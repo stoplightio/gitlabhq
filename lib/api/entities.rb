@@ -563,6 +563,7 @@ module API
       expose :created_at
       expose :note, using: Entities::Note, if: ->(event, options) { event.note? }
       expose :author, using: Entities::UserBasic, if: ->(event, options) { event.author }
+      expose :project, using: Entities::BasicProjectDetails, if: ->(event, options) { event.project }
 
       expose :push_event_payload,
         as: :push_data,

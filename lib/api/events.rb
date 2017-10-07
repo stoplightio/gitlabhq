@@ -35,7 +35,14 @@ module API
       get do
         authenticate!
 
-        events = EventsFinder.new(params.merge(source: current_user, current_user: current_user)).execute.preload(:author, :target)
+        projects =
+          if params[:filter] == "starred"
+            ProjectsFinder.new(current_user: current_user, params: { starred: true }).execute
+          else
+            current_user.authorized_projects
+          end
+
+        events = EventsFinder.new(params.merge(projects: projects)).execute
 
         present_events(events)
       end

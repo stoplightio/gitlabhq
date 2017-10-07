@@ -42,11 +42,11 @@ Dates for the `before` and `after` parameters should be supplied in the followin
 YYYY-MM-DD
 ```
 
-## List currently authenticated user's events
+## List events across the currently authenticated user's accessible projects
 
 >**Note:** This endpoint was introduced in GitLab 9.3.
 
-Get a list of events for the authenticated user.
+Get a list of events for the activity across the authenticated user's accessible projects.
 
 ```
 GET /events
@@ -89,6 +89,25 @@ Example response:
       "avatar_url":"http://www.gravatar.com/avatar/97d6d9441ff85fdc730e02a6068d267b?s=80\u0026d=identicon",
       "web_url":"https://gitlab.example.com/user3"
     },
+    "project": {
+      "id": 1,
+      "description": "",
+      "default_branch": null,
+      "tag_list": [
+
+      ],
+      "ssh_url_to_repo": "ssh://Marc@localhost:2222/user0/foozer2.git",
+      "http_url_to_repo": "http://localhost:3000/user0/foozer2.git",
+      "web_url": "http://localhost:3000/user0/foozer2",
+      "name": "foozer2",
+      "name_with_namespace": "User 0 / foozer2",
+      "path": "foozer2",
+      "path_with_namespace": "user0/foozer2",
+      "star_count": 0,
+      "forks_count": 0,
+      "created_at": "2017-10-07T18:36:35.451Z",
+      "last_activity_at": "2017-10-07T18:36:35.451Z"
+    },
     "author_username":"user3"
   },
   {
@@ -107,6 +126,25 @@ Example response:
       "state":"active",
       "avatar_url":"http://www.gravatar.com/avatar/80fb888c9a48b9a3f87477214acaa63f?s=80\u0026d=identicon",
       "web_url":"https://gitlab.example.com/ted"
+    },
+    "project": {
+      "id": 1,
+      "description": "",
+      "default_branch": null,
+      "tag_list": [
+
+      ],
+      "ssh_url_to_repo": "ssh://Marc@localhost:2222/user0/foozer2.git",
+      "http_url_to_repo": "http://localhost:3000/user0/foozer2.git",
+      "web_url": "http://localhost:3000/user0/foozer2",
+      "name": "foozer2",
+      "name_with_namespace": "User 0 / foozer2",
+      "path": "foozer2",
+      "path_with_namespace": "user0/foozer2",
+      "star_count": 0,
+      "forks_count": 0,
+      "created_at": "2017-10-07T18:36:35.451Z",
+      "last_activity_at": "2017-10-07T18:36:35.451Z"
     },
     "author_username":"ted"
   }
@@ -158,6 +196,25 @@ Example response:
       "avatar_url": "http://localhost:3000/uploads/user/avatar/1/fox_avatar.png",
       "web_url": "http://localhost:3000/root"
     },
+    "project": {
+      "id": 15,
+      "description": "",
+      "default_branch": null,
+      "tag_list": [
+
+      ],
+      "ssh_url_to_repo": "ssh://Marc@localhost:2222/user0/foozer2.git",
+      "http_url_to_repo": "http://localhost:3000/user0/foozer2.git",
+      "web_url": "http://localhost:3000/user0/foozer2",
+      "name": "foozer2",
+      "name_with_namespace": "User 0 / foozer2",
+      "path": "foozer2",
+      "path_with_namespace": "user0/foozer2",
+      "star_count": 0,
+      "forks_count": 0,
+      "created_at": "2017-10-07T18:36:35.451Z",
+      "last_activity_at": "2017-10-07T18:36:35.451Z"
+    },
     "author_username": "root"
   },
   {
@@ -174,6 +231,25 @@ Example response:
       "state": "active",
       "avatar_url": "http://localhost:3000/uploads/user/avatar/1/fox_avatar.png",
       "web_url": "http://localhost:3000/root"
+    },
+    "project": {
+      "id": 15,
+      "description": "",
+      "default_branch": null,
+      "tag_list": [
+
+      ],
+      "ssh_url_to_repo": "ssh://Marc@localhost:2222/user0/foozer2.git",
+      "http_url_to_repo": "http://localhost:3000/user0/foozer2.git",
+      "web_url": "http://localhost:3000/user0/foozer2",
+      "name": "foozer2",
+      "name_with_namespace": "User 0 / foozer2",
+      "path": "foozer2",
+      "path_with_namespace": "user0/foozer2",
+      "star_count": 0,
+      "forks_count": 0,
+      "created_at": "2017-10-07T18:36:35.451Z",
+      "last_activity_at": "2017-10-07T18:36:35.451Z"
     },
     "author_username": "john",
     "push_data": {
@@ -203,6 +279,25 @@ Example response:
       "avatar_url": "http://localhost:3000/uploads/user/avatar/1/fox_avatar.png",
       "web_url": "http://localhost:3000/root"
     },
+    "project": {
+      "id": 15,
+      "description": "",
+      "default_branch": null,
+      "tag_list": [
+
+      ],
+      "ssh_url_to_repo": "ssh://Marc@localhost:2222/user0/foozer2.git",
+      "http_url_to_repo": "http://localhost:3000/user0/foozer2.git",
+      "web_url": "http://localhost:3000/user0/foozer2",
+      "name": "foozer2",
+      "name_with_namespace": "User 0 / foozer2",
+      "path": "foozer2",
+      "path_with_namespace": "user0/foozer2",
+      "star_count": 0,
+      "forks_count": 0,
+      "created_at": "2017-10-07T18:36:35.451Z",
+      "last_activity_at": "2017-10-07T18:36:35.451Z"
+    },
     "author_username": "root"
   },
   {
@@ -230,6 +325,25 @@ Example response:
       "system": false,
       "noteable_id": 377,
       "noteable_type": "Issue"
+    },
+    "project": {
+      "id": 15,
+      "description": "",
+      "default_branch": null,
+      "tag_list": [
+
+      ],
+      "ssh_url_to_repo": "ssh://Marc@localhost:2222/user0/foozer2.git",
+      "http_url_to_repo": "http://localhost:3000/user0/foozer2.git",
+      "web_url": "http://localhost:3000/user0/foozer2",
+      "name": "foozer2",
+      "name_with_namespace": "User 0 / foozer2",
+      "path": "foozer2",
+      "path_with_namespace": "user0/foozer2",
+      "star_count": 0,
+      "forks_count": 0,
+      "created_at": "2017-10-07T18:36:35.451Z",
+      "last_activity_at": "2017-10-07T18:36:35.451Z"
     },
     "author": {
       "name": "Dmitriy Zaporozhets",
@@ -293,6 +407,25 @@ Example response:
       "avatar_url":"http://www.gravatar.com/avatar/97d6d9441ff85fdc730e02a6068d267b?s=80\u0026d=identicon",
       "web_url":"https://gitlab.example.com/user3"
     },
+    "project": {
+      "id": 1,
+      "description": "",
+      "default_branch": null,
+      "tag_list": [
+
+      ],
+      "ssh_url_to_repo": "ssh://Marc@localhost:2222/user0/foozer2.git",
+      "http_url_to_repo": "http://localhost:3000/user0/foozer2.git",
+      "web_url": "http://localhost:3000/user0/foozer2",
+      "name": "foozer2",
+      "name_with_namespace": "User 0 / foozer2",
+      "path": "foozer2",
+      "path_with_namespace": "user0/foozer2",
+      "star_count": 0,
+      "forks_count": 0,
+      "created_at": "2017-10-07T18:36:35.451Z",
+      "last_activity_at": "2017-10-07T18:36:35.451Z"
+    },
     "author_username":"user3"
   },
   {
@@ -312,6 +445,25 @@ Example response:
       "state":"active",
       "avatar_url":"http://www.gravatar.com/avatar/80fb888c9a48b9a3f87477214acaa63f?s=80\u0026d=identicon",
       "web_url":"https://gitlab.example.com/ted"
+    },
+    "project": {
+      "id": 1,
+      "description": "",
+      "default_branch": null,
+      "tag_list": [
+
+      ],
+      "ssh_url_to_repo": "ssh://Marc@localhost:2222/user0/foozer2.git",
+      "http_url_to_repo": "http://localhost:3000/user0/foozer2.git",
+      "web_url": "http://localhost:3000/user0/foozer2",
+      "name": "foozer2",
+      "name_with_namespace": "User 0 / foozer2",
+      "path": "foozer2",
+      "path_with_namespace": "user0/foozer2",
+      "star_count": 0,
+      "forks_count": 0,
+      "created_at": "2017-10-07T18:36:35.451Z",
+      "last_activity_at": "2017-10-07T18:36:35.451Z"
     },
     "author_username":"ted"
   },
@@ -343,6 +495,25 @@ Example response:
       "noteable_id": 377,
       "noteable_type": "Issue",
       "noteable_iid": 377
+    },
+    "project": {
+      "id": 1,
+      "description": "",
+      "default_branch": null,
+      "tag_list": [
+
+      ],
+      "ssh_url_to_repo": "ssh://Marc@localhost:2222/user0/foozer2.git",
+      "http_url_to_repo": "http://localhost:3000/user0/foozer2.git",
+      "web_url": "http://localhost:3000/user0/foozer2",
+      "name": "foozer2",
+      "name_with_namespace": "User 0 / foozer2",
+      "path": "foozer2",
+      "path_with_namespace": "user0/foozer2",
+      "star_count": 0,
+      "forks_count": 0,
+      "created_at": "2017-10-07T18:36:35.451Z",
+      "last_activity_at": "2017-10-07T18:36:35.451Z"
     },
     "author": {
       "name": "Dmitriy Zaporozhets",
