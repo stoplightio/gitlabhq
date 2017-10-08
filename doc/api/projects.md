@@ -39,6 +39,7 @@ GET /projects
 | `statistics` | boolean | no | Include project statistics |
 | `with_issues_enabled` | boolean | no | Limit by enabled issues feature |
 | `with_merge_requests_enabled` | boolean | no | Limit by enabled merge requests feature |
+| `tags` | Array[string] | no | Limit by one or more tags |
 
 ```json
 [
@@ -216,6 +217,7 @@ GET /users/:user_id/projects
 | `statistics` | boolean | no | Include project statistics |
 | `with_issues_enabled` | boolean | no | Limit by enabled issues feature |
 | `with_merge_requests_enabled` | boolean | no | Limit by enabled merge requests feature |
+| `tags` | Array[string] | no | Limit by one or more tags |
 
 ```json
 [

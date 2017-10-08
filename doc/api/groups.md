@@ -64,6 +64,7 @@ Parameters:
 | `simple` | boolean | no | Return only the ID, URL, name, and path of each project |
 | `owned` | boolean | no | Limit by projects owned by the current user |
 | `starred` | boolean | no | Limit by projects starred by the current user |
+| `tags` | Array[string] | no | Limit by one or more tags |
 
 Example response:
 
