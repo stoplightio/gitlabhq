@@ -15,6 +15,7 @@ module API
         optional :lfs_enabled, type: Boolean, desc: 'Enable/disable LFS for the projects in this group'
         optional :request_access_enabled, type: Boolean, desc: 'Allow users to request member access'
         optional :share_with_group_lock, type: Boolean, desc: 'Prevent sharing a project with another group within this group'
+        optional :avatar, type: File, desc: 'Avatar image for group'
       end
 
       params :optional_params do

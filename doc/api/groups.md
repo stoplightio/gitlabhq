@@ -292,6 +292,7 @@ Parameters:
 - `lfs_enabled` (optional)      - Enable/disable Large File Storage (LFS) for the projects in this group
 - `request_access_enabled` (optional) - Allow users to request member access.
 - `parent_id` (optional) - The parent group id for creating nested group.
+- `avatar` (optional) - Image file for group's avatar
 
 ## Transfer project to group
 
@@ -323,6 +324,7 @@ PUT /groups/:id
 | `visibility` | string | no | The visibility level of the group. Can be `private`, `internal`, or `public`. |
 | `lfs_enabled` (optional) | boolean | no | Enable/disable Large File Storage (LFS) for the projects in this group |
 | `request_access_enabled` | boolean | no | Allow users to request member access. |
+| `avatar` | file | no | Image file for group's avatar. |
 
 ```bash
 curl --request PUT --header "PRIVATE-TOKEN: 9koXpg98eAheJpvBs5tK" "https://gitlab.example.com/api/v4/groups/5?name=Experimental"
