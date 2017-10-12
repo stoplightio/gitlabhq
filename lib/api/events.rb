@@ -89,5 +89,26 @@ module API
         present_events(events)
       end
     end
+
+    params do
+      requires :id, type: String, desc: 'The ID of a group'
+    end
+    resource :groups do
+      desc "List a Group's visible events" do
+        success Entities::Event
+      end
+      params do
+        use :pagination
+        use :event_filter_params
+        use :sort_params
+      end
+      get ":id/events" do
+        group = find_group!(params[:id])
+        projects = GroupProjectsFinder.new(group: group, current_user: current_user).execute
+        events = EventsFinder.new(params.merge(projects: projects)).execute
+
+        present_events(events)
+      end
+    end
   end
 end

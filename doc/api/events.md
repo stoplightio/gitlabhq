@@ -365,14 +365,14 @@ Example response:
 Get a list of visible events for a particular project.
 
 ```
-GET /:project_id/events
+GET /projects/:id/events
 ```
 
 Parameters:
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `project_id` | integer/string | yes | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) |
 | `action` | string | no | Include only events of a particular [action type][action-types] |
 | `target_type` | string | no | Include only events of a particular [target type][target-types] |
 | `before` | date | no |  Include only events created before a particular date. Please see [here for the supported format][date-formatting] |
@@ -383,6 +383,174 @@ Example request:
 
 ```
 curl --header "PRIVATE-TOKEN 9koXpg98eAheJpvBs5tK" https://gitlab.example.com/api/v4/projects/:project_id/events&target_type=issue&action=created&after=2017-01-31&before=2017-03-01
+```
+
+Example response:
+
+```json
+[
+  {
+    "title":null,
+    "project_id":1,
+    "action_name":"opened",
+    "target_id":160,
+    "target_iid":160,
+    "target_type":"Issue",
+    "author_id":25,
+    "target_title":"Qui natus eos odio tempore et quaerat consequuntur ducimus cupiditate quis.",
+    "created_at":"2017-02-09T10:43:19.667Z",
+    "author":{
+      "name":"User 3",
+      "username":"user3",
+      "id":25,
+      "state":"active",
+      "avatar_url":"http://www.gravatar.com/avatar/97d6d9441ff85fdc730e02a6068d267b?s=80\u0026d=identicon",
+      "web_url":"https://gitlab.example.com/user3"
+    },
+    "project": {
+      "id": 1,
+      "description": "",
+      "default_branch": null,
+      "tag_list": [
+
+      ],
+      "ssh_url_to_repo": "ssh://Marc@localhost:2222/user0/foozer2.git",
+      "http_url_to_repo": "http://localhost:3000/user0/foozer2.git",
+      "web_url": "http://localhost:3000/user0/foozer2",
+      "name": "foozer2",
+      "name_with_namespace": "User 0 / foozer2",
+      "path": "foozer2",
+      "path_with_namespace": "user0/foozer2",
+      "star_count": 0,
+      "forks_count": 0,
+      "created_at": "2017-10-07T18:36:35.451Z",
+      "last_activity_at": "2017-10-07T18:36:35.451Z"
+    },
+    "author_username":"user3"
+  },
+  {
+    "title":null,
+    "project_id":1,
+    "action_name":"opened",
+    "target_id":159,
+    "target_iid":159,
+    "target_type":"Issue",
+    "author_id":21,
+    "target_title":"Nostrum enim non et sed optio illo deleniti non.",
+    "created_at":"2017-02-09T10:43:19.426Z",
+    "author":{
+      "name":"Test User",
+      "username":"ted",
+      "id":21,
+      "state":"active",
+      "avatar_url":"http://www.gravatar.com/avatar/80fb888c9a48b9a3f87477214acaa63f?s=80\u0026d=identicon",
+      "web_url":"https://gitlab.example.com/ted"
+    },
+    "project": {
+      "id": 1,
+      "description": "",
+      "default_branch": null,
+      "tag_list": [
+
+      ],
+      "ssh_url_to_repo": "ssh://Marc@localhost:2222/user0/foozer2.git",
+      "http_url_to_repo": "http://localhost:3000/user0/foozer2.git",
+      "web_url": "http://localhost:3000/user0/foozer2",
+      "name": "foozer2",
+      "name_with_namespace": "User 0 / foozer2",
+      "path": "foozer2",
+      "path_with_namespace": "user0/foozer2",
+      "star_count": 0,
+      "forks_count": 0,
+      "created_at": "2017-10-07T18:36:35.451Z",
+      "last_activity_at": "2017-10-07T18:36:35.451Z"
+    },
+    "author_username":"ted"
+  },
+  {
+    "title": null,
+    "project_id": 1,
+    "action_name": "commented on",
+    "target_id": 1312,
+    "target_iid": 1312,
+    "target_type": "Note",
+    "author_id": 1,
+    "data": null,
+    "target_title": null,
+    "created_at": "2015-12-04T10:33:58.089Z",
+    "note": {
+      "id": 1312,
+      "body": "What an awesome day!",
+      "attachment": null,
+      "author": {
+        "name": "Dmitriy Zaporozhets",
+        "username": "root",
+        "id": 1,
+        "state": "active",
+        "avatar_url": "http://localhost:3000/uploads/user/avatar/1/fox_avatar.png",
+        "web_url": "http://localhost:3000/root"
+      },
+      "created_at": "2015-12-04T10:33:56.698Z",
+      "system": false,
+      "noteable_id": 377,
+      "noteable_type": "Issue",
+      "noteable_iid": 377
+    },
+    "project": {
+      "id": 1,
+      "description": "",
+      "default_branch": null,
+      "tag_list": [
+
+      ],
+      "ssh_url_to_repo": "ssh://Marc@localhost:2222/user0/foozer2.git",
+      "http_url_to_repo": "http://localhost:3000/user0/foozer2.git",
+      "web_url": "http://localhost:3000/user0/foozer2",
+      "name": "foozer2",
+      "name_with_namespace": "User 0 / foozer2",
+      "path": "foozer2",
+      "path_with_namespace": "user0/foozer2",
+      "star_count": 0,
+      "forks_count": 0,
+      "created_at": "2017-10-07T18:36:35.451Z",
+      "last_activity_at": "2017-10-07T18:36:35.451Z"
+    },
+    "author": {
+      "name": "Dmitriy Zaporozhets",
+      "username": "root",
+      "id": 1,
+      "state": "active",
+      "avatar_url": "http://localhost:3000/uploads/user/avatar/1/fox_avatar.png",
+      "web_url": "http://localhost:3000/root"
+    },
+    "author_username": "root"
+  }
+]
+```
+
+## List a Group's visible events
+
+Get a list of visible events for a particular group.
+
+```
+GET /groups/:id/events
+```
+
+Parameters:
+
+| Attribute | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| `id` | integer | yes | The ID or Path of the group |
+| `action` | string | no | Include only events of a particular [action type][action-types] |
+| `target_type` | string | no | Include only events of a particular [target type][target-types] |
+| `before` | date | no |  Include only events created before a particular date. Please see [here for the supported format][date-formatting] |
+| `after` | date | no |  Include only events created after a particular date. Please see [here for the supported format][date-formatting]  |
+| `sort` | string | no | Sort events in `asc` or `desc` order by `created_at`. Default is `desc` |
+
+Example request:
+
+```
+curl --header "PRIVATE-TOKEN 9koXpg98eAheJpvBs5tK" https://gitlab.example.com/api/v4/groups/:id/events&target_type=issue&action=created&after=2017-01-31&before=2017-03-01
 ```
 
 Example response:
