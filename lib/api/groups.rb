@@ -133,6 +133,30 @@ module API
         end
       end
 
+      desc 'Get a list of subgroups in this group.' do
+        success Entities::Group
+      end
+      params do
+        use :statistics_params
+        optional :skip_groups, type: Array[Integer], desc: 'Array of group ids to exclude from list'
+        optional :all_available, type: Boolean, desc: 'Show all group that you have access to'
+        optional :search, type: String, desc: 'Search for a specific group'
+        optional :owned, type: Boolean, default: false, desc: 'Limit by owned by authenticated user'
+        optional :order_by, type: String, values: %w[name path], default: 'name', desc: 'Order by name or path'
+        optional :sort, type: String, values: %w[asc desc], default: 'asc', desc: 'Sort by asc (ascending) or desc (descending)'
+        use :pagination
+      end
+      get ":id/subgroups" do
+        group = find_group!(params[:id])
+        find_params = { all_available: params[:all_available], owned: params[:owned] }
+        groups = GroupsFinder.new(current_user, find_params.merge(parent: group)).execute
+        groups = groups.search(params[:search]) if params[:search].present?
+        groups = groups.where.not(id: params[:skip_groups]) if params[:skip_groups].present?
+        groups = groups.reorder(params[:order_by] => params[:sort])
+
+        present_groups groups, statistics: params[:statistics] && current_user.admin?
+      end
+
       desc 'Get a list of projects in this group.' do
         success Entities::Project
       end
