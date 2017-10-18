@@ -7,9 +7,9 @@
 - else
   #content
     - if Gitlab.com?
-      = email_default_heading('Thanks for signing up to GitLab!')
+      = email_default_heading('Thanks for signing up with Stoplight!')
     - else
       = email_default_heading("Welcome, #{@resource.name}!")
-    %p To get started, click the link below to confirm your account.
+    %p To get started with Stoplight, click the link below to confirm your account.
   #cta
     = link_to 'Confirm your account', confirmation_url(@resource, confirmation_token: @token)
