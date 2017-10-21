@@ -11,6 +11,7 @@ class GroupPolicy < BasePolicy
   condition(:guest) { access_level >= GroupMember::GUEST }
   condition(:owner) { access_level >= GroupMember::OWNER }
   condition(:master) { access_level >= GroupMember::MASTER }
+  condition(:developer) { access_level >= GroupMember::DEVELOPER }
   condition(:reporter) { access_level >= GroupMember::REPORTER }
 
   condition(:nested_groups_supported, scope: :global) { Group.supports_nested_groups? }
@@ -35,8 +36,12 @@ class GroupPolicy < BasePolicy
 
   rule { reporter }.enable :admin_label
 
-  rule { master }.policy do
+  rule { developer }.policy do
     enable :create_projects
+  end
+
+  rule { master }.policy do
+    enable :admin_group_member
     enable :admin_milestones
     enable :admin_pipeline
     enable :admin_build
@@ -45,11 +50,10 @@ class GroupPolicy < BasePolicy
   rule { owner }.policy do
     enable :admin_group
     enable :admin_namespace
-    enable :admin_group_member
     enable :change_visibility_level
   end
 
-  rule { owner & nested_groups_supported }.enable :create_subgroup
+  rule { master & nested_groups_supported }.enable :create_subgroup
 
   rule { public_group | logged_in_viewable }.enable :view_globally
 
