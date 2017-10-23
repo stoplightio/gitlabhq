@@ -4,9 +4,9 @@
   - if Gitlab.config.gitlab.signup_enabled
     Your account has been created successfully.
   - else
-    Your Stoplight Administrator created an account for you. Now you are a member of the company Stoplight application.
+    Your Stoplight Administrator created an account for you. You are now a member of the company Stoplight account.
 %p
-  login..........................................
+  Your login is:
   %code= @user['email']
 
 - if @user.created_by_id
