@@ -697,6 +697,36 @@ module API
         current_user.update_secondary_emails!
       end
 
+      desc 'Initiate a password reset for the user account with the given email'
+      params do
+        requires :email, type: String, desc: 'The users email address'
+      end
+      post "password_reset" do
+        authenticated_as_admin!
+
+        user = User.find_by_email(params[:email])
+
+        return unless user && !user.recently_sent_password_reset?
+
+        user.send_reset_password_instructions
+
+        status 204
+      end
+
+      desc 'Set a users password, using their reset password token'
+      params do
+        requires :reset_password_token, type: String, desc: 'The reset password token'
+        requires :password, type: String, desc: 'The new password'
+        requires :password_confirmation, type: String, desc: 'The new password confirmation'
+      end
+      post "password_confirm" do
+        authenticated_as_admin!
+
+        User.reset_password_by_token(params)
+
+        status 204
+      end
+
       desc 'Get a list of user activities'
       params do
         optional :from, type: DateTime, default: 6.months.ago, desc: 'Date string in the format YEAR-MONTH-DAY'
