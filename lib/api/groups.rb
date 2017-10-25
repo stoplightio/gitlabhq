@@ -180,7 +180,15 @@ module API
         group = find_group!(params[:id])
         projects = GroupProjectsFinder.new(group: group, current_user: current_user, params: project_finder_params).execute
         projects = reorder_projects(projects)
-        entity = params[:simple] ? Entities::BasicProjectDetails : Entities::ProjectWithAccess
+
+        if params[:simple]
+          entity = Entities::BasicProjectDetails
+        elsif current_user
+          entity = Entities::ProjectWithAccess
+        else
+          entity = Entities::Project
+        end
+
         present paginate(projects), with: entity, current_user: current_user
       end
 
