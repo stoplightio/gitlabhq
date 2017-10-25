@@ -1,8 +1,8 @@
 Hi <%= @user.name %>!
 
-Your Stoplight Administrator created an account for you. Now you are a member of the company Stoplight application.
+Your Stoplight administrator created an account for you. You are now a member of the company Stoplight account.
 
-login.................. <%= @user.email %>
+Your login is: <%= @user.email %>
 <% if @user.created_by_id %>
   <%= link_to "Click here to set your password", edit_password_url(@user, :reset_password_token => @token) %>
 
