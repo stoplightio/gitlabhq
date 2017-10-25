@@ -642,6 +642,39 @@ module API
         key.destroy
       end
 
+      desc 'Resend confirmation instructions for the given email'
+      params do
+        requires :email, type: String, desc: 'The email to resend instructions to'
+      end
+      post "resend_email_confirm" do
+        user = User.find_by_unconfirmed_email_with_errors(params)
+
+        not_found!('User') unless user && user.id == current_user.id
+
+        if user.errors.blank?
+          user.resend_confirmation_instructions
+          status 204
+        else
+          render_validation_error!(user)
+        end
+      end
+
+      desc 'Confirm a user by token'
+      params do
+        requires :confirmation_token, type: String, desc: 'The user confirmation token'
+      end
+      put "email_confirm" do
+        authenticated_as_admin!
+
+        user = User.confirm_by_token(params[:confirmation_token])
+
+        if user.errors.blank?
+          status 204
+        else
+          render_validation_error!(user)
+        end
+      end
+
       desc "Get the currently authenticated user's email addresses" do
         success Entities::Email
       end
