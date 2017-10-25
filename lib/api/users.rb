@@ -706,9 +706,9 @@ module API
 
         user = User.find_by_email(params[:email])
 
-        return unless user && !user.recently_sent_password_reset?
-
-        user.send_reset_password_instructions
+        if user && !user.recently_sent_password_reset?
+          user.send_reset_password_instructions
+        end
 
         status 204
       end
@@ -722,9 +722,13 @@ module API
       post "password_confirm" do
         authenticated_as_admin!
 
-        User.reset_password_by_token(params)
+        user = User.reset_password_by_token(params)
 
-        status 204
+        if user.errors.blank?
+          status 204
+        else
+          render_validation_error!(user)
+        end
       end
 
       desc 'Get a list of user activities'
