@@ -60,7 +60,7 @@ module EmailsHelper
       )
     else
       image_tag(
-        image_url('mailers/stoplight_header_logo.jpg'),
+        image_url('mailers/stoplight_header_logo.png'),
         size: '55x50',
         alt: 'Stoplight'
       )
