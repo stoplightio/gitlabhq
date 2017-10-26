@@ -124,21 +124,21 @@ Devise.setup do |config|
   config.lock_strategy = :failed_attempts
 
   # Defines which key will be used when locking and unlocking an account
-  config.unlock_keys = [:email]
+  config.unlock_keys = [:time]
 
   # Defines which strategy will be used to unlock an account.
   # :email = Sends an unlock link to the user email
   # :time  = Re-enables login after a certain amount of time (see :unlock_in below)
   # :both  = Enables both strategies
   # :none  = No unlock strategy. You should handle unlocking by yourself.
-  config.unlock_strategy = :both
+  config.unlock_strategy = :time
 
   # Number of authentication tries before locking an account if lock_strategy
   # is failed attempts.
-  config.maximum_attempts = 10
+  config.maximum_attempts = 50
 
   # Time interval to unlock the account if :time is enabled as unlock_strategy.
-  config.unlock_in = 10.minutes
+  config.unlock_in = 1.minutes
 
   # ==> Configuration for :recoverable
   #
@@ -149,7 +149,7 @@ Devise.setup do |config|
   # Don't put a too small interval or your users won't have the time to
   # change their passwords.
   # When someone else invites you to GitLab this time is also used so it should be pretty long.
-  config.reset_password_within = 2.days
+  config.reset_password_within = 30.days
 
   # When set to false, does not sign a user in automatically after their password is
   # reset. Defaults to true, so a user is signed in automatically after a reset.
