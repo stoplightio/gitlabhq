@@ -19,7 +19,7 @@ module Emails
       end
 
       mail(to: admins,
-           subject: subject("Request to join the #{member_source.human_name} #{member_source.model_name.singular}"))
+           subject: subject("Request to join the #{member_source.human_name} #{member_source_type}"))
     end
 
     def member_access_granted_email(member_source_type, member_id)
@@ -27,7 +27,7 @@ module Emails
       @member_id = member_id
 
       mail(to: member.user.notification_email,
-           subject: subject("Access to the #{member_source.human_name} #{member_source.model_name.singular} was granted"))
+           subject: subject("Access to the #{member_source.human_name} #{member_source_type} was granted"))
     end
 
     def member_access_denied_email(member_source_type, source_id, user_id)
@@ -36,7 +36,7 @@ module Emails
       requester = User.find(user_id)
 
       mail(to: requester.notification_email,
-           subject: subject("Access to the #{member_source.human_name} #{member_source.model_name.singular} was denied"))
+           subject: subject("Access to the #{member_source.human_name} #{member_source_type} was denied"))
     end
 
     def member_invited_email(member_source_type, member_id, token)
@@ -45,7 +45,7 @@ module Emails
       @token = token
 
       mail(to: member.invite_email,
-           subject: subject("Invitation to join the #{member_source.human_name} #{member_source.model_name.singular}"))
+           subject: subject("Invitation to join the #{member_source.human_name} #{member_source_type}"))
     end
 
     def member_invite_accepted_email(member_source_type, member_id)
