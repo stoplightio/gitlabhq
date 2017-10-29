@@ -86,7 +86,7 @@ module API
         if group.persisted?
           present group, with: Entities::GroupDetail, current_user: current_user
         else
-          render_api_error!("Failed to save group #{group.errors.messages}", 400)
+          render_validation_error!(group)
         end
       end
     end
@@ -174,7 +174,7 @@ module API
         if result
           present group, with: Entities::GroupDetail, current_user: current_user
         else
-          render_api_error!("Failed to transfer project #{project.errors.messages}", 400)
+          render_validation_error!(project)
         end
       end
     end
