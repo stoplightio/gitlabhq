@@ -414,6 +414,29 @@ module API
         destroy_conditionally!(link)
       end
 
+      desc 'Transfer the project to another namespace' do
+        success Entities::Project
+      end
+      params do
+        requires :namespace_id, type: Integer, desc: 'The ID of the namespace to transfer to'
+      end
+      post ":id/transfer" do
+        authenticated_as_admin!
+
+        # can only do the transfer if allowed to remove the project
+        authorize! :remove_project, user_project
+
+        namespace = Namespace.find_by(id: params[:namespace_id])
+        unless namespace
+          not_found!('Namespace')
+        end
+
+        ::Projects::TransferService.new(user_project, current_user, params.dup).execute(namespace)
+        user_project.reload
+
+        present user_project, with: Entities::Project
+      end
+
       desc 'Upload a file'
       params do
         requires :file, type: File, desc: 'The file to be uploaded'
