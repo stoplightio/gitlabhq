@@ -8,7 +8,7 @@ module API
       end
 
       def authorize_admin_source!(source_type, source)
-        authorize! :"admin_#{source_type}", source
+        authorize! :"admin_#{source_type}_member", source
       end
     end
   end
