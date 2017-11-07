@@ -34,9 +34,8 @@ class GroupPolicy < BasePolicy
   rule { admin }             .enable :read_group
   rule { has_projects }      .enable :read_group
 
-  rule { reporter }.enable :admin_label
-
-  rule { developer }.policy do
+  rule { reporter }.policy do
+    enable :admin_label
     enable :create_projects
   end
 
