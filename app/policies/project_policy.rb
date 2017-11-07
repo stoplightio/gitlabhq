@@ -81,7 +81,7 @@ class ProjectPolicy < BasePolicy
   rule { developer }.enable :developer_access
   rule { master }.enable :master_access
 
-  rule { owner | admin }.policy do
+  rule { master | owner | admin }.policy do
     enable :guest_access
     enable :reporter_access
     enable :developer_access
@@ -98,7 +98,7 @@ class ProjectPolicy < BasePolicy
     enable :remove_pages
   end
 
-  rule { owner | reporter }.policy do
+  rule { admin | owner | reporter }.policy do
     enable :build_download_code
     enable :build_read_container_image
   end
