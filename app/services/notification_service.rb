@@ -254,7 +254,7 @@ class NotificationService
   def update_project_member(project_member)
     return true unless project_member.notifiable?(:mention)
 
-    mailer.member_access_granted_email(project_member.real_source_type, project_member.id).deliver_later
+    # mailer.member_access_granted_email(project_member.real_source_type, project_member.id).deliver_later
   end
 
   # Group invite
@@ -287,7 +287,7 @@ class NotificationService
   def update_group_member(group_member)
     return true unless group_member.notifiable?(:mention)
 
-    mailer.member_access_granted_email(group_member.real_source_type, group_member.id).deliver_later
+    # mailer.member_access_granted_email(group_member.real_source_type, group_member.id).deliver_later
   end
 
   def project_was_moved(project, old_path_with_namespace)
