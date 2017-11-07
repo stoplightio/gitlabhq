@@ -618,8 +618,11 @@ module API
       end
     end
 
-    class MemberAccess < Grape::Entity
+    class Access < Grape::Entity
       expose :access_level
+    end
+
+    class MemberAccess < Access
       expose :notification_level do |member, options|
         if member.notification_setting
           ::NotificationSetting.levels[member.notification_setting.level]
@@ -664,6 +667,14 @@ module API
 
     class ProjectWithAccess < Project
       expose :permissions do
+        expose :resolved, using: Entities::Access do |project, options|
+          if options.key?(:project_authorizations)
+            (options[:project_authorizations] || []).find { |authorization| authorization.project_id == project.id }
+          else
+            project.project_authorizations.find_by(user_id: options[:current_user].id)
+          end
+        end
+
         expose :project_access, using: Entities::ProjectAccess do |project, options|
           if options.key?(:project_members)
             (options[:project_members] || []).find { |member| member.source_id == project.id }
