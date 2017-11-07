@@ -617,8 +617,11 @@ module API
       end
     end
 
-    class MemberAccess < Grape::Entity
+    class Access < Grape::Entity
       expose :access_level
+    end
+
+    class MemberAccess < Access
       expose :notification_level do |member, options|
         if member.notification_setting
           ::NotificationSetting.levels[member.notification_setting.level]
