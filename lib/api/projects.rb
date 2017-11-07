@@ -79,6 +79,7 @@ module API
 
         if current_user
           projects = projects.includes(:route, :taggings, namespace: :route)
+          project_authorizations = current_user.project_authorizations
           project_members = current_user.project_members
           group_members = current_user.group_members
         end
@@ -86,6 +87,7 @@ module API
         options = options.reverse_merge(
           with: current_user ? Entities::ProjectWithAccess : Entities::BasicProjectDetails,
           statistics: params[:statistics],
+          project_authorizations: project_authorizations,
           project_members: project_members,
           group_members: group_members,
           current_user: current_user
