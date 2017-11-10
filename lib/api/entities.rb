@@ -90,6 +90,8 @@ module API
       expose :name, :name_with_namespace
       expose :path, :path_with_namespace
       expose :star_count, :forks_count
+      expose :visibility
+      expose :open_issues_count, if: lambda { |project, options| project.feature_available?(:issues, options[:current_user]) }
       expose :created_at, :last_activity_at
     end
 
@@ -127,7 +129,6 @@ module API
       end
 
       expose :archived?, as: :archived
-      expose :visibility
       expose :owner, using: Entities::UserBasic, unless: ->(project, options) { project.group }
       expose :resolve_outdated_diff_discussions
       expose :container_registry_enabled
@@ -149,7 +150,6 @@ module API
       expose :avatar_url do |user, options|
         user.avatar_url(only_path: false)
       end
-      expose :open_issues_count, if: lambda { |project, options| project.feature_available?(:issues, options[:current_user]) }
       expose :runners_token, if: lambda { |_project, options| options[:user_can_admin_project] }
       expose :public_builds, as: :public_jobs
       expose :ci_config_path
@@ -658,6 +658,64 @@ module API
           .select { |field| options[:include_passwords] || field[:type] != 'password' }
           .map { |field| field[:name] }
         service.properties.slice(*field_names)
+      end
+    end
+
+    class ProjectPermissions < Grape::Entity
+      expose :resolved, using: Entities::Access do |project, options|
+        if options.key?(:project_authorizations)
+          (options[:project_authorizations] || []).find { |authorization| authorization.project_id == project.id }
+        else
+          project.project_authorizations.find_by(user_id: options[:current_user].id)
+        end
+      end
+
+      expose :project_access, using: Entities::ProjectAccess do |project, options|
+        if options.key?(:project_members)
+          (options[:project_members] || []).find { |member| member.source_id == project.id }
+        else
+          project.project_members.find_by(user_id: options[:current_user].id)
+        end
+      end
+
+      expose :group_access, using: Entities::GroupAccess do |project, options|
+        if project.group
+          if options.key?(:group_members)
+            (options[:group_members] || []).find { |member| member.source_id == project.namespace_id }
+          else
+            project.group.group_members.find_by(user_id: options[:current_user].id)
+          end
+        end
+      end
+    end
+
+    class BasicProjectDetailsWithAccess < BasicProjectDetails
+      expose :permissions do
+        expose :resolved, using: Entities::Access do |project, options|
+          if options.key?(:project_authorizations)
+            (options[:project_authorizations] || []).find { |authorization| authorization.project_id == project.id }
+          else
+            project.project_authorizations.find_by(user_id: options[:current_user].id)
+          end
+        end
+
+        expose :project_access, using: Entities::ProjectAccess do |project, options|
+          if options.key?(:project_members)
+            (options[:project_members] || []).find { |member| member.source_id == project.id }
+          else
+            project.project_members.find_by(user_id: options[:current_user].id)
+          end
+        end
+
+        expose :group_access, using: Entities::GroupAccess do |project, options|
+          if project.group
+            if options.key?(:group_members)
+              (options[:group_members] || []).find { |member| member.source_id == project.namespace_id }
+            else
+              project.group.group_members.find_by(user_id: options[:current_user].id)
+            end
+          end
+        end
       end
     end
 

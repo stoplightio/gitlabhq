@@ -84,7 +84,7 @@ module API
         end
 
         options = options.reverse_merge(
-          with: current_user ? Entities::ProjectWithAccess : Entities::BasicProjectDetails,
+          with: current_user ? Entities::BasicProjectDetailsWithAccess : Entities::BasicProjectDetails,
           statistics: params[:statistics],
           project_members: project_members,
           group_members: group_members,
