@@ -4,8 +4,8 @@ class CreateOauthCredentials < ActiveRecord::Migration
 
   def change
     create_table :oauth_credentials do |t|
-      t.integer :user_id
-      t.string :token_name
+      t.integer :user_id, null: false
+      t.string :name
       t.string :secret
       t.string :route
       t.string :client_id
