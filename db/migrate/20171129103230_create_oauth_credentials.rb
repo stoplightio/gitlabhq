@@ -4,7 +4,8 @@ class CreateOauthCredentials < ActiveRecord::Migration
 
   def change
     create_table :oauth_credentials do |t|
-      t.integer :user_id, null: false
+      t.integer :source_id
+      t.integer :user_id
       t.string :name
       t.string :secret
       t.string :route
@@ -14,9 +15,8 @@ class CreateOauthCredentials < ActiveRecord::Migration
       t.string :authorize_url
       t.string :scope
 
-      t.timestamps null: true
+      t.index :source_id
+      t.index :user_id
     end
-
-     add_index "oauth_credentials", ["user_id"], name: "index_oauth_credentials_on_user_id", using: :btree, unique: true
   end
 end
