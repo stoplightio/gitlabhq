@@ -191,7 +191,7 @@ module API
         if params[:simple]
           entity = Entities::BasicProjectDetails
         elsif current_user
-          entity = Entities::ProjectWithAccess
+          entity = Entities::BasicProjectDetailsWithAccess
         else
           entity = Entities::Project
         end
