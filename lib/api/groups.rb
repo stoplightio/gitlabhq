@@ -15,6 +15,7 @@ module API
         optional :lfs_enabled, type: Boolean, desc: 'Enable/disable LFS for the projects in this group'
         optional :request_access_enabled, type: Boolean, desc: 'Allow users to request member access'
         optional :share_with_group_lock, type: Boolean, desc: 'Prevent sharing a project with another group within this group'
+        optional :avatar, type: File, desc: 'Avatar image for group'
       end
 
       params :optional_params do
@@ -93,7 +94,7 @@ module API
         if group.persisted?
           present group, with: Entities::GroupDetail, current_user: current_user
         else
-          render_api_error!("Failed to save group #{group.errors.messages}", 400)
+          render_validation_error!(group)
         end
       end
     end
@@ -139,6 +140,30 @@ module API
         end
       end
 
+      desc 'Get a list of subgroups in this group.' do
+        success Entities::Group
+      end
+      params do
+        use :statistics_params
+        optional :skip_groups, type: Array[Integer], desc: 'Array of group ids to exclude from list'
+        optional :all_available, type: Boolean, desc: 'Show all group that you have access to'
+        optional :search, type: String, desc: 'Search for a specific group'
+        optional :owned, type: Boolean, default: false, desc: 'Limit by owned by authenticated user'
+        optional :order_by, type: String, values: %w[name path], default: 'name', desc: 'Order by name or path'
+        optional :sort, type: String, values: %w[asc desc], default: 'asc', desc: 'Sort by asc (ascending) or desc (descending)'
+        use :pagination
+      end
+      get ":id/subgroups" do
+        group = find_group!(params[:id])
+        find_params = { all_available: params[:all_available], owned: params[:owned] }
+        groups = GroupsFinder.new(current_user, find_params.merge(parent: group)).execute
+        groups = groups.search(params[:search]) if params[:search].present?
+        groups = groups.where.not(id: params[:skip_groups]) if params[:skip_groups].present?
+        groups = groups.reorder(params[:order_by] => params[:sort])
+
+        present_groups groups, statistics: params[:statistics] && current_user.admin?
+      end
+
       desc 'Get a list of projects in this group.' do
         success Entities::Project
       end
@@ -162,7 +187,15 @@ module API
         group = find_group!(params[:id])
         projects = GroupProjectsFinder.new(group: group, current_user: current_user, params: project_finder_params).execute
         projects = reorder_projects(projects)
-        entity = params[:simple] ? Entities::BasicProjectDetails : Entities::Project
+
+        if params[:simple]
+          entity = Entities::BasicProjectDetails
+        elsif current_user
+          entity = Entities::ProjectWithAccess
+        else
+          entity = Entities::Project
+        end
+
         present paginate(projects), with: entity, current_user: current_user
       end
 
@@ -181,7 +214,7 @@ module API
         if result
           present group, with: Entities::GroupDetail, current_user: current_user
         else
-          render_api_error!("Failed to transfer project #{project.errors.messages}", 400)
+          render_validation_error!(project)
         end
       end
     end

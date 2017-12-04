@@ -115,7 +115,7 @@ class ProjectsFinder < UnionFinder
   end
 
   def by_tags(items)
-    params[:tag].present? ? items.tagged_with(params[:tag]) : items
+    params[:tags].present? ? items.tagged_with(params[:tags]) : items
   end
 
   def by_search(items)

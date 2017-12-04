@@ -639,6 +639,39 @@ module API
         key.destroy
       end
 
+      desc 'Resend confirmation instructions for the given email'
+      params do
+        requires :email, type: String, desc: 'The email to resend instructions to'
+      end
+      post "resend_email_confirm" do
+        user = User.find_by_unconfirmed_email_with_errors(params)
+
+        not_found!('User') unless user && user.id == current_user.id
+
+        if user.errors.blank?
+          user.resend_confirmation_instructions
+          status 204
+        else
+          render_validation_error!(user)
+        end
+      end
+
+      desc 'Confirm a user by token'
+      params do
+        requires :confirmation_token, type: String, desc: 'The user confirmation token'
+      end
+      put "email_confirm" do
+        authenticated_as_admin!
+
+        user = User.confirm_by_token(params[:confirmation_token])
+
+        if user.errors.blank?
+          status 204
+        else
+          render_validation_error!(user)
+        end
+      end
+
       desc "Get the currently authenticated user's email addresses" do
         success Entities::Email
       end
@@ -688,6 +721,40 @@ module API
 
         destroy_conditionally!(email) do |email|
           Emails::DestroyService.new(current_user, user: current_user).execute(email)
+        end
+      end
+
+      desc 'Initiate a password reset for the user account with the given email'
+      params do
+        requires :email, type: String, desc: 'The users email address'
+      end
+      post "password_reset" do
+        authenticated_as_admin!
+
+        user = User.find_by_email(params[:email])
+
+        if user && !user.recently_sent_password_reset?
+          user.send_reset_password_instructions
+        end
+
+        status 204
+      end
+
+      desc 'Set a users password, using their reset password token'
+      params do
+        requires :reset_password_token, type: String, desc: 'The reset password token'
+        requires :password, type: String, desc: 'The new password'
+        requires :password_confirmation, type: String, desc: 'The new password confirmation'
+      end
+      post "password_confirm" do
+        authenticated_as_admin!
+
+        user = User.reset_password_by_token(params)
+
+        if user.errors.blank?
+          status 204
+        else
+          render_validation_error!(user)
         end
       end
 

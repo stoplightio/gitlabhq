@@ -7,15 +7,15 @@ authentication, only public groups are returned.
 
 Parameters:
 
-| Attribute | Type | Required | Description |
-| --------- | ---- | -------- | ----------- |
-| `skip_groups` | array of integers | no | Skip the group IDs passes |
-| `all_available` | boolean | no | Show all the groups you have access to |
-| `search` | string | no | Return list of authorized groups matching the search criteria |
-| `order_by` | string | no | Order groups by `name` or `path`. Default is `name` |
-| `sort` | string | no | Order groups in `asc` or `desc` order. Default is `asc` |
-| `statistics` | boolean | no | Include group statistics (admins only) |
-| `owned` | boolean | no | Limit by groups owned by the current user |
+| Attribute       | Type              | Required | Description                                                   |
+| --------------- | ----------------- | -------- | ------------------------------------------------------------- |
+| `skip_groups`   | array of integers | no       | Skip the group IDs passes                                     |
+| `all_available` | boolean           | no       | Show all the groups you have access to                        |
+| `search`        | string            | no       | Return list of authorized groups matching the search criteria |
+| `order_by`      | string            | no       | Order groups by `name` or `path`. Default is `name`           |
+| `sort`          | string            | no       | Order groups in `asc` or `desc` order. Default is `asc`       |
+| `statistics`    | boolean           | no       | Include group statistics (admins only)                        |
+| `owned`         | boolean           | no       | Limit by groups owned by the current user                     |
 
 ```
 GET /groups
@@ -40,7 +40,8 @@ GET /groups
 ]
 ```
 
-When adding the parameter `statistics=true` and the authenticated user is an admin, additional group statistics are returned.
+When adding the parameter `statistics=true` and the authenticated user is an
+admin, additional group statistics are returned.
 
 ```
 GET /groups?statistics=true
@@ -62,11 +63,10 @@ GET /groups?statistics=true
     "full_path": "foo-bar",
     "parent_id": null,
     "statistics": {
-      "storage_size" : 212,
-      "repository_size" : 33,
-      "lfs_objects_size" : 123,
-      "job_artifacts_size" : 57
-
+      "storage_size": 212,
+      "repository_size": 33,
+      "lfs_objects_size": 123,
+      "job_artifacts_size": 57
     }
   }
 ]
@@ -80,6 +80,46 @@ You can filter by [custom attributes](custom_attributes.md) with:
 GET /groups?custom_attributes[key]=value&custom_attributes[other_key]=other_value
 ```
 
+## List a groups's subgroups
+
+Get a list of visible direct subgroups in this group. When accessed without
+authentication, only public groups are returned.
+
+Parameters:
+
+| Attribute       | Type              | Required | Description                                                   |
+| --------------- | ----------------- | -------- | ------------------------------------------------------------- |
+| `skip_groups`   | array of integers | no       | Skip the group IDs passes                                     |
+| `all_available` | boolean           | no       | Show all the groups you have access to                        |
+| `search`        | string            | no       | Return list of authorized groups matching the search criteria |
+| `order_by`      | string            | no       | Order groups by `name` or `path`. Default is `name`           |
+| `sort`          | string            | no       | Order groups in `asc` or `desc` order. Default is `asc`       |
+| `statistics`    | boolean           | no       | Include group statistics (admins only)                        |
+| `owned`         | boolean           | no       | Limit by groups owned by the current user                     |
+
+```
+GET /groups/:id/subgroups
+```
+
+```json
+[
+  {
+    "id": 1,
+    "name": "Foobar Group",
+    "path": "foo-bar",
+    "description": "An interesting group",
+    "visibility": "public",
+    "lfs_enabled": true,
+    "avatar_url": "http://localhost:3000/uploads/group/avatar/1/foo.jpg",
+    "web_url": "http://localhost:3000/groups/foo-bar",
+    "request_access_enabled": false,
+    "full_name": "Foobar Group",
+    "full_path": "foo-bar",
+    "parent_id": 123
+  }
+]
+```
+
 ## List a group's projects
 
 Get a list of projects in this group. When accessed without authentication, only
@@ -91,17 +131,18 @@ GET /groups/:id/projects
 
 Parameters:
 
-| Attribute | Type | Required | Description |
-| --------- | ---- | -------- | ----------- |
-| `id` | integer/string | yes | The ID or [URL-encoded path of the group](README.md#namespaced-path-encoding) owned by the authenticated user |
-| `archived` | boolean | no | Limit by archived status |
-| `visibility` | string | no | Limit by visibility `public`, `internal`, or `private` |
-| `order_by` | string | no | Return projects ordered by `id`, `name`, `path`, `created_at`, `updated_at`, or `last_activity_at` fields. Default is `created_at` |
-| `sort` | string | no | Return projects sorted in `asc` or `desc` order. Default is `desc` |
-| `search` | string | no | Return list of authorized projects matching the search criteria |
-| `simple` | boolean | no | Return only the ID, URL, name, and path of each project |
-| `owned` | boolean | no | Limit by projects owned by the current user |
-| `starred` | boolean | no | Limit by projects starred by the current user |
+| Attribute    | Type           | Required | Description                                                                                                                        |
+| ------------ | -------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `id`         | integer/string | yes      | The ID or [URL-encoded path of the group](README.md#namespaced-path-encoding) owned by the authenticated user                      |
+| `archived`   | boolean        | no       | Limit by archived status                                                                                                           |
+| `visibility` | string         | no       | Limit by visibility `public`, `internal`, or `private`                                                                             |
+| `order_by`   | string         | no       | Return projects ordered by `id`, `name`, `path`, `created_at`, `updated_at`, or `last_activity_at` fields. Default is `created_at` |
+| `sort`       | string         | no       | Return projects sorted in `asc` or `desc` order. Default is `desc`                                                                 |
+| `search`     | string         | no       | Return list of authorized projects matching the search criteria                                                                    |
+| `simple`     | boolean        | no       | Return only the ID, URL, name, and path of each project                                                                            |
+| `owned`      | boolean        | no       | Limit by projects owned by the current user                                                                                        |
+| `starred`    | boolean        | no       | Limit by projects starred by the current user                                                                                      |
+| `tags`       | Array[string]  | no       | Limit by one or more tags                                                                                                          |
 
 Example response:
 
@@ -158,9 +199,9 @@ GET /groups/:id
 
 Parameters:
 
-| Attribute | Type | Required | Description |
-| --------- | ---- | -------- | ----------- |
-| `id` | integer/string | yes | The ID or [URL-encoded path of the group](README.md#namespaced-path-encoding) owned by the authenticated user |
+| Attribute | Type           | Required | Description                                                                                                   |
+| --------- | -------------- | -------- | ------------------------------------------------------------------------------------------------------------- |
+| `id`      | integer/string | yes      | The ID or [URL-encoded path of the group](README.md#namespaced-path-encoding) owned by the authenticated user |
 
 ```bash
 curl --header "PRIVATE-TOKEN: 9koXpg98eAheJpvBs5tK" https://gitlab.example.com/api/v4/groups/4
@@ -173,7 +214,8 @@ Example response:
   "id": 4,
   "name": "Twitter",
   "path": "twitter",
-  "description": "Aliquid qui quis dignissimos distinctio ut commodi voluptas est.",
+  "description":
+    "Aliquid qui quis dignissimos distinctio ut commodi voluptas est.",
   "visibility": "public",
   "avatar_url": null,
   "web_url": "https://gitlab.example.com/groups/twitter",
@@ -184,7 +226,8 @@ Example response:
   "projects": [
     {
       "id": 7,
-      "description": "Voluptas veniam qui et beatae voluptas doloremque explicabo facilis.",
+      "description":
+        "Voluptas veniam qui et beatae voluptas doloremque explicabo facilis.",
       "default_branch": "master",
       "tag_list": [],
       "archived": false,
@@ -268,7 +311,8 @@ Example response:
       "archived": false,
       "visibility": "private",
       "ssh_url_to_repo": "git@gitlab.example.com:h5bp/html5-boilerplate.git",
-      "http_url_to_repo": "https://gitlab.example.com/h5bp/html5-boilerplate.git",
+      "http_url_to_repo":
+        "https://gitlab.example.com/h5bp/html5-boilerplate.git",
       "web_url": "https://gitlab.example.com/h5bp/html5-boilerplate",
       "name": "Html5 Boilerplate",
       "name_with_namespace": "H5bp / Html5 Boilerplate",
@@ -322,13 +366,16 @@ POST /groups
 
 Parameters:
 
-- `name` (required) - The name of the group
-- `path` (required) - The path of the group
-- `description` (optional) - The group's description
-- `visibility` (optional) - The group's visibility. Can be `private`, `internal`, or `public`.
-- `lfs_enabled` (optional)      - Enable/disable Large File Storage (LFS) for the projects in this group
-- `request_access_enabled` (optional) - Allow users to request member access.
-- `parent_id` (optional) - The parent group id for creating nested group.
+* `name` (required) - The name of the group
+* `path` (required) - The path of the group
+* `description` (optional) - The group's description
+* `visibility` (optional) - The group's visibility. Can be `private`,
+  `internal`, or `public`.
+* `lfs_enabled` (optional) - Enable/disable Large File Storage (LFS) for the
+  projects in this group
+* `request_access_enabled` (optional) - Allow users to request member access.
+* `parent_id` (optional) - The parent group id for creating nested group.
+* `avatar` (optional) - Image file for group's avatar
 
 ## Transfer project to group
 
@@ -340,8 +387,10 @@ POST  /groups/:id/projects/:project_id
 
 Parameters:
 
-- `id` (required) - The ID or [URL-encoded path of the group](README.md#namespaced-path-encoding) owned by the authenticated user
-- `project_id` (required) - The ID or path of a project
+* `id` (required) - The ID or
+  [URL-encoded path of the group](README.md#namespaced-path-encoding) owned by
+  the authenticated user
+* `project_id` (required) - The ID or path of a project
 
 ## Update group
 
@@ -351,19 +400,19 @@ Updates the project group. Only available to group owners and administrators.
 PUT /groups/:id
 ```
 
-| Attribute | Type | Required | Description |
-| --------- | ---- | -------- | ----------- |
-| `id` | integer | yes | The ID of the group |
-| `name` | string | no | The name of the group |
-| `path` | string | no | The path of the group |
-| `description` | string | no | The description of the group |
-| `visibility` | string | no | The visibility level of the group. Can be `private`, `internal`, or `public`. |
-| `lfs_enabled` (optional) | boolean | no | Enable/disable Large File Storage (LFS) for the projects in this group |
-| `request_access_enabled` | boolean | no | Allow users to request member access. |
+| Attribute                | Type    | Required | Description                                                                   |
+| ------------------------ | ------- | -------- | ----------------------------------------------------------------------------- |
+| `id`                     | integer | yes      | The ID of the group                                                           |
+| `name`                   | string  | no       | The name of the group                                                         |
+| `path`                   | string  | no       | The path of the group                                                         |
+| `description`            | string  | no       | The description of the group                                                  |
+| `visibility`             | string  | no       | The visibility level of the group. Can be `private`, `internal`, or `public`. |
+| `lfs_enabled` (optional) | boolean | no       | Enable/disable Large File Storage (LFS) for the projects in this group        |
+| `request_access_enabled` | boolean | no       | Allow users to request member access.                                         |
+| `avatar`                 | file    | no       | Image file for group's avatar.                                                |
 
 ```bash
 curl --request PUT --header "PRIVATE-TOKEN: 9koXpg98eAheJpvBs5tK" "https://gitlab.example.com/api/v4/groups/5?name=Experimental"
-
 ```
 
 Example response:
@@ -391,7 +440,8 @@ Example response:
       "archived": false,
       "visibility": "internal",
       "ssh_url_to_repo": "git@gitlab.example.com/html5-boilerplate.git",
-      "http_url_to_repo": "http://gitlab.example.com/h5bp/html5-boilerplate.git",
+      "http_url_to_repo":
+        "http://gitlab.example.com/h5bp/html5-boilerplate.git",
       "web_url": "http://gitlab.example.com/h5bp/html5-boilerplate",
       "name": "Html5 Boilerplate",
       "name_with_namespace": "Experimental / Html5 Boilerplate",
@@ -434,7 +484,7 @@ DELETE /groups/:id
 
 Parameters:
 
-- `id` (required) - The ID or path of a user group
+* `id` (required) - The ID or path of a user group
 
 ## Search for group
 
@@ -461,14 +511,17 @@ Please consult the [Group Members](members.md) documentation.
 
 ## Namespaces in groups
 
-By default, groups only get 20 namespaces at a time because the API results are paginated.
+By default, groups only get 20 namespaces at a time because the API results are
+paginated.
 
 To get more (up to 100), pass the following as an argument to the API call:
+
 ```
 /groups?per_page=100
 ```
 
 And to switch pages add:
+
 ```
 /groups?per_page=100&page=2
 ```

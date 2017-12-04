@@ -1,11 +1,12 @@
 class EventsFinder
-  attr_reader :source, :params, :current_user
+  attr_reader :source, :params, :current_user, :projects
 
   # Used to filter Events
   #
   # Arguments:
-  #   source - which user or project to looks for events on
+  #   source - which user or project to scope events to
   #   current_user - only return events for projects visible to this user
+  #   projects - only return events for these projects
   #   params:
   #     action: string
   #     target_type: string
@@ -15,24 +16,38 @@ class EventsFinder
   def initialize(params = {})
     @source = params.delete(:source)
     @current_user = params.delete(:current_user)
+    @projects = params.delete(:projects)
     @params = params
   end
 
   def execute
-    events = source.events
+    if source
+      events = source.events
+    else
+      events = Event.unscoped.recent
+    end
 
+    events = by_projects(events)
     events = by_current_user_access(events)
     events = by_action(events)
     events = by_target_type(events)
     events = by_created_at_before(events)
     events = by_created_at_after(events)
 
-    events
+    events.with_associations
   end
 
   private
 
+  def by_projects(events)
+    return events unless projects
+
+    events.in_projects(projects)
+  end
+
   def by_current_user_access(events)
+    return events unless current_user
+
     events.merge(ProjectsFinder.new(current_user: current_user).execute)
       .joins(:project)
   end

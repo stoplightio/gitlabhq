@@ -34,23 +34,28 @@ class GroupPolicy < BasePolicy
   rule { admin }             .enable :read_group
   rule { has_projects }      .enable :read_group
 
-  rule { developer }.enable :admin_milestones
-  rule { reporter }.enable :admin_label
+  rule { developer }.policy do
+    enable :admin_milestones
+  end
+
+  rule { reporter }.policy do
+    enable :admin_label
+    enable :create_projects
+  end
 
   rule { master }.policy do
-    enable :create_projects
     enable :admin_pipeline
     enable :admin_build
+    enable :admin_group_member
   end
 
   rule { owner }.policy do
     enable :admin_group
     enable :admin_namespace
-    enable :admin_group_member
     enable :change_visibility_level
   end
 
-  rule { owner & nested_groups_supported }.enable :create_subgroup
+  rule { master & nested_groups_supported }.enable :create_subgroup
 
   rule { public_group | logged_in_viewable }.enable :view_globally
 

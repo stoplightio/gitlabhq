@@ -27,7 +27,17 @@ class GroupMember < Member
 
   # Because source_type is `Namespace`...
   def real_source_type
-    'Group'
+    @group = Group.find(source_id)
+
+    if @group
+      if @group.human_name.include? ' / '
+        "Team"
+      else
+        "Organization"
+      end
+    else
+      "Group"
+    end
   end
 
   def notifiable_options
