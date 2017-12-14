@@ -17,6 +17,9 @@ class CreateOauthTesterAccessTokens < ActiveRecord::Migration
       t.index :user_id
       t.index :project_id
       t.index :namespace_id
+
+      t.datetime :created_at
+      t.datetime :updated_at
     end
   end
 end
