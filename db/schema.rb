@@ -170,6 +170,7 @@ ActiveRecord::Schema.define(version: 20171130082115) do
     t.string   "provider"
     t.integer  "namespace_id"
     t.string   "namespace_type"
+    t.string   "additional_namespace_ids", default: [], array: true
     t.boolean  "delinquent"
     t.json     "account"
     t.string   "account_id"
@@ -182,6 +183,7 @@ ActiveRecord::Schema.define(version: 20171130082115) do
     t.datetime "updated_at"
   end
 
+  add_index "billing_accounts", ["additional_namespace_ids"], name: "index_billing_accounts_on_additional_namespace_ids", using: :btree
   add_index "billing_accounts", ["namespace_id"], name: "index_billing_accounts_on_namespace_id", using: :btree
 
   create_table "boards", force: :cascade do |t|

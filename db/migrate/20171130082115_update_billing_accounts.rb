@@ -12,6 +12,7 @@ class UpdateBillingAccounts < ActiveRecord::Migration
 
       t.integer :namespace_id
       t.string :namespace_type
+      t.string :additional_namespace_ids, array: true, default: []
 
       t.boolean :delinquent
 
@@ -56,6 +57,7 @@ class UpdateBillingAccounts < ActiveRecord::Migration
     end
 
      add_index "billing_accounts", ["namespace_id"], name: "index_billing_accounts_on_namespace_id", using: :btree
+     add_index "billing_accounts", ["additional_namespace_ids"], name: "index_billing_accounts_on_additional_namespace_ids", using: :btree
   end
 
   def down
