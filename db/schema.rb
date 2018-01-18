@@ -11,7 +11,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20171130082113) do
+ActiveRecord::Schema.define(version: 20171130082115) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -167,16 +167,23 @@ ActiveRecord::Schema.define(version: 20171130082113) do
   add_index "award_emoji", ["user_id", "name"], name: "index_award_emoji_on_user_id_and_name", using: :btree
 
   create_table "billing_accounts", force: :cascade do |t|
+    t.string   "provider"
     t.integer  "namespace_id"
-    t.integer  "recurly_account_id"
-    t.string   "recurly_account_state"
-    t.string   "recurly_subscription_id"
-    t.string   "recurly_subscription_state"
-    t.string   "recurly_plan"
+    t.string   "namespace_type"
+    t.string   "additional_namespace_ids", default: [], array: true
+    t.boolean  "delinquent"
+    t.json     "account"
+    t.string   "account_id"
+    t.json     "card"
+    t.string   "card_id"
+    t.json     "subscription"
+    t.string   "subscription_id"
+    t.json     "discount"
     t.datetime "created_at"
     t.datetime "updated_at"
   end
 
+  add_index "billing_accounts", ["additional_namespace_ids"], name: "index_billing_accounts_on_additional_namespace_ids", using: :btree
   add_index "billing_accounts", ["namespace_id"], name: "index_billing_accounts_on_namespace_id", using: :btree
 
   create_table "boards", force: :cascade do |t|
@@ -1276,49 +1283,23 @@ ActiveRecord::Schema.define(version: 20171130082113) do
   add_index "oauth_applications", ["owner_id", "owner_type"], name: "index_oauth_applications_on_owner_id_and_owner_type", using: :btree
   add_index "oauth_applications", ["uid"], name: "index_oauth_applications_on_uid", unique: true, using: :btree
 
-  create_table "oauth_credentials", force: :cascade do |t|
-    t.integer "source_id"
-    t.integer "user_id"
-    t.string  "name"
-    t.string  "secret"
-    t.string  "route"
-    t.string  "client_id"
-    t.string  "client_secret"
-    t.string  "access_token_url"
-    t.string  "authorize_url"
-    t.string  "scope"
-  end
-
-  add_index "oauth_credentials", ["source_id"], name: "index_oauth_credentials_on_source_id", using: :btree
-  add_index "oauth_credentials", ["user_id"], name: "index_oauth_credentials_on_user_id", using: :btree
-
   create_table "oauth_openid_requests", force: :cascade do |t|
     t.integer "access_grant_id", null: false
     t.string  "nonce",           null: false
   end
 
-  create_table "oauth_stored_access_tokens", force: :cascade do |t|
-    t.integer "oauth_credentials_id"
-    t.integer "user_id"
-    t.string  "name"
-    t.string  "access_token",         null: false
-    t.string  "scope"
-    t.string  "token_type"
-  end
-
-  add_index "oauth_stored_access_tokens", ["oauth_credentials_id"], name: "index_oauth_stored_access_tokens_on_oauth_credentials_id", using: :btree
-  add_index "oauth_stored_access_tokens", ["user_id"], name: "index_oauth_stored_access_tokens_on_user_id", using: :btree
-
   create_table "oauth_tester_access_tokens", force: :cascade do |t|
-    t.integer "user_id"
-    t.integer "project_id"
-    t.integer "namespace_id"
-    t.boolean "shared"
-    t.string  "name"
-    t.string  "access_token"
-    t.string  "scope"
-    t.string  "token_type"
-    t.string  "description"
+    t.string   "name"
+    t.string   "description"
+    t.integer  "user_id"
+    t.integer  "project_id"
+    t.integer  "namespace_id"
+    t.boolean  "shared"
+    t.string   "access_token"
+    t.string   "scope"
+    t.string   "token_type"
+    t.datetime "created_at",   null: false
+    t.datetime "updated_at",   null: false
   end
 
   add_index "oauth_tester_access_tokens", ["namespace_id"], name: "index_oauth_tester_access_tokens_on_namespace_id", using: :btree
