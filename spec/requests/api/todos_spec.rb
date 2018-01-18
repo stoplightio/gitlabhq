@@ -132,6 +132,33 @@ describe API::Todos do
     end
   end
 
+  describe 'POST /todos/:id/mark_as_pending' do
+    context 'when unauthenticated' do
+      it 'returns authentication error' do
+        post api("/todos/#{pending_1.id}/mark_as_pending")
+
+        expect(response).to have_gitlab_http_status(401)
+      end
+    end
+
+    context 'when authenticated' do
+      it 'marks a todo as pending' do
+        post api("/todos/#{done.id}/mark_as_pending", john_doe)
+
+        expect(response).to have_gitlab_http_status(201)
+        expect(json_response['id']).to eq(done.id)
+        expect(json_response['state']).to eq('pending')
+        expect(done.reload).to be_pending
+      end
+
+      it 'updates todos cache' do
+        expect_any_instance_of(User).to receive(:update_todos_count_cache).and_call_original
+
+        post api("/todos/#{done.id}/mark_as_pending", john_doe)
+      end
+    end
+  end
+
   describe 'POST /mark_as_done' do
     context 'when unauthenticated' do
       it 'returns authentication error' do

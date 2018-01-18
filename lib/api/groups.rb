@@ -15,6 +15,7 @@ module API
         optional :lfs_enabled, type: Boolean, desc: 'Enable/disable LFS for the projects in this group'
         optional :request_access_enabled, type: Boolean, desc: 'Allow users to request member access'
         optional :share_with_group_lock, type: Boolean, desc: 'Prevent sharing a project with another group within this group'
+        optional :avatar, type: File, desc: 'Avatar image for group'
       end
 
       params :optional_params do
@@ -111,7 +112,7 @@ module API
         if group.persisted?
           present group, with: Entities::GroupDetail, current_user: current_user
         else
-          render_api_error!("Failed to save group #{group.errors.messages}", 400)
+          render_validation_error!(group)
         end
       end
     end
@@ -178,7 +179,14 @@ module API
       end
       get ":id/projects" do
         projects = find_group_projects(params)
-        entity = params[:simple] ? Entities::BasicProjectDetails : Entities::Project
+
+        if params[:simple]
+          entity = Entities::BasicProjectDetails
+        elsif current_user
+          entity = Entities::BasicProjectDetailsWithAccess
+        else
+          entity = Entities::Project
+        end
 
         present entity.prepare_relation(projects), with: entity, current_user: current_user
       end
@@ -209,7 +217,7 @@ module API
         if result
           present group, with: Entities::GroupDetail, current_user: current_user
         else
-          render_api_error!("Failed to transfer project #{project.errors.messages}", 400)
+          render_validation_error!(project)
         end
       end
     end

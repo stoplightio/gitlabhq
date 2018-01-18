@@ -35,7 +35,7 @@ Rails.application.configure do
   # config.force_ssl = true
 
   # See everything in the log (default is :info)
-  config.log_level = :info
+  config.log_level = :warn
 
   # Suppress 'Rendered template ...' messages in the log
   # source: http://stackoverflow.com/a/16369363

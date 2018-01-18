@@ -44,20 +44,24 @@ class GroupPolicy < BasePolicy
   rule { developer }.enable :admin_milestones
   rule { reporter }.enable :admin_label
 
-  rule { master }.policy do
+  rule { reporter }.policy do
+    enable :admin_label
     enable :create_projects
+  end
+
+  rule { master }.policy do
     enable :admin_pipeline
     enable :admin_build
+    enable :admin_group_member
   end
 
   rule { owner }.policy do
     enable :admin_group
     enable :admin_namespace
-    enable :admin_group_member
     enable :change_visibility_level
   end
 
-  rule { owner & nested_groups_supported }.enable :create_subgroup
+  rule { master & nested_groups_supported }.enable :create_subgroup
 
   rule { public_group | logged_in_viewable }.enable :view_globally
 

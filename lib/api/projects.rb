@@ -63,6 +63,7 @@ module API
         optional :membership, type: Boolean, default: false, desc: 'Limit by projects that the current user is a member of'
         optional :with_issues_enabled, type: Boolean, default: false, desc: 'Limit by enabled issues feature'
         optional :with_merge_requests_enabled, type: Boolean, default: false, desc: 'Limit by enabled merge requests feature'
+        optional :tags, type: Array[String], desc: 'Limit by tags'
       end
 
       params :create_params do
@@ -84,11 +85,13 @@ module API
         if current_user
           project_members = current_user.project_members.preload(:source, user: [notification_settings: :source])
           group_members = current_user.group_members.preload(:source, user: [notification_settings: :source])
+          project_authorizations = current_user.project_authorizations
         end
 
         options = options.reverse_merge(
-          with: current_user ? Entities::ProjectWithAccess : Entities::BasicProjectDetails,
+          with: current_user ? Entities::BasicProjectDetailsWithAccess : Entities::BasicProjectDetails,
           statistics: params[:statistics],
+          project_authorizations: project_authorizations,
           project_members: project_members,
           group_members: group_members,
           current_user: current_user
@@ -430,6 +433,29 @@ module API
         not_found!('Group Link') unless link
 
         destroy_conditionally!(link)
+      end
+
+      desc 'Transfer the project to another namespace' do
+        success Entities::Project
+      end
+      params do
+        requires :namespace_id, type: Integer, desc: 'The ID of the namespace to transfer to'
+      end
+      post ":id/transfer" do
+        authenticated_as_admin!
+
+        # can only do the transfer if allowed to remove the project
+        authorize! :remove_project, user_project
+
+        namespace = Namespace.find_by(id: params[:namespace_id])
+        unless namespace
+          not_found!('Namespace')
+        end
+
+        ::Projects::TransferService.new(user_project, current_user, params.dup).execute(namespace)
+        user_project.reload
+
+        present user_project, with: Entities::Project
       end
 
       desc 'Upload a file'

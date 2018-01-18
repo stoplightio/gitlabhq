@@ -145,6 +145,7 @@ module API
     mount ::API::Runner
     mount ::API::Runners
     mount ::API::Services
+    mount ::API::Session
     mount ::API::Settings
     mount ::API::SidekiqMetrics
     mount ::API::Snippets
