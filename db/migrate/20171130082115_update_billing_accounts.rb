@@ -57,6 +57,7 @@ class UpdateBillingAccounts < ActiveRecord::Migration
     end
 
      add_index "billing_accounts", ["namespace_id"], name: "index_billing_accounts_on_namespace_id", using: :btree
+     add_index "billing_accounts", ["account_id"], name: "index_billing_accounts_on_account_id", using: :btree, unique: true
      add_index "billing_accounts", ["additional_namespace_ids"], name: "index_billing_accounts_on_additional_namespace_ids", using: :btree
   end
 
