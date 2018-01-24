@@ -1,9 +1,10 @@
 <script>
   import { mapGetters, mapActions } from 'vuex';
+  import { escape } from 'underscore';
   import Flash from '../../flash';
   import userAvatarLink from '../../vue_shared/components/user_avatar/user_avatar_link.vue';
-  import issueNoteHeader from './issue_note_header.vue';
-  import issueNoteActions from './issue_note_actions.vue';
+  import noteHeader from './note_header.vue';
+  import noteActions from './note_actions.vue';
   import issueNoteBody from './issue_note_body.vue';
   import eventHub from '../event_hub';
 
@@ -23,8 +24,8 @@
     },
     components: {
       userAvatarLink,
-      issueNoteHeader,
-      issueNoteActions,
+      noteHeader,
+      noteActions,
       issueNoteBody,
     },
     computed: {
@@ -85,7 +86,7 @@
         };
         this.isRequesting = true;
         this.oldContent = this.note.note_html;
-        this.note.note_html = noteText;
+        this.note.note_html = escape(noteText);
 
         this.updateNote(data)
           .then(() => {
@@ -155,13 +156,13 @@
       </div>
       <div class="timeline-content">
         <div class="note-header">
-          <issue-note-header
+          <note-header
             :author="author"
             :created-at="note.created_at"
             :note-id="note.id"
             action-text="commented"
             />
-          <issue-note-actions
+          <note-actions
             :author-id="author.id"
             :note-id="note.id"
             :access-level="note.human_access"

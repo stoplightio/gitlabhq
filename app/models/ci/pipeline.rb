@@ -40,7 +40,6 @@ module Ci
     validates :status, presence: { unless: :importing? }
     validate :valid_commit_sha, unless: :importing?
 
-    after_initialize :set_config_source, if: :new_record?
     after_create :keep_around_commits, unless: :importing?
 
     enum source: {
@@ -66,8 +65,8 @@ module Ci
 
     state_machine :status, initial: :created do
       event :enqueue do
-        transition created: :pending
-        transition [:success, :failed, :canceled, :skipped] => :running
+        transition [:created, :skipped] => :pending
+        transition [:success, :failed, :canceled] => :running
       end
 
       event :run do
@@ -336,8 +335,10 @@ module Ci
 
     def latest?
       return false unless ref
+
       commit = project.commit(ref)
       return false unless commit
+
       commit.sha == sha
     end
 
@@ -363,7 +364,7 @@ module Ci
     end
 
     def has_kubernetes_active?
-      project.kubernetes_service&.active?
+      project.deployment_platform&.active?
     end
 
     def has_stage_seeds?

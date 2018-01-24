@@ -172,8 +172,8 @@ module API
         expose :id
         expose :default_projects_limit
         expose :signup_enabled
-        expose :password_authentication_enabled
-        expose :password_authentication_enabled, as: :signin_enabled
+        expose :password_authentication_enabled_for_web, as: :password_authentication_enabled
+        expose :password_authentication_enabled_for_web, as: :signin_enabled
         expose :gravatar_enabled
         expose :sign_in_text
         expose :after_sign_up_text
@@ -257,10 +257,7 @@ module API
         expose :job_events, as: :build_events
         # Expose serialized properties
         expose :properties do |service, options|
-          field_names = service.fields
-            .select { |field| options[:include_passwords] || field[:type] != 'password' }
-            .map { |field| field[:name] }
-          service.properties.slice(*field_names)
+          service.properties.slice(*service.api_field_names)
         end
       end
 

@@ -172,15 +172,15 @@ describe API::MergeRequests do
 
     context "when authenticated" do
       it 'avoids N+1 queries' do
-        control_count = ActiveRecord::QueryRecorder.new do
+        control = ActiveRecord::QueryRecorder.new do
           get api("/projects/#{project.id}/merge_requests", user)
-        end.count
+        end
 
         create(:merge_request, state: 'closed', milestone: milestone1, author: user, assignee: user, source_project: project, target_project: project, title: "Test", created_at: base_time)
 
         expect do
           get api("/projects/#{project.id}/merge_requests", user)
-        end.not_to exceed_query_limit(control_count)
+        end.not_to exceed_query_limit(control)
       end
 
       it "returns an array of all merge_requests" do
@@ -628,7 +628,7 @@ describe API::MergeRequests do
 
     context 'forked projects' do
       let!(:user2) { create(:user) }
-      let!(:forked_project) { fork_project(project, user2) }
+      let!(:forked_project) { fork_project(project, user2, repository: true) }
       let!(:unrelated_project) { create(:project,  namespace: create(:user).namespace, creator_id: user2.id) }
 
       before do
@@ -685,15 +685,27 @@ describe API::MergeRequests do
         expect(response).to have_gitlab_http_status(400)
       end
 
-      context 'when target_branch is specified' do
+      context 'when target_branch and target_project_id is specified' do
+        let(:params) do
+          { title: 'Test merge_request',
+            target_branch: 'master',
+            source_branch: 'markdown',
+            author: user2,
+            target_project_id: unrelated_project.id }
+        end
+
         it 'returns 422 if targeting a different fork' do
-          post api("/projects/#{forked_project.id}/merge_requests", user2),
-               title: 'Test merge_request',
-               target_branch: 'master',
-               source_branch: 'markdown',
-               author: user2,
-               target_project_id: unrelated_project.id
+          unrelated_project.add_developer(user2)
+
+          post api("/projects/#{forked_project.id}/merge_requests", user2), params
+
           expect(response).to have_gitlab_http_status(422)
+        end
+
+        it 'returns 403 if targeting a different fork which user can not access' do
+          post api("/projects/#{forked_project.id}/merge_requests", user2), params
+
+          expect(response).to have_gitlab_http_status(403)
         end
       end
 

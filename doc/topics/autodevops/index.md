@@ -19,6 +19,7 @@ project in an easy and automatic way:
 1. [Auto Build](#auto-build)
 1. [Auto Test](#auto-test)
 1. [Auto Code Quality](#auto-code-quality)
+1. [Auto SAST (Static Application Security Testing)](#auto-sast)
 1. [Auto Review Apps](#auto-review-apps)
 1. [Auto Deploy](#auto-deploy)
 1. [Auto Monitoring](#auto-monitoring)
@@ -121,7 +122,7 @@ Google Cloud.
 
 ## Enabling Auto DevOps
 
-NOTE: **Note:**
+**Note:**
 If you haven't done already, read the [prerequisites](#prerequisites) to make
 full use of Auto DevOps. If this is your fist time, we recommend you follow the
 [quick start guide](#quick-start).
@@ -133,6 +134,8 @@ full use of Auto DevOps. If this is your fist time, we recommend you follow the
    that will be used by Kubernetes to deploy your application
 1. Hit **Save changes** for the changes to take effect
 
+![Project AutoDevops settings section](img/auto_devops_settings.png)
+
 Now that it's enabled, there are a few more steps depending on whether your project
 has a `.gitlab-ci.yml` or not:
 
@@ -143,6 +146,10 @@ has a `.gitlab-ci.yml` or not:
 - **For projects with a `.gitlab-ci.yml` present:**
   All you need to do is remove your existing `.gitlab-ci.yml`, and you can even
   do that in a branch to test Auto DevOps before committing to `master`.
+
+NOTE: **Note:**
+Starting with GitLab 10.3, when enabling Auto DevOps, a pipeline is
+automatically run on the default branch.
 
 NOTE: **Note:**
 If you are a GitLab Administrator, you can enable Auto DevOps instance wide
@@ -195,6 +202,18 @@ created, and is uploaded as an artifact which you can later download and check
 out. In GitLab Enterprise Edition Starter, differences between the source and
 target branches are
 [shown in the merge request widget](https://docs.gitlab.com/ee/user/project/merge_requests/code_quality_diff.html).
+
+### Auto SAST
+
+> Introduced in [GitLab Enterprise Edition Ultimate][ee] 10.3.
+
+Static Application Security Testing (SAST) uses the
+[gl-sast Docker image](https://gitlab.com/gitlab-org/gl-sast) to run static
+analysis on the current code and checks for potential security issues. Once the
+report is created, it's uploaded as an artifact which you can later download and
+check out.
+
+Any security warnings are also [shown in the merge request widget](https://docs.gitlab.com/ee/user/project/merge_requests/sast.html).
 
 ### Auto Review Apps
 
@@ -321,7 +340,7 @@ Auto DevOps uses [Helm](https://helm.sh/) to deploy your application to Kubernet
 You can override the Helm chart used by bundling up a chart into your project
 repo or by specifying a project variable:
 
-- **Bundled chart** - If your project has a `./charts` directory with a `Chart.yaml`
+- **Bundled chart** - If your project has a `./chart` directory with a `Chart.yaml`
   file in it, Auto DevOps will detect the chart and use it instead of the [default
   one](https://gitlab.com/charts/charts.gitlab.io/tree/master/charts/auto-deploy-app).
   This can be a great way to control exactly how your application is deployed.
@@ -534,3 +553,4 @@ curl --data "value=true" --header "PRIVATE-TOKEN: personal_access_token" https:/
 [postgresql]: https://www.postgresql.org/
 [Auto DevOps template]: https://gitlab.com/gitlab-org/gitlab-ci-yml/blob/master/Auto-DevOps.gitlab-ci.yml
 [GitLab Omnibus Helm Chart]: ../../install/kubernetes/gitlab_omnibus.md
+[ee]: https://about.gitlab.com/gitlab-ee/

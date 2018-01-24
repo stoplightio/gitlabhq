@@ -56,7 +56,7 @@ module Emails
     def setup_issue_mail(issue_id, recipient_id)
       @issue = Issue.find(issue_id)
       @project = @issue.project
-      @target_url = project_issue_url(@project, @issue)
+      @target_url = project_url(@project, show: 'issues', issue: @issue.iid)
 
       @sent_notification = SentNotification.record(@issue, recipient_id, reply_key)
     end

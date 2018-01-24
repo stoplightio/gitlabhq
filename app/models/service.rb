@@ -117,6 +117,11 @@ class Service < ActiveRecord::Base
     nil
   end
 
+  def api_field_names
+    fields.map { |field| field[:name] }
+      .reject { |field_name| field_name =~ /(password|token|key)/ }
+  end
+
   def global_fields
     fields
   end
@@ -211,7 +216,7 @@ class Service < ActiveRecord::Base
   def async_execute(data)
     return unless supported_events.include?(data[:object_kind])
 
-    Sidekiq::Client.enqueue(ProjectServiceWorker, id, data)
+    ProjectServiceWorker.perform_async(id, data)
   end
 
   def issue_tracker?

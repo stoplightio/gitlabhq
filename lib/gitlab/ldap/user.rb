@@ -9,11 +9,8 @@ module Gitlab
     class User < Gitlab::OAuth::User
       class << self
         def find_by_uid_and_provider(uid, provider)
-          uid = Gitlab::LDAP::Person.normalize_dn(uid)
+          identity = ::Identity.with_extern_uid(provider, uid).take
 
-          identity = ::Identity
-            .where(provider: provider)
-            .where(extern_uid: uid).last
           identity && identity.user
         end
       end
@@ -37,10 +34,6 @@ module Gitlab
 
       def block_after_signup?
         ldap_config.block_auto_created_users
-      end
-
-      def sync_profile_from_provider?
-        true
       end
 
       def allowed?

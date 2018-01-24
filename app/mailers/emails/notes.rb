@@ -12,7 +12,8 @@ module Emails
       setup_note_mail(note_id, recipient_id)
 
       @issue = @note.noteable
-      @target_url = project_issue_url(*note_target_url_options)
+      @project = @issue.project
+      @target_url = project_url(@project, show: 'issues', issue: @issue.iid, anchor: "comment_#{@note.id}")
       mail_answer_thread(@issue, note_thread_options(recipient_id))
     end
 

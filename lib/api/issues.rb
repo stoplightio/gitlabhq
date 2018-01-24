@@ -161,6 +161,8 @@ module API
         use :issue_params
       end
       post ':id/issues' do
+        authorize! :create_issue, user_project
+
         # Setting created_at time only allowed for admins and project owners
         unless current_user.admin? || user_project.owner == current_user
           params.delete(:created_at)
@@ -255,7 +257,9 @@ module API
 
         authorize!(:destroy_issue, issue)
 
-        destroy_conditionally!(issue)
+        destroy_conditionally!(issue) do |issue|
+          Issuable::DestroyService.new(user_project, current_user).execute(issue)
+        end
       end
 
       desc 'List merge requests closing issue'  do

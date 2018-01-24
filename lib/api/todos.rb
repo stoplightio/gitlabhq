@@ -64,6 +64,12 @@ module API
 
         present todo, with: Entities::Todo, current_user: current_user
       end
+      post ':id/mark_as_pending' do
+        TodoService.new.mark_todos_as_pending_by_ids(params[:id], current_user)
+        todo = Todo.find(params[:id])
+
+        present todo, with: Entities::Todo, current_user: current_user
+      end
 
       desc 'Mark all todos as done'
       post '/mark_as_done' do

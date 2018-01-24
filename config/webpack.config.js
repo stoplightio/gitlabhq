@@ -108,10 +108,6 @@ var config = {
         loader: 'vue-loader',
       },
       {
-        test: /\.ts$/,
-        loader: 'ts-loader',
-      },
-      {
         test: /\.svg$/,
         loader: 'raw-loader',
       },
@@ -119,6 +115,13 @@ var config = {
         test: /\.(gif|png)$/,
         loader: 'url-loader',
         options: { limit: 2048 },
+      },
+      {
+        test: /\_worker\.js$/,
+        use: [
+          { loader: 'worker-loader' },
+          { loader: 'babel-loader' },
+        ],
       },
       {
         test: /\.(worker(\.min)?\.js|pdf|bmpr)$/,
@@ -256,7 +259,7 @@ var config = {
   ],
 
   resolve: {
-    extensions: ['.js', '.ts'],
+    extensions: ['.js'],
     alias: {
       '~':              path.join(ROOT_PATH, 'app/assets/javascripts'),
       'emojis':         path.join(ROOT_PATH, 'fixtures/emojis'),

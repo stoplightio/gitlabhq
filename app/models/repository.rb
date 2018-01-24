@@ -37,7 +37,7 @@ class Repository
                       issue_template_names merge_request_template_names).freeze
 
   # Methods that use cache_method but only memoize the value
-  MEMOIZED_CACHED_METHODS = %i(license empty_repo?).freeze
+  MEMOIZED_CACHED_METHODS = %i(license).freeze
 
   # Certain method caches should be refreshed when certain types of files are
   # changed. This Hash maps file types (as returned by Gitlab::FileDetector) to
@@ -242,6 +242,7 @@ class Repository
       Rails.logger.error "Unable to create #{REF_KEEP_AROUND} reference for repository #{path}: #{ex}"
     rescue Rugged::OSError => ex
       raise unless ex.message =~ /Failed to create locked file/ && ex.message =~ /File exists/
+
       Rails.logger.error "Unable to create #{REF_KEEP_AROUND} reference for repository #{path}: #{ex}"
     end
   end
@@ -255,7 +256,7 @@ class Repository
   end
 
   def diverging_commit_counts(branch)
-    root_ref_hash = raw_repository.rev_parse_target(root_ref).oid
+    root_ref_hash = raw_repository.commit(root_ref).id
     cache.fetch(:"diverging_commit_counts_#{branch.name}") do
       # Rugged seems to throw a `ReferenceError` when given branch_names rather
       # than SHA-1 hashes
@@ -473,6 +474,11 @@ class Repository
     nil
   end
 
+  # items is an Array like: [[oid, path], [oid1, path1]]
+  def blobs_at(items)
+    raw_repository.batch_blobs(items).map { |blob| Blob.decorate(blob, project) }
+  end
+
   def root_ref
     if raw_repository
       raw_repository.root_ref
@@ -491,7 +497,11 @@ class Repository
   end
   cache_method :exists?
 
-  delegate :empty?, to: :raw_repository
+  def empty?
+    return true unless exists?
+
+    !has_visible_content?
+  end
   cache_method :empty?
 
   # The size of this repository in megabytes.
@@ -662,6 +672,7 @@ class Repository
   def next_branch(name, opts = {})
     branch_ids = self.branch_names.map do |n|
       next 1 if n == name
+
       result = n.match(/\A#{name}-([0-9]+)\z/)
       result[1].to_i if result
     end.compact
@@ -902,19 +913,13 @@ class Repository
     end
   end
 
-  def merged_to_root_ref?(branch_or_name, pre_loaded_merged_branches = nil)
+  def merged_to_root_ref?(branch_or_name)
     branch = Gitlab::Git::Branch.find(self, branch_or_name)
 
     if branch
       @root_ref_sha ||= commit(root_ref).sha
       same_head = branch.target == @root_ref_sha
-      merged =
-        if pre_loaded_merged_branches
-          pre_loaded_merged_branches.include?(branch.name)
-        else
-          ancestor?(branch.target, @root_ref_sha)
-        end
-
+      merged = ancestor?(branch.target, @root_ref_sha)
       !same_head && merged
     else
       nil
@@ -943,13 +948,8 @@ class Repository
     end
   end
 
-  def empty_repo?
-    !exists? || !has_visible_content?
-  end
-  cache_method :empty_repo?, memoize_only: true
-
   def search_files_by_content(query, ref)
-    return [] if empty_repo? || query.blank?
+    return [] if empty? || query.blank?
 
     offset = 2
     args = %W(grep -i -I -n --before-context #{offset} --after-context #{offset} -E -e #{Regexp.escape(query)} #{ref || root_ref})
@@ -958,11 +958,23 @@ class Repository
   end
 
   def search_files_by_name(query, ref)
-    return [] if empty_repo? || query.blank?
+    return [] if empty? || query.blank?
 
     args = %W(ls-tree --full-tree -r #{ref || root_ref} --name-status | #{Regexp.escape(query)})
 
     run_git(args).first.lines.map(&:strip)
+  end
+
+  def fetch_as_mirror(url, forced: false, refmap: :all_refs, remote_name: nil)
+    unless remote_name
+      remote_name = "tmp-#{SecureRandom.hex}"
+      tmp_remote_name = true
+    end
+
+    add_remote(remote_name, url, mirror_refmap: refmap)
+    fetch_remote(remote_name, forced: forced)
+  ensure
+    remove_remote(remote_name) if tmp_remote_name
   end
 
   def fetch_remote(remote, forced: false, ssh_auth: nil, no_tags: false)
@@ -1058,6 +1070,14 @@ class Repository
     blob_data_at(sha, path)
   end
 
+  def fetch_ref(source_repository, source_ref:, target_ref:)
+    raw_repository.fetch_ref(source_repository.raw_repository, source_ref: source_ref, target_ref: target_ref)
+  end
+
+  def repository_storage_path
+    @project.repository_storage_path
+  end
+
   private
 
   # TODO Generice finder, later split this on finders by Ref or Oid
@@ -1121,10 +1141,6 @@ class Repository
   def last_commit_id_for_path_by_shelling_out(sha, path)
     args = %W(rev-list --max-count=1 #{sha} -- #{path})
     raw_repository.run_git_with_timeout(args, Gitlab::Git::Popen::FAST_GIT_PROCESS_TIMEOUT).first.strip
-  end
-
-  def repository_storage_path
-    @project.repository_storage_path
   end
 
   def initialize_raw_repository

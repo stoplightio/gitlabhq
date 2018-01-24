@@ -81,14 +81,14 @@ describe API::Services do
         get api("/projects/#{project.id}/services/#{dashed_service}", admin)
 
         expect(response).to have_gitlab_http_status(200)
-        expect(json_response['properties'].keys.map(&:to_sym)).to match_array(service_attrs_list.map)
+        expect(json_response['properties'].keys).to match_array(service_instance.api_field_names)
       end
 
       it "returns properties of service #{service} other than passwords when authenticated as project owner" do
         get api("/projects/#{project.id}/services/#{dashed_service}", user)
 
         expect(response).to have_gitlab_http_status(200)
-        expect(json_response['properties'].keys.map(&:to_sym)).to match_array(service_attrs_list_without_passwords)
+        expect(json_response['properties'].keys).to match_array(service_instance.api_field_names)
       end
 
       it "returns error when authenticated but not a project owner" do
@@ -173,6 +173,27 @@ describe API::Services do
         expect(response).to have_gitlab_http_status(200)
         expect(json_response['response_type']).to eq("ephemeral")
       end
+    end
+  end
+
+  describe 'Mattermost service' do
+    let(:service_name) { 'mattermost' }
+    let(:params) do
+      { webhook: 'https://hook.example.com', username: 'username' }
+    end
+
+    before do
+      project.create_mattermost_service(
+        active: true,
+        properties: params
+      )
+    end
+
+    it 'accepts a username for update' do
+      put api("/projects/#{project.id}/services/mattermost", user), params.merge(username: 'new_username')
+
+      expect(response).to have_gitlab_http_status(200)
+      expect(json_response['properties']['username']).to eq('new_username')
     end
   end
 end

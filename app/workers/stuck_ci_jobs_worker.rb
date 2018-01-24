@@ -1,5 +1,5 @@
 class StuckCiJobsWorker
-  include Sidekiq::Worker
+  include ApplicationWorker
   include CronjobQueue
 
   EXCLUSIVE_LEASE_KEY = 'stuck_ci_builds_worker_lease'.freeze
@@ -39,6 +39,7 @@ class StuckCiJobsWorker
   def drop_stuck(status, timeout)
     search(status, timeout) do |build|
       return unless build.stuck?
+
       drop_build :stuck, build, status, timeout
     end
   end

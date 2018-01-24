@@ -30,13 +30,19 @@ class GroupPolicy < BasePolicy
 
   rule { public_group }      .enable :read_group
   rule { logged_in_viewable }.enable :read_group
-  rule { guest }             .enable :read_group
+
+  rule { guest }.policy do
+    enable :read_group
+    enable :upload_file
+  end
+
   rule { admin }             .enable :read_group
   rule { has_projects }      .enable :read_group
 
-  rule { developer }.policy do
-    enable :admin_milestones
-  end
+  rule { has_access }.enable :read_namespace
+
+  rule { developer }.enable :admin_milestones
+  rule { reporter }.enable :admin_label
 
   rule { reporter }.policy do
     enable :admin_label

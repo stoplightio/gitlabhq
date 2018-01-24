@@ -257,7 +257,7 @@ describe Gitlab::Git::Repository, seed_helper: true do
   end
 
   describe '#empty?' do
-    it { expect(repository.empty?).to be_falsey }
+    it { expect(repository).not_to be_empty }
   end
 
   describe '#ref_names' do
@@ -449,7 +449,6 @@ describe Gitlab::Git::Repository, seed_helper: true do
       let(:repository) { Gitlab::Git::Repository.new('default', TEST_MUTABLE_REPO_PATH, '') }
 
       after do
-        FileUtils.rm_rf(TEST_MUTABLE_REPO_PATH)
         ensure_seeds
       end
 
@@ -484,7 +483,6 @@ describe Gitlab::Git::Repository, seed_helper: true do
       let(:repository) { Gitlab::Git::Repository.new('default', TEST_MUTABLE_REPO_PATH, '') }
 
       after do
-        FileUtils.rm_rf(TEST_MUTABLE_REPO_PATH)
         ensure_seeds
       end
 
@@ -544,7 +542,6 @@ describe Gitlab::Git::Repository, seed_helper: true do
     end
 
     after(:all) do
-      FileUtils.rm_rf(TEST_MUTABLE_REPO_PATH)
       ensure_seeds
     end
   end
@@ -570,7 +567,6 @@ describe Gitlab::Git::Repository, seed_helper: true do
     end
 
     after(:all) do
-      FileUtils.rm_rf(TEST_MUTABLE_REPO_PATH)
       ensure_seeds
     end
   end
@@ -588,17 +584,16 @@ describe Gitlab::Git::Repository, seed_helper: true do
     end
 
     after(:all) do
-      FileUtils.rm_rf(TEST_MUTABLE_REPO_PATH)
       ensure_seeds
     end
   end
 
-  describe '#fetch_mirror' do
+  describe '#fetch_repository_as_mirror' do
     let(:new_repository) do
       Gitlab::Git::Repository.new('default', 'my_project.git', '')
     end
 
-    subject { new_repository.fetch_mirror(repository.path) }
+    subject { new_repository.fetch_repository_as_mirror(repository) }
 
     before do
       Gitlab::Shell.new.add_repository('default', 'my_project')
@@ -608,7 +603,7 @@ describe Gitlab::Git::Repository, seed_helper: true do
       Gitlab::Shell.new.remove_repository(TestEnv.repos_path, 'my_project')
     end
 
-    it 'fetches a url as a mirror remote' do
+    it 'fetches a repository as a mirror remote' do
       subject
 
       expect(refs(new_repository.path)).to eq(refs(repository.path))
@@ -1135,7 +1130,6 @@ describe Gitlab::Git::Repository, seed_helper: true do
       end
 
       after do
-        FileUtils.rm_rf(TEST_MUTABLE_REPO_PATH)
         ensure_seeds
       end
 
@@ -1182,7 +1176,6 @@ describe Gitlab::Git::Repository, seed_helper: true do
       end
 
       after do
-        FileUtils.rm_rf(TEST_MUTABLE_REPO_PATH)
         ensure_seeds
       end
 
@@ -1217,13 +1210,32 @@ describe Gitlab::Git::Repository, seed_helper: true do
       end
     end
 
+    context 'when no root ref is available' do
+      it 'returns empty list' do
+        project = create(:project, :empty_repo)
+
+        names = project.repository.merged_branch_names(%w[feature])
+
+        expect(names).to be_empty
+      end
+    end
+
     context 'when no branch names are specified' do
-      it 'returns all merged branch names' do
+      before do
+        repository.create_branch('identical', 'master')
+      end
+
+      after do
+        ensure_seeds
+      end
+
+      it 'returns all merged branch names except for identical one' do
         names = repository.merged_branch_names
 
         expect(names).to include('merge-test')
         expect(names).to include('fix-mode')
         expect(names).not_to include('feature')
+        expect(names).not_to include('identical')
       end
     end
   end
@@ -1432,7 +1444,6 @@ describe Gitlab::Git::Repository, seed_helper: true do
     end
 
     after(:all) do
-      FileUtils.rm_rf(TEST_MUTABLE_REPO_PATH)
       ensure_seeds
     end
 
@@ -1550,34 +1561,59 @@ describe Gitlab::Git::Repository, seed_helper: true do
   end
 
   describe '#fetch_source_branch!' do
-    let(:local_ref) { 'refs/merge-requests/1/head' }
+    shared_examples '#fetch_source_branch!' do
+      let(:local_ref) { 'refs/merge-requests/1/head' }
+      let(:repository) { Gitlab::Git::Repository.new('default', TEST_REPO_PATH, '') }
+      let(:source_repository) { Gitlab::Git::Repository.new('default', TEST_MUTABLE_REPO_PATH, '') }
 
-    context 'when the branch exists' do
-      let(:source_branch) { 'master' }
-
-      it 'writes the ref' do
-        expect(repository).to receive(:write_ref).with(local_ref, /\h{40}/)
-
-        repository.fetch_source_branch!(repository, source_branch, local_ref)
+      after do
+        ensure_seeds
       end
 
-      it 'returns true' do
-        expect(repository.fetch_source_branch!(repository, source_branch, local_ref)).to eq(true)
+      context 'when the branch exists' do
+        context 'when the commit does not exist locally' do
+          let(:source_branch) { 'new-branch-for-fetch-source-branch' }
+          let(:source_rugged) { source_repository.rugged }
+          let(:new_oid) { new_commit_edit_old_file(source_rugged).oid }
+
+          before do
+            source_rugged.branches.create(source_branch, new_oid)
+          end
+
+          it 'writes the ref' do
+            expect(repository.fetch_source_branch!(source_repository, source_branch, local_ref)).to eq(true)
+            expect(repository.commit(local_ref).sha).to eq(new_oid)
+          end
+        end
+
+        context 'when the commit exists locally' do
+          let(:source_branch) { 'master' }
+          let(:expected_oid) { SeedRepo::LastCommit::ID }
+
+          it 'writes the ref' do
+            # Sanity check: the commit should already exist
+            expect(repository.commit(expected_oid)).not_to be_nil
+
+            expect(repository.fetch_source_branch!(source_repository, source_branch, local_ref)).to eq(true)
+            expect(repository.commit(local_ref).sha).to eq(expected_oid)
+          end
+        end
+      end
+
+      context 'when the branch does not exist' do
+        let(:source_branch) { 'definitely-not-master' }
+
+        it 'does not write the ref' do
+          expect(repository.fetch_source_branch!(source_repository, source_branch, local_ref)).to eq(false)
+          expect(repository.commit(local_ref)).to be_nil
+        end
       end
     end
 
-    context 'when the branch does not exist' do
-      let(:source_branch) { 'definitely-not-master' }
+    it_behaves_like '#fetch_source_branch!'
 
-      it 'does not write the ref' do
-        expect(repository).not_to receive(:write_ref)
-
-        repository.fetch_source_branch!(repository, source_branch, local_ref)
-      end
-
-      it 'returns false' do
-        expect(repository.fetch_source_branch!(repository, source_branch, local_ref)).to eq(false)
-      end
+    context 'without gitaly', :skip_gitaly_mock do
+      it_behaves_like '#fetch_source_branch!'
     end
   end
 
@@ -1626,21 +1662,6 @@ describe Gitlab::Git::Repository, seed_helper: true do
     end
   end
 
-  describe '#fetch' do
-    let(:git_path) { Gitlab.config.git.bin_path }
-    let(:remote_name) { 'my_remote' }
-
-    subject { repository.fetch(remote_name) }
-
-    it 'fetches the remote and returns true if the command was successful' do
-      expect(repository).to receive(:popen)
-        .with(%W(#{git_path} fetch #{remote_name}), repository.path)
-        .and_return(['', 0])
-
-      expect(subject).to be(true)
-    end
-  end
-
   describe '#merge' do
     let(:repository) do
       Gitlab::Git::Repository.new('default', TEST_MUTABLE_REPO_PATH, '')
@@ -1654,7 +1675,6 @@ describe Gitlab::Git::Repository, seed_helper: true do
     end
 
     after do
-      FileUtils.rm_rf(TEST_MUTABLE_REPO_PATH)
       ensure_seeds
     end
 
@@ -1752,18 +1772,29 @@ describe Gitlab::Git::Repository, seed_helper: true do
     end
   end
 
-  describe '#fetch' do
-    let(:git_path) { Gitlab.config.git.bin_path }
-    let(:remote_name) { 'my_remote' }
+  describe '#delete_all_refs_except' do
+    let(:repository) do
+      Gitlab::Git::Repository.new('default', TEST_MUTABLE_REPO_PATH, '')
+    end
 
-    subject { repository.fetch(remote_name) }
+    before do
+      repository.write_ref("refs/delete/a", "0b4bc9a49b562e85de7cc9e834518ea6828729b9")
+      repository.write_ref("refs/also-delete/b", "12d65c8dd2b2676fa3ac47d955accc085a37a9c1")
+      repository.write_ref("refs/keep/c", "6473c90867124755509e100d0d35ebdc85a0b6ae")
+      repository.write_ref("refs/also-keep/d", "0b4bc9a49b562e85de7cc9e834518ea6828729b9")
+    end
 
-    it 'fetches the remote and returns true if the command was successful' do
-      expect(repository).to receive(:popen)
-        .with(%W(#{git_path} fetch #{remote_name}), repository.path)
-        .and_return(['', 0])
+    after do
+      ensure_seeds
+    end
 
-      expect(subject).to be(true)
+    it 'deletes all refs except those with the specified prefixes' do
+      repository.delete_all_refs_except(%w(refs/keep refs/also-keep refs/heads))
+      expect(repository.ref_exists?("refs/delete/a")).to be(false)
+      expect(repository.ref_exists?("refs/also-delete/b")).to be(false)
+      expect(repository.ref_exists?("refs/keep/c")).to be(true)
+      expect(repository.ref_exists?("refs/also-keep/d")).to be(true)
+      expect(repository.ref_exists?("refs/heads/master")).to be(true)
     end
   end
 
