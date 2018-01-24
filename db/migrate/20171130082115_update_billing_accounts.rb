@@ -12,7 +12,7 @@ class UpdateBillingAccounts < ActiveRecord::Migration
 
       t.integer :namespace_id
       t.string :namespace_type
-      t.string :additional_namespace_ids, array: true, default: []
+      t.integer :additional_namespace_ids, array: true, default: []
 
       t.boolean :delinquent
 
