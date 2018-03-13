@@ -184,7 +184,7 @@ ActiveRecord::Schema.define(version: 20171215121259) do
     t.string   "provider"
     t.integer  "namespace_id"
     t.string   "namespace_type"
-    t.string   "additional_namespace_ids", default: [], array: true
+    t.integer  "additional_namespace_ids", default: [], array: true
     t.boolean  "delinquent"
     t.json     "account"
     t.string   "account_id"
