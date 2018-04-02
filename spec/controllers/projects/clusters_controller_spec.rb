@@ -27,13 +27,6 @@ describe Projects::ClustersController do
           expect(assigns(:clusters)).to match_array([enabled_cluster, disabled_cluster])
         end
 
-        it 'assigns counters to correct values' do
-          go
-
-          expect(assigns(:active_count)).to eq(1)
-          expect(assigns(:inactive_count)).to eq(1)
-        end
-
         context 'when page is specified' do
           let(:last_page) { project.clusters.page.total_pages }
 
@@ -48,20 +41,6 @@ describe Projects::ClustersController do
             expect(assigns(:clusters).current_page).to eq(last_page)
           end
         end
-
-        context 'when only enabled clusters are requested' do
-          it 'returns only enabled clusters' do
-            get :index, namespace_id: project.namespace, project_id: project, scope: 'active'
-            expect(assigns(:clusters)).to all(have_attributes(enabled: true))
-          end
-        end
-
-        context 'when only disabled clusters are requested' do
-          it 'returns only disabled clusters' do
-            get :index, namespace_id: project.namespace, project_id: project, scope: 'inactive'
-            expect(assigns(:clusters)).to all(have_attributes(enabled: false))
-          end
-        end
       end
 
       context 'when project does not have a cluster' do
@@ -73,13 +52,6 @@ describe Projects::ClustersController do
           expect(response).to have_gitlab_http_status(:ok)
           expect(response).to render_template(:index, partial: :empty_state)
           expect(assigns(:clusters)).to eq([])
-        end
-
-        it 'assigns counters to zero' do
-          go
-
-          expect(assigns(:active_count)).to eq(0)
-          expect(assigns(:inactive_count)).to eq(0)
         end
       end
     end
@@ -118,6 +90,12 @@ describe Projects::ClustersController do
 
         expect(response).to have_gitlab_http_status(:ok)
         expect(response).to match_response_schema('cluster_status')
+      end
+
+      it 'invokes schedule_status_update on each application' do
+        expect_any_instance_of(Clusters::Applications::Ingress).to receive(:schedule_status_update)
+
+        go
       end
     end
 
@@ -205,7 +183,7 @@ describe Projects::ClustersController do
 
           cluster.reload
           expect(response).to redirect_to(project_cluster_path(project, cluster))
-          expect(flash[:notice]).to eq('Cluster was successfully updated.')
+          expect(flash[:notice]).to eq('Kubernetes cluster was successfully updated.')
           expect(cluster.enabled).to be_falsey
         end
 
@@ -304,7 +282,7 @@ describe Projects::ClustersController do
 
             cluster.reload
             expect(response).to redirect_to(project_cluster_path(project, cluster))
-            expect(flash[:notice]).to eq('Cluster was successfully updated.')
+            expect(flash[:notice]).to eq('Kubernetes cluster was successfully updated.')
             expect(cluster.enabled).to be_falsey
             expect(cluster.name).to eq('my-new-cluster-name')
             expect(cluster.platform_kubernetes.namespace).to eq('my-namespace')
@@ -364,7 +342,7 @@ describe Projects::ClustersController do
               .and change { Clusters::Providers::Gcp.count }.by(-1)
 
             expect(response).to redirect_to(project_clusters_path(project))
-            expect(flash[:notice]).to eq('Cluster integration was successfully removed.')
+            expect(flash[:notice]).to eq('Kubernetes cluster integration was successfully removed.')
           end
         end
 
@@ -377,7 +355,7 @@ describe Projects::ClustersController do
               .and change { Clusters::Providers::Gcp.count }.by(-1)
 
             expect(response).to redirect_to(project_clusters_path(project))
-            expect(flash[:notice]).to eq('Cluster integration was successfully removed.')
+            expect(flash[:notice]).to eq('Kubernetes cluster integration was successfully removed.')
           end
         end
       end
@@ -392,7 +370,7 @@ describe Projects::ClustersController do
             .and change { Clusters::Providers::Gcp.count }.by(0)
 
           expect(response).to redirect_to(project_clusters_path(project))
-          expect(flash[:notice]).to eq('Cluster integration was successfully removed.')
+          expect(flash[:notice]).to eq('Kubernetes cluster integration was successfully removed.')
         end
       end
     end

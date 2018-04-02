@@ -21,13 +21,14 @@ describe MergeRequests::CreateService do
       let(:merge_request) { service.execute }
 
       before do
-        project.team << [user, :master]
-        project.team << [assignee, :developer]
+        project.add_master(user)
+        project.add_developer(assignee)
         allow(service).to receive(:execute_hooks)
       end
 
       it 'creates an MR' do
         expect(merge_request).to be_valid
+        expect(merge_request.work_in_progress?).to be(false)
         expect(merge_request.title).to eq('Awesome merge_request')
         expect(merge_request.assignee).to be_nil
         expect(merge_request.merge_params['force_remove_source_branch']).to eq('1')
@@ -60,6 +61,40 @@ describe MergeRequests::CreateService do
         }
 
         expect(Event.where(attributes).count).to eq(1)
+      end
+
+      describe 'when marked with /wip' do
+        context 'in title and in description' do
+          let(:opts) do
+            {
+              title: 'WIP: Awesome merge_request',
+              description: "well this is not done yet\n/wip",
+              source_branch: 'feature',
+              target_branch: 'master',
+              assignee: assignee
+            }
+          end
+
+          it 'sets MR to WIP' do
+            expect(merge_request.work_in_progress?).to be(true)
+          end
+        end
+
+        context 'in description only' do
+          let(:opts) do
+            {
+              title: 'Awesome merge_request',
+              description: "well this is not done yet\n/wip",
+              source_branch: 'feature',
+              target_branch: 'master',
+              assignee: assignee
+            }
+          end
+
+          it 'sets MR to WIP' do
+            expect(merge_request.work_in_progress?).to be(true)
+          end
+        end
       end
 
       context 'when merge request is assigned to someone' do
@@ -148,8 +183,8 @@ describe MergeRequests::CreateService do
         end
 
         before do
-          project.team << [user, :master]
-          project.team << [assignee, :master]
+          project.add_master(user)
+          project.add_master(assignee)
         end
 
         it 'assigns and sets milestone to issuable from command' do
@@ -165,7 +200,7 @@ describe MergeRequests::CreateService do
         let(:assignee) { create(:user) }
 
         before do
-          project.team << [user, :master]
+          project.add_master(user)
         end
 
         it 'removes assignee_id when user id is invalid' do
@@ -185,7 +220,7 @@ describe MergeRequests::CreateService do
         end
 
         it 'saves assignee when user id is valid' do
-          project.team << [assignee, :master]
+          project.add_master(assignee)
           opts = { title: 'Title', description: 'Description', assignee_id: assignee.id }
 
           merge_request = described_class.new(project, user, opts).execute
@@ -205,7 +240,7 @@ describe MergeRequests::CreateService do
           end
 
           it 'invalidates open merge request counter for assignees when merge request is assigned' do
-            project.team << [assignee, :master]
+            project.add_master(assignee)
 
             described_class.new(project, user, opts).execute
 
@@ -249,8 +284,8 @@ describe MergeRequests::CreateService do
       end
 
       before do
-        project.team << [user, :master]
-        project.team << [assignee, :developer]
+        project.add_master(user)
+        project.add_developer(assignee)
       end
 
       it 'creates a `MergeRequestsClosingIssues` record for each issue' do

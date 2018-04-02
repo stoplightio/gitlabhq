@@ -17,7 +17,7 @@ feature 'Clusters', :js do
     end
 
     it 'sees empty state' do
-      expect(page).to have_link('Add cluster')
+      expect(page).to have_link('Add Kubernetes cluster')
       expect(page).to have_selector('.empty-state')
     end
   end
@@ -35,26 +35,15 @@ feature 'Clusters', :js do
       expect(page).to have_selector('.gl-responsive-table-row', count: 2)
     end
 
-    it 'user sees navigation tabs' do
-      expect(page.find('.js-active-tab').text).to include('Active')
-      expect(page.find('.js-active-tab .badge').text).to include('1')
-
-      expect(page.find('.js-inactive-tab').text).to include('Inactive')
-      expect(page.find('.js-inactive-tab .badge').text).to include('0')
-
-      expect(page.find('.js-all-tab').text).to include('All')
-      expect(page.find('.js-all-tab .badge').text).to include('1')
-    end
-
     context 'inline update of cluster' do
       it 'user can update cluster' do
-        expect(page).to have_selector('.js-toggle-cluster-list')
+        expect(page).to have_selector('.js-project-feature-toggle')
       end
 
       context 'with sucessfull request' do
         it 'user sees updated cluster' do
           expect do
-            page.find('.js-toggle-cluster-list').click
+            page.find('.js-project-feature-toggle').click
             wait_for_requests
           end.to change { cluster.reload.enabled }
 
@@ -68,7 +57,7 @@ feature 'Clusters', :js do
           expect_any_instance_of(Clusters::UpdateService).to receive(:execute).and_call_original
           allow_any_instance_of(Clusters::Cluster).to receive(:valid?) { false }
 
-          page.find('.js-toggle-cluster-list').click
+          page.find('.js-project-feature-toggle').click
 
           expect(page).to have_content('Something went wrong on our end.')
           expect(page).to have_selector('.is-checked')
@@ -86,6 +75,20 @@ feature 'Clusters', :js do
         expect(page).to have_button('Save')
         expect(page.find(:css, '.cluster-name').value).to eq(cluster.name)
       end
+    end
+  end
+
+  context 'when user has not signed in Google' do
+    before do
+      visit project_clusters_path(project)
+
+      click_link 'Add Kubernetes cluster'
+      click_link 'Create on GKE'
+    end
+
+    it 'user sees a login page' do
+      expect(page).to have_css('.signin-with-google')
+      expect(page).to have_link('Google account')
     end
   end
 end

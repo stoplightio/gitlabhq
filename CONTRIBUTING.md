@@ -50,6 +50,9 @@ _This notice should stay as the first item in the CONTRIBUTING.md file._
 
 ## Contribute to GitLab
 
+For a first-time step-by-step guide to the contribution process, see
+["Contributing to GitLab"](https://about.gitlab.com/contributing/).
+
 Thank you for your interest in contributing to GitLab. This guide details how
 to contribute to GitLab in a way that is efficient for everyone.
 
@@ -104,9 +107,13 @@ the remaining issues on the GitHub issue tracker.
 
 ## I want to contribute!
 
-If you want to contribute to GitLab, [issues with the label `Accepting Merge Requests` and small weight][accepting-mrs-weight] is a great place to start. Issues with a lower weight (1 or 2) are deemed suitable for beginners.
-These issues will be of reasonable size and challenge, for anyone to start
-contributing to GitLab.
+If you want to contribute to GitLab [issues with the label `Accepting Merge Requests` and small weight][accepting-mrs-weight]
+is a great place to start. Issues with a lower weight (1 or 2) are deemed
+suitable for beginners. These issues will be of reasonable size and challenge,
+for anyone to start contributing to GitLab. If you have any questions or need help visit [Getting Help](https://about.gitlab.com/getting-help/#discussion) to
+learn how to communicate with GitLab. If you're looking for a Gitter or Slack channel
+please consider we favor 
+[asynchronous communication](https://about.gitlab.com/handbook/communication/#internal-communication) over real time communication. Thanks for your contribution!
 
 ## Workflow labels
 
@@ -167,7 +174,7 @@ Assigning a team label makes sure issues get the attention of the appropriate
 people.
 
 The current team labels are ~Build, ~"CI/CD", ~Discussion, ~Documentation, ~Edge,
-~Geo, ~Gitaly, ~Platform, ~Prometheus, ~Release, and ~"UX".
+~Geo, ~Gitaly, ~Monitoring, ~Platform, ~Release, ~"Security Products" and ~"UX".
 
 The descriptions on the [labels page][labels-page] explain what falls under the
 responsibility of each team.
@@ -188,6 +195,17 @@ release. There are two levels of priority labels:
 - ~Stretch: Issues that are a stretch goal for delivering in the current
   milestone. If these issues are not done in the current release, they will
   strongly be considered for the next release.
+
+### Severity labels (~S1, ~S2, etc.)
+
+Severity labels help us clearly communicate the impact of a ~bug on users.
+
+| Label | Meaning                                  | Example |
+|-------|------------------------------------------|---------|
+| ~S1   | Feature broken, no workaround            | Unable to create an issue |
+| ~S2   | Feature broken, workaround unacceptable  | Can push commits, but only via the command line |
+| ~S3   | Feature broken, workaround acceptable    | Can create merge requests only from the Merge Requests page, not through the Issue |
+| ~S4   | Cosmetic issue                           | Label colors are incorrect / not being displayed |       
 
 ### Label for community contributors (~"Accepting Merge Requests")
 
@@ -390,9 +408,9 @@ For issues related to the open source stewardship of GitLab,
 there is the ~"stewardship" label.
 
 This label is to be used for issues in which the stewardship of GitLab
-is a topic of discussion. For instance if GitLab Inc. is planning to remove
-features from GitLab CE to make exclusive in GitLab EE, related issues
-would be labelled with ~"stewardship".
+is a topic of discussion. For instance if GitLab Inc. is planning to add
+features from GitLab EE to GitLab CE, related issues would be labelled with
+~"stewardship".
 
 A recent example of this was the issue for
 [bringing the time tracking API to GitLab CE][time-tracking-issue].
@@ -553,7 +571,7 @@ the feature you contribute through all of these steps.
 
 1. Description explaining the relevancy (see following item)
 1. Working and clean code that is commented where needed
-1. [Unit and system tests][testing] that pass on the CI server
+1. [Unit, integration, and system tests][testing] that pass on the CI server
 1. Performance/scalability implications have been considered, addressed, and tested
 1. [Documented][doc-styleguide] in the `/doc` directory
 1. [Changelog entry added][changelog], if necessary

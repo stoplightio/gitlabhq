@@ -16,23 +16,25 @@ module Gitlab
         vars['PWD'] = path
         options = { chdir: path }
 
-        @cmd_output = ""
-        @cmd_status = 0
+        cmd_output = ""
+        cmd_status = 0
         Open3.popen3(vars, *cmd, options) do |stdin, stdout, stderr, wait_thr|
+          stdout.set_encoding(Encoding::ASCII_8BIT)
+
           yield(stdin) if block_given?
           stdin.close
 
           if lazy_block
-            return lazy_block.call(stdout.lazy)
+            return [lazy_block.call(stdout.lazy), 0]
           else
-            @cmd_output << stdout.read
+            cmd_output << stdout.read
           end
 
-          @cmd_output << stderr.read
-          @cmd_status = wait_thr.value.exitstatus
+          cmd_output << stderr.read
+          cmd_status = wait_thr.value.exitstatus
         end
 
-        [@cmd_output, @cmd_status]
+        [cmd_output, cmd_status]
       end
 
       def popen_with_timeout(cmd, timeout, path, vars = {})

@@ -40,7 +40,7 @@ constraints(ProjectUrlConstrainer.new) do
       #
       # Templates
       #
-      get '/templates/:template_type/:key' => 'templates#show', as: :template
+      get '/templates/:template_type/:key' => 'templates#show', as: :template, constraints: { key: %r{[^/]+} }
 
       resource  :avatar, only: [:show, :destroy]
       resources :commit, only: [:show], constraints: { id: /\h{7,40}/ } do
@@ -50,11 +50,16 @@ constraints(ProjectUrlConstrainer.new) do
           post :revert
           post :cherry_pick
           get :diff_for_path
+          get :merge_requests
         end
       end
 
       resource :pages, only: [:show, :destroy] do
-        resources :domains, only: [:show, :new, :create, :destroy], controller: 'pages_domains', constraints: { id: /[^\/]+/ }
+        resources :domains, except: :index, controller: 'pages_domains', constraints: { id: %r{[^/]+} } do
+          member do
+            post :verify
+          end
+        end
       end
 
       resources :snippets, concerns: :awardable, constraints: { id: /\d+/ } do
@@ -64,7 +69,7 @@ constraints(ProjectUrlConstrainer.new) do
         end
       end
 
-      resources :services, constraints: { id: /[^\/]+/ }, only: [:index, :edit, :update] do
+      resources :services, constraints: { id: %r{[^/]+} }, only: [:edit, :update] do
         member do
           put :test
         end
@@ -73,7 +78,9 @@ constraints(ProjectUrlConstrainer.new) do
       resource :mattermost, only: [:new, :create]
 
       namespace :prometheus do
-        get :active_metrics
+        resources :metrics, constraints: { id: %r{[^\/]+} }, only: [] do
+          get :active_common, on: :collection
+        end
       end
 
       resources :deploy_keys, constraints: { id: /\d+/ }, only: [:index, :new, :create, :edit, :update] do
@@ -96,6 +103,8 @@ constraints(ProjectUrlConstrainer.new) do
           post :toggle_subscription
           post :remove_wip
           post :assign_related_issues
+          get :discussions, format: :json
+          post :rebase
 
           scope constraints: { format: nil }, action: :show do
             get :commits, defaults: { tab: 'commits' }
@@ -154,7 +163,8 @@ constraints(ProjectUrlConstrainer.new) do
         end
       end
 
-      resources :variables, only: [:index, :show, :update, :create, :destroy]
+      resource :variables, only: [:show, :update]
+
       resources :triggers, only: [:index, :create, :edit, :update, :destroy] do
         member do
           post :take_ownership
@@ -179,6 +189,7 @@ constraints(ProjectUrlConstrainer.new) do
 
       resources :pipeline_schedules, except: [:show] do
         member do
+          post :play
           post :take_ownership
         end
       end
@@ -343,7 +354,7 @@ constraints(ProjectUrlConstrainer.new) do
         end
       end
 
-      resources :project_members, except: [:show, :new, :edit], constraints: { id: /[a-zA-Z.\/0-9_\-#%+]+/ }, concerns: :access_requestable do
+      resources :project_members, except: [:show, :new, :edit], constraints: { id: %r{[a-zA-Z./0-9_\-#%+]+} }, concerns: :access_requestable do
         collection do
           delete :leave
 
@@ -370,20 +381,21 @@ constraints(ProjectUrlConstrainer.new) do
 
       get 'noteable/:target_type/:target_id/notes' => 'notes#index', as: 'noteable_notes'
 
-      resources :boards, only: [:index, :show, :create, :update, :destroy]
+      # On CE only index and show are needed
+      resources :boards, only: [:index, :show]
 
       resources :todos, only: [:create]
 
       resources :uploads, only: [:create] do
         collection do
-          get ":secret/:filename", action: :show, as: :show, constraints: { filename: /[^\/]+/ }
+          get ":secret/:filename", action: :show, as: :show, constraints: { filename: %r{[^/]+} }
         end
       end
 
       resources :runners, only: [:index, :edit, :update, :destroy, :show] do
         member do
-          get :resume
-          get :pause
+          post :resume
+          post :pause
         end
 
         collection do
@@ -406,7 +418,9 @@ constraints(ProjectUrlConstrainer.new) do
       end
       namespace :settings do
         get :members, to: redirect("%{namespace_id}/%{project_id}/project_members")
-        resource :ci_cd, only: [:show], controller: 'ci_cd'
+        resource :ci_cd, only: [:show], controller: 'ci_cd' do
+          post :reset_cache
+        end
         resource :integrations, only: [:show]
         resource :repository, only: [:show], controller: :repository
       end

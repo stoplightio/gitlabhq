@@ -1,23 +1,16 @@
 module API
   module Helpers
     module InternalHelpers
-      SSH_GITALY_FEATURES = {
-        'git-receive-pack' => [:ssh_receive_pack, Gitlab::GitalyClient::MigrationStatus::OPT_IN],
-        'git-upload-pack' => [:ssh_upload_pack, Gitlab::GitalyClient::MigrationStatus::OPT_OUT]
-      }.freeze
+      attr_reader :redirected_path
 
       def wiki?
-        set_project unless defined?(@wiki)
-        @wiki
+        set_project unless defined?(@wiki) # rubocop:disable Gitlab/ModuleWithInstanceVariables
+        @wiki # rubocop:disable Gitlab/ModuleWithInstanceVariables
       end
 
       def project
-        set_project unless defined?(@project)
-        @project
-      end
-
-      def redirected_path
-        @redirected_path
+        set_project unless defined?(@project) # rubocop:disable Gitlab/ModuleWithInstanceVariables
+        @project # rubocop:disable Gitlab/ModuleWithInstanceVariables
       end
 
       def ssh_authentication_abilities
@@ -67,8 +60,21 @@ module API
         false
       end
 
+      def project_path
+        project&.path || project_path_match[:project_path]
+      end
+
+      def namespace_path
+        project&.namespace&.full_path || project_path_match[:namespace_path]
+      end
+
       private
 
+      def project_path_match
+        @project_path_match ||= params[:project].match(Gitlab::PathRegex.full_project_git_path_regex) || {}
+      end
+
+      # rubocop:disable Gitlab/ModuleWithInstanceVariables
       def set_project
         if params[:gl_repository]
           @project, @wiki = Gitlab::GlRepository.parse(params[:gl_repository])
@@ -77,6 +83,7 @@ module API
           @project, @wiki, @redirected_path = Gitlab::RepoPath.parse(params[:project])
         end
       end
+      # rubocop:enable Gitlab/ModuleWithInstanceVariables
 
       # Project id to pass between components that don't share/don't have
       # access to the same filesystem mounts
@@ -102,8 +109,7 @@ module API
 
       # Return the Gitaly Address if it is enabled
       def gitaly_payload(action)
-        feature, status = SSH_GITALY_FEATURES[action]
-        return unless feature && Gitlab::GitalyClient.feature_enabled?(feature, status: status)
+        return unless %w[git-receive-pack git-upload-pack].include?(action)
 
         {
           repository: repository.gitaly_repository,

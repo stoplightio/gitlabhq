@@ -70,9 +70,17 @@ class Projects::MilestonesController < Projects::ApplicationController
   end
 
   def promote
-    promoted_milestone = Milestones::PromoteService.new(project, current_user).execute(milestone)
-    flash[:notice] = "Milestone has been promoted to group milestone."
-    redirect_to group_milestone_path(project.group, promoted_milestone.iid)
+    Milestones::PromoteService.new(project, current_user).execute(milestone)
+
+    flash[:notice] = "#{milestone.title} promoted to group milestone"
+    respond_to do |format|
+      format.html do
+        redirect_to project_milestones_path(project)
+      end
+      format.json do
+        render json: { url: project_milestones_path(project) }
+      end
+    end
   rescue Milestones::PromoteService::PromoteMilestoneError => error
     redirect_to milestone, alert: error.message
   end
@@ -83,7 +91,7 @@ class Projects::MilestonesController < Projects::ApplicationController
     Milestones::DestroyService.new(project, current_user).execute(milestone)
 
     respond_to do |format|
-      format.html { redirect_to namespace_project_milestones_path, status: 302 }
+      format.html { redirect_to namespace_project_milestones_path, status: 303 }
       format.js { head :ok }
     end
   end

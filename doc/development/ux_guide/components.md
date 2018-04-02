@@ -10,7 +10,7 @@
 * [Tables](#tables)
 * [Blocks](#blocks)
 * [Panels](#panels)
-* [Dialog modals](#dialog-modals)
+* [Modals](#modals)
 * [Alerts](#alerts)
 * [Forms](#forms)
 * [Search box](#search-box)
@@ -108,7 +108,7 @@ Primary buttons communicate the main call to action. There should only be one ca
 ![Primary button example](img/button-primary.png)
 
 #### Secondary
-Secondary buttons are for alternative commands. They should be conveyed by a button with an stroke, and no background fill.
+Secondary buttons are for alternative commands. They should be conveyed by a button with a stroke, and no background fill.
 
 ![Secondary button example](img/button-secondary.png)
 
@@ -181,7 +181,7 @@ A count element is used in navigation contexts where it is helpful to indicate t
 
 ## Lists
 
-Lists are used where ever there is a single column of information to display. Ths [issues list](https://gitlab.com/gitlab-org/gitlab-ce/issues) is an example of a important list in the GitLab UI.
+Lists are used where ever there is a single column of information to display. Ths [issues list](https://gitlab.com/gitlab-org/gitlab-ce/issues) is an example of an important list in the GitLab UI.
 
 ### Types
 
@@ -255,21 +255,21 @@ Skeleton loading can replace any existing UI elements for the period in which th
 
 ---
 
-## Dialog modals
+## Modals
 
-Dialog modals are only used for having a conversation and confirmation with the user. The user is not able to access the features on the main page until closing the modal.
+Modals are only used for having a conversation and confirmation with the user. The user is not able to access the features on the main page until closing the modal.
 
 ### Usage
 
-* When the action is irreversible, dialog modals provide the details and confirm with the user before they take an advanced action.
-* When the action will affect privacy or authorization, dialog modals provide advanced information and confirm with the user.
+* When the action is irreversible, modals provide the details and confirm with the user before they take an advanced action.
+* When the action will affect privacy or authorization, modals provide advanced information and confirm with the user.
 
 ### Style
 
-* Dialog modals contain the header, body, and actions.
+* Modals contain the header, body, and actions.
   * **Header(1):** The header title is a question instead of a descriptive phrase.
   * **Body(2):** The content in body should never be ambiguous and unclear. It provides specific information.
-  * **Actions(3):** Contains a affirmative action, a dismissive action, and an extra action. The order of actions from left to right: Dismissive action → Extra action → Affirmative action
+  * **Actions(3):** Contains an affirmative action, a dismissive action, and an extra action. The order of actions from left to right: Dismissive action → Extra action → Affirmative action
 * Confirmations regarding labels should keep labeling styling.
 * References to commits, branches, and tags should be **monospaced**.
 
@@ -277,13 +277,13 @@ Dialog modals are only used for having a conversation and confirmation with the 
 
 ### Placement
 
-* Dialog modals should always be the center of the screen horizontally and be positioned **72px** from the top.
+* Modals should always be the center of the screen horizontally and be positioned **72px** from the top.
 
-| Dialog with 2 actions | Dialog with 3 actions | Special confirmation |
+| Modal with 2 actions | Modal with 3 actions | Special confirmation |
 | --------------------- | --------------------- | -------------------- |
 | ![two-actions](img/modals-general-confimation-dialog.png) | ![three-actions](img/modals-three-buttons.png) | ![spcial-confirmation](img/modals-special-confimation-dialog.png) |
 
-> TODO: Special case for dialog modal.
+> TODO: Special case for modal.
 
 ---
 

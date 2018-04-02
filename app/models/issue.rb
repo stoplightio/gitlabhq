@@ -12,7 +12,7 @@ class Issue < ActiveRecord::Base
   include ThrottledTouch
   include IgnorableColumn
 
-  ignore_column :branch_name
+  ignore_column :assignee_id, :branch_name, :deleted_at
 
   DueDateStruct = Struct.new(:title, :name).freeze
   NoDueDate     = DueDateStruct.new('No Due Date', '0').freeze
@@ -34,6 +34,8 @@ class Issue < ActiveRecord::Base
   has_many :assignees, class_name: "User", through: :issue_assignees
 
   validates :project, presence: true
+
+  alias_attribute :parent_ids, :project_id
 
   scope :in_projects, ->(project_ids) { where(project_id: project_ids) }
 
@@ -76,7 +78,9 @@ class Issue < ActiveRecord::Base
     end
   end
 
-  acts_as_paranoid
+  class << self
+    alias_method :in_parents, :in_projects
+  end
 
   def self.reference_prefix
     '#'
@@ -155,7 +159,18 @@ class Issue < ActiveRecord::Base
       object.all_references(current_user, extractor: ext)
     end
 
-    ext.merge_requests.sort_by(&:iid)
+    merge_requests = ext.merge_requests.sort_by(&:iid)
+
+    cross_project_filter = -> (merge_requests) do
+      merge_requests.select { |mr| mr.target_project == project }
+    end
+
+    Ability.merge_requests_readable_by_user(
+      merge_requests, current_user,
+      filters: {
+        read_cross_project: cross_project_filter
+      }
+    )
   end
 
   # All branches containing the current issue's ID, except for
@@ -275,6 +290,11 @@ class Issue < ActiveRecord::Base
   end
 
   private
+
+  def ensure_metrics
+    super
+    metrics.record!
+  end
 
   # Returns `true` if the given User can read the current Issue.
   #

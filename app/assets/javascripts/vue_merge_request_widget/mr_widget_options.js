@@ -1,4 +1,4 @@
-import Project from '~/project';
+import Project from '~/pages/projects/project';
 import SmartInterval from '~/smart_interval';
 import Flash from '../flash';
 import {
@@ -6,10 +6,12 @@ import {
   WidgetMergeHelp,
   WidgetPipeline,
   WidgetDeployment,
+  WidgetMaintainerEdit,
   WidgetRelatedLinks,
   MergedState,
   ClosedState,
   MergingState,
+  RebaseState,
   WipState,
   ArchivedState,
   ConflictsState,
@@ -62,7 +64,7 @@ export default {
       return this.mr.hasCI;
     },
     shouldRenderRelatedLinks() {
-      return !!this.mr.relatedLinks;
+      return !!this.mr.relatedLinks && !this.mr.isNothingToMergeState;
     },
     shouldRenderDeployments() {
       return this.mr.deployments.length;
@@ -79,24 +81,23 @@ export default {
         ciEnvironmentsStatusPath: store.ciEnvironmentsStatusPath,
         statusPath: store.statusPath,
         mergeActionsContentPath: store.mergeActionsContentPath,
+        rebasePath: store.rebasePath,
       };
       return new MRWidgetService(endpoints);
     },
     checkStatus(cb) {
       return this.service.checkStatus()
-        .then(res => res.json())
-        .then((res) => {
-          this.handleNotification(res);
-          this.mr.setData(res);
+        .then(res => res.data)
+        .then((data) => {
+          this.handleNotification(data);
+          this.mr.setData(data);
           this.setFaviconHelper();
 
           if (cb) {
-            cb.call(null, res);
+            cb.call(null, data);
           }
         })
-        .catch(() => {
-          new Flash('Something went wrong. Please try again.'); // eslint-disable-line
-        });
+        .catch(() => new Flash('Something went wrong. Please try again.'));
     },
     initPolling() {
       this.pollingInterval = new SmartInterval({
@@ -124,10 +125,10 @@ export default {
     },
     fetchDeployments() {
       return this.service.fetchDeployments()
-        .then(res => res.json())
-        .then((res) => {
-          if (res.length) {
-            this.mr.deployments = res;
+        .then(res => res.data)
+        .then((data) => {
+          if (data.length) {
+            this.mr.deployments = data;
           }
         })
         .catch(() => {
@@ -137,19 +138,18 @@ export default {
     fetchActionsContent() {
       this.service.fetchMergeActionsContent()
         .then((res) => {
-          if (res.body) {
+          if (res.data) {
             const el = document.createElement('div');
-            el.innerHTML = res.body;
+            el.innerHTML = res.data;
             document.body.appendChild(el);
             Project.initRefSwitcher();
           }
         })
-        .catch(() => {
-          new Flash('Something went wrong. Please try again.'); // eslint-disable-line
-        });
+        .catch(() => new Flash('Something went wrong. Please try again.'));
     },
     handleNotification(data) {
       if (data.ci_status === this.mr.ciStatus) return;
+      if (!data.pipeline) return;
 
       const label = data.pipeline.details.status.label;
       const title = `Pipeline ${label}`;
@@ -212,6 +212,7 @@ export default {
     'mr-widget-merge-help': WidgetMergeHelp,
     'mr-widget-pipeline': WidgetPipeline,
     'mr-widget-deployment': WidgetDeployment,
+    'mr-widget-maintainer-edit': WidgetMaintainerEdit,
     'mr-widget-related-links': WidgetRelatedLinks,
     'mr-widget-merged': MergedState,
     'mr-widget-closed': ClosedState,
@@ -232,6 +233,7 @@ export default {
     'mr-widget-pipeline-failed': PipelineFailedState,
     'mr-widget-merge-when-pipeline-succeeds': MergeWhenPipelineSucceedsState,
     'mr-widget-auto-merge-failed': AutoMergeFailed,
+    'mr-widget-rebase': RebaseState,
   },
   template: `
     <div class="mr-state-widget prepend-top-default">
@@ -251,6 +253,8 @@ export default {
           :is="componentName"
           :mr="mr"
           :service="service" />
+        <mr-widget-maintainer-edit
+          :maintainerEditAllowed="mr.maintainerEditAllowed" />
         <mr-widget-related-links
           v-if="shouldRenderRelatedLinks"
           :state="mr.state"

@@ -14,12 +14,22 @@ import CycleAnalyticsStore from './cycle_analytics_store';
 
 Vue.use(Translate);
 
-$(() => {
+export default () => {
   const OVERVIEW_DIALOG_COOKIE = 'cycle_analytics_help_dismissed';
 
-  gl.cycleAnalyticsApp = new Vue({
+  new Vue({ // eslint-disable-line no-new
     el: '#cycle-analytics',
     name: 'CycleAnalytics',
+    components: {
+      banner,
+      'stage-issue-component': stageComponent,
+      'stage-plan-component': stagePlanComponent,
+      'stage-code-component': stageCodeComponent,
+      'stage-test-component': stageTestComponent,
+      'stage-review-component': stageReviewComponent,
+      'stage-staging-component': stageStagingComponent,
+      'stage-production-component': stageComponent,
+    },
     data() {
       const cycleAnalyticsEl = document.querySelector('#cycle-analytics');
       const cycleAnalyticsService = new CycleAnalyticsService({
@@ -42,16 +52,6 @@ $(() => {
       currentStage() {
         return this.store.currentActiveStage();
       },
-    },
-    components: {
-      banner,
-      'stage-issue-component': stageComponent,
-      'stage-plan-component': stagePlanComponent,
-      'stage-code-component': stageCodeComponent,
-      'stage-test-component': stageTestComponent,
-      'stage-review-component': stageReviewComponent,
-      'stage-staging-component': stageStagingComponent,
-      'stage-production-component': stageComponent,
     },
     created() {
       this.fetchCycleAnalyticsData();
@@ -132,4 +132,4 @@ $(() => {
       },
     },
   });
-});
+};

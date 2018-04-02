@@ -2,6 +2,7 @@ module IssuableCollections
   extend ActiveSupport::Concern
   include SortingHelper
   include Gitlab::IssuableMetadata
+  include Gitlab::Utils::StrongMemoize
 
   included do
     helper_method :finder
@@ -9,15 +10,14 @@ module IssuableCollections
 
   private
 
+  # rubocop:disable Gitlab/ModuleWithInstanceVariables
   def set_issuables_index
-    @issuables          = issuables_collection
-    @issuables          = @issuables.page(params[:page])
-    @issuable_meta_data = issuable_meta_data(@issuables, collection_type)
-    @total_pages        = issuable_page_count
+    @issuables = issuables_collection
 
+    set_pagination
     return if redirect_out_of_range(@total_pages)
 
-    if params[:label_name].present?
+    if params[:label_name].present? && @project
       labels_params = { project_id: @project.id, title: params[:label_name] }
       @labels = LabelsFinder.new(current_user, labels_params).execute
     end
@@ -34,14 +34,27 @@ module IssuableCollections
     end
   end
 
+  def set_pagination
+    return if pagination_disabled?
+
+    @issuables          = @issuables.page(params[:page])
+    @issuable_meta_data = issuable_meta_data(@issuables, collection_type)
+    @total_pages        = issuable_page_count
+  end
+  # rubocop:enable Gitlab/ModuleWithInstanceVariables
+
+  def pagination_disabled?
+    false
+  end
+
   def issuables_collection
     finder.execute.preload(preload_for_collection)
   end
 
   def redirect_out_of_range(total_pages)
-    return false if total_pages.zero?
+    return false if total_pages.nil? || total_pages.zero?
 
-    out_of_range = @issuables.current_page > total_pages
+    out_of_range = @issuables.current_page > total_pages # rubocop:disable Gitlab/ModuleWithInstanceVariables
 
     if out_of_range
       redirect_to(url_for(params.merge(page: total_pages, only_path: true)))
@@ -51,7 +64,7 @@ module IssuableCollections
   end
 
   def issuable_page_count
-    page_count_for_relation(@issuables, finder.row_count)
+    page_count_for_relation(@issuables, finder.row_count) # rubocop:disable Gitlab/ModuleWithInstanceVariables
   end
 
   def page_count_for_relation(relation, row_count)
@@ -66,6 +79,7 @@ module IssuableCollections
     finder_class.new(current_user, filter_params)
   end
 
+  # rubocop:disable Gitlab/ModuleWithInstanceVariables
   def filter_params
     set_sort_order_from_cookie
     set_default_state
@@ -80,6 +94,7 @@ module IssuableCollections
       @filter_params[:project_id] = @project.id
     elsif @group
       @filter_params[:group_id] = @group.id
+      @filter_params[:include_subgroups] = true
     else
       # TODO: this filter ignore issues/mr created in public or
       # internal repos where you are not a member. Enable this filter
@@ -88,8 +103,9 @@ module IssuableCollections
       # @filter_params[:authorized_only] = true
     end
 
-    @filter_params.permit(IssuableFinder::VALID_PARAMS)
+    @filter_params.permit(finder_type.valid_params)
   end
+  # rubocop:enable Gitlab/ModuleWithInstanceVariables
 
   def set_default_state
     params[:state] = 'opened' if params[:state].blank?
@@ -129,9 +145,9 @@ module IssuableCollections
   end
 
   def finder
-    return @finder if defined?(@finder)
-
-    @finder = issuable_finder_for(@finder_type)
+    strong_memoize(:finder) do
+      issuable_finder_for(finder_type)
+    end
   end
 
   def collection_type

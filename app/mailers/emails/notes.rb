@@ -5,7 +5,7 @@ module Emails
 
       @commit = @note.noteable
       @target_url = project_commit_url(*note_target_url_options)
-      mail_answer_thread(@commit, note_thread_options(recipient_id))
+      mail_answer_note_thread(@commit, @note, note_thread_options(recipient_id))
     end
 
     def note_issue_email(recipient_id, note_id)
@@ -22,7 +22,7 @@ module Emails
 
       @merge_request = @note.noteable
       @target_url = project_merge_request_url(*note_target_url_options)
-      mail_answer_thread(@merge_request, note_thread_options(recipient_id))
+      mail_answer_note_thread(@merge_request, @note, note_thread_options(recipient_id))
     end
 
     def note_snippet_email(recipient_id, note_id)
@@ -30,7 +30,7 @@ module Emails
 
       @snippet = @note.noteable
       @target_url = project_snippet_url(*note_target_url_options)
-      mail_answer_thread(@snippet, note_thread_options(recipient_id))
+      mail_answer_note_thread(@snippet, @note, note_thread_options(recipient_id))
     end
 
     def note_personal_snippet_email(recipient_id, note_id)
@@ -38,7 +38,7 @@ module Emails
 
       @snippet = @note.noteable
       @target_url = snippet_url(@note.noteable)
-      mail_answer_thread(@snippet, note_thread_options(recipient_id))
+      mail_answer_note_thread(@snippet, @note, note_thread_options(recipient_id))
     end
 
     private

@@ -1,6 +1,6 @@
 import Vue from 'vue';
 import toggleButton from '~/vue_shared/components/toggle_button.vue';
-import mountComponent from '../../helpers/vue_mount_component_helper';
+import mountComponent from 'spec/helpers/vue_mount_component_helper';
 
 describe('Toggle Button', () => {
   let vm;
@@ -30,9 +30,9 @@ describe('Toggle Button', () => {
       expect(vm.$el.querySelector('input').getAttribute('value')).toEqual('true');
     });
 
-    it('renders Enabled and Disabled text data attributes', () => {
-      expect(vm.$el.querySelector('button').getAttribute('data-enabled-text')).toEqual('Enabled');
-      expect(vm.$el.querySelector('button').getAttribute('data-disabled-text')).toEqual('Disabled');
+    it('renders input status icon', () => {
+      expect(vm.$el.querySelectorAll('span.toggle-icon').length).toEqual(1);
+      expect(vm.$el.querySelectorAll('svg.s16.toggle-icon-svg').length).toEqual(1);
     });
   });
 
@@ -47,6 +47,14 @@ describe('Toggle Button', () => {
 
     it('renders is checked class', () => {
       expect(vm.$el.querySelector('button').classList.contains('is-checked')).toEqual(true);
+    });
+
+    it('sets aria-label representing toggle state', () => {
+      vm.value = true;
+      expect(vm.ariaLabel).toEqual('Toggle Status: ON');
+
+      vm.value = false;
+      expect(vm.ariaLabel).toEqual('Toggle Status: OFF');
     });
 
     it('emits change event when clicked', () => {

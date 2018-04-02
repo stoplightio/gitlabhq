@@ -3,6 +3,9 @@
   import markdownField from '../../../vue_shared/components/markdown/field.vue';
 
   export default {
+    components: {
+      markdownField,
+    },
     mixins: [updateMixin],
     props: {
       formState: {
@@ -28,9 +31,6 @@
         default: true,
       },
     },
-    components: {
-      markdownField,
-    },
     mounted() {
       this.$refs.textarea.focus();
     },
@@ -53,7 +53,7 @@
       <textarea
         id="issue-description"
         class="note-textarea js-gfm-input js-autosize markdown-area"
-        data-supports-quick-actionss="false"
+        data-supports-quick-actions="false"
         aria-label="Description"
         v-model="formState.description"
         ref="textarea"

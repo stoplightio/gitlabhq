@@ -8,7 +8,7 @@ module QA
       def initialize
         @tty = false
         @tags = []
-        @files = ['qa/specs/features']
+        @files = [File.expand_path('./features', __dir__)]
       end
 
       def perform
@@ -17,7 +17,7 @@ module QA
         tags.to_a.each { |tag| args.push(['-t', tag.to_s]) }
         args.push(files)
 
-        Specs::Config.perform
+        Runtime::Browser.configure!
 
         RSpec::Core::Runner.run(args.flatten, $stderr, $stdout).tap do |status|
           abort if status.nonzero?

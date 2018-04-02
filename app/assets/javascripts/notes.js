@@ -16,14 +16,17 @@ import Autosize from 'autosize';
 import 'vendor/jquery.caret'; // required by jquery.atwho
 import 'vendor/jquery.atwho';
 import AjaxCache from '~/lib/utils/ajax_cache';
+import axios from './lib/utils/axios_utils';
+import { getLocationHash } from './lib/utils/url_utility';
 import Flash from './flash';
 import CommentTypeToggle from './comment_type_toggle';
 import GLForm from './gl_form';
 import loadAwardsHandler from './awards_handler';
 import Autosave from './autosave';
 import TaskList from './task_list';
-import { ajaxPost, isInViewport, getPagePath, scrollToElement, isMetaKey } from './lib/utils/common_utils';
+import { isInViewport, getPagePath, scrollToElement, isMetaKey, hasVueMRDiscussionsCookie } from './lib/utils/common_utils';
 import imageDiffHelper from './image_diff/helpers/index';
+import { localTimeAgo } from './lib/utils/datetime_utility';
 
 window.autosize = Autosize;
 
@@ -35,6 +38,16 @@ const MAX_VISIBLE_COMMIT_LIST_COUNT = 3;
 const REGEX_QUICK_ACTIONS = /^\/\w+.*$/gm;
 
 export default class Notes {
+  static initialize(notes_url, note_ids, last_fetched_at, view, enableGFM = true) {
+    if (!this.instance) {
+      this.instance = new Notes(notes_url, note_ids, last_fetched_at, view, enableGFM);
+    }
+  }
+
+  static getInstance() {
+    return this.instance;
+  }
+
   constructor(notes_url, note_ids, last_fetched_at, view, enableGFM = true) {
     this.updateTargetButtons = this.updateTargetButtons.bind(this);
     this.updateComment = this.updateComment.bind(this);
@@ -69,6 +82,9 @@ export default class Notes {
     this.basePollingInterval = 15000;
     this.maxPollingSteps = 4;
 
+    this.$wrapperEl = hasVueMRDiscussionsCookie()
+      ? $(document).find('.diffs')
+      : $(document);
     this.cleanBinding();
     this.addBinding();
     this.setPollingInterval();
@@ -94,66 +110,69 @@ export default class Notes {
 
   addBinding() {
     // Edit note link
-    $(document).on('click', '.js-note-edit', this.showEditForm.bind(this));
-    $(document).on('click', '.note-edit-cancel', this.cancelEdit);
+    this.$wrapperEl.on('click', '.js-note-edit', this.showEditForm.bind(this));
+    this.$wrapperEl.on('click', '.note-edit-cancel', this.cancelEdit);
     // Reopen and close actions for Issue/MR combined with note form submit
-    $(document).on('click', '.js-comment-submit-button', this.postComment);
-    $(document).on('click', '.js-comment-save-button', this.updateComment);
-    $(document).on('keyup input', '.js-note-text', this.updateTargetButtons);
+    this.$wrapperEl.on('click', '.js-comment-submit-button', this.postComment);
+    this.$wrapperEl.on('click', '.js-comment-save-button', this.updateComment);
+    this.$wrapperEl.on('keyup input', '.js-note-text', this.updateTargetButtons);
     // resolve a discussion
-    $(document).on('click', '.js-comment-resolve-button', this.postComment);
+    this.$wrapperEl.on('click', '.js-comment-resolve-button', this.postComment);
     // remove a note (in general)
-    $(document).on('click', '.js-note-delete', this.removeNote);
+    this.$wrapperEl.on('click', '.js-note-delete', this.removeNote);
     // delete note attachment
-    $(document).on('click', '.js-note-attachment-delete', this.removeAttachment);
+    this.$wrapperEl.on('click', '.js-note-attachment-delete', this.removeAttachment);
     // reset main target form when clicking discard
-    $(document).on('click', '.js-note-discard', this.resetMainTargetForm);
+    this.$wrapperEl.on('click', '.js-note-discard', this.resetMainTargetForm);
     // update the file name when an attachment is selected
-    $(document).on('change', '.js-note-attachment-input', this.updateFormAttachment);
+    this.$wrapperEl.on('change', '.js-note-attachment-input', this.updateFormAttachment);
     // reply to diff/discussion notes
-    $(document).on('click', '.js-discussion-reply-button', this.onReplyToDiscussionNote);
+    this.$wrapperEl.on('click', '.js-discussion-reply-button', this.onReplyToDiscussionNote);
     // add diff note
-    $(document).on('click', '.js-add-diff-note-button', this.onAddDiffNote);
+    this.$wrapperEl.on('click', '.js-add-diff-note-button', this.onAddDiffNote);
     // add diff note for images
-    $(document).on('click', '.js-add-image-diff-note-button', this.onAddImageDiffNote);
+    this.$wrapperEl.on('click', '.js-add-image-diff-note-button', this.onAddImageDiffNote);
     // hide diff note form
-    $(document).on('click', '.js-close-discussion-note-form', this.cancelDiscussionForm);
+    this.$wrapperEl.on('click', '.js-close-discussion-note-form', this.cancelDiscussionForm);
     // toggle commit list
-    $(document).on('click', '.system-note-commit-list-toggler', this.toggleCommitList);
+    this.$wrapperEl.on('click', '.system-note-commit-list-toggler', this.toggleCommitList);
     // fetch notes when tab becomes visible
-    $(document).on('visibilitychange', this.visibilityChange);
+    this.$wrapperEl.on('visibilitychange', this.visibilityChange);
     // when issue status changes, we need to refresh data
-    $(document).on('issuable:change', this.refresh);
+    this.$wrapperEl.on('issuable:change', this.refresh);
     // ajax:events that happen on Form when actions like Reopen, Close are performed on Issues and MRs.
-    $(document).on('ajax:success', '.js-main-target-form', this.addNote);
-    $(document).on('ajax:success', '.js-discussion-note-form', this.addDiscussionNote);
-    $(document).on('ajax:success', '.js-main-target-form', this.resetMainTargetForm);
-    $(document).on('ajax:complete', '.js-main-target-form', this.reenableTargetFormSubmitButton);
+    this.$wrapperEl.on('ajax:success', '.js-main-target-form', this.addNote);
+    this.$wrapperEl.on('ajax:success', '.js-discussion-note-form', this.addDiscussionNote);
+    this.$wrapperEl.on('ajax:success', '.js-main-target-form', this.resetMainTargetForm);
+    this.$wrapperEl.on('ajax:complete', '.js-main-target-form', this.reenableTargetFormSubmitButton);
     // when a key is clicked on the notes
-    $(document).on('keydown', '.js-note-text', this.keydownNoteText);
+    this.$wrapperEl.on('keydown', '.js-note-text', this.keydownNoteText);
     // When the URL fragment/hash has changed, `#note_xxx`
-    return $(window).on('hashchange', this.onHashChange);
+    $(window).on('hashchange', this.onHashChange);
+    this.boundGetContent = this.getContent.bind(this);
+    document.addEventListener('refreshLegacyNotes', this.boundGetContent);
   }
 
   cleanBinding() {
-    $(document).off('click', '.js-note-edit');
-    $(document).off('click', '.note-edit-cancel');
-    $(document).off('click', '.js-note-delete');
-    $(document).off('click', '.js-note-attachment-delete');
-    $(document).off('click', '.js-discussion-reply-button');
-    $(document).off('click', '.js-add-diff-note-button');
-    $(document).off('click', '.js-add-image-diff-note-button');
-    $(document).off('visibilitychange');
-    $(document).off('keyup input', '.js-note-text');
-    $(document).off('click', '.js-note-target-reopen');
-    $(document).off('click', '.js-note-target-close');
-    $(document).off('click', '.js-note-discard');
-    $(document).off('keydown', '.js-note-text');
-    $(document).off('click', '.js-comment-resolve-button');
-    $(document).off('click', '.system-note-commit-list-toggler');
-    $(document).off('ajax:success', '.js-main-target-form');
-    $(document).off('ajax:success', '.js-discussion-note-form');
-    $(document).off('ajax:complete', '.js-main-target-form');
+    this.$wrapperEl.off('click', '.js-note-edit');
+    this.$wrapperEl.off('click', '.note-edit-cancel');
+    this.$wrapperEl.off('click', '.js-note-delete');
+    this.$wrapperEl.off('click', '.js-note-attachment-delete');
+    this.$wrapperEl.off('click', '.js-discussion-reply-button');
+    this.$wrapperEl.off('click', '.js-add-diff-note-button');
+    this.$wrapperEl.off('click', '.js-add-image-diff-note-button');
+    this.$wrapperEl.off('visibilitychange');
+    this.$wrapperEl.off('keyup input', '.js-note-text');
+    this.$wrapperEl.off('click', '.js-note-target-reopen');
+    this.$wrapperEl.off('click', '.js-note-target-close');
+    this.$wrapperEl.off('click', '.js-note-discard');
+    this.$wrapperEl.off('keydown', '.js-note-text');
+    this.$wrapperEl.off('click', '.js-comment-resolve-button');
+    this.$wrapperEl.off('click', '.system-note-commit-list-toggler');
+    this.$wrapperEl.off('ajax:success', '.js-main-target-form');
+    this.$wrapperEl.off('ajax:success', '.js-discussion-note-form');
+    this.$wrapperEl.off('ajax:complete', '.js-main-target-form');
+    document.removeEventListener('refreshLegacyNotes', this.boundGetContent);
     $(window).off('hashchange', this.onHashChange);
   }
 
@@ -210,7 +229,7 @@ export default class Notes {
         }
         editNote = $textarea.closest('.note');
         if (editNote.length) {
-          originalText = $textarea.closest('form').data('original-note');
+          originalText = $textarea.closest('form').data('originalNote');
           newText = $textarea.val();
           if (originalText !== newText) {
             if (!confirm('Are you sure you want to cancel editing this comment?')) {
@@ -243,27 +262,23 @@ export default class Notes {
     if (this.refreshing) {
       return;
     }
+
     this.refreshing = true;
-    return $.ajax({
-      url: this.notes_url,
-      headers: { 'X-Last-Fetched-At': this.last_fetched_at },
-      dataType: 'json',
-      success: (function(_this) {
-        return function(data) {
-          var notes;
-          notes = data.notes;
-          _this.last_fetched_at = data.last_fetched_at;
-          _this.setPollingInterval(data.notes.length);
-          return $.each(notes, function(i, note) {
-            _this.renderNote(note);
-          });
-        };
-      })(this)
-    }).always((function(_this) {
-      return function() {
-        return _this.refreshing = false;
-      };
-    })(this));
+
+    axios.get(`${this.notes_url}?html=true`, {
+      headers: {
+        'X-Last-Fetched-At': this.last_fetched_at,
+      },
+    }).then(({ data }) => {
+      const notes = data.notes;
+      this.last_fetched_at = data.last_fetched_at;
+      this.setPollingInterval(data.notes.length);
+      $.each(notes, (i, note) => this.renderNote(note));
+
+      this.refreshing = false;
+    }).catch(() => {
+      this.refreshing = false;
+    });
   }
 
   /**
@@ -310,7 +325,7 @@ export default class Notes {
 
   setupNewNote($note) {
     // Update datetime format on the recent note
-    gl.utils.localTimeAgo($note.find('.js-timeago'), false);
+    localTimeAgo($note.find('.js-timeago'), false);
 
     this.collapseLongCommitList();
     this.taskList.init();
@@ -330,7 +345,7 @@ export default class Notes {
   }
 
   static updateNoteTargetSelector($note) {
-    const hash = gl.utils.getLocationHash();
+    const hash = getLocationHash();
     // Needs to be an explicit true/false for the jQuery `toggleClass(force)`
     const addTargetClass = Boolean(hash && $note.filter(`#${hash}`).length > 0);
     $note.toggleClass('target', addTargetClass);
@@ -347,7 +362,7 @@ export default class Notes {
     }
 
     if (!noteEntity.valid) {
-      if (noteEntity.errors.commands_only) {
+      if (noteEntity.errors && noteEntity.errors.commands_only) {
         if (noteEntity.commands_changes &&
             Object.keys(noteEntity.commands_changes).length > 0) {
           $notesList.find('.system-note.being-posted').remove();
@@ -360,6 +375,10 @@ export default class Notes {
 
     const $note = $notesList.find(`#note_${noteEntity.id}`);
     if (Notes.isNewNote(noteEntity, this.note_ids)) {
+      if (hasVueMRDiscussionsCookie()) {
+        return;
+      }
+
       this.note_ids.push(noteEntity.id);
 
       if ($notesList.length) {
@@ -396,6 +415,8 @@ export default class Notes {
         this.setupNewNote($updatedNote);
       }
     }
+
+    Notes.refreshVueNotes();
   }
 
   isParallelView() {
@@ -403,12 +424,11 @@ export default class Notes {
   }
 
   /**
-   * Render note in discussion area.
-   *
-   * Note: for rendering inline notes use renderDiscussionNote
+   * Render note in discussion area. To render inline notes use renderDiscussionNote.
    */
   renderDiscussionNote(noteEntity, $form) {
     var discussionContainer, form, row, lineType, diffAvatarContainer;
+
     if (!Notes.isNewNote(noteEntity, this.note_ids)) {
       return;
     }
@@ -449,7 +469,9 @@ export default class Notes {
       // Init discussion on 'Discussion' page if it is merge request page
       const page = $('body').attr('data-page');
       if ((page && page.indexOf('projects:merge_request') !== -1) || !noteEntity.diff_discussion_html) {
-        Notes.animateAppendNote(noteEntity.discussion_html, $('.main-notes-list'));
+        if (!hasVueMRDiscussionsCookie()) {
+          Notes.animateAppendNote(noteEntity.discussion_html, $('.main-notes-list'));
+        }
       }
     } else {
       // append new note to all matching discussions
@@ -462,7 +484,7 @@ export default class Notes {
       this.renderDiscussionAvatar(diffAvatarContainer, noteEntity);
     }
 
-    gl.utils.localTimeAgo($('.js-timeago'), false);
+    localTimeAgo($('.js-timeago'), false);
     Notes.checkMergeRequestStatus();
     return this.updateNotesCount(1);
   }
@@ -606,9 +628,9 @@ export default class Notes {
    */
   addDiscussionNote($form, note, isNewDiffComment) {
     if ($form.attr('data-resolve-all') != null) {
-      var projectPath = $form.data('project-path');
-      var discussionId = $form.data('discussion-id');
-      var mergeRequestId = $form.data('noteable-iid');
+      var projectPath = $form.data('projectPath');
+      var discussionId = $form.data('discussionId');
+      var mergeRequestId = $form.data('noteableIid');
 
       if (ResolveService != null) {
         ResolveService.toggleResolveForDiscussion(mergeRequestId, discussionId);
@@ -631,7 +653,6 @@ export default class Notes {
     var $noteEntityEl, $note_li;
     // Convert returned HTML to a jQuery object so we can modify it further
     $noteEntityEl = $(noteEntity.html);
-    $noteEntityEl.addClass('fade-in-full');
     this.revertNoteEditForm($targetNote);
     $noteEntityEl.renderGFM();
     // Find the note's `li` element by ID and replace it with the updated HTML
@@ -727,7 +748,7 @@ export default class Notes {
     var selector = this.getEditFormSelector($target);
     var $editForm = $(selector);
 
-    $editForm.insertBefore('.notes-form');
+    $editForm.insertBefore('.diffs');
     $editForm.find('.js-comment-save-button').enable();
     $editForm.find('.js-finish-edit-warning').hide();
   }
@@ -743,12 +764,13 @@ export default class Notes {
   }
 
   removeNoteEditForm($note) {
-    var form = $note.find('.current-note-edit-form');
+    var form = $note.find('.diffs .current-note-edit-form');
+
     $note.removeClass('is-editing');
     form.removeClass('current-note-edit-form');
     form.find('.js-finish-edit-warning').hide();
     // Replace markdown textarea text with original note text.
-    return form.find('.js-note-text').val(form.find('form.edit-note').data('original-note'));
+    return form.find('.js-note-text').val(form.find('form.edit-note').data('originalNote'));
   }
 
   /**
@@ -773,7 +795,7 @@ export default class Notes {
         var $note, $notes;
         $note = $(el);
         $notes = $note.closest('.discussion-notes');
-        const discussionId = $('.notes', $notes).data('discussion-id');
+        const discussionId = $('.notes', $notes).data('discussionId');
 
         if (typeof gl.diffNotesCompileComponents !== 'undefined') {
           if (gl.diffNoteApps[noteElId]) {
@@ -815,6 +837,7 @@ export default class Notes {
       };
     })(this));
 
+    Notes.refreshVueNotes();
     Notes.checkMergeRequestStatus();
     return this.updateNotesCount(-1);
   }
@@ -894,7 +917,7 @@ export default class Notes {
     // DiffNote
     form.find('#note_position').val(dataHolder.attr('data-position'));
 
-    form.find('.js-note-discard').show().removeClass('js-note-discard').addClass('js-close-discussion-note-form').text(form.find('.js-close-discussion-note-form').data('cancel-text'));
+    form.find('.js-note-discard').show().removeClass('js-note-discard').addClass('js-close-discussion-note-form').text(form.find('.js-close-discussion-note-form').data('cancelText'));
     form.find('.js-note-target-close').remove();
     form.find('.js-note-new-discussion').remove();
     this.setupNoteForm(form);
@@ -1034,7 +1057,7 @@ export default class Notes {
   removeDiscussionNoteForm(form) {
     var glForm, row;
     row = form.closest('tr');
-    glForm = form.data('gl-form');
+    glForm = form.data('glForm');
     glForm.destroy();
     form.find('.js-note-text').data('autosave').reset();
     // show the reply button (will only work for replies)
@@ -1119,8 +1142,8 @@ export default class Notes {
         return discardbtn.show();
       }
     } else {
-      reopentext = reopenbtn.data('original-text');
-      closetext = closebtn.data('original-text');
+      reopentext = reopenbtn.data('originalText');
+      closetext = closebtn.data('originalText');
       if (reopenbtn.text() !== reopentext) {
         reopenbtn.text(reopentext);
       }
@@ -1147,14 +1170,14 @@ export default class Notes {
 
     var $originalContentEl = $note.find('.original-note-content');
     var originalContent = $originalContentEl.text().trim();
-    var postUrl = $originalContentEl.data('post-url');
-    var targetId = $originalContentEl.data('target-id');
-    var targetType = $originalContentEl.data('target-type');
+    var postUrl = $originalContentEl.data('postUrl');
+    var targetId = $originalContentEl.data('targetId');
+    var targetType = $originalContentEl.data('targetType');
 
     this.glForm = new GLForm($editForm.find('form'), this.enableGFM);
 
     $editForm.find('form')
-      .attr('action', postUrl)
+      .attr('action', `${postUrl}?html=true`)
       .attr('data-remote', 'true');
     $editForm.find('.js-form-target-id').val(targetId);
     $editForm.find('.js-form-target-type').val(targetType);
@@ -1277,6 +1300,10 @@ export default class Notes {
     return $updatedNote;
   }
 
+  static refreshVueNotes() {
+    document.dispatchEvent(new CustomEvent('refreshVueNotes'));
+  }
+
   /**
    * Get data from Form attributes to use for saving/submitting comment.
    */
@@ -1396,7 +1423,7 @@ export default class Notes {
    * 2) Identify comment type; a) Main thread b) Discussion thread c) Discussion resolve
    * 3) Build temporary placeholder element (using `createPlaceholderNote`)
    * 4) Show placeholder note on UI
-   * 5) Perform network request to submit the note using `ajaxPost`
+   * 5) Perform network request to submit the note using `axios.post`
    *    a) If request is successfully completed
    *        1. Remove placeholder element
    *        2. Show submitted Note element
@@ -1478,8 +1505,10 @@ export default class Notes {
 
     /* eslint-disable promise/catch-or-return */
     // Make request to submit comment on server
-    ajaxPost(formAction, formData)
-      .then((note) => {
+    axios.post(`${formAction}?html=true`, formData)
+      .then((res) => {
+        const note = res.data;
+
         // Submission successful! remove placeholder
         $notesContainer.find(`#${noteUniqueId}`).remove();
 
@@ -1508,9 +1537,9 @@ export default class Notes {
           // If comment intends to resolve discussion, do the same.
           if (isDiscussionResolve) {
             $form
-              .attr('data-discussion-id', $submitBtn.data('discussion-id'))
+              .attr('data-discussion-id', $submitBtn.data('discussionId'))
               .attr('data-resolve-all', 'true')
-              .attr('data-project-path', $submitBtn.data('project-path'));
+              .attr('data-project-path', $submitBtn.data('projectPath'));
           }
 
           // Show final note element on UI
@@ -1541,6 +1570,8 @@ export default class Notes {
           if ($notesContainer.length) {
             $notesContainer.append('<div class="flash-container" style="display: none;"></div>');
           }
+
+          Notes.refreshVueNotes();
         } else if (isMainForm) { // Check if this was main thread comment
           // Show final note element on UI and perform form and action buttons cleanup
           this.addNote($form, note);
@@ -1552,7 +1583,7 @@ export default class Notes {
         }
 
         $form.trigger('ajax:success', [note]);
-      }).fail(() => {
+      }).catch(() => {
         // Submission failed, remove placeholder note and show Flash error message
         $notesContainer.find(`#${noteUniqueId}`).remove();
 
@@ -1582,7 +1613,7 @@ export default class Notes {
         this.addNoteError($form);
       });
 
-    return $closeBtn.text($closeBtn.data('original-text'));
+    return $closeBtn.text($closeBtn.data('originalText'));
   }
 
   /**
@@ -1591,7 +1622,7 @@ export default class Notes {
    *
    * 1) Get Form metadata
    * 2) Update note element with new content
-   * 3) Perform network request to submit the updated note using `ajaxPost`
+   * 3) Perform network request to submit the updated note using `axios.post`
    *    a) If request is successfully completed
    *        1. Show submitted Note element
    *    b) If request failed
@@ -1622,12 +1653,12 @@ export default class Notes {
 
     /* eslint-disable promise/catch-or-return */
     // Make request to update comment on server
-    ajaxPost(formAction, formData)
-      .then((note) => {
+    axios.post(`${formAction}?html=true`, formData)
+      .then(({ data }) => {
         // Submission successful! render final note element
-        this.updateNote(note, $editingNote);
+        this.updateNote(data, $editingNote);
       })
-      .fail(() => {
+      .catch(() => {
         // Submission failed, revert back to original note
         $noteBodyText.html(_.escape(cachedNoteBodyText));
         $editingNote.removeClass('being-posted fade-in');
@@ -1637,7 +1668,7 @@ export default class Notes {
         this.updateNoteError();
       });
 
-    return $closeBtn.text($closeBtn.data('original-text'));
+    return $closeBtn.text($closeBtn.data('originalText'));
   }
 }
 

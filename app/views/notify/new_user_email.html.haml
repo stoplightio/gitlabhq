@@ -1,7 +1,7 @@
 %p
   Hi #{@user['name']}!
 %p
-  - if current_application_settings.allow_signup?
+  - if Gitlab::CurrentSettings.allow_signup?
     Your account has been created successfully.
   - else
     Your Stoplight Administrator created an account for you. You are now a member of the company Stoplight account.

@@ -4,12 +4,20 @@
   import emojiSmile from 'icons/_emoji_smile.svg';
   import emojiSmiley from 'icons/_emoji_smiley.svg';
   import editSvg from 'icons/_icon_pencil.svg';
+  import resolveDiscussionSvg from 'icons/_icon_resolve_discussion.svg';
+  import resolvedDiscussionSvg from 'icons/_icon_status_success_solid.svg';
   import ellipsisSvg from 'icons/_ellipsis_v.svg';
   import loadingIcon from '~/vue_shared/components/loading_icon.vue';
   import tooltip from '~/vue_shared/directives/tooltip';
 
   export default {
-    name: 'noteActions',
+    name: 'NoteActions',
+    directives: {
+      tooltip,
+    },
+    components: {
+      loadingIcon,
+    },
     props: {
       authorId: {
         type: Number,
@@ -36,16 +44,30 @@
         type: Boolean,
         required: true,
       },
+      resolvable: {
+        type: Boolean,
+        required: false,
+        default: false,
+      },
+      isResolved: {
+        type: Boolean,
+        required: false,
+        default: false,
+      },
+      isResolving: {
+        type: Boolean,
+        required: false,
+        default: false,
+      },
+      resolvedBy: {
+        type: Object,
+        required: false,
+        default: () => ({}),
+      },
       canReportAsAbuse: {
         type: Boolean,
         required: true,
       },
-    },
-    directives: {
-      tooltip,
-    },
-    components: {
-      loadingIcon,
     },
     computed: {
       ...mapGetters([
@@ -63,13 +85,14 @@
       currentUserId() {
         return this.getUserDataByProp('id');
       },
-    },
-    methods: {
-      onEdit() {
-        this.$emit('handleEdit');
-      },
-      onDelete() {
-        this.$emit('handleDelete');
+      resolveButtonTitle() {
+        let title = 'Mark as resolved';
+
+        if (this.resolvedBy) {
+          title = `Resolved by ${this.resolvedBy.name}`;
+        }
+
+        return title;
       },
     },
     created() {
@@ -78,6 +101,19 @@
       this.emojiSmiley = emojiSmiley;
       this.editSvg = editSvg;
       this.ellipsisSvg = ellipsisSvg;
+      this.resolveDiscussionSvg = resolveDiscussionSvg;
+      this.resolvedDiscussionSvg = resolvedDiscussionSvg;
+    },
+    methods: {
+      onEdit() {
+        this.$emit('handleEdit');
+      },
+      onDelete() {
+        this.$emit('handleDelete');
+      },
+      onResolve() {
+        this.$emit('handleResolve');
+      },
     },
   };
 </script>
@@ -86,7 +122,34 @@
   <div class="note-actions">
     <span
       v-if="accessLevel"
-      class="note-role user-access-role">{{accessLevel}}</span>
+      class="note-role user-access-role">
+      {{ accessLevel }}
+    </span>
+    <div
+      v-if="resolvable"
+      class="note-actions-item">
+      <button
+        v-tooltip
+        @click="onResolve"
+        :class="{ 'is-disabled': !resolvable, 'is-active': isResolved }"
+        :title="resolveButtonTitle"
+        :aria-label="resolveButtonTitle"
+        type="button"
+        class="line-resolve-btn note-action-button">
+        <template v-if="!isResolving">
+          <div
+            v-if="isResolved"
+            v-html="resolvedDiscussionSvg"></div>
+          <div
+            v-else
+            v-html="resolveDiscussionSvg"></div>
+        </template>
+        <loading-icon
+          v-else
+          :inline="true"
+        />
+      </button>
+    </div>
     <div
       v-if="canAddAwardEmoji"
       class="note-actions-item">
@@ -98,20 +161,21 @@
         data-placement="bottom"
         data-container="body"
         href="#"
-        title="Add reaction">
-          <loading-icon :inline="true" />
-          <span
-            v-html="emojiSmiling"
-            class="link-highlight award-control-icon-neutral">
-          </span>
-          <span
-            v-html="emojiSmiley"
-            class="link-highlight award-control-icon-positive">
-          </span>
-          <span
-            v-html="emojiSmile"
-            class="link-highlight award-control-icon-super-positive">
-          </span>
+        title="Add reaction"
+      >
+        <loading-icon :inline="true" />
+        <span
+          v-html="emojiSmiling"
+          class="link-highlight award-control-icon-neutral">
+        </span>
+        <span
+          v-html="emojiSmiley"
+          class="link-highlight award-control-icon-positive">
+        </span>
+        <span
+          v-html="emojiSmile"
+          class="link-highlight award-control-icon-super-positive">
+        </span>
       </a>
     </div>
     <div
@@ -125,9 +189,10 @@
         class="note-action-button js-note-edit btn btn-transparent"
         data-container="body"
         data-placement="bottom">
-          <span
-            v-html="editSvg"
-            class="link-highlight"></span>
+        <span
+          v-html="editSvg"
+          class="link-highlight">
+        </span>
       </button>
     </div>
     <div
@@ -141,9 +206,10 @@
         data-toggle="dropdown"
         data-container="body"
         data-placement="bottom">
-          <span
-            class="icon"
-            v-html="ellipsisSvg"></span>
+        <span
+          class="icon"
+          v-html="ellipsisSvg">
+        </span>
       </button>
       <ul class="dropdown-menu more-actions-dropdown dropdown-open-left">
         <li v-if="canReportAsAbuse">

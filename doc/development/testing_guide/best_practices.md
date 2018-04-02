@@ -8,8 +8,8 @@ and effective _as well as_ fast.
 
 Here are some things to keep in mind regarding test performance:
 
-- `double` and `spy` are faster than `FactoryGirl.build(...)`
-- `FactoryGirl.build(...)` and `.build_stubbed` are faster than `.create`.
+- `double` and `spy` are faster than `FactoryBot.build(...)`
+- `FactoryBot.build(...)` and `.build_stubbed` are faster than `.create`.
 - Don't `create` an object when `build`, `build_stubbed`, `attributes_for`,
   `spy`, or `double` will do. Database persistence is slow!
 - Don't mark a feature as requiring JavaScript (through `@javascript` in
@@ -26,7 +26,6 @@ Here are some things to keep in mind regarding test performance:
 - Use `.method` to describe class methods and `#method` to describe instance
   methods.
 - Use `context` to test branching logic.
-- Don't assert against the absolute value of a sequence-generated attribute (see [Gotchas](../gotchas.md#dont-assert-against-the-absolute-value-of-a-sequence-generated-attribute)).
 - Try to match the ordering of tests to the ordering within the class.
 - Try to follow the [Four-Phase Test][four-phase-test] pattern, using newlines
   to separate phases.
@@ -88,6 +87,8 @@ Back to the example!
 Finished in 34.51 seconds (files took 0.76702 seconds to load)
 1 example, 0 failures
 ```
+
+Note: `live_debug` only works on javascript enabled specs.
 
 ### `let` variables
 
@@ -254,13 +255,13 @@ end
 
 ### Factories
 
-GitLab uses [factory_girl] as a test fixture replacement.
+GitLab uses [factory_bot] as a test fixture replacement.
 
 - Factory definitions live in `spec/factories/`, named using the pluralization
   of their corresponding model (`User` factories are defined in `users.rb`).
 - There should be only one top-level factory definition per file.
-- FactoryGirl methods are mixed in to all RSpec groups. This means you can (and
-  should) call `create(...)` instead of `FactoryGirl.create(...)`.
+- FactoryBot methods are mixed in to all RSpec groups. This means you can (and
+  should) call `create(...)` instead of `FactoryBot.create(...)`.
 - Make use of [traits] to clean up definitions and usages.
 - When defining a factory, don't define attributes that are not required for the
   resulting record to pass validation.
@@ -269,8 +270,8 @@ GitLab uses [factory_girl] as a test fixture replacement.
 - Factories don't have to be limited to `ActiveRecord` objects.
   [See example](https://gitlab.com/gitlab-org/gitlab-ce/commit/0b8cefd3b2385a21cfed779bd659978c0402766d).
 
-[factory_girl]: https://github.com/thoughtbot/factory_girl
-[traits]: http://www.rubydoc.info/gems/factory_girl/file/GETTING_STARTED.md#Traits
+[factory_bot]: https://github.com/thoughtbot/factory_bot
+[traits]: http://www.rubydoc.info/gems/factory_bot/file/GETTING_STARTED.md#Traits
 
 ### Fixtures
 

@@ -1,6 +1,6 @@
 include ActionDispatch::TestProcess
 
-FactoryGirl.define do
+FactoryBot.define do
   factory :ci_job_artifact, class: Ci::JobArtifact do
     job factory: :ci_build
     file_type :archive
@@ -24,6 +24,15 @@ FactoryGirl.define do
       after(:build) do |artifact, _|
         artifact.file = fixture_file_upload(
           Rails.root.join('spec/fixtures/ci_build_artifacts_metadata.gz'), 'application/x-gzip')
+      end
+    end
+
+    trait :trace do
+      file_type :trace
+
+      after(:build) do |artifact, evaluator|
+        artifact.file = fixture_file_upload(
+          Rails.root.join('spec/fixtures/trace/sample_trace'), 'text/plain')
       end
     end
   end

@@ -56,6 +56,9 @@ future GitLab releases.**
 | **CI_RUNNER_DESCRIPTION**       | 8.10   | 0.5    | The description of the runner as saved in GitLab |
 | **CI_RUNNER_ID**                | 8.10   | 0.5    | The unique id of runner being used |
 | **CI_RUNNER_TAGS**              | 8.10   | 0.5    | The defined runner tags |
+| **CI_RUNNER_VERSION**           | all    | 10.6   | GitLab Runner version that is executing the current job |
+| **CI_RUNNER_REVISION**          | all    | 10.6   | GitLab Runner revision that is executing the current job |
+| **CI_RUNNER_EXECUTABLE_ARCH**   | all    | 10.6   | The OS/architecture of the GitLab Runner executable (note that this is not necessarily the same as the environment of the executor) |
 | **CI_PIPELINE_ID**              | 8.10   | 0.5    | The unique id of the current pipeline that GitLab CI uses internally |
 | **CI_PIPELINE_TRIGGERED**       | all    | all    | The flag to indicate that job was [triggered] |
 | **CI_PIPELINE_SOURCE**          | 10.0   | all    | The source for this pipeline, one of: push, web, trigger, schedule, api, external. Pipelines created before 9.5 will have unknown as source |
@@ -87,7 +90,7 @@ future GitLab releases.**
 
 ## 9.0 Renaming
 
-To follow conventions of naming across GitLab, and to futher move away from the
+To follow conventions of naming across GitLab, and to further move away from the
 `build` term and toward `job` CI variables have been renamed for the 9.0
 release.
 
@@ -110,7 +113,7 @@ future GitLab releases.**
 | `CI_BUILD_MANUAL`     | `CI_JOB_MANUAL`         |
 | `CI_BUILD_TOKEN`      | `CI_JOB_TOKEN`          |
 
-## `.gitlab-ci.yaml` defined variables
+## `.gitlab-ci.yml` defined variables
 
 >**Note:**
 This feature requires GitLab Runner 0.5.0 or higher and GitLab CI 7.14 or higher.
@@ -213,14 +216,15 @@ An example project service that defines deployment variables is
 ## Debug tracing
 
 > Introduced in GitLab Runner 1.7.
->
-> **WARNING:** Enabling debug tracing can have severe security implications. The
-  output **will** contain the content of all your secret variables and any other
-  secrets! The output **will** be uploaded to the GitLab server and made visible
-  in job traces!
+
+CAUTION: **Warning:**
+Enabling debug tracing can have severe security implications. The
+output **will** contain the content of all your secret variables and any other
+secrets! The output **will** be uploaded to the GitLab server and made visible
+in job traces!
 
 By default, GitLab Runner hides most of the details of what it is doing when
-processing a job. This behaviour keeps job traces short, and prevents secrets
+processing a job. This behavior keeps job traces short, and prevents secrets
 from being leaked into the trace unless your script writes them to the screen.
 
 If a job isn't working as expected, this can make the problem difficult to
@@ -446,7 +450,7 @@ export CI_REGISTRY_PASSWORD="longalfanumstring"
 ```
 
 [ce-13784]: https://gitlab.com/gitlab-org/gitlab-ce/issues/13784 "Simple protection of CI secret variables"
-[eep]: https://about.gitlab.com/gitlab-ee/ "Available only in GitLab Enterprise Edition Premium"
+[eep]: https://about.gitlab.com/products/ "Available only in GitLab Premium"
 [envs]: ../environments.md
 [protected branches]: ../../user/project/protected_branches.md
 [protected tags]: ../../user/project/protected_tags.md

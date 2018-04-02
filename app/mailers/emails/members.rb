@@ -7,7 +7,7 @@ module Emails
       helper_method :member_source, :member
     end
 
-    def member_access_requested_email(member_source_type, member_id)
+    def member_access_requested_email(member_source_type, member_id, recipient_notification_email)
       @member_source_type = member_source_type
       @member_id = member_id
 

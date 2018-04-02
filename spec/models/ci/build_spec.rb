@@ -25,6 +25,13 @@ describe Ci::Build do
 
   it { is_expected.to be_a(ArtifactMigratable) }
 
+  describe 'associations' do
+    it 'has a bidirectional relationship with projects' do
+      expect(described_class.reflect_on_association(:project).has_inverse?).to eq(:builds)
+      expect(Project.reflect_on_association(:builds).has_inverse?).to eq(:project)
+    end
+  end
+
   describe 'callbacks' do
     context 'when running after_create callback' do
       it 'triggers asynchronous build hooks worker' do
@@ -70,6 +77,42 @@ describe Ci::Build do
       end
 
       it { is_expected.not_to include(job) }
+    end
+  end
+
+  describe '.with_artifacts_archive' do
+    subject { described_class.with_artifacts_archive }
+
+    context 'when job does not have an archive' do
+      let!(:job) { create(:ci_build) }
+
+      it 'does not return the job' do
+        is_expected.not_to include(job)
+      end
+    end
+
+    context 'when job has a legacy archive' do
+      let!(:job) { create(:ci_build, :legacy_artifacts) }
+
+      it 'returns the job' do
+        is_expected.to include(job)
+      end
+    end
+
+    context 'when job has a job artifact archive' do
+      let!(:job) { create(:ci_build, :artifacts) }
+
+      it 'returns the job' do
+        is_expected.to include(job)
+      end
+    end
+
+    context 'when job has a job artifact trace' do
+      let!(:job) { create(:ci_build, :trace_artifact) }
+
+      it 'does not return the job' do
+        is_expected.not_to include(job)
+      end
     end
   end
 
@@ -132,11 +175,9 @@ describe Ci::Build do
   end
 
   describe '#artifacts?' do
+    subject { build.artifacts? }
+
     context 'when new artifacts are used' do
-      let(:build) { create(:ci_build, :artifacts) }
-
-      subject { build.artifacts? }
-
       context 'artifacts archive does not exist' do
         let(:build) { create(:ci_build) }
 
@@ -144,25 +185,19 @@ describe Ci::Build do
       end
 
       context 'artifacts archive exists' do
+        let(:build) { create(:ci_build, :artifacts) }
+
         it { is_expected.to be_truthy }
 
         context 'is expired' do
-          let!(:build) { create(:ci_build, :artifacts, :expired) }
+          let(:build) { create(:ci_build, :artifacts, :expired) }
 
           it { is_expected.to be_falsy }
-        end
-
-        context 'is not expired' do
-          it { is_expected.to be_truthy }
         end
       end
     end
 
     context 'when legacy artifacts are used' do
-      let(:build) { create(:ci_build, :legacy_artifacts) }
-
-      subject { build.artifacts? }
-
       context 'artifacts archive does not exist' do
         let(:build) { create(:ci_build) }
 
@@ -170,16 +205,14 @@ describe Ci::Build do
       end
 
       context 'artifacts archive exists' do
+        let(:build) { create(:ci_build, :legacy_artifacts) }
+
         it { is_expected.to be_truthy }
 
         context 'is expired' do
-          let!(:build) { create(:ci_build, :legacy_artifacts, :expired) }
+          let(:build) { create(:ci_build, :legacy_artifacts, :expired) }
 
           it { is_expected.to be_falsy }
-        end
-
-        context 'is not expired' do
-          it { is_expected.to be_truthy }
         end
       end
     end
@@ -262,6 +295,42 @@ describe Ci::Build do
   describe '#commit' do
     it 'returns commit pipeline has been created for' do
       expect(build.commit).to eq project.commit
+    end
+  end
+
+  describe '#cache' do
+    let(:options) { { cache: { key: "key", paths: ["public"], policy: "pull-push" } } }
+
+    subject { build.cache }
+
+    context 'when build has cache' do
+      before do
+        allow(build).to receive(:options).and_return(options)
+      end
+
+      context 'when project has jobs_cache_index' do
+        before do
+          allow_any_instance_of(Project).to receive(:jobs_cache_index).and_return(1)
+        end
+
+        it { is_expected.to be_an(Array).and all(include(key: "key-1")) }
+      end
+
+      context 'when project does not have jobs_cache_index' do
+        before do
+          allow_any_instance_of(Project).to receive(:jobs_cache_index).and_return(nil)
+        end
+
+        it { is_expected.to eq([options[:cache]]) }
+      end
+    end
+
+    context 'when build does not have cache' do
+      before do
+        allow(build).to receive(:options).and_return({})
+      end
+
+      it { is_expected.to eq([nil]) }
     end
   end
 
@@ -642,7 +711,7 @@ describe Ci::Build do
 
     context 'build is erasable' do
       context 'new artifacts' do
-        let!(:build) { create(:ci_build, :trace, :success, :artifacts) }
+        let!(:build) { create(:ci_build, :trace_artifact, :success, :artifacts) }
 
         describe '#erase' do
           before do
@@ -676,7 +745,7 @@ describe Ci::Build do
         end
 
         describe '#erased?' do
-          let!(:build) { create(:ci_build, :trace, :success, :artifacts) }
+          let!(:build) { create(:ci_build, :trace_artifact, :success, :artifacts) }
           subject { build.erased? }
 
           context 'job has not been erased' do
@@ -711,7 +780,7 @@ describe Ci::Build do
     context 'old artifacts' do
       context 'build is erasable' do
         context 'new artifacts' do
-          let!(:build) { create(:ci_build, :trace, :success, :legacy_artifacts) }
+          let!(:build) { create(:ci_build, :trace_artifact, :success, :legacy_artifacts) }
 
           describe '#erase' do
             before do
@@ -745,7 +814,7 @@ describe Ci::Build do
           end
 
           describe '#erased?' do
-            let!(:build) { create(:ci_build, :trace, :success, :legacy_artifacts) }
+            let!(:build) { create(:ci_build, :trace_artifact, :success, :legacy_artifacts) }
             subject { build.erased? }
 
             context 'job has not been erased' do
@@ -1380,6 +1449,7 @@ describe Ci::Build do
       [
         { key: 'CI', value: 'true', public: true },
         { key: 'GITLAB_CI', value: 'true', public: true },
+        { key: 'GITLAB_FEATURES', value: project.namespace.features.join(','), public: true },
         { key: 'CI_SERVER_NAME', value: 'GitLab', public: true },
         { key: 'CI_SERVER_VERSION', value: Gitlab::VERSION, public: true },
         { key: 'CI_SERVER_REVISION', value: Gitlab::REVISION, public: true },
@@ -1556,7 +1626,7 @@ describe Ci::Build do
 
       context 'when the branch is protected' do
         before do
-          create(:protected_branch, project: build.project, name: build.ref)
+          allow(build.project).to receive(:protected_for?).with(build.ref).and_return(true)
         end
 
         it { is_expected.to include(protected_variable) }
@@ -1564,7 +1634,7 @@ describe Ci::Build do
 
       context 'when the tag is protected' do
         before do
-          create(:protected_tag, project: build.project, name: build.ref)
+          allow(build.project).to receive(:protected_for?).with(build.ref).and_return(true)
         end
 
         it { is_expected.to include(protected_variable) }
@@ -1601,7 +1671,7 @@ describe Ci::Build do
 
       context 'when the branch is protected' do
         before do
-          create(:protected_branch, project: build.project, name: build.ref)
+          allow(build.project).to receive(:protected_for?).with(build.ref).and_return(true)
         end
 
         it { is_expected.to include(protected_variable) }
@@ -1609,7 +1679,7 @@ describe Ci::Build do
 
       context 'when the tag is protected' do
         before do
-          create(:protected_tag, project: build.project, name: build.ref)
+          allow(build.project).to receive(:protected_for?).with(build.ref).and_return(true)
         end
 
         it { is_expected.to include(protected_variable) }
@@ -1979,6 +2049,35 @@ describe Ci::Build do
         expect(service).not_to receive(:commit_status_merge_requests)
 
         subject.drop!
+      end
+
+      context 'when retry service raises Gitlab::Access::AccessDeniedError exception' do
+        let(:retry_service) { Ci::RetryBuildService.new(subject.project, subject.user) }
+
+        before do
+          allow_any_instance_of(Ci::RetryBuildService)
+            .to receive(:execute)
+            .with(subject)
+            .and_raise(Gitlab::Access::AccessDeniedError)
+          allow(Rails.logger).to receive(:error)
+        end
+
+        it 'handles raised exception' do
+          expect { subject.drop! }.not_to raise_exception(Gitlab::Access::AccessDeniedError)
+        end
+
+        it 'logs the error' do
+          subject.drop!
+
+          expect(Rails.logger)
+            .to have_received(:error)
+            .with(a_string_matching("Unable to auto-retry job #{subject.id}"))
+        end
+
+        it 'fails the job' do
+          subject.drop!
+          expect(subject.failed?).to be_truthy
+        end
       end
     end
 

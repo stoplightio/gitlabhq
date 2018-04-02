@@ -1,7 +1,7 @@
 import Vue from 'vue';
 import descriptionComponent from '~/issue_show/components/description.vue';
 import * as taskList from '~/task_list';
-import mountComponent from '../../helpers/vue_mount_component_helper';
+import mountComponent from 'spec/helpers/vue_mount_component_helper';
 
 describe('Description component', () => {
   let vm;
@@ -54,7 +54,7 @@ describe('Description component', () => {
   it('opens recaptcha dialog if update rejected as spam', (done) => {
     let modal;
     const recaptchaChild = vm.$children
-      .find(child => child.$options._componentTag === 'recaptcha-dialog'); // eslint-disable-line no-underscore-dangle
+      .find(child => child.$options._componentTag === 'recaptcha-modal'); // eslint-disable-line no-underscore-dangle
 
     recaptchaChild.scriptSrc = '//scriptsrc';
 
@@ -64,7 +64,7 @@ describe('Description component', () => {
 
     vm.$nextTick()
       .then(() => {
-        modal = vm.$el.querySelector('.js-recaptcha-dialog');
+        modal = vm.$el.querySelector('.js-recaptcha-modal');
 
         expect(modal.style.display).not.toEqual('none');
         expect(modal.querySelector('.g-recaptcha').textContent).toEqual('recaptcha_html');

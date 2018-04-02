@@ -4,15 +4,13 @@ class Projects::ClustersController < Projects::ApplicationController
   before_action :authorize_create_cluster!, only: [:new]
   before_action :authorize_update_cluster!, only: [:update]
   before_action :authorize_admin_cluster!, only: [:destroy]
+  before_action :update_applications_status, only: [:status]
 
   STATUS_POLLING_INTERVAL = 10_000
 
   def index
-    @scope = params[:scope] || 'all'
-    @clusters = ClustersFinder.new(project, current_user, @scope).execute.page(params[:page])
-    @active_count = ClustersFinder.new(project, current_user, :active).execute.count
-    @inactive_count = ClustersFinder.new(project, current_user, :inactive).execute.count
-    @all_count = @active_count + @inactive_count
+    clusters = ClustersFinder.new(project, current_user, :all).execute
+    @clusters = clusters.page(params[:page]).per(20)
   end
 
   def new
@@ -44,7 +42,7 @@ class Projects::ClustersController < Projects::ApplicationController
           head :no_content
         end
         format.html do
-          flash[:notice] = "Cluster was successfully updated."
+          flash[:notice] = _('Kubernetes cluster was successfully updated.')
           redirect_to project_cluster_path(project, cluster)
         end
       end
@@ -58,10 +56,10 @@ class Projects::ClustersController < Projects::ApplicationController
 
   def destroy
     if cluster.destroy
-      flash[:notice] = "Cluster integration was successfully removed."
+      flash[:notice] = _('Kubernetes cluster integration was successfully removed.')
       redirect_to project_clusters_path(project), status: 302
     else
-      flash[:notice] = "Cluster integration was not removed."
+      flash[:notice] = _('Kubernetes cluster integration was not removed.')
       render :show
     end
   end
@@ -116,5 +114,9 @@ class Projects::ClustersController < Projects::ApplicationController
 
   def authorize_admin_cluster!
     access_denied! unless can?(current_user, :admin_cluster, cluster)
+  end
+
+  def update_applications_status
+    @cluster.applications.each(&:schedule_status_update)
   end
 end

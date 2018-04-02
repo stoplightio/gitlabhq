@@ -9,10 +9,7 @@ module MergeRequests
       merge_request.source_branch = params[:source_branch]
       merge_request.merge_params['force_remove_source_branch'] = params.delete(:force_remove_source_branch)
 
-      # n+1: https://gitlab.com/gitlab-org/gitlab-ce/issues/37439
-      Gitlab::GitalyClient.allow_n_plus_1_calls do
-        create(merge_request)
-      end
+      create(merge_request)
     end
 
     def before_create(merge_request)
@@ -35,6 +32,12 @@ module MergeRequests
     # handler CreateMergeRequestHandler
     def create(merge_request)
       super
+    end
+
+    # Override from IssuableBaseService
+    def handle_quick_actions_on_create(merge_request)
+      super
+      handle_wip_event(merge_request)
     end
 
     private

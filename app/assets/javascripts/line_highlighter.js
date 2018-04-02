@@ -83,7 +83,7 @@ LineHighlighter.prototype.clickHandler = function(event) {
   var current, lineNumber, range;
   event.preventDefault();
   this.clearHighlight();
-  lineNumber = $(event.target).closest('a').data('line-number');
+  lineNumber = $(event.target).closest('a').data('lineNumber');
   current = this.hashToRange(this._hash);
   if (!(current[0] && event.shiftKey)) {
     // If there's no current selection, or there is but Shift wasn't held,
@@ -175,4 +175,4 @@ LineHighlighter.prototype.__setLocationHash__ = function(value) {
   }, document.title, value);
 };
 
-window.LineHighlighter = LineHighlighter;
+export default LineHighlighter;

@@ -258,16 +258,39 @@ With inline diffs tags you can display {+ additions +} or [- deletions -].
 
 The wrapping tags can be either curly braces or square brackets [+ additions +] or {- deletions -}.
 
-However the wrapping tags can not be mixed as such -
+Examples:
 
+```
+- {+ additions +}
+- [+ additions +]
+- {- deletions -}
+- [- deletions -]
+```
+
+However the wrapping tags cannot be mixed as such:
+
+```
 - {+ additions +]
 - [+ additions +}
-- {- delletions -]
-- [- delletions -}
+- {- deletions -]
+- [- deletions -}
+```
 
 ### Videos
 
 ![My Video](/assets/videos/gitlab-demo.mp4)
+
+### Colors
+
+`#F00`  
+`#F00A`  
+`#FF0000`  
+`#FF0000AA`  
+`RGB(0,255,0)`  
+`RGB(0%,100%,0%)`  
+`RGBA(0,255,0,0.7)`  
+`HSL(540,70%,50%)`  
+`HSLA(540,70%,50%,0.7)`  
 
 ### Mermaid
 

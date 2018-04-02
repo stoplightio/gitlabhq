@@ -1,6 +1,8 @@
 require 'spec_helper'
 
 describe NotificationService, :mailer do
+  include EmailSpec::Matchers
+
   let(:notification) { described_class.new }
   let(:assignee) { create(:user) }
 
@@ -30,6 +32,14 @@ describe NotificationService, :mailer do
     it 'does not email new mentions with a watch level equal to or less than mention' do
       send_notifications(@u_disabled)
       should_not_email_anyone
+    end
+
+    it 'sends the proper notification reason header' do
+      send_notifications(@u_watcher)
+      should_only_email(@u_watcher)
+      email = find_email_for(@u_watcher)
+
+      expect(email).to have_header('X-GitLab-NotificationReason', NotificationReason::MENTIONED)
     end
   end
 
@@ -448,7 +458,7 @@ describe NotificationService, :mailer do
     context "merge request diff note" do
       let(:project) { create(:project, :repository) }
       let(:user) { create(:user) }
-      let(:merge_request) { create(:merge_request, source_project: project, assignee: user) }
+      let(:merge_request) { create(:merge_request, source_project: project, assignee: user, author: create(:user)) }
       let(:note) { create(:diff_note_on_merge_request, project: project, noteable: merge_request) }
 
       before do
@@ -459,11 +469,13 @@ describe NotificationService, :mailer do
 
       describe '#new_note' do
         it "records sent notifications" do
-          # Ensure create SentNotification by noteable = merge_request 6 times, not noteable = note
+          # 3 SentNotification are sent: the MR assignee and author, and the @u_watcher
           expect(SentNotification).to receive(:record_note).with(note, any_args).exactly(3).times.and_call_original
 
           notification.new_note(note)
 
+          expect(SentNotification.last(3).map(&:recipient).map(&:id))
+            .to contain_exactly(merge_request.assignee.id, merge_request.author.id, @u_watcher.id)
           expect(SentNotification.last.in_reply_to_discussion_id).to eq(note.discussion_id)
         end
       end
@@ -511,12 +523,35 @@ describe NotificationService, :mailer do
         should_not_email(issue.assignees.first)
       end
 
+      it 'properly prioritizes notification reason' do
+        # have assignee be both assigned and mentioned
+        issue.update_attribute(:description, "/cc #{assignee.to_reference} #{@u_mentioned.to_reference}")
+
+        notification.new_issue(issue, @u_disabled)
+
+        email = find_email_for(assignee)
+        expect(email).to have_header('X-GitLab-NotificationReason', 'assigned')
+
+        email = find_email_for(@u_mentioned)
+        expect(email).to have_header('X-GitLab-NotificationReason', 'mentioned')
+      end
+
+      it 'adds "assigned" reason for assignees if any' do
+        notification.new_issue(issue, @u_disabled)
+
+        email = find_email_for(assignee)
+
+        expect(email).to have_header('X-GitLab-NotificationReason', 'assigned')
+      end
+
       it "emails any mentioned users with the mention level" do
         issue.description = @u_mentioned.to_reference
 
         notification.new_issue(issue, @u_disabled)
 
-        should_email(@u_mentioned)
+        email = find_email_for(@u_mentioned)
+        expect(email).not_to be_nil
+        expect(email).to have_header('X-GitLab-NotificationReason', 'mentioned')
       end
 
       it "emails the author if they've opted into notifications about their activity" do
@@ -618,6 +653,14 @@ describe NotificationService, :mailer do
         should_not_email(@u_participating)
         should_not_email(@u_disabled)
         should_not_email(@u_lazy_participant)
+      end
+
+      it 'adds "assigned" reason for new assignee' do
+        notification.reassigned_issue(issue, @u_disabled, [assignee])
+
+        email = find_email_for(assignee)
+
+        expect(email).to have_header('X-GitLab-NotificationReason', NotificationReason::ASSIGNED)
       end
 
       it 'emails previous assignee even if he has the "on mention" notif level' do
@@ -910,6 +953,14 @@ describe NotificationService, :mailer do
         should_not_email(@u_lazy_participant)
       end
 
+      it 'adds "assigned" reason for assignee, if any' do
+        notification.new_merge_request(merge_request, @u_disabled)
+
+        email = find_email_for(merge_request.assignee)
+
+        expect(email).to have_header('X-GitLab-NotificationReason', NotificationReason::ASSIGNED)
+      end
+
       it "emails any mentioned users with the mention level" do
         merge_request.description = @u_mentioned.to_reference
 
@@ -924,6 +975,9 @@ describe NotificationService, :mailer do
         notification.new_merge_request(merge_request, merge_request.author)
 
         should_email(merge_request.author)
+
+        email = find_email_for(merge_request.author)
+        expect(email).to have_header('X-GitLab-NotificationReason', NotificationReason::OWN_ACTIVITY)
       end
 
       it "doesn't email the author if they haven't opted into notifications about their activity" do
@@ -1007,6 +1061,14 @@ describe NotificationService, :mailer do
         should_not_email(@u_participating)
         should_not_email(@u_disabled)
         should_not_email(@u_lazy_participant)
+      end
+
+      it 'adds "assigned" reason for new assignee' do
+        notification.reassigned_merge_request(merge_request, merge_request.author)
+
+        email = find_email_for(merge_request.assignee)
+
+        expect(email).to have_header('X-GitLab-NotificationReason', NotificationReason::ASSIGNED)
       end
 
       it_behaves_like 'participating notifications' do
@@ -1245,6 +1307,33 @@ describe NotificationService, :mailer do
   end
 
   describe 'GroupMember' do
+    let(:added_user) { create(:user) }
+
+    describe '#new_access_request' do
+      let(:master) { create(:user) }
+      let(:owner) { create(:user) }
+      let(:developer) { create(:user) }
+      let!(:group) do
+        create(:group, :public, :access_requestable) do |group|
+          group.add_owner(owner)
+          group.add_master(master)
+          group.add_developer(developer)
+        end
+      end
+
+      before do
+        reset_delivered_emails!
+      end
+
+      it 'sends notification to group owners_and_masters' do
+        group.request_access(added_user)
+
+        should_email(owner)
+        should_email(master)
+        should_not_email(developer)
+      end
+    end
+
     describe '#decline_group_invite' do
       let(:creator) { create(:user) }
       let(:group) { create(:group) }
@@ -1266,18 +1355,9 @@ describe NotificationService, :mailer do
 
     describe '#new_group_member' do
       let(:group) { create(:group) }
-      let(:added_user) { create(:user) }
-
-      def create_member!
-        GroupMember.create(
-          group: group,
-          user: added_user,
-          access_level: Gitlab::Access::GUEST
-        )
-      end
 
       it 'sends a notification' do
-        create_member!
+        group.add_guest(added_user)
         should_only_email(added_user)
       end
 
@@ -1287,7 +1367,7 @@ describe NotificationService, :mailer do
         end
 
         it 'does not send a notification' do
-          create_member!
+          group.add_guest(added_user)
           should_not_email_anyone
         end
       end
@@ -1295,8 +1375,42 @@ describe NotificationService, :mailer do
   end
 
   describe 'ProjectMember' do
+    let(:project) { create(:project) }
+    set(:added_user) { create(:user) }
+
+    describe '#new_access_request' do
+      context 'for a project in a user namespace' do
+        let(:project) do
+          create(:project, :public, :access_requestable) do |project|
+            project.add_master(project.owner)
+          end
+        end
+
+        it 'sends notification to project owners_and_masters' do
+          project.request_access(added_user)
+
+          should_only_email(project.owner)
+        end
+      end
+
+      context 'for a project in a group' do
+        let(:group_owner) { create(:user) }
+        let(:group) { create(:group).tap { |g| g.add_owner(group_owner) } }
+        let!(:project) { create(:project, :public, :access_requestable, namespace: group) }
+
+        before do
+          reset_delivered_emails!
+        end
+
+        it 'sends notification to group owners_and_masters' do
+          project.request_access(added_user)
+
+          should_only_email(group_owner)
+        end
+      end
+    end
+
     describe '#decline_group_invite' do
-      let(:project) { create(:project) }
       let(:member) { create(:user) }
 
       before do
@@ -1313,19 +1427,12 @@ describe NotificationService, :mailer do
     end
 
     describe '#new_project_member' do
-      let(:project) { create(:project) }
-      let(:added_user) { create(:user) }
-
-      def create_member!
-        create(:project_member, user: added_user, project: project)
-      end
-
       it do
         create_member!
         should_only_email(added_user)
       end
 
-      describe 'when notifications are disabled' do
+      context 'when notifications are disabled' do
         before do
           create_global_setting_for(added_user, :disabled)
         end
@@ -1335,6 +1442,10 @@ describe NotificationService, :mailer do
           should_not_email_anyone
         end
       end
+    end
+
+    def create_member!
+      create(:project_member, user: added_user, project: project)
     end
   end
 
@@ -1563,6 +1674,78 @@ describe NotificationService, :mailer do
             should_not_email_anyone
           end
         end
+      end
+    end
+  end
+
+  describe 'Pages domains' do
+    set(:project) { create(:project) }
+    set(:domain) { create(:pages_domain, project: project) }
+    set(:u_blocked) { create(:user, :blocked) }
+    set(:u_silence) { create_user_with_notification(:disabled, 'silent', project) }
+    set(:u_owner)   { project.owner }
+    set(:u_master1) { create(:user) }
+    set(:u_master2) { create(:user) }
+    set(:u_developer) { create(:user) }
+
+    before do
+      project.add_master(u_blocked)
+      project.add_master(u_silence)
+      project.add_master(u_master1)
+      project.add_master(u_master2)
+      project.add_developer(u_developer)
+
+      reset_delivered_emails!
+    end
+
+    %i[
+      pages_domain_enabled
+      pages_domain_disabled
+      pages_domain_verification_succeeded
+      pages_domain_verification_failed
+    ].each do |sym|
+      describe "##{sym}" do
+        subject(:notify!) { notification.send(sym, domain) }
+
+        it 'emails current watching masters' do
+          expect(Notify).to receive(:"#{sym}_email").at_least(:once).and_call_original
+
+          notify!
+
+          should_only_email(u_master1, u_master2, u_owner)
+        end
+
+        it 'emails nobody if the project is missing' do
+          domain.project = nil
+
+          notify!
+
+          should_not_email_anyone
+        end
+      end
+    end
+
+    describe '#pages_domain_verification_failed' do
+      it 'emails current watching masters' do
+        notification.pages_domain_verification_failed(domain)
+
+        should_only_email(u_master1, u_master2, u_owner)
+      end
+    end
+
+    describe '#pages_domain_enabled' do
+      it 'emails current watching masters' do
+        notification.pages_domain_enabled(domain)
+
+        should_only_email(u_master1, u_master2, u_owner)
+      end
+    end
+
+    describe '#pages_domain_disabled' do
+      it 'emails current watching masters' do
+        notification.pages_domain_disabled(domain)
+
+        should_only_email(u_master1, u_master2, u_owner)
       end
     end
   end

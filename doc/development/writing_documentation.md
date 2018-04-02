@@ -15,15 +15,37 @@ request introducing these changes must be accompanied by the documentation
 (either updating existing ones or creating new ones). This is also valid when
 changes are introduced to the UI.
 
-The one resposible for writing the first piece of documentation is the developer who
+The one responsible for writing the first piece of documentation is the developer who
 wrote the code. It's the job of the Product Manager to ensure all features are
 shipped with its docs, whether is a small or big change. At the pace GitLab evolves,
 this is the only way to keep the docs up-to-date. If you have any questions about it,
-please ask a Technical Writer. Otherwise, when your content is ready, assign one of
+ask a Technical Writer. Otherwise, when your content is ready, assign one of
 them to review it for you.
 
 We use the [monthly release blog post](https://about.gitlab.com/handbook/marketing/blog/release-posts/#monthly-releases) as a changelog checklist to ensure everything
 is documented.
+
+Whenever you submit a merge request for the documentation, use the documentation MR description template.
+
+Please check the [documentation workflow](https://about.gitlab.com/handbook/product/technical-writing/workflow/) before getting started.
+
+### Documentation directory structure
+
+The documentation is structured based on the GitLab UI structure itself,
+separated by [`user`](https://gitlab.com/gitlab-org/gitlab-ce/tree/master/doc/user),
+[`administrator`](https://gitlab.com/gitlab-org/gitlab-ce/tree/master/doc/administration), and [`contributor`](https://gitlab.com/gitlab-org/gitlab-ce/tree/master/doc/development).
+
+To learn where to place a new document, check the [documentation style guide](doc_styleguide.md#location-and-naming-of-documents).
+
+In order to have a [solid site structure](https://searchengineland.com/seo-benefits-developing-solid-site-structure-277456) for our documentation,
+all docs should be linked. Every new document should be cross-linked to its related documentation, and linked from its topic-related index, when existent.
+
+The directories `/workflow/`, `/gitlab-basics/`, `/university/`, and `/articles/` have
+been deprecated and the majority their docs have been moved to their correct location
+in small iterations. Don't create new docs in these folders.
+
+To move a document from its location to another directory, read the section
+[changing document location](doc_styleguide.md#changing-document-location) of the doc style guide.
 
 ### Feature overview and use cases
 
@@ -31,7 +53,7 @@ Every major feature (regardless if present in GitLab Community or Enterprise edi
 should present, at the beginning of the document, two main sections: **overview** and
 **use cases**. Every GitLab EE-only feature should also contain these sections.
 
-**Overview**: at the name suggests, the goal here is to provide an overview of the feature.
+**Overview**: as the name suggests, the goal here is to provide an overview of the feature.
 Describe what is it, what it does, why it is important/cool/nice-to-have,
 what problem it solves, and what you can do with this feature that you couldn't
 do before.
@@ -95,6 +117,49 @@ choices:
 
 If your branch name matches any of the above, it will run only the docs
 tests. If it doesn't, the whole test suite will run (including docs).
+
+### Merge requests for GitLab documentation
+
+Before getting started, make sure you read the introductory section
+"[contributing to docs](#contributing-to-docs)" above and the
+[tech writing workflow](https://about.gitlab.com/handbook/product/technical-writing/workflow/)
+for GitLab Team members.
+
+- Use the current [merge request description template](https://gitlab.com/gitlab-org/gitlab-ce/blob/master/.gitlab/merge_request_templates/Documentation.md)
+- Use the correct [branch name](#branch-naming)
+- Label the MR `Documentation`
+- Assign the correct milestone (see note below)
+
+
+NOTE: **Note:**
+If the release version you want to add the documentation to has already been
+frozen or released, use the label `Pick into X.Y` to get it merged into
+the correct release. Avoid picking into a past release as much as you can, as
+it increases the work of the release managers.
+
+#### Cherry-picking from CE to EE
+
+As we have the `master` branch of CE merged into EE once a day, it's common to
+run into merge conflicts. To avoid them, we [test for merge conflicts against EE](#testing)
+with the `ee-compat-check` job, and use the following method of creating equivalent
+branches for CE and EE.
+
+Follow this [method for cherry-picking from CE to EE](automatic_ce_ee_merge.md#cherry-picking-from-ce-to-ee), with a few adjustments:
+
+- Create the [CE branch](#branch-naming) starting with `docs-`,
+  e.g.: `git checkout -b docs-example`
+- Create the EE-equivalent branch ending with `-ee`, e.g.,
+  `git checkout -b docs-example-ee`
+- Once all the jobs are passing in CE and EE, and you've addressed the
+feedback from your own team, assign the CE MR to a technical writer for review
+- When both MRs are ready, the EE merge request will be merged first, and the
+CE-equivalent will be merged next.
+- Note that the review will occur only in the CE MR, as the EE MR
+contains the same commits as the CE MR.
+- If you have a few more changes that apply to the EE-version only, you can submit
+a couple more commits to the EE branch, but ask the reviewer to review the EE merge request
+additionally to the CE MR. If there are many EE-only changes though, start a new MR
+to EE only.
 
 ### Previewing the changes live
 
@@ -220,7 +285,7 @@ Suppose there's a process to go from point A to point B in 5 steps: `(A) 1 > 2 >
 
 A **guide** can be understood as a description of certain processes to achieve a particular objective. A guide brings you from A to B describing the characteristics of that process, but not necessarily going over each step. It can mention, for example, steps 2 and 3, but does not necessarily explain how to accomplish them.
 
-- Live example: "GitLab Pages from A to Z - [Part 1](../user/project/pages/getting_started_part_one.md) to [Part 4](../user/project/pages/getting_started_part_four.md)"
+- Live example: "[Static sites and GitLab Pages domains (Part 1)](../user/project/pages/getting_started_part_one.md) to [Creating and Tweaking GitLab CI/CD for GitLab Pages (Part 4)](../user/project/pages/getting_started_part_four.md)"
 
 A **tutorial** requires a clear **step-by-step** guidance to achieve a singular objective. It brings you from A to B, describing precisely all the necessary steps involved in that process, showing each of the 5 steps to go from A to B.
 It does not only describes steps 2 and 3, but also shows you how to accomplish them.
@@ -234,18 +299,25 @@ through the process of how to use it systematically.
 
 #### Special format
 
-Every **Technical Article** contains, in the very beginning, a blockquote with the following information:
+Every **Technical Article** contains a frontmatter at the beginning of the doc
+with the following information:
 
-- A reference to the **type of article** (user guide, admin guide, tech overview, tutorial)
-- A reference to the **knowledge level** expected from the reader to be able to follow through (beginner, intermediate, advanced)
-- A reference to the **author's name** and **GitLab.com handle**
-- A reference of the **publication date**
+- **Type of article** (user guide, admin guide, technical overview, tutorial)
+- **Knowledge level** expected from the reader to be able to follow through (beginner, intermediate, advanced)
+- **Author's name** and **GitLab.com handle**
+- **Publication date** (ISO format YYYY-MM-DD)
 
-```md
-> **[Article Type](../../development/writing_documentation.html#types-of-technical-articles):** tutorial ||
-> **Level:** intermediary ||
-> **Author:** [Name Surname](https://gitlab.com/username) ||
-> **Publication date:** AAAA-MM-DD
+For example:
+
+
+```yaml
+---
+author: John Doe
+author_gitlab: johnDoe
+level: beginner
+article_type: user guide
+date: 2017-02-01
+---
 ```
 
 #### Technical Articles - Writing Method
