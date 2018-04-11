@@ -1697,21 +1697,22 @@ ActiveRecord::Schema.define(version: 20180320182229) do
     t.integer  "project_id"
     t.datetime "created_at"
     t.datetime "updated_at"
-    t.boolean  "active",                     default: false,    null: false
-    t.text     "properties"
-    t.boolean  "template",                   default: false
-    t.boolean  "push_events",                default: true
-    t.boolean  "issues_events",              default: true
-    t.boolean  "merge_requests_events",      default: true
-    t.boolean  "tag_push_events",            default: true
-    t.boolean  "note_events",                default: true,     null: false
-    t.string   "category",                   default: "common", null: false
-    t.boolean  "default",                    default: false
-    t.boolean  "wiki_page_events",           default: true
-    t.boolean  "pipeline_events",            default: false,    null: false
-    t.boolean  "confidential_issues_events", default: true,     null: false
-    t.boolean  "commit_events",              default: true,     null: false
-    t.boolean  "job_events",                 default: false,    null: false
+    t.boolean "active", default: false, null: false
+    t.text "properties"
+    t.boolean "template", default: false
+    t.boolean "push_events", default: true
+    t.boolean "issues_events", default: true
+    t.boolean "merge_requests_events", default: true
+    t.boolean "tag_push_events", default: true
+    t.boolean "note_events", default: true, null: false
+    t.string "category", default: "common", null: false
+    t.boolean "default", default: false
+    t.boolean "wiki_page_events", default: true
+    t.boolean "pipeline_events", default: false, null: false
+    t.boolean "confidential_issues_events", default: true, null: false
+    t.boolean "commit_events", default: true, null: false
+    t.boolean "job_events", default: false, null: false
+    t.boolean "confidential_note_events", default: true
   end
 
   add_index "services", ["project_id"], name: "index_services_on_project_id", using: :btree
@@ -2035,20 +2036,21 @@ ActiveRecord::Schema.define(version: 20180320182229) do
     t.integer  "project_id"
     t.datetime "created_at"
     t.datetime "updated_at"
-    t.string   "type",                                    default: "ProjectHook"
-    t.integer  "service_id"
-    t.boolean  "push_events",                             default: true,          null: false
-    t.boolean  "issues_events",                           default: false,         null: false
-    t.boolean  "merge_requests_events",                   default: false,         null: false
-    t.boolean  "tag_push_events",                         default: false
-    t.boolean  "note_events",                             default: false,         null: false
-    t.boolean  "enable_ssl_verification",                 default: true
-    t.boolean  "wiki_page_events",                        default: false,         null: false
-    t.string   "token"
-    t.boolean  "pipeline_events",                         default: false,         null: false
-    t.boolean  "confidential_issues_events",              default: false,         null: false
-    t.boolean  "repository_update_events",                default: false,         null: false
-    t.boolean  "job_events",                              default: false,         null: false
+    t.string "type", default: "ProjectHook"
+    t.integer "service_id"
+    t.boolean "push_events", default: true, null: false
+    t.boolean "issues_events", default: false, null: false
+    t.boolean "merge_requests_events", default: false, null: false
+    t.boolean "tag_push_events", default: false
+    t.boolean "note_events", default: false, null: false
+    t.boolean "enable_ssl_verification", default: true
+    t.boolean "wiki_page_events", default: false, null: false
+    t.string "token"
+    t.boolean "pipeline_events", default: false, null: false
+    t.boolean "confidential_issues_events", default: false, null: false
+    t.boolean "repository_update_events", default: false, null: false
+    t.boolean "job_events", default: false, null: false
+    t.boolean "confidential_note_events"
   end
 
   add_index "web_hooks", ["project_id"], name: "index_web_hooks_on_project_id", using: :btree
