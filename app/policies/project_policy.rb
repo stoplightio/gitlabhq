@@ -125,6 +125,9 @@ class ProjectPolicy < BasePolicy
     enable :create_note
     enable :upload_file
     enable :read_cycle_analytics
+
+    # custom to stoplight, allow guests to see project files
+    enable :download_code    
   end
 
   # These abilities are not allowed to admins that are not members of the project,
