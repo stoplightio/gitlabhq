@@ -74,13 +74,6 @@ describe Issues::UpdateService, :mailer do
           .to change { project.open_issues_count }.from(1).to(0)
       end
 
-      it 'refreshes the number of open issues when the issue is made confidential', :use_clean_rails_memory_store_caching do
-        issue # make sure the issue is created first so our counts are correct.
-
-        expect { update_issue(confidential: true) }
-          .to change { project.open_issues_count }.from(1).to(0)
-      end
-
       it 'updates open issue counter for assignees when issue is reassigned' do
         update_issue(assignee_ids: [user2.id])
 
@@ -104,11 +97,13 @@ describe Issues::UpdateService, :mailer do
         expect(issue.relative_position).to be_between(issue1.relative_position, issue2.relative_position)
       end
 
-      context 'when moving issue between issues from different projects' do
+      context 'when moving issue between issues from different projects', :nested_groups do
         let(:group) { create(:group) }
+        let(:subgroup) { create(:group, parent: group) }
+
         let(:project_1) { create(:project, namespace: group) }
         let(:project_2) { create(:project, namespace: group) }
-        let(:project_3) { create(:project, namespace: group) }
+        let(:project_3) { create(:project, namespace: subgroup) }
 
         let(:issue_1) { create(:issue, project: project_1) }
         let(:issue_2) { create(:issue, project: project_2) }

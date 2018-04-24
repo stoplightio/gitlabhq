@@ -84,6 +84,8 @@ describe Project do
     it { is_expected.to have_many(:custom_attributes).class_name('ProjectCustomAttribute') }
     it { is_expected.to have_many(:project_badges).class_name('ProjectBadge') }
     it { is_expected.to have_many(:lfs_file_locks) }
+    it { is_expected.to have_many(:project_deploy_tokens) }
+    it { is_expected.to have_many(:deploy_tokens).through(:project_deploy_tokens) }
 
     context 'after initialized' do
       it "has a project_feature" do
@@ -224,14 +226,14 @@ describe Project do
       project2 = build(:project, import_url: 'http://localhost:9000/t.git')
 
       expect(project2).to be_invalid
-      expect(project2.errors[:import_url]).to include('imports are not allowed from that URL')
+      expect(project2.errors[:import_url].first).to include('Requests to localhost are not allowed')
     end
 
     it "does not allow blocked import_url port" do
       project2 = build(:project, import_url: 'http://github.com:25/t.git')
 
       expect(project2).to be_invalid
-      expect(project2.errors[:import_url]).to include('imports are not allowed from that URL')
+      expect(project2.errors[:import_url].first).to include('Only allowed ports are 22, 80, 443')
     end
 
     describe 'project pending deletion' do
@@ -922,7 +924,7 @@ describe Project do
 
     it 'is false if avatar is html page' do
       project.update_attribute(:avatar, 'uploads/avatar.html')
-      expect(project.avatar_type).to eq(['only images allowed'])
+      expect(project.avatar_type).to eq(['file format is not supported. Please try one of the following supported formats: png, jpg, jpeg, gif, bmp, tiff'])
     end
   end
 
@@ -1101,8 +1103,8 @@ describe Project do
 
     before do
       storages = {
-        'default' => { 'path' => 'tmp/tests/repositories' },
-        'picked'  => { 'path' => 'tmp/tests/repositories' }
+        'default' => Gitlab::GitalyClient::StorageSettings.new('path' => 'tmp/tests/repositories'),
+        'picked'  => Gitlab::GitalyClient::StorageSettings.new('path' => 'tmp/tests/repositories')
       }
       allow(Gitlab.config.repositories).to receive(:storages).and_return(storages)
     end
@@ -1265,6 +1267,34 @@ describe Project do
     end
   end
 
+  describe '#pages_group_url' do
+    let(:group) { create :group, name: group_name }
+    let(:project) { create :project, namespace: group, name: project_name }
+    let(:domain) { 'Example.com' }
+    let(:port) { 1234 }
+
+    subject { project.pages_group_url }
+
+    before do
+      allow(Settings.pages).to receive(:host).and_return(domain)
+      allow(Gitlab.config.pages).to receive(:url).and_return("http://example.com:#{port}")
+    end
+
+    context 'group page' do
+      let(:group_name) { 'Group' }
+      let(:project_name) { 'group.example.com' }
+
+      it { is_expected.to eq("http://group.example.com:#{port}") }
+    end
+
+    context 'project page' do
+      let(:group_name) { 'Group' }
+      let(:project_name) { 'Project' }
+
+      it { is_expected.to eq("http://group.example.com:#{port}") }
+    end
+  end
+
   describe '.search' do
     let(:project) { create(:project, description: 'kitten mittens') }
 
@@ -1378,7 +1408,7 @@ describe Project do
 
     context 'using a regular repository' do
       it 'creates the repository' do
-        expect(shell).to receive(:add_repository)
+        expect(shell).to receive(:create_repository)
           .with(project.repository_storage, project.disk_path)
           .and_return(true)
 
@@ -1388,7 +1418,7 @@ describe Project do
       end
 
       it 'adds an error if the repository could not be created' do
-        expect(shell).to receive(:add_repository)
+        expect(shell).to receive(:create_repository)
           .with(project.repository_storage, project.disk_path)
           .and_return(false)
 
@@ -1402,7 +1432,7 @@ describe Project do
     context 'using a forked repository' do
       it 'does nothing' do
         expect(project).to receive(:forked?).and_return(true)
-        expect(shell).not_to receive(:add_repository)
+        expect(shell).not_to receive(:create_repository)
 
         project.create_repository
       end
@@ -1421,7 +1451,7 @@ describe Project do
       allow(project).to receive(:repository_exists?)
         .and_return(false)
 
-      allow(shell).to receive(:add_repository)
+      allow(shell).to receive(:create_repository)
         .with(project.repository_storage_path, project.disk_path)
         .and_return(true)
 
@@ -1445,7 +1475,7 @@ describe Project do
       allow(project).to receive(:repository_exists?)
         .and_return(false)
 
-      expect(shell).to receive(:add_repository)
+      expect(shell).to receive(:create_repository)
         .with(project.repository_storage, project.disk_path)
         .and_return(true)
 
@@ -1617,7 +1647,7 @@ describe Project do
 
     before do
       allow_any_instance_of(Gitlab::Shell).to receive(:import_repository)
-        .with(project.repository_storage_path, project.disk_path, project.import_url)
+        .with(project.repository_storage, project.disk_path, project.import_url)
         .and_return(true)
 
       expect_any_instance_of(Repository).to receive(:after_import)
@@ -1770,10 +1800,7 @@ describe Project do
       let(:project) { forked_project_link.forked_to_project }
 
       it 'schedules a RepositoryForkWorker job' do
-        expect(RepositoryForkWorker).to receive(:perform_async).with(
-          project.id,
-          forked_from_project.repository_storage_path,
-          forked_from_project.disk_path).and_return(import_jid)
+        expect(RepositoryForkWorker).to receive(:perform_async).with(project.id).and_return(import_jid)
 
         expect(project.add_import_job).to eq(import_jid)
       end
@@ -1995,6 +2022,22 @@ describe Project do
         expect(forked_project).to receive(:fork_source).and_return(nil)
 
         expect(forked_project.lfs_storage_project).to eq forked_project
+      end
+    end
+
+    describe '#all_lfs_objects' do
+      let(:lfs_object) { create(:lfs_object) }
+
+      before do
+        project.lfs_objects << lfs_object
+      end
+
+      it 'returns the lfs object for a project' do
+        expect(project.all_lfs_objects).to contain_exactly(lfs_object)
+      end
+
+      it 'returns the lfs object for a fork' do
+        expect(forked_project.all_lfs_objects).to contain_exactly(lfs_object)
       end
     end
   end
@@ -2532,7 +2575,7 @@ describe Project do
     end
   end
 
-  describe '#remove_exports' do
+  describe '#remove_export' do
     let(:legacy_project) { create(:project, :legacy_storage, :with_export) }
     let(:project) { create(:project, :with_export) }
 
@@ -2577,6 +2620,23 @@ describe Project do
       expect(project).to receive(:remove_exports).and_call_original
 
       project.destroy
+    end
+  end
+
+  describe '#remove_exported_project_file' do
+    let(:project) { create(:project, :with_export) }
+
+    it 'removes the exported project file' do
+      exported_file = project.export_project_path
+
+      expect(File.exist?(exported_file)).to be_truthy
+
+      allow(FileUtils).to receive(:rm_f).and_call_original
+      expect(FileUtils).to receive(:rm_f).with(exported_file).and_call_original
+
+      project.remove_exported_project_file
+
+      expect(File.exist?(exported_file)).to be_falsy
     end
   end
 
@@ -3185,6 +3245,7 @@ describe Project do
       expect(project).to receive(:update_project_counter_caches)
       expect(project).to receive(:remove_import_jid)
       expect(project).to receive(:after_create_default_branch)
+      expect(project).to receive(:refresh_markdown_cache!)
 
       project.after_import
     end
@@ -3477,6 +3538,51 @@ describe Project do
             .not_to exceed_query_limit(control).with_threshold(2)
         end
       end
+    end
+  end
+
+  describe "#pages_https_only?" do
+    subject { build(:project) }
+
+    context "when HTTPS pages are disabled" do
+      it { is_expected.not_to be_pages_https_only }
+    end
+
+    context "when HTTPS pages are enabled", :https_pages_enabled do
+      it { is_expected.to be_pages_https_only }
+    end
+  end
+
+  describe "#pages_https_only? validation", :https_pages_enabled do
+    subject(:project) do
+      # set-up dirty object:
+      create(:project, pages_https_only: false).tap do |p|
+        p.pages_https_only = true
+      end
+    end
+
+    context "when no domains are associated" do
+      it { is_expected.to be_valid }
+    end
+
+    context "when domains including keys and certificates are associated" do
+      before do
+        allow(project)
+          .to receive(:pages_domains)
+          .and_return([instance_double(PagesDomain, https?: true)])
+      end
+
+      it { is_expected.to be_valid }
+    end
+
+    context "when domains including no keys or certificates are associated" do
+      before do
+        allow(project)
+          .to receive(:pages_domains)
+          .and_return([instance_double(PagesDomain, https?: false)])
+      end
+
+      it { is_expected.not_to be_valid }
     end
   end
 end

@@ -14,7 +14,7 @@ class Projects::MilestonesController < Projects::ApplicationController
 
   def index
     @sort = params[:sort] || 'due_date_asc'
-    @milestones = milestones.sort(@sort)
+    @milestones = milestones.sort_by_attribute(@sort)
 
     respond_to do |format|
       format.html do
@@ -42,6 +42,10 @@ class Projects::MilestonesController < Projects::ApplicationController
 
   def show
     @project_namespace = @project.namespace.becomes(Namespace)
+
+    respond_to do |format|
+      format.html
+    end
   end
 
   def create

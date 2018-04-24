@@ -1,10 +1,8 @@
-require 'constraints/group_url_constrainer'
-
 resources :groups, only: [:index, :new, :create] do
   post :preview_markdown
 end
 
-constraints(GroupUrlConstrainer.new) do
+constraints(::Constraints::GroupUrlConstrainer.new) do
   scope(path: 'groups/*id',
         controller: :groups,
         constraints: { id: Gitlab::PathRegex.full_namespace_route_regex, format: /(html|json|atom)/ }) do
@@ -26,6 +24,7 @@ constraints(GroupUrlConstrainer.new) do
         constraints: { group_id: Gitlab::PathRegex.full_namespace_route_regex }) do
     namespace :settings do
       resource :ci_cd, only: [:show], controller: 'ci_cd'
+      resources :badges, only: [:index]
     end
 
     resource :variables, only: [:show, :update]

@@ -17,7 +17,7 @@ describe MergeRequest do
   describe 'modules' do
     subject { described_class }
 
-    it { is_expected.to include_module(InternalId) }
+    it { is_expected.to include_module(NonatomicInternalId) }
     it { is_expected.to include_module(Issuable) }
     it { is_expected.to include_module(Referable) }
     it { is_expected.to include_module(Sortable) }
@@ -1544,7 +1544,7 @@ describe MergeRequest do
     end
 
     it "executes diff cache service" do
-      expect_any_instance_of(MergeRequests::MergeRequestDiffCacheService).to receive(:execute).with(subject)
+      expect_any_instance_of(MergeRequests::MergeRequestDiffCacheService).to receive(:execute).with(subject, an_instance_of(MergeRequestDiff))
 
       subject.reload_diff
     end
@@ -1960,6 +1960,17 @@ describe MergeRequest do
       it 'returns the diffs' do
         expect(subject.merge_request_diff_for(merge_request_diff3.head_commit_sha)).to eq(merge_request_diff3)
       end
+    end
+
+    it 'runs a single query on the initial call, and none afterwards' do
+      expect { subject.merge_request_diff_for(merge_request_diff1.diff_refs) }
+        .not_to exceed_query_limit(1)
+
+      expect { subject.merge_request_diff_for(merge_request_diff2.diff_refs) }
+        .not_to exceed_query_limit(0)
+
+      expect { subject.merge_request_diff_for(merge_request_diff3.head_commit_sha) }
+        .not_to exceed_query_limit(0)
     end
   end
 

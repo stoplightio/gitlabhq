@@ -115,6 +115,12 @@ module Gitlab
     config.assets.precompile << "test.css"
     config.assets.precompile << "locale/**/app.js"
 
+    # Import gitlab-svgs directly from vendored directory
+    config.assets.paths << "#{config.root}/node_modules/@gitlab-org/gitlab-svgs/dist"
+    config.assets.precompile << "icons.svg"
+    config.assets.precompile << "icons.json"
+    config.assets.precompile << "illustrations/*.svg"
+
     # Version of your assets, change this if you want to expire all your assets
     config.assets.version = '1.0'
 
@@ -164,7 +170,7 @@ module Gitlab
     ENV['GIT_TERMINAL_PROMPT'] = '0'
 
     # Gitlab Read-only middleware support
-    config.middleware.insert_after ActionDispatch::Flash, 'Gitlab::Middleware::ReadOnly'
+    config.middleware.insert_after ActionDispatch::Flash, '::Gitlab::Middleware::ReadOnly'
 
     config.generators do |g|
       g.factory_bot false
@@ -191,5 +197,11 @@ module Gitlab
       Gitlab::Routing.add_helpers(project_url_helpers)
       Gitlab::Routing.add_helpers(MilestonesRoutingHelper)
     end
+  end
+
+  # This method is used for smooth upgrading from the current Rails 4.x to Rails 5.0.
+  # https://gitlab.com/gitlab-org/gitlab-ce/issues/14286
+  def self.rails5?
+    ENV["RAILS5"].in?(%w[1 true])
   end
 end
