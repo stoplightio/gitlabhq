@@ -12,9 +12,13 @@ class CreateDomains < ActiveRecord::Migration
       t.string :hostname
       t.string :ssl_path
       t.boolean :custom_ssl
+      t.datetime :created_at, null: false
+      t.datetime :updated_at, null: false
     end
 
-     add_index "domains", ["namespace_id"], name: "index_domains_on_namespace_id", using: :btree
+    add_index "domains", ["namespace_id"], name: "index_domains_on_namespace_id", using: :btree
+    add_index "domains", ["project_id"], name: "index_domains_on_project_id", using: :btree
+    add_index "domains", ["active_build_id"], name: "index_domains_on_active_build_id", using: :btree
   end
 
   def down
