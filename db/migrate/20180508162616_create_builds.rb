@@ -14,7 +14,8 @@ class CreateBuilds < ActiveRecord::Migration
       t.string :comment
       t.string :commit
       t.string :branch
-      t.datetime :ts, null: false
+      t.datetime :created_at, null: false
+      t.datetime :updated_at, null: false
       t.jsonb :config, null: false, default: '{}'
     end
 
