@@ -12,7 +12,7 @@ class CreateBuilds < ActiveRecord::Migration
       t.string :status
       t.string :file_path
       t.string :comment
-      t.string :commmit
+      t.string :commit
       t.string :branch
       t.datetime :ts, null: false
       t.jsonb :config, null: false, default: '{}'
