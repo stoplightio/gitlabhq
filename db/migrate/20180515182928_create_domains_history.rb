@@ -1,4 +1,4 @@
-# 20180508142803_create_domains_history.rb
+# 20180515182928_create_domains_history.rb
 
 # rubocop:disable all
 class CreateDomainsHistory < ActiveRecord::Migration
@@ -12,7 +12,8 @@ class CreateDomainsHistory < ActiveRecord::Migration
       t.integer :build_id
       t.datetime :created_at, null: false
       t.string :event
-      t.json: data
+      t.json :data
+    end
 
       if Gitlab::Database.postgresql?
         execute %q{
@@ -32,7 +33,6 @@ class CreateDomainsHistory < ActiveRecord::Migration
             ON DELETE CASCADE;
         }
       end
-    end
 
      add_index "domains_history", ["build_id"], name: "index_domains_history_on_build_id", using: :btree
      add_index "domains_history", ["domain_id"], name: "index_domains_history_on_domain_id", using: :btree

@@ -1,4 +1,4 @@
-# 20180508142803_create_domains.rb
+# 20180515182843_create_domains.rb
 
 # rubocop:disable all
 class CreateDomains < ActiveRecord::Migration
