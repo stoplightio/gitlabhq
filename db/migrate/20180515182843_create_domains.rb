@@ -9,7 +9,7 @@ class CreateDomains < ActiveRecord::Migration
       t.integer :namespace_id
       t.integer :project_id
       t.integer :active_build_id
-      t.string :hostname
+      t.string :hostname, unique: true
       t.string :ssl_path
       t.boolean :custom_ssl
 
