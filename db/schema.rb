@@ -766,6 +766,7 @@ ActiveRecord::Schema.define(version: 20180515182928) do
     t.datetime "updated_at"
   end
 
+  add_index "domains", ["hostname"], name: "index_domains_on_hostname", unique: true, using: :btree
   add_index "domains", ["namespace_id"], name: "index_domains_on_namespace_id", using: :btree
   add_index "domains", ["project_id"], name: "index_domains_on_project_id", using: :btree
 

@@ -9,7 +9,7 @@ class CreateDomains < ActiveRecord::Migration
       t.integer :namespace_id
       t.integer :project_id
       t.integer :active_build_id
-      t.string :hostname, unique: true
+      t.string :hostname
       t.string :ssl_path
       t.boolean :custom_ssl
 
@@ -17,6 +17,7 @@ class CreateDomains < ActiveRecord::Migration
     end
 
     add_index "domains", ["namespace_id"], name: "index_domains_on_namespace_id", using: :btree
+    add_index "domains", ["hostname"], name: "index_domains_on_hostname", using: :btree, unique: true
     add_index "domains", ["project_id"], name: "index_domains_on_project_id", using: :btree
   end
 
