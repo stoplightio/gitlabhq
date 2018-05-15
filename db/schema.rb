@@ -762,8 +762,8 @@ ActiveRecord::Schema.define(version: 20180515182928) do
     t.string   "hostname"
     t.string   "ssl_path"
     t.boolean  "custom_ssl"
-    t.datetime "created_at",      null: false
-    t.datetime "updated_at",      null: false
+    t.datetime "created_at"
+    t.datetime "updated_at"
   end
 
   add_index "domains", ["namespace_id"], name: "index_domains_on_namespace_id", using: :btree
@@ -772,9 +772,10 @@ ActiveRecord::Schema.define(version: 20180515182928) do
   create_table "domains_history", force: :cascade do |t|
     t.integer  "domain_id"
     t.integer  "build_id"
-    t.datetime "created_at", null: false
     t.string   "event"
     t.json     "data"
+    t.datetime "created_at"
+    t.datetime "updated_at"
   end
 
   add_index "domains_history", ["build_id"], name: "index_domains_history_on_build_id", using: :btree

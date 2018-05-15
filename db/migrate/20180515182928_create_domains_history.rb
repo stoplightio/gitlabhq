@@ -10,9 +10,10 @@ class CreateDomainsHistory < ActiveRecord::Migration
     create_table :domains_history do |t|
       t.integer :domain_id
       t.integer :build_id
-      t.datetime :created_at, null: false
       t.string :event
       t.json :data
+
+      t.timestamps null: true
     end
 
       if Gitlab::Database.postgresql?
@@ -39,6 +40,6 @@ class CreateDomainsHistory < ActiveRecord::Migration
   end
 
   def down
-    drop_table :domains
+    drop_table :domains_history
   end
 end

@@ -12,8 +12,8 @@ class CreateDomains < ActiveRecord::Migration
       t.string :hostname
       t.string :ssl_path
       t.boolean :custom_ssl
-      t.datetime :created_at, null: false
-      t.datetime :updated_at, null: false
+
+      t.timestamps null: true
     end
 
     add_index "domains", ["namespace_id"], name: "index_domains_on_namespace_id", using: :btree
