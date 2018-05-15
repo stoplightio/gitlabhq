@@ -2,6 +2,8 @@
 
 # rubocop:disable all
 class CreateDomainsHistory < ActiveRecord::Migration
+  include Gitlab::Database::MigrationHelpers
+
   DOWNTIME = false
 
   def up
@@ -9,6 +11,27 @@ class CreateDomainsHistory < ActiveRecord::Migration
       t.integer :domain_id
       t.integer :build_id
       t.datetime :created_at, null: false
+      t.string :event
+      t.json: data
+
+      if Gitlab::Database.postgresql?
+        execute %q{
+          ALTER TABLE "domains_history"
+            ADD CONSTRAINT "domains_history_domain_id_fkey"
+            FOREIGN KEY ("domain_id")
+            REFERENCES "domains" ("id")
+            ON DELETE CASCADE
+            NOT VALID;
+        }
+      else
+        execute %q{
+          ALTER TABLE domains_history
+            ADD CONSTRAINT domains_history_domain_id_fkey
+            FOREIGN KEY (domain_id)
+            REFERENCES domains (id)
+            ON DELETE CASCADE;
+        }
+      end
     end
 
      add_index "domains_history", ["build_id"], name: "index_domains_history_on_build_id", using: :btree
