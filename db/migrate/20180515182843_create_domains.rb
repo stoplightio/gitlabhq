@@ -1,4 +1,4 @@
-# 20180508142803_create_domains.rb
+# 20180515182843_create_domains.rb
 
 # rubocop:disable all
 class CreateDomains < ActiveRecord::Migration
@@ -12,11 +12,12 @@ class CreateDomains < ActiveRecord::Migration
       t.string :hostname
       t.string :ssl_path
       t.boolean :custom_ssl
-      t.datetime :created_at, null: false
-      t.datetime :updated_at, null: false
+
+      t.timestamps null: true
     end
 
     add_index "domains", ["namespace_id"], name: "index_domains_on_namespace_id", using: :btree
+    add_index "domains", ["hostname"], name: "index_domains_on_hostname", using: :btree, unique: true
     add_index "domains", ["project_id"], name: "index_domains_on_project_id", using: :btree
   end
 
