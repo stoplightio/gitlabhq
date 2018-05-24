@@ -11,7 +11,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20180418053107) do
+ActiveRecord::Schema.define(version: 20180524142014) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -47,117 +47,117 @@ ActiveRecord::Schema.define(version: 20180418053107) do
     t.text     "sign_in_text"
     t.datetime "created_at"
     t.datetime "updated_at"
-    t.string "home_page_url"
-    t.integer "default_branch_protection", default: 2
-    t.text "restricted_visibility_levels"
-    t.boolean "version_check_enabled", default: true
-    t.integer "max_attachment_size", default: 10, null: false
-    t.integer "default_project_visibility"
-    t.integer "default_snippet_visibility"
-    t.text "domain_whitelist"
-    t.boolean "user_oauth_applications", default: true
-    t.string "after_sign_out_path"
-    t.integer "session_expire_delay", default: 10080, null: false
-    t.text "import_sources"
-    t.text "help_page_text"
-    t.string "admin_notification_email"
-    t.boolean "shared_runners_enabled", default: true, null: false
-    t.integer "max_artifacts_size", default: 100, null: false
-    t.string "runners_registration_token"
-    t.integer "max_pages_size", default: 100, null: false
-    t.boolean "require_two_factor_authentication", default: false
-    t.integer "two_factor_grace_period", default: 48
-    t.boolean "metrics_enabled", default: false
-    t.string "metrics_host", default: "localhost"
-    t.integer "metrics_pool_size", default: 16
-    t.integer "metrics_timeout", default: 10
-    t.integer "metrics_method_call_threshold", default: 10
-    t.boolean "recaptcha_enabled", default: false
-    t.string "recaptcha_site_key"
-    t.string "recaptcha_private_key"
-    t.integer "metrics_port", default: 8089
-    t.boolean "akismet_enabled", default: false
-    t.string "akismet_api_key"
-    t.integer "metrics_sample_interval", default: 15
-    t.boolean "sentry_enabled", default: false
-    t.string "sentry_dsn"
-    t.boolean "email_author_in_body", default: false
-    t.integer "default_group_visibility"
-    t.boolean "repository_checks_enabled", default: false
-    t.text "shared_runners_text"
-    t.integer "metrics_packet_size", default: 1
-    t.text "disabled_oauth_sign_in_sources"
-    t.string "health_check_access_token"
-    t.boolean "send_user_confirmation_email", default: false
-    t.integer "container_registry_token_expire_delay", default: 5
-    t.text "after_sign_up_text"
-    t.boolean "user_default_external", default: false, null: false
-    t.string "repository_storages", default: "default"
-    t.string "enabled_git_access_protocol"
-    t.boolean "domain_blacklist_enabled", default: false
-    t.text "domain_blacklist"
-    t.boolean "usage_ping_enabled", default: true, null: false
-    t.boolean "koding_enabled"
-    t.string "koding_url"
-    t.text "sign_in_text_html"
-    t.text "help_page_text_html"
-    t.text "shared_runners_text_html"
-    t.text "after_sign_up_text_html"
-    t.integer "rsa_key_restriction", default: 0, null: false
-    t.integer "dsa_key_restriction", default: 0, null: false
-    t.integer "ecdsa_key_restriction", default: 0, null: false
-    t.integer "ed25519_key_restriction", default: 0, null: false
-    t.boolean "housekeeping_enabled", default: true, null: false
-    t.boolean "housekeeping_bitmaps_enabled", default: true, null: false
-    t.integer "housekeeping_incremental_repack_period", default: 10, null: false
-    t.integer "housekeeping_full_repack_period", default: 50, null: false
-    t.integer "housekeeping_gc_period", default: 200, null: false
-    t.boolean "sidekiq_throttling_enabled", default: false
-    t.string "sidekiq_throttling_queues"
-    t.decimal "sidekiq_throttling_factor"
-    t.boolean "html_emails_enabled", default: true
-    t.string "plantuml_url"
-    t.boolean "plantuml_enabled"
-    t.integer "terminal_max_session_time", default: 0, null: false
-    t.integer "unique_ips_limit_per_user"
-    t.integer "unique_ips_limit_time_window"
-    t.boolean "unique_ips_limit_enabled", default: false, null: false
-    t.string "default_artifacts_expire_in", default: "0", null: false
-    t.string "uuid"
-    t.decimal "polling_interval_multiplier", default: 1.0, null: false
-    t.integer "cached_markdown_version"
-    t.boolean "clientside_sentry_enabled", default: false, null: false
-    t.string "clientside_sentry_dsn"
-    t.boolean "prometheus_metrics_enabled", default: false, null: false
-    t.boolean "help_page_hide_commercial_content", default: false
-    t.string "help_page_support_url"
-    t.integer "performance_bar_allowed_group_id"
-    t.boolean "hashed_storage_enabled", default: false, null: false
-    t.boolean "project_export_enabled", default: true, null: false
-    t.boolean "auto_devops_enabled", default: false, null: false
-    t.integer "circuitbreaker_failure_count_threshold", default: 3
-    t.integer "circuitbreaker_failure_reset_time", default: 1800
-    t.integer "circuitbreaker_storage_timeout", default: 15
-    t.integer "circuitbreaker_access_retries", default: 3
-    t.boolean "throttle_unauthenticated_enabled", default: false, null: false
-    t.integer "throttle_unauthenticated_requests_per_period", default: 3600, null: false
-    t.integer "throttle_unauthenticated_period_in_seconds", default: 3600, null: false
-    t.boolean "throttle_authenticated_api_enabled", default: false, null: false
-    t.integer "throttle_authenticated_api_requests_per_period", default: 7200, null: false
-    t.integer "throttle_authenticated_api_period_in_seconds", default: 3600, null: false
-    t.boolean "throttle_authenticated_web_enabled", default: false, null: false
-    t.integer "throttle_authenticated_web_requests_per_period", default: 7200, null: false
-    t.integer "throttle_authenticated_web_period_in_seconds", default: 3600, null: false
-    t.integer "circuitbreaker_check_interval", default: 1, null: false
-    t.boolean "password_authentication_enabled_for_web"
-    t.boolean "password_authentication_enabled_for_git", default: true
-    t.integer "gitaly_timeout_default", default: 55, null: false
-    t.integer "gitaly_timeout_medium", default: 30, null: false
-    t.integer "gitaly_timeout_fast", default: 10, null: false
-    t.boolean "authorized_keys_enabled", default: true, null: false
-    t.string "auto_devops_domain"
-    t.boolean "pages_domain_verification_enabled", default: true, null: false
-    t.boolean "allow_local_requests_from_hooks_and_services", default: false, null: false
+    t.string   "home_page_url"
+    t.integer  "default_branch_protection",                      default: 2
+    t.text     "restricted_visibility_levels"
+    t.boolean  "version_check_enabled",                          default: true
+    t.integer  "max_attachment_size",                            default: 10,          null: false
+    t.integer  "default_project_visibility"
+    t.integer  "default_snippet_visibility"
+    t.text     "domain_whitelist"
+    t.boolean  "user_oauth_applications",                        default: true
+    t.string   "after_sign_out_path"
+    t.integer  "session_expire_delay",                           default: 10080,       null: false
+    t.text     "import_sources"
+    t.text     "help_page_text"
+    t.string   "admin_notification_email"
+    t.boolean  "shared_runners_enabled",                         default: true,        null: false
+    t.integer  "max_artifacts_size",                             default: 100,         null: false
+    t.string   "runners_registration_token"
+    t.integer  "max_pages_size",                                 default: 100,         null: false
+    t.boolean  "require_two_factor_authentication",              default: false
+    t.integer  "two_factor_grace_period",                        default: 48
+    t.boolean  "metrics_enabled",                                default: false
+    t.string   "metrics_host",                                   default: "localhost"
+    t.integer  "metrics_pool_size",                              default: 16
+    t.integer  "metrics_timeout",                                default: 10
+    t.integer  "metrics_method_call_threshold",                  default: 10
+    t.boolean  "recaptcha_enabled",                              default: false
+    t.string   "recaptcha_site_key"
+    t.string   "recaptcha_private_key"
+    t.integer  "metrics_port",                                   default: 8089
+    t.boolean  "akismet_enabled",                                default: false
+    t.string   "akismet_api_key"
+    t.integer  "metrics_sample_interval",                        default: 15
+    t.boolean  "sentry_enabled",                                 default: false
+    t.string   "sentry_dsn"
+    t.boolean  "email_author_in_body",                           default: false
+    t.integer  "default_group_visibility"
+    t.boolean  "repository_checks_enabled",                      default: false
+    t.text     "shared_runners_text"
+    t.integer  "metrics_packet_size",                            default: 1
+    t.text     "disabled_oauth_sign_in_sources"
+    t.string   "health_check_access_token"
+    t.boolean  "send_user_confirmation_email",                   default: false
+    t.integer  "container_registry_token_expire_delay",          default: 5
+    t.text     "after_sign_up_text"
+    t.boolean  "user_default_external",                          default: false,       null: false
+    t.string   "repository_storages",                            default: "default"
+    t.string   "enabled_git_access_protocol"
+    t.boolean  "domain_blacklist_enabled",                       default: false
+    t.text     "domain_blacklist"
+    t.boolean  "usage_ping_enabled",                             default: true,        null: false
+    t.boolean  "koding_enabled"
+    t.string   "koding_url"
+    t.text     "sign_in_text_html"
+    t.text     "help_page_text_html"
+    t.text     "shared_runners_text_html"
+    t.text     "after_sign_up_text_html"
+    t.integer  "rsa_key_restriction",                            default: 0,           null: false
+    t.integer  "dsa_key_restriction",                            default: 0,           null: false
+    t.integer  "ecdsa_key_restriction",                          default: 0,           null: false
+    t.integer  "ed25519_key_restriction",                        default: 0,           null: false
+    t.boolean  "housekeeping_enabled",                           default: true,        null: false
+    t.boolean  "housekeeping_bitmaps_enabled",                   default: true,        null: false
+    t.integer  "housekeeping_incremental_repack_period",         default: 10,          null: false
+    t.integer  "housekeeping_full_repack_period",                default: 50,          null: false
+    t.integer  "housekeeping_gc_period",                         default: 200,         null: false
+    t.boolean  "sidekiq_throttling_enabled",                     default: false
+    t.string   "sidekiq_throttling_queues"
+    t.decimal  "sidekiq_throttling_factor"
+    t.boolean  "html_emails_enabled",                            default: true
+    t.string   "plantuml_url"
+    t.boolean  "plantuml_enabled"
+    t.integer  "terminal_max_session_time",                      default: 0,           null: false
+    t.integer  "unique_ips_limit_per_user"
+    t.integer  "unique_ips_limit_time_window"
+    t.boolean  "unique_ips_limit_enabled",                       default: false,       null: false
+    t.string   "default_artifacts_expire_in",                    default: "0",         null: false
+    t.string   "uuid"
+    t.decimal  "polling_interval_multiplier",                    default: 1.0,         null: false
+    t.integer  "cached_markdown_version"
+    t.boolean  "clientside_sentry_enabled",                      default: false,       null: false
+    t.string   "clientside_sentry_dsn"
+    t.boolean  "prometheus_metrics_enabled",                     default: false,       null: false
+    t.boolean  "help_page_hide_commercial_content",              default: false
+    t.string   "help_page_support_url"
+    t.integer  "performance_bar_allowed_group_id"
+    t.boolean  "hashed_storage_enabled",                         default: false,       null: false
+    t.boolean  "project_export_enabled",                         default: true,        null: false
+    t.boolean  "auto_devops_enabled",                            default: false,       null: false
+    t.integer  "circuitbreaker_failure_count_threshold",         default: 3
+    t.integer  "circuitbreaker_failure_reset_time",              default: 1800
+    t.integer  "circuitbreaker_storage_timeout",                 default: 15
+    t.integer  "circuitbreaker_access_retries",                  default: 3
+    t.boolean  "throttle_unauthenticated_enabled",               default: false,       null: false
+    t.integer  "throttle_unauthenticated_requests_per_period",   default: 3600,        null: false
+    t.integer  "throttle_unauthenticated_period_in_seconds",     default: 3600,        null: false
+    t.boolean  "throttle_authenticated_api_enabled",             default: false,       null: false
+    t.integer  "throttle_authenticated_api_requests_per_period", default: 7200,        null: false
+    t.integer  "throttle_authenticated_api_period_in_seconds",   default: 3600,        null: false
+    t.boolean  "throttle_authenticated_web_enabled",             default: false,       null: false
+    t.integer  "throttle_authenticated_web_requests_per_period", default: 7200,        null: false
+    t.integer  "throttle_authenticated_web_period_in_seconds",   default: 3600,        null: false
+    t.integer  "circuitbreaker_check_interval",                  default: 1,           null: false
+    t.boolean  "password_authentication_enabled_for_web"
+    t.boolean  "password_authentication_enabled_for_git",        default: true
+    t.integer  "gitaly_timeout_default",                         default: 55,          null: false
+    t.integer  "gitaly_timeout_medium",                          default: 30,          null: false
+    t.integer  "gitaly_timeout_fast",                            default: 10,          null: false
+    t.boolean  "authorized_keys_enabled",                        default: true,        null: false
+    t.string   "auto_devops_domain"
+    t.boolean  "pages_domain_verification_enabled",              default: true,        null: false
+    t.boolean  "allow_local_requests_from_hooks_and_services",   default: false,       null: false
   end
 
   create_table "audit_events", force: :cascade do |t|
@@ -184,6 +184,19 @@ ActiveRecord::Schema.define(version: 20180418053107) do
   add_index "award_emoji", ["awardable_type", "awardable_id"], name: "index_award_emoji_on_awardable_type_and_awardable_id", using: :btree
   add_index "award_emoji", ["user_id", "name"], name: "index_award_emoji_on_user_id_and_name", using: :btree
 
+  create_table "badges", force: :cascade do |t|
+    t.string                 "link_url",   null: false
+    t.string                 "image_url",  null: false
+    t.integer                "project_id"
+    t.integer                "group_id"
+    t.string                 "type",       null: false
+    t.datetime_with_timezone "created_at", null: false
+    t.datetime_with_timezone "updated_at", null: false
+  end
+
+  add_index "badges", ["group_id"], name: "index_badges_on_group_id", using: :btree
+  add_index "badges", ["project_id"], name: "index_badges_on_project_id", using: :btree
+
   create_table "billing_accounts", force: :cascade do |t|
     t.string   "provider"
     t.integer  "namespace_id"
@@ -201,27 +214,14 @@ ActiveRecord::Schema.define(version: 20180418053107) do
     t.integer  "additional_namespace_ids", default: [], array: true
   end
 
-  add_index "billing_accounts", ["namespace_id"], name: "index_billing_accounts_on_namespace_id", using: :btree
   add_index "billing_accounts", ["additional_namespace_ids"], name: "index_billing_accounts_on_additional_namespace_ids", using: :btree
-
-  create_table "badges", force: :cascade do |t|
-    t.string "link_url", null: false
-    t.string "image_url", null: false
-    t.integer "project_id"
-    t.integer "group_id"
-    t.string "type", null: false
-    t.datetime_with_timezone "created_at", null: false
-    t.datetime_with_timezone "updated_at", null: false
-  end
-
-  add_index "badges", ["group_id"], name: "index_badges_on_group_id", using: :btree
-  add_index "badges", ["project_id"], name: "index_badges_on_project_id", using: :btree
+  add_index "billing_accounts", ["namespace_id"], name: "index_billing_accounts_on_namespace_id", using: :btree
 
   create_table "boards", force: :cascade do |t|
-    t.integer "project_id"
+    t.integer  "project_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.integer "group_id"
+    t.integer  "group_id"
   end
 
   add_index "boards", ["group_id"], name: "index_boards_on_group_id", using: :btree
@@ -240,6 +240,22 @@ ActiveRecord::Schema.define(version: 20180418053107) do
   end
 
   add_index "broadcast_messages", ["starts_at", "ends_at", "id"], name: "index_broadcast_messages_on_starts_at_and_ends_at_and_id", using: :btree
+
+  create_table "builds", force: :cascade do |t|
+    t.integer  "namespace_id"
+    t.integer  "project_id"
+    t.integer  "active_build_id"
+    t.string   "status"
+    t.string   "file_path"
+    t.string   "comment"
+    t.string   "commit"
+    t.string   "branch"
+    t.datetime "created_at",                   null: false
+    t.datetime "updated_at",                   null: false
+    t.jsonb    "config",          default: {}, null: false
+  end
+
+  add_index "builds", ["namespace_id"], name: "index_builds_on_namespace_id", using: :btree
 
   create_table "chat_names", force: :cascade do |t|
     t.integer  "user_id",      null: false
@@ -300,7 +316,7 @@ ActiveRecord::Schema.define(version: 20180418053107) do
     t.text     "commands"
     t.string   "name"
     t.text     "options"
-    t.boolean  "allow_failure",                 default: false, null: false
+    t.boolean  "allow_failure",                      default: false, null: false
     t.string   "stage"
     t.integer  "trigger_request_id"
     t.integer  "stage_idx"
@@ -317,20 +333,20 @@ ActiveRecord::Schema.define(version: 20180418053107) do
     t.datetime "erased_at"
     t.datetime "artifacts_expire_at"
     t.string   "environment"
-    t.integer  "artifacts_size",      limit: 8
+    t.integer  "artifacts_size",           limit: 8
     t.string   "when"
     t.text     "yaml_variables"
     t.datetime "queued_at"
-    t.string "token"
-    t.integer "lock_version"
-    t.string "coverage_regex"
-    t.integer "auto_canceled_by_id"
-    t.boolean "retried"
-    t.integer "stage_id"
-    t.integer "artifacts_file_store"
-    t.integer "artifacts_metadata_store"
-    t.boolean "protected"
-    t.integer "failure_reason"
+    t.string   "token"
+    t.integer  "lock_version"
+    t.string   "coverage_regex"
+    t.integer  "auto_canceled_by_id"
+    t.boolean  "retried"
+    t.integer  "stage_id"
+    t.boolean  "protected"
+    t.integer  "failure_reason"
+    t.integer  "artifacts_file_store"
+    t.integer  "artifacts_metadata_store"
   end
 
   add_index "ci_builds", ["artifacts_expire_at"], name: "index_ci_builds_on_artifacts_expire_at", where: "(artifacts_file <> ''::text)", using: :btree
@@ -350,8 +366,8 @@ ActiveRecord::Schema.define(version: 20180418053107) do
   add_index "ci_builds", ["user_id"], name: "index_ci_builds_on_user_id", using: :btree
 
   create_table "ci_builds_metadata", force: :cascade do |t|
-    t.integer "build_id", null: false
-    t.integer "project_id", null: false
+    t.integer "build_id",                   null: false
+    t.integer "project_id",                 null: false
     t.integer "timeout"
     t.integer "timeout_source", default: 1, null: false
   end
@@ -374,16 +390,16 @@ ActiveRecord::Schema.define(version: 20180418053107) do
   add_index "ci_group_variables", ["group_id", "key"], name: "index_ci_group_variables_on_group_id_and_key", unique: true, using: :btree
 
   create_table "ci_job_artifacts", force: :cascade do |t|
-    t.integer "project_id", null: false
-    t.integer "job_id", null: false
-    t.integer "file_type", null: false
-    t.integer "file_store"
-    t.integer "size", limit: 8
-    t.datetime_with_timezone "created_at", null: false
-    t.datetime_with_timezone "updated_at", null: false
+    t.integer                "project_id",            null: false
+    t.integer                "job_id",                null: false
+    t.integer                "file_type",             null: false
+    t.integer                "size",        limit: 8
+    t.datetime_with_timezone "created_at",            null: false
+    t.datetime_with_timezone "updated_at",            null: false
     t.datetime_with_timezone "expire_at"
-    t.string "file"
-    t.binary "file_sha256"
+    t.string                 "file"
+    t.binary                 "file_sha256"
+    t.integer                "file_store"
   end
 
   add_index "ci_job_artifacts", ["expire_at", "job_id"], name: "index_ci_job_artifacts_on_expire_at_and_job_id", using: :btree
@@ -410,9 +426,9 @@ ActiveRecord::Schema.define(version: 20180418053107) do
     t.string   "cron"
     t.string   "cron_timezone"
     t.datetime "next_run_at"
-    t.integer "project_id"
-    t.integer "owner_id"
-    t.boolean "active", default: true
+    t.integer  "project_id"
+    t.integer  "owner_id"
+    t.boolean  "active",        default: true
     t.datetime "deleted_at"
     t.datetime "created_at"
     t.datetime "updated_at"
@@ -480,18 +496,18 @@ ActiveRecord::Schema.define(version: 20180418053107) do
     t.datetime "updated_at"
     t.string   "description"
     t.datetime "contacted_at"
-    t.boolean "active", default: true, null: false
-    t.boolean "is_shared", default: false
-    t.string "name"
-    t.string "version"
-    t.string "revision"
-    t.string "platform"
-    t.string "architecture"
-    t.boolean "run_untagged", default: true, null: false
-    t.boolean "locked", default: false, null: false
-    t.integer "access_level", default: 0, null: false
-    t.string "ip_address"
-    t.integer "maximum_timeout"
+    t.boolean  "active",          default: true,  null: false
+    t.boolean  "is_shared",       default: false
+    t.string   "name"
+    t.string   "version"
+    t.string   "revision"
+    t.string   "platform"
+    t.string   "architecture"
+    t.boolean  "run_untagged",    default: true,  null: false
+    t.boolean  "locked",          default: false, null: false
+    t.integer  "access_level",    default: 0,     null: false
+    t.string   "ip_address"
+    t.integer  "maximum_timeout"
   end
 
   add_index "ci_runners", ["contacted_at"], name: "index_ci_runners_on_contacted_at", using: :btree
@@ -525,7 +541,7 @@ ActiveRecord::Schema.define(version: 20180418053107) do
 
   create_table "ci_triggers", force: :cascade do |t|
     t.datetime "deleted_at"
-    t.string "token"
+    t.string   "token"
     t.datetime "created_at"
     t.datetime "updated_at"
     t.integer  "project_id"
@@ -617,35 +633,35 @@ ActiveRecord::Schema.define(version: 20180418053107) do
   end
 
   create_table "clusters_applications_ingress", force: :cascade do |t|
-    t.integer "cluster_id", null: false
-    t.datetime_with_timezone "created_at", null: false
-    t.datetime_with_timezone "updated_at", null: false
-    t.integer "status", null: false
-    t.integer "ingress_type", null: false
-    t.string "version", null: false
-    t.string "cluster_ip"
-    t.text "status_reason"
-    t.string "external_ip"
+    t.integer                "cluster_id",    null: false
+    t.datetime_with_timezone "created_at",    null: false
+    t.datetime_with_timezone "updated_at",    null: false
+    t.integer                "status",        null: false
+    t.integer                "ingress_type",  null: false
+    t.string                 "version",       null: false
+    t.string                 "cluster_ip"
+    t.text                   "status_reason"
+    t.string                 "external_ip"
   end
 
   create_table "clusters_applications_prometheus", force: :cascade do |t|
-    t.integer "cluster_id", null: false
-    t.integer "status", null: false
-    t.string "version", null: false
-    t.text "status_reason"
-    t.datetime_with_timezone "created_at", null: false
-    t.datetime_with_timezone "updated_at", null: false
+    t.integer                "cluster_id",    null: false
+    t.integer                "status",        null: false
+    t.string                 "version",       null: false
+    t.text                   "status_reason"
+    t.datetime_with_timezone "created_at",    null: false
+    t.datetime_with_timezone "updated_at",    null: false
   end
 
   create_table "clusters_applications_runners", force: :cascade do |t|
-    t.integer "cluster_id", null: false
-    t.integer "runner_id"
-    t.integer "status", null: false
-    t.datetime_with_timezone "created_at", null: false
-    t.datetime_with_timezone "updated_at", null: false
-    t.string "version", null: false
-    t.text "status_reason"
-    t.boolean "privileged", default: true, null: false
+    t.integer                "cluster_id",                   null: false
+    t.integer                "runner_id"
+    t.integer                "status",                       null: false
+    t.datetime_with_timezone "created_at",                   null: false
+    t.datetime_with_timezone "updated_at",                   null: false
+    t.string                 "version",                      null: false
+    t.text                   "status_reason"
+    t.boolean                "privileged",    default: true, null: false
   end
 
   add_index "clusters_applications_runners", ["cluster_id"], name: "index_clusters_applications_runners_on_cluster_id", unique: true, using: :btree
@@ -701,19 +717,19 @@ ActiveRecord::Schema.define(version: 20180418053107) do
     t.integer  "project_id",                    null: false
     t.datetime "created_at"
     t.datetime "updated_at"
-    t.boolean "can_push", default: false, null: false
+    t.boolean  "can_push",      default: false, null: false
   end
 
   add_index "deploy_keys_projects", ["project_id"], name: "index_deploy_keys_projects_on_project_id", using: :btree
 
   create_table "deploy_tokens", force: :cascade do |t|
-    t.boolean "revoked", default: false
-    t.boolean "read_repository", default: false, null: false
-    t.boolean "read_registry", default: false, null: false
-    t.datetime_with_timezone "expires_at", null: false
-    t.datetime_with_timezone "created_at", null: false
-    t.string "name", null: false
-    t.string "token", null: false
+    t.boolean                "revoked",         default: false
+    t.boolean                "read_repository", default: false, null: false
+    t.boolean                "read_registry",   default: false, null: false
+    t.datetime_with_timezone "expires_at",                      null: false
+    t.datetime_with_timezone "created_at",                      null: false
+    t.string                 "name",                            null: false
+    t.string                 "token",                           null: false
   end
 
   add_index "deploy_tokens", ["token", "expires_at", "id"], name: "index_deploy_tokens_on_token_and_expires_at_and_id", where: "(revoked IS FALSE)", using: :btree
@@ -739,12 +755,66 @@ ActiveRecord::Schema.define(version: 20180418053107) do
   add_index "deployments", ["environment_id", "iid", "project_id"], name: "index_deployments_on_environment_id_and_iid_and_project_id", using: :btree
   add_index "deployments", ["project_id", "iid"], name: "index_deployments_on_project_id_and_iid", unique: true, using: :btree
 
-  create_table "emails", force: :cascade do |t|
-    t.integer  "user_id",              null: false
-    t.string   "email",                null: false
+  create_table "doc_builds", force: :cascade do |t|
+    t.integer  "doc_id"
+    t.string   "ref"
+    t.string   "file_path"
+    t.json     "status"
+    t.json     "config"
     t.datetime "created_at"
     t.datetime "updated_at"
-    t.string "confirmation_token"
+  end
+
+  add_index "doc_builds", ["doc_id"], name: "index_doc_builds_on_doc_id", using: :btree
+
+  create_table "docs", force: :cascade do |t|
+    t.integer  "org_id"
+    t.integer  "project_id"
+    t.string   "hostname"
+    t.string   "ssl_path"
+    t.boolean  "custom_ssl"
+    t.json     "config"
+    t.datetime "created_at"
+    t.datetime "updated_at"
+  end
+
+  add_index "docs", ["hostname"], name: "index_docs_on_hostname", unique: true, using: :btree
+  add_index "docs", ["org_id"], name: "index_docs_on_org_id", using: :btree
+  add_index "docs", ["project_id"], name: "index_docs_on_project_id", using: :btree
+
+  create_table "domains", force: :cascade do |t|
+    t.integer  "namespace_id"
+    t.integer  "project_id"
+    t.integer  "active_build_id"
+    t.string   "hostname"
+    t.string   "ssl_path"
+    t.boolean  "custom_ssl"
+    t.datetime "created_at"
+    t.datetime "updated_at"
+  end
+
+  add_index "domains", ["hostname"], name: "index_domains_on_hostname", unique: true, using: :btree
+  add_index "domains", ["namespace_id"], name: "index_domains_on_namespace_id", using: :btree
+  add_index "domains", ["project_id"], name: "index_domains_on_project_id", using: :btree
+
+  create_table "domains_history", force: :cascade do |t|
+    t.integer  "domain_id"
+    t.integer  "build_id"
+    t.string   "event"
+    t.json     "data"
+    t.datetime "created_at"
+    t.datetime "updated_at"
+  end
+
+  add_index "domains_history", ["build_id"], name: "index_domains_history_on_build_id", using: :btree
+  add_index "domains_history", ["domain_id"], name: "index_domains_history_on_domain_id", using: :btree
+
+  create_table "emails", force: :cascade do |t|
+    t.integer                "user_id",              null: false
+    t.string                 "email",                null: false
+    t.datetime               "created_at"
+    t.datetime               "updated_at"
+    t.string                 "confirmation_token"
     t.datetime_with_timezone "confirmed_at"
     t.datetime_with_timezone "confirmation_sent_at"
   end
@@ -779,7 +849,6 @@ ActiveRecord::Schema.define(version: 20180418053107) do
 
   add_index "events", ["action"], name: "index_events_on_action", using: :btree
   add_index "events", ["author_id", "project_id"], name: "index_events_on_author_id_and_project_id", using: :btree
-  add_index "events", ["author_id"], name: "index_events_on_author_id", using: :btree
   add_index "events", ["project_id", "id"], name: "index_events_on_project_id_and_id", using: :btree
   add_index "events", ["target_type", "target_id"], name: "index_events_on_target_type_and_target_id", using: :btree
 
@@ -920,7 +989,7 @@ ActiveRecord::Schema.define(version: 20180418053107) do
 
   create_table "internal_ids", id: :bigserial, force: :cascade do |t|
     t.integer "project_id", null: false
-    t.integer "usage", null: false
+    t.integer "usage",      null: false
     t.integer "last_value", null: false
   end
 
@@ -946,30 +1015,29 @@ ActiveRecord::Schema.define(version: 20180418053107) do
   add_index "issue_metrics", ["issue_id"], name: "index_issue_metrics", using: :btree
 
   create_table "issues", force: :cascade do |t|
-    t.string "title"
-    t.integer "author_id"
-    t.integer "project_id"
+    t.string   "title"
+    t.integer  "author_id"
+    t.integer  "project_id"
     t.datetime "created_at"
     t.datetime "updated_at"
-    t.text "description"
-    t.integer "milestone_id"
-    t.string "state"
-    t.integer "iid"
-    t.integer "updated_by_id"
-    t.boolean "confidential", default: false, null: false
-    t.date "due_date"
-    t.integer "moved_to_id"
-    t.integer "lock_version"
-    t.text "title_html"
-    t.text "description_html"
-    t.integer "time_estimate"
-    t.integer "relative_position"
-    t.integer "cached_markdown_version"
+    t.text     "description"
+    t.integer  "milestone_id"
+    t.string   "state"
+    t.integer  "iid"
+    t.integer  "updated_by_id"
+    t.boolean  "confidential",            default: false, null: false
+    t.date     "due_date"
+    t.integer  "moved_to_id"
+    t.integer  "lock_version"
+    t.text     "title_html"
+    t.text     "description_html"
+    t.integer  "time_estimate"
+    t.integer  "relative_position"
+    t.integer  "cached_markdown_version"
     t.datetime "last_edited_at"
-    t.integer "last_edited_by_id"
-    t.boolean "discussion_locked"
-    t.datetime_with_timezone "closed_at"
-    t.integer "closed_by_id"
+    t.integer  "last_edited_by_id"
+    t.boolean  "discussion_locked"
+    t.integer  "closed_by_id"
   end
 
   add_index "issues", ["author_id"], name: "index_issues_on_author_id", using: :btree
@@ -991,11 +1059,11 @@ ActiveRecord::Schema.define(version: 20180418053107) do
     t.integer  "user_id"
     t.datetime "created_at"
     t.datetime "updated_at"
-    t.text "key"
-    t.string "title"
-    t.string "type"
-    t.string "fingerprint"
-    t.boolean "public", default: false, null: false
+    t.text     "key"
+    t.string   "title"
+    t.string   "type"
+    t.string   "fingerprint"
+    t.boolean  "public",       default: false, null: false
     t.datetime "last_used_at"
   end
 
@@ -1045,10 +1113,10 @@ ActiveRecord::Schema.define(version: 20180418053107) do
   add_index "labels", ["type", "project_id"], name: "index_labels_on_type_and_project_id", using: :btree
 
   create_table "lfs_file_locks", force: :cascade do |t|
-    t.integer "project_id", null: false
-    t.integer "user_id", null: false
-    t.datetime "created_at", null: false
-    t.string "path", limit: 511
+    t.integer  "project_id",             null: false
+    t.integer  "user_id",                null: false
+    t.datetime "created_at",             null: false
+    t.string   "path",       limit: 511
   end
 
   add_index "lfs_file_locks", ["project_id", "path"], name: "index_lfs_file_locks_on_project_id_and_path", unique: true, using: :btree
@@ -1059,8 +1127,8 @@ ActiveRecord::Schema.define(version: 20180418053107) do
     t.integer  "size",       limit: 8, null: false
     t.datetime "created_at"
     t.datetime "updated_at"
-    t.string "file"
-    t.integer "file_store"
+    t.string   "file"
+    t.integer  "file_store"
   end
 
   add_index "lfs_objects", ["oid"], name: "index_lfs_objects_on_oid", unique: true, using: :btree
@@ -1147,26 +1215,26 @@ ActiveRecord::Schema.define(version: 20180418053107) do
     t.integer  "merge_request_id", null: false
     t.datetime "created_at"
     t.datetime "updated_at"
-    t.string "base_commit_sha"
-    t.string "real_size"
-    t.string "head_commit_sha"
-    t.string "start_commit_sha"
-    t.integer "commits_count"
+    t.string   "base_commit_sha"
+    t.string   "real_size"
+    t.string   "head_commit_sha"
+    t.string   "start_commit_sha"
+    t.integer  "commits_count"
   end
 
   add_index "merge_request_diffs", ["merge_request_id", "id"], name: "index_merge_request_diffs_on_merge_request_id_and_id", using: :btree
 
   create_table "merge_request_metrics", force: :cascade do |t|
-    t.integer  "merge_request_id",                null: false
-    t.datetime "latest_build_started_at"
-    t.datetime "latest_build_finished_at"
-    t.datetime "first_deployed_to_production_at"
-    t.datetime "merged_at"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.integer "pipeline_id"
-    t.integer "merged_by_id"
-    t.integer "latest_closed_by_id"
+    t.integer                "merge_request_id",                null: false
+    t.datetime               "latest_build_started_at"
+    t.datetime               "latest_build_finished_at"
+    t.datetime               "first_deployed_to_production_at"
+    t.datetime               "merged_at"
+    t.datetime               "created_at",                      null: false
+    t.datetime               "updated_at",                      null: false
+    t.integer                "pipeline_id"
+    t.integer                "merged_by_id"
+    t.integer                "latest_closed_by_id"
     t.datetime_with_timezone "latest_closed_at"
   end
 
@@ -1183,32 +1251,32 @@ ActiveRecord::Schema.define(version: 20180418053107) do
     t.string   "title"
     t.datetime "created_at"
     t.datetime "updated_at"
-    t.integer "milestone_id"
-    t.string "state", default: "opened", null: false
-    t.string "merge_status", default: "unchecked", null: false
-    t.integer "target_project_id", null: false
-    t.integer "iid"
-    t.text "description"
-    t.integer "updated_by_id"
-    t.text "merge_error"
-    t.text "merge_params"
-    t.boolean "merge_when_pipeline_succeeds", default: false, null: false
-    t.integer "merge_user_id"
-    t.string "merge_commit_sha"
-    t.string "in_progress_merge_commit_sha"
-    t.integer "lock_version"
-    t.text "title_html"
-    t.text "description_html"
-    t.integer "time_estimate"
-    t.integer "cached_markdown_version"
+    t.integer  "milestone_id"
+    t.string   "state",                        default: "opened",    null: false
+    t.string   "merge_status",                 default: "unchecked", null: false
+    t.integer  "target_project_id",                                  null: false
+    t.integer  "iid"
+    t.text     "description"
+    t.integer  "updated_by_id"
+    t.text     "merge_error"
+    t.text     "merge_params"
+    t.boolean  "merge_when_pipeline_succeeds", default: false,       null: false
+    t.integer  "merge_user_id"
+    t.string   "merge_commit_sha"
+    t.string   "in_progress_merge_commit_sha"
+    t.integer  "lock_version"
+    t.text     "title_html"
+    t.text     "description_html"
+    t.integer  "time_estimate"
+    t.integer  "cached_markdown_version"
     t.datetime "last_edited_at"
-    t.integer "last_edited_by_id"
-    t.integer "head_pipeline_id"
-    t.string "merge_jid"
-    t.boolean "discussion_locked"
-    t.integer "latest_merge_request_diff_id"
-    t.string "rebase_commit_sha"
-    t.boolean "allow_maintainer_to_push"
+    t.integer  "last_edited_by_id"
+    t.integer  "head_pipeline_id"
+    t.string   "merge_jid"
+    t.boolean  "discussion_locked"
+    t.integer  "latest_merge_request_diff_id"
+    t.string   "rebase_commit_sha"
+    t.boolean  "allow_maintainer_to_push"
   end
 
   add_index "merge_requests", ["assignee_id"], name: "index_merge_requests_on_assignee_id", using: :btree
@@ -1281,18 +1349,18 @@ ActiveRecord::Schema.define(version: 20180418053107) do
     t.integer  "owner_id"
     t.datetime "created_at"
     t.datetime "updated_at"
-    t.string "type"
-    t.string "description", default: "", null: false
-    t.string "avatar"
-    t.boolean "share_with_group_lock", default: false
-    t.integer "visibility_level", default: 20, null: false
-    t.boolean "request_access_enabled", default: false, null: false
-    t.text "description_html"
-    t.boolean "lfs_enabled"
-    t.integer "parent_id"
-    t.boolean "require_two_factor_authentication", default: false, null: false
-    t.integer "two_factor_grace_period", default: 48, null: false
-    t.integer "cached_markdown_version"
+    t.string   "type"
+    t.string   "description",                       default: "",    null: false
+    t.string   "avatar"
+    t.boolean  "share_with_group_lock",             default: false
+    t.integer  "visibility_level",                  default: 20,    null: false
+    t.boolean  "request_access_enabled",            default: false, null: false
+    t.text     "description_html"
+    t.boolean  "lfs_enabled"
+    t.integer  "parent_id"
+    t.boolean  "require_two_factor_authentication", default: false, null: false
+    t.integer  "two_factor_grace_period",           default: 48,    null: false
+    t.integer  "cached_markdown_version"
   end
 
   add_index "namespaces", ["created_at"], name: "index_namespaces_on_created_at", using: :btree
@@ -1343,25 +1411,25 @@ ActiveRecord::Schema.define(version: 20180418053107) do
   add_index "notes", ["updated_at"], name: "index_notes_on_updated_at", using: :btree
 
   create_table "notification_settings", force: :cascade do |t|
-    t.integer "user_id", null: false
-    t.integer "source_id"
-    t.string "source_type"
-    t.integer "level", default: 0, null: false
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.boolean "new_note"
-    t.boolean "new_issue"
-    t.boolean "reopen_issue"
-    t.boolean "close_issue"
-    t.boolean "reassign_issue"
-    t.boolean "new_merge_request"
-    t.boolean "reopen_merge_request"
-    t.boolean "close_merge_request"
-    t.boolean "reassign_merge_request"
-    t.boolean "merge_merge_request"
-    t.boolean "failed_pipeline"
-    t.boolean "success_pipeline"
-    t.boolean "push_to_merge_request"
+    t.integer  "user_id",                            null: false
+    t.integer  "source_id"
+    t.string   "source_type"
+    t.integer  "level",                  default: 0, null: false
+    t.datetime "created_at",                         null: false
+    t.datetime "updated_at",                         null: false
+    t.boolean  "new_note"
+    t.boolean  "new_issue"
+    t.boolean  "reopen_issue"
+    t.boolean  "close_issue"
+    t.boolean  "reassign_issue"
+    t.boolean  "new_merge_request"
+    t.boolean  "reopen_merge_request"
+    t.boolean  "close_merge_request"
+    t.boolean  "reassign_merge_request"
+    t.boolean  "merge_merge_request"
+    t.boolean  "failed_pipeline"
+    t.boolean  "success_pipeline"
+    t.boolean  "push_to_merge_request"
   end
 
   add_index "notification_settings", ["source_id", "source_type"], name: "index_notification_settings_on_source_id_and_source_type", using: :btree
@@ -1436,14 +1504,14 @@ ActiveRecord::Schema.define(version: 20180418053107) do
   add_index "oauth_tester_access_tokens", ["user_id"], name: "index_oauth_tester_access_tokens_on_user_id", using: :btree
 
   create_table "pages_domains", force: :cascade do |t|
-    t.integer "project_id"
-    t.text "certificate"
-    t.text "encrypted_key"
-    t.string "encrypted_key_iv"
-    t.string "encrypted_key_salt"
-    t.string "domain"
+    t.integer                "project_id"
+    t.text                   "certificate"
+    t.text                   "encrypted_key"
+    t.string                 "encrypted_key_iv"
+    t.string                 "encrypted_key_salt"
+    t.string                 "domain"
     t.datetime_with_timezone "verified_at"
-    t.string "verification_code", null: false
+    t.string                 "verification_code",  null: false
     t.datetime_with_timezone "enabled_until"
   end
 
@@ -1499,9 +1567,9 @@ ActiveRecord::Schema.define(version: 20180418053107) do
   add_index "project_custom_attributes", ["project_id", "key"], name: "index_project_custom_attributes_on_project_id_and_key", unique: true, using: :btree
 
   create_table "project_deploy_tokens", force: :cascade do |t|
-    t.integer "project_id", null: false
-    t.integer "deploy_token_id", null: false
-    t.datetime_with_timezone "created_at", null: false
+    t.integer                "project_id",      null: false
+    t.integer                "deploy_token_id", null: false
+    t.datetime_with_timezone "created_at",      null: false
   end
 
   add_index "project_deploy_tokens", ["project_id", "deploy_token_id"], name: "index_project_deploy_tokens_on_project_id_and_deploy_token_id", unique: true, using: :btree
@@ -1561,8 +1629,8 @@ ActiveRecord::Schema.define(version: 20180418053107) do
     t.text     "description"
     t.datetime "created_at"
     t.datetime "updated_at"
-    t.integer "creator_id"
-    t.integer "namespace_id", null: false
+    t.integer  "creator_id"
+    t.integer  "namespace_id",                                                                   null: false
     t.datetime "last_activity_at"
     t.string   "import_url"
     t.integer  "visibility_level",                                           default: 0,         null: false
@@ -1599,13 +1667,13 @@ ActiveRecord::Schema.define(version: 20180418053107) do
     t.integer  "cached_markdown_version"
     t.text     "delete_error"
     t.datetime "last_repository_updated_at"
-    t.integer "storage_version", limit: 2
-    t.boolean "resolve_outdated_diff_discussions"
-    t.boolean "repository_read_only"
-    t.boolean "merge_requests_ff_only_enabled", default: false
-    t.boolean "merge_requests_rebase_enabled", default: false, null: false
-    t.integer "jobs_cache_index"
-    t.boolean "pages_https_only", default: true
+    t.integer  "storage_version",                                  limit: 2
+    t.boolean  "resolve_outdated_diff_discussions"
+    t.boolean  "repository_read_only"
+    t.boolean  "merge_requests_ff_only_enabled",                             default: false
+    t.boolean  "merge_requests_rebase_enabled",                              default: false,     null: false
+    t.integer  "jobs_cache_index"
+    t.boolean  "pages_https_only",                                           default: true
   end
 
   add_index "projects", ["ci_id"], name: "index_projects_on_ci_id", using: :btree
@@ -1688,11 +1756,11 @@ ActiveRecord::Schema.define(version: 20180418053107) do
   add_index "push_event_payloads", ["event_id"], name: "index_push_event_payloads_on_event_id", unique: true, using: :btree
 
   create_table "redirect_routes", force: :cascade do |t|
-    t.integer "source_id", null: false
-    t.string "source_type", null: false
-    t.string "path", null: false
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
+    t.integer  "source_id",   null: false
+    t.string   "source_type", null: false
+    t.string   "path",        null: false
+    t.datetime "created_at",  null: false
+    t.datetime "updated_at",  null: false
   end
 
   add_index "redirect_routes", ["path"], name: "index_redirect_routes_on_path", unique: true, using: :btree
@@ -1745,22 +1813,22 @@ ActiveRecord::Schema.define(version: 20180418053107) do
     t.integer  "project_id"
     t.datetime "created_at"
     t.datetime "updated_at"
-    t.boolean "active", default: false, null: false
-    t.text "properties"
-    t.boolean "template", default: false
-    t.boolean "push_events", default: true
-    t.boolean "issues_events", default: true
-    t.boolean "merge_requests_events", default: true
-    t.boolean "tag_push_events", default: true
-    t.boolean "note_events", default: true, null: false
-    t.string "category", default: "common", null: false
-    t.boolean "default", default: false
-    t.boolean "wiki_page_events", default: true
-    t.boolean "pipeline_events", default: false, null: false
-    t.boolean "confidential_issues_events", default: true, null: false
-    t.boolean "commit_events", default: true, null: false
-    t.boolean "job_events", default: false, null: false
-    t.boolean "confidential_note_events", default: true
+    t.boolean  "active",                     default: false,    null: false
+    t.text     "properties"
+    t.boolean  "template",                   default: false
+    t.boolean  "push_events",                default: true
+    t.boolean  "issues_events",              default: true
+    t.boolean  "merge_requests_events",      default: true
+    t.boolean  "tag_push_events",            default: true
+    t.boolean  "note_events",                default: true,     null: false
+    t.string   "category",                   default: "common", null: false
+    t.boolean  "default",                    default: false
+    t.boolean  "wiki_page_events",           default: true
+    t.boolean  "pipeline_events",            default: false,    null: false
+    t.boolean  "confidential_issues_events", default: true,     null: false
+    t.boolean  "commit_events",              default: true,     null: false
+    t.boolean  "job_events",                 default: false,    null: false
+    t.boolean  "confidential_note_events",   default: true
   end
 
   add_index "services", ["project_id"], name: "index_services_on_project_id", using: :btree
@@ -1863,13 +1931,13 @@ ActiveRecord::Schema.define(version: 20180418053107) do
   add_index "timelogs", ["user_id"], name: "index_timelogs_on_user_id", using: :btree
 
   create_table "todos", force: :cascade do |t|
-    t.integer "user_id", null: false
-    t.integer "project_id", null: false
-    t.integer "target_id"
-    t.string "target_type", null: false
-    t.integer "author_id", null: false
-    t.integer "action", null: false
-    t.string "state", null: false
+    t.integer  "user_id",     null: false
+    t.integer  "project_id",  null: false
+    t.integer  "target_id"
+    t.string   "target_type", null: false
+    t.integer  "author_id",   null: false
+    t.integer  "action",      null: false
+    t.string   "state",       null: false
     t.datetime "created_at"
     t.datetime "updated_at"
     t.integer  "note_id"
@@ -1906,16 +1974,16 @@ ActiveRecord::Schema.define(version: 20180418053107) do
   add_index "u2f_registrations", ["user_id"], name: "index_u2f_registrations_on_user_id", using: :btree
 
   create_table "uploads", force: :cascade do |t|
-    t.integer "size", limit: 8, null: false
-    t.string "path", limit: 511, null: false
-    t.string "checksum", limit: 64
-    t.integer "model_id"
-    t.string "model_type"
-    t.string "uploader", null: false
-    t.datetime "created_at", null: false
-    t.string "mount_point"
-    t.string "secret"
-    t.integer "store"
+    t.integer  "size",        limit: 8,   null: false
+    t.string   "path",        limit: 511, null: false
+    t.string   "checksum",    limit: 64
+    t.integer  "model_id"
+    t.string   "model_type"
+    t.string   "uploader",                null: false
+    t.datetime "created_at",              null: false
+    t.string   "mount_point"
+    t.string   "secret"
+    t.integer  "store"
   end
 
   add_index "uploads", ["checksum"], name: "index_uploads_on_checksum", using: :btree
@@ -1936,7 +2004,7 @@ ActiveRecord::Schema.define(version: 20180418053107) do
 
   create_table "user_callouts", force: :cascade do |t|
     t.integer "feature_name", null: false
-    t.integer "user_id", null: false
+    t.integer "user_id",      null: false
   end
 
   add_index "user_callouts", ["user_id", "feature_name"], name: "index_user_callouts_on_user_id_and_feature_name", unique: true, using: :btree
@@ -1945,16 +2013,16 @@ ActiveRecord::Schema.define(version: 20180418053107) do
   create_table "user_custom_attributes", force: :cascade do |t|
     t.datetime_with_timezone "created_at", null: false
     t.datetime_with_timezone "updated_at", null: false
-    t.integer "user_id", null: false
-    t.string "key", null: false
-    t.string "value", null: false
+    t.integer                "user_id",    null: false
+    t.string                 "key",        null: false
+    t.string                 "value",      null: false
   end
 
   add_index "user_custom_attributes", ["key", "value"], name: "index_user_custom_attributes_on_key_and_value", using: :btree
   add_index "user_custom_attributes", ["user_id", "key"], name: "index_user_custom_attributes_on_user_id_and_key", unique: true, using: :btree
 
   create_table "user_interacted_projects", id: false, force: :cascade do |t|
-    t.integer "user_id", null: false
+    t.integer "user_id",    null: false
     t.integer "project_id", null: false
   end
 
@@ -1984,14 +2052,14 @@ ActiveRecord::Schema.define(version: 20180418053107) do
     t.string   "last_sign_in_ip"
     t.datetime "created_at"
     t.datetime "updated_at"
-    t.string "name"
-    t.boolean "admin", default: false, null: false
-    t.integer "projects_limit", null: false
-    t.string "skype", default: "", null: false
-    t.string "linkedin", default: "", null: false
-    t.string "twitter", default: "", null: false
-    t.string "bio"
-    t.integer "failed_attempts", default: 0
+    t.string   "name"
+    t.boolean  "admin",                                                  default: false, null: false
+    t.integer  "projects_limit",                                                         null: false
+    t.string   "skype",                                                  default: "",    null: false
+    t.string   "linkedin",                                               default: "",    null: false
+    t.string   "twitter",                                                default: "",    null: false
+    t.string   "bio"
+    t.integer  "failed_attempts",                                        default: 0
     t.datetime "locked_at"
     t.string   "username"
     t.boolean  "can_create_group",                                       default: true,  null: false
@@ -2085,21 +2153,21 @@ ActiveRecord::Schema.define(version: 20180418053107) do
     t.integer  "project_id"
     t.datetime "created_at"
     t.datetime "updated_at"
-    t.string "type", default: "ProjectHook"
-    t.integer "service_id"
-    t.boolean "push_events", default: true, null: false
-    t.boolean "issues_events", default: false, null: false
-    t.boolean "merge_requests_events", default: false, null: false
-    t.boolean "tag_push_events", default: false
-    t.boolean "note_events", default: false, null: false
-    t.boolean "enable_ssl_verification", default: true
-    t.boolean "wiki_page_events", default: false, null: false
-    t.string "token"
-    t.boolean "pipeline_events", default: false, null: false
-    t.boolean "confidential_issues_events", default: false, null: false
-    t.boolean "repository_update_events", default: false, null: false
-    t.boolean "job_events", default: false, null: false
-    t.boolean "confidential_note_events"
+    t.string   "type",                                    default: "ProjectHook"
+    t.integer  "service_id"
+    t.boolean  "push_events",                             default: true,          null: false
+    t.boolean  "issues_events",                           default: false,         null: false
+    t.boolean  "merge_requests_events",                   default: false,         null: false
+    t.boolean  "tag_push_events",                         default: false
+    t.boolean  "note_events",                             default: false,         null: false
+    t.boolean  "enable_ssl_verification",                 default: true
+    t.boolean  "wiki_page_events",                        default: false,         null: false
+    t.string   "token"
+    t.boolean  "pipeline_events",                         default: false,         null: false
+    t.boolean  "confidential_issues_events",              default: false,         null: false
+    t.boolean  "repository_update_events",                default: false,         null: false
+    t.boolean  "job_events",                              default: false,         null: false
+    t.boolean  "confidential_note_events"
   end
 
   add_index "web_hooks", ["project_id"], name: "index_web_hooks_on_project_id", using: :btree
@@ -2149,6 +2217,8 @@ ActiveRecord::Schema.define(version: 20180418053107) do
   add_foreign_key "container_repositories", "projects"
   add_foreign_key "deploy_keys_projects", "projects", name: "fk_58a901ca7e", on_delete: :cascade
   add_foreign_key "deployments", "projects", name: "fk_b9a3851b82", on_delete: :cascade
+  add_foreign_key "doc_builds", "docs", name: "doc_builds_doc_id_fkey", on_delete: :cascade
+  add_foreign_key "domains_history", "domains", name: "domains_history_domain_id_fkey", on_delete: :cascade
   add_foreign_key "environments", "projects", name: "fk_d1c8c1da6a", on_delete: :cascade
   add_foreign_key "events", "projects", on_delete: :cascade
   add_foreign_key "events", "users", column: "author_id", name: "fk_edfd187b6f", on_delete: :cascade
