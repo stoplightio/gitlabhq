@@ -770,6 +770,7 @@ ActiveRecord::Schema.define(version: 20180524142014) do
   create_table "docs", force: :cascade do |t|
     t.integer  "org_id"
     t.integer  "project_id"
+    t.integer  "live_build_id"
     t.string   "hostname"
     t.string   "ssl_path"
     t.boolean  "custom_ssl"

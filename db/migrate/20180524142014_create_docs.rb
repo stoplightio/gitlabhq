@@ -84,7 +84,7 @@ class CreateDocs < ActiveRecord::Migration
   end
 
   def down
-    drop_table :docs
     drop_table :doc_builds
+    drop_table :docs
   end
 end
