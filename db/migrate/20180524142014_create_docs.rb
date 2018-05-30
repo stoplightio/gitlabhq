@@ -10,6 +10,7 @@ class CreateDocs < ActiveRecord::Migration
     create_table :docs do |t|
       t.integer :org_id
       t.integer :project_id
+      t.integer :live_build_id
       t.string :hostname
       t.string :ssl_path
       t.boolean :custom_ssl
