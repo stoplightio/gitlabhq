@@ -759,6 +759,7 @@ ActiveRecord::Schema.define(version: 20180524142014) do
     t.integer  "doc_id"
     t.string   "ref"
     t.string   "file_path"
+    t.string   "branch"
     t.json     "status"
     t.json     "config"
     t.datetime "created_at"

@@ -34,6 +34,7 @@ class CreateDocs < ActiveRecord::Migration
       t.integer :doc_id
       t.string :ref
       t.string :file_path
+      t.string :branch
 
       # status
         # code
