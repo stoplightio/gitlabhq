@@ -11,7 +11,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20180418053107) do
+ActiveRecord::Schema.define(version: 20180604161740) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -1606,6 +1606,8 @@ ActiveRecord::Schema.define(version: 20180418053107) do
     t.boolean "merge_requests_rebase_enabled", default: false, null: false
     t.integer "jobs_cache_index"
     t.boolean "pages_https_only", default: true
+    t.boolean  "is_released", default: false
+
   end
 
   add_index "projects", ["ci_id"], name: "index_projects_on_ci_id", using: :btree
