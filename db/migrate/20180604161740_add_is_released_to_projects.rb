@@ -5,13 +5,12 @@ class AddIsReleasedToProjects < ActiveRecord::Migration
   include Gitlab::Database::MigrationHelpers
 
   # Set this constant to true if this migration requires downtime.
-  # Do not need to set downtime-true since we are not setting a default on the column
-  DOWNTIME = false
+  DOWNTIME = true
 
   # When a migration requires downtime you **must** uncomment the following
   # constant and define a short and easy to understand explanation as to why the
   # migration requires downtime.
-  # DOWNTIME_REASON = ''
+  DOWNTIME_REASON = 'Creates a column with a default value, downtime is required'
 
   # When using the methods "add_concurrent_index", "remove_concurrent_index" or
   # "add_column_with_default" you must disable the use of transactions
@@ -27,6 +26,6 @@ class AddIsReleasedToProjects < ActiveRecord::Migration
   # disable_ddl_transaction!
 
   def change
-    add_column :projects, :is_released, :boolean
+    add_column :projects, :is_released, :boolean, :default => false
   end
 end

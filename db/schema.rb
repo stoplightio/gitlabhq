@@ -1606,7 +1606,7 @@ ActiveRecord::Schema.define(version: 20180604161740) do
     t.boolean  "merge_requests_rebase_enabled",                              default: false,     null: false
     t.integer  "jobs_cache_index"
     t.boolean  "pages_https_only",                                           default: true
-    t.boolean  "is_released"
+    t.boolean  "is_released",                                                default: false
   end
 
   add_index "projects", ["ci_id"], name: "index_projects_on_ci_id", using: :btree
