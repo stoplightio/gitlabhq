@@ -268,11 +268,11 @@ class NotificationService
 
   # Group invite
   def invite_group_member(group_member, token)
-    # mailer.member_invited_email(group_member.real_source_type, group_member.id, token).deliver_later
+    mailer.member_invited_email(group_member.real_source_type, group_member.id, token).deliver_later
   end
 
   def accept_group_invite(group_member)
-    # mailer.member_invite_accepted_email(group_member.real_source_type, group_member.id).deliver_later
+    mailer.member_invite_accepted_email(group_member.real_source_type, group_member.id).deliver_later
   end
 
   def decline_group_invite(group_member)
