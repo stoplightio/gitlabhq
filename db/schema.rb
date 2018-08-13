@@ -757,6 +757,7 @@ ActiveRecord::Schema.define(version: 20180726185641) do
 
   create_table "doc_builds", force: :cascade do |t|
     t.integer  "doc_id"
+    t.integer  "author_id"
     t.string   "ref"
     t.string   "file_path"
     t.string   "branch"
@@ -771,6 +772,7 @@ ActiveRecord::Schema.define(version: 20180726185641) do
   create_table "docs", force: :cascade do |t|
     t.integer  "org_id"
     t.integer  "project_id"
+    t.integer  "owner_id"
     t.integer  "live_build_id"
     t.string   "hostname"
     t.string   "ssl_path"
