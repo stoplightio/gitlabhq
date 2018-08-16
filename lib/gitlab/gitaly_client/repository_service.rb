@@ -50,6 +50,15 @@ module Gitlab
         GitalyClient.call(@storage, :repository_service, :apply_gitattributes, request)
       end
 
+      def info_attributes
+        request = Gitaly::GetInfoAttributesRequest.new(repository: @gitaly_repo)
+
+        response = GitalyClient.call(@storage, :repository_service, :get_info_attributes, request)
+        response.each_with_object("") do |message, attributes|
+          attributes << message.attributes
+        end
+      end
+
       def fetch_remote(remote, ssh_auth:, forced:, no_tags:, timeout:, prune: true)
         request = Gitaly::FetchRemoteRequest.new(
           repository: @gitaly_repo, remote: remote, force: forced,
@@ -133,7 +142,7 @@ module Gitlab
           :repository_service,
           :is_rebase_in_progress,
           request,
-          timeout: GitalyClient.default_timeout
+          timeout: GitalyClient.fast_timeout
         )
 
         response.in_progress
@@ -150,7 +159,7 @@ module Gitlab
           :repository_service,
           :is_squash_in_progress,
           request,
-          timeout: GitalyClient.default_timeout
+          timeout: GitalyClient.fast_timeout
         )
 
         response.in_progress
@@ -283,6 +292,14 @@ module Gitlab
         request  = Gitaly::CalculateChecksumRequest.new(repository: @gitaly_repo)
         response = GitalyClient.call(@storage, :repository_service, :calculate_checksum, request)
         response.checksum.presence
+      rescue GRPC::DataLoss => e
+        raise Gitlab::Git::Repository::InvalidRepository.new(e)
+      end
+
+      def raw_changes_between(from, to)
+        request = Gitaly::GetRawChangesRequest.new(repository: @gitaly_repo, from_revision: from, to_revision: to)
+
+        GitalyClient.call(@storage, :repository_service, :get_raw_changes, request)
       end
     end
   end

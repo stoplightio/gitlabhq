@@ -9,7 +9,7 @@ describe ProfilesController, :request_store do
 
       expect do
         post :update,
-             user: { password: 'hello12345', password_confirmation: 'hello12345' }
+          user: { password: 'hello12345', password_confirmation: 'hello12345' }
       end.not_to change { user.reload.encrypted_password }
 
       expect(response.status).to eq(302)
@@ -138,7 +138,7 @@ describe ProfilesController, :request_store do
         user.reload
 
         expect(response.status).to eq(302)
-        expect(gitlab_shell.exists?(project.repository_storage_path, "#{new_username}/#{project.path}.git")).to be_truthy
+        expect(gitlab_shell.exists?(project.repository_storage, "#{new_username}/#{project.path}.git")).to be_truthy
       end
     end
 
@@ -156,7 +156,7 @@ describe ProfilesController, :request_store do
         user.reload
 
         expect(response.status).to eq(302)
-        expect(gitlab_shell.exists?(project.repository_storage_path, "#{project.disk_path}.git")).to be_truthy
+        expect(gitlab_shell.exists?(project.repository_storage, "#{project.disk_path}.git")).to be_truthy
         expect(before_disk_path).to eq(project.disk_path)
       end
     end

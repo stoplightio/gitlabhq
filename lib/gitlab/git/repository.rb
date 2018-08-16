@@ -20,6 +20,9 @@ module Gitlab
         GIT_ALTERNATE_OBJECT_DIRECTORIES_RELATIVE
       ].freeze
       SEARCH_CONTEXT_LINES = 3
+      # In https://gitlab.com/gitlab-org/gitaly/merge_requests/698
+      # We copied these two prefixes into gitaly-go, so don't change these
+      # or things will break! (REBASE_WORKTREE_PREFIX and SQUASH_WORKTREE_PREFIX)
       REBASE_WORKTREE_PREFIX = 'rebase'.freeze
       SQUASH_WORKTREE_PREFIX = 'squash'.freeze
       GITALY_INTERNAL_URL = 'ssh://gitaly/internal.git'.freeze
@@ -27,6 +30,7 @@ module Gitlab
       EMPTY_REPOSITORY_CHECKSUM = '0000000000000000000000000000000000000000'.freeze
 
       NoRepository = Class.new(StandardError)
+      InvalidRepository = Class.new(StandardError)
       InvalidBlobName = Class.new(StandardError)
       InvalidRef = Class.new(StandardError)
       GitError = Class.new(StandardError)
@@ -76,9 +80,6 @@ module Gitlab
         end
       end
 
-      # Full path to repo
-      attr_reader :path
-
       # Directory name of repo
       attr_reader :name
 
@@ -97,20 +98,24 @@ module Gitlab
         @relative_path = relative_path
         @gl_repository = gl_repository
 
-        storage_path = Gitlab.config.repositories.storages[@storage].legacy_disk_path
         @gitlab_projects = Gitlab::Git::GitlabProjects.new(
           storage,
           relative_path,
           global_hooks_path: Gitlab.config.gitlab_shell.hooks_path,
           logger: Rails.logger
         )
-        @path = File.join(storage_path, @relative_path)
+
         @name = @relative_path.split("/").last
-        @attributes = Gitlab::Git::InfoAttributes.new(path)
       end
 
       def ==(other)
         path == other.path
+      end
+
+      def path
+        @path ||= File.join(
+          Gitlab.config.repositories.storages[@storage].legacy_disk_path, @relative_path
+        )
       end
 
       # Default branch in the repository
@@ -141,15 +146,7 @@ module Gitlab
       end
 
       def exists?
-        Gitlab::GitalyClient.migrate(:repository_exists, status:  Gitlab::GitalyClient::MigrationStatus::OPT_OUT) do |enabled|
-          if enabled
-            gitaly_repository_client.exists?
-          else
-            circuit_breaker.perform do
-              File.exist?(File.join(@path, 'refs'))
-            end
-          end
-        end
+        gitaly_repository_client.exists?
       end
 
       # Returns an Array of branch names
@@ -299,7 +296,8 @@ module Gitlab
       #
       # Ref names must start with `refs/`.
       def ref_exists?(ref_name)
-        gitaly_migrate(:ref_exists) do |is_enabled|
+        gitaly_migrate(:ref_exists,
+                      status: Gitlab::GitalyClient::MigrationStatus::OPT_OUT) do |is_enabled|
           if is_enabled
             gitaly_ref_exists?(ref_name)
           else
@@ -579,6 +577,41 @@ module Gitlab
       # Counts the amount of commits between `from` and `to`.
       def count_commits_between(from, to, options = {})
         count_commits(from: from, to: to, **options)
+      end
+
+      # old_rev and new_rev are commit ID's
+      # the result of this method is an array of Gitlab::Git::RawDiffChange
+      def raw_changes_between(old_rev, new_rev)
+        @raw_changes_between ||= {}
+
+        @raw_changes_between[[old_rev, new_rev]] ||= begin
+          return [] if new_rev.blank? || new_rev == Gitlab::Git::BLANK_SHA
+
+          gitaly_migrate(:raw_changes_between) do |is_enabled|
+            if is_enabled
+              gitaly_repository_client.raw_changes_between(old_rev, new_rev)
+                .each_with_object([]) do |msg, arr|
+                msg.raw_changes.each { |change| arr << ::Gitlab::Git::RawDiffChange.new(change) }
+              end
+            else
+              result = []
+
+              circuit_breaker.perform do
+                Open3.pipeline_r(git_diff_cmd(old_rev, new_rev), format_git_cat_file_script, git_cat_file_cmd) do |last_stdout, wait_threads|
+                  last_stdout.each_line { |line| result << ::Gitlab::Git::RawDiffChange.new(line.chomp!) }
+
+                  if wait_threads.any? { |waiter| !waiter.value&.success? }
+                    raise ::Gitlab::Git::Repository::GitError, "Unabled to obtain changes between #{old_rev} and #{new_rev}"
+                  end
+                end
+              end
+
+              result
+            end
+          end
+        end
+      rescue ArgumentError => e
+        raise Gitlab::Git::Repository::GitError.new(e)
       end
 
       # Returns the SHA of the most recent common ancestor of +from+ and +to+
@@ -1015,11 +1048,32 @@ module Gitlab
         raise InvalidRef
       end
 
+      def info_attributes
+        return @info_attributes if @info_attributes
+
+        content =
+          gitaly_migrate(:get_info_attributes) do |is_enabled|
+            if is_enabled
+              gitaly_repository_client.info_attributes
+            else
+              attributes_path = File.join(File.expand_path(path), 'info', 'attributes')
+
+              if File.exist?(attributes_path)
+                File.read(attributes_path)
+              else
+                ""
+              end
+            end
+          end
+
+        @info_attributes = AttributesParser.new(content)
+      end
+
       # Returns the Git attributes for the given file path.
       #
       # See `Gitlab::Git::Attributes` for more information.
       def attributes(path)
-        @attributes.attributes(path)
+        info_attributes.attributes(path)
       end
 
       def gitattribute(path, name)
@@ -1067,7 +1121,8 @@ module Gitlab
       end
 
       def license_short_name
-        gitaly_migrate(:license_short_name) do |is_enabled|
+        gitaly_migrate(:license_short_name,
+                       status: Gitlab::GitalyClient::MigrationStatus::OPT_OUT) do |is_enabled|
           if is_enabled
             gitaly_repository_client.license_short_name
           else
@@ -1166,6 +1221,8 @@ module Gitlab
           if is_enabled
             gitaly_fetch_ref(source_repository, source_ref: source_ref, target_ref: target_ref)
           else
+            # When removing this code, also remove source_repository#path
+            # to remove deprecated method calls
             local_fetch_ref(source_repository.path, source_ref: source_ref, target_ref: target_ref)
           end
         end
@@ -1410,7 +1467,8 @@ module Gitlab
       end
 
       def branch_names_contains_sha(sha)
-        gitaly_migrate(:branch_names_contains_sha) do |is_enabled|
+        gitaly_migrate(:branch_names_contains_sha,
+                      status: Gitlab::GitalyClient::MigrationStatus::OPT_OUT) do |is_enabled|
           if is_enabled
             gitaly_ref_client.branch_names_contains_sha(sha)
           else
@@ -1420,7 +1478,8 @@ module Gitlab
       end
 
       def tag_names_contains_sha(sha)
-        gitaly_migrate(:tag_names_contains_sha) do |is_enabled|
+        gitaly_migrate(:tag_names_contains_sha,
+                       status: Gitlab::GitalyClient::MigrationStatus::OPT_OUT) do |is_enabled|
           if is_enabled
             gitaly_ref_client.tag_names_contains_sha(sha)
           else
@@ -1453,7 +1512,7 @@ module Gitlab
 
         return [] if empty? || safe_query.blank?
 
-        args = %W(ls-tree --full-tree -r #{ref || root_ref} --name-status | #{safe_query})
+        args = %W(ls-tree -r --name-status --full-tree #{ref || root_ref} -- #{safe_query})
 
         run_git(args).first.lines.map(&:strip)
       end
@@ -1531,7 +1590,8 @@ module Gitlab
       end
 
       def checksum
-        gitaly_migrate(:calculate_checksum) do |is_enabled|
+        gitaly_migrate(:calculate_checksum,
+                       status: Gitlab::GitalyClient::MigrationStatus::OPT_OUT) do |is_enabled|
           if is_enabled
             gitaly_repository_client.calculate_checksum
           else
@@ -1632,10 +1692,14 @@ module Gitlab
         end
       end
 
+      # This function is duplicated in Gitaly-Go, don't change it!
+      # https://gitlab.com/gitlab-org/gitaly/merge_requests/698
       def fresh_worktree?(path)
         File.exist?(path) && !clean_stuck_worktree(path)
       end
 
+      # This function is duplicated in Gitaly-Go, don't change it!
+      # https://gitlab.com/gitlab-org/gitaly/merge_requests/698
       def clean_stuck_worktree(path)
         return false unless File.mtime(path) < 15.minutes.ago
 
@@ -2476,10 +2540,12 @@ module Gitlab
         output, status = run_git(args)
 
         if status.nil? || !status.zero?
-          # Empty repositories return with a non-zero status and an empty output.
-          return EMPTY_REPOSITORY_CHECKSUM if output&.empty?
+          # Non-valid git repositories return 128 as the status code and an error output
+          raise InvalidRepository if status == 128 && output.to_s.downcase =~ /not a git repository/
+          # Empty repositories returns with a non-zero status and an empty output.
+          raise ChecksumError, output unless output.blank?
 
-          raise ChecksumError, output
+          return EMPTY_REPOSITORY_CHECKSUM
         end
 
         refs = output.split("\n")
@@ -2495,6 +2561,35 @@ module Gitlab
         end
 
         result.to_s(16)
+      end
+
+      def build_git_cmd(*args)
+        object_directories = alternate_object_directories.join(File::PATH_SEPARATOR)
+
+        env = { 'PWD' => self.path }
+        env['GIT_ALTERNATE_OBJECT_DIRECTORIES'] = object_directories if object_directories.present?
+
+        [
+          env,
+          ::Gitlab.config.git.bin_path,
+          *args,
+          { chdir: self.path }
+        ]
+      end
+
+      def git_diff_cmd(old_rev, new_rev)
+        old_rev = old_rev == ::Gitlab::Git::BLANK_SHA ? ::Gitlab::Git::EMPTY_TREE_ID : old_rev
+
+        build_git_cmd('diff', old_rev, new_rev, '--raw')
+      end
+
+      def git_cat_file_cmd
+        format = '%(objectname) %(objectsize) %(rest)'
+        build_git_cmd('cat-file', "--batch-check=#{format}")
+      end
+
+      def format_git_cat_file_script
+        File.expand_path('../support/format-git-cat-file-input', __FILE__)
       end
     end
   end

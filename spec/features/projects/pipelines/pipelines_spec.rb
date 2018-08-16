@@ -388,9 +388,9 @@ describe 'Pipelines', :js do
 
           it 'should be possible to cancel pending build' do
             find('.js-builds-dropdown-button').click
-            find('a.js-ci-action-icon').click
+            find('.js-ci-action').click
+            wait_for_requests
 
-            expect(page).to have_content('canceled')
             expect(build.reload).to be_canceled
           end
         end
@@ -407,7 +407,7 @@ describe 'Pipelines', :js do
 
             within('.js-builds-dropdown-list') do
               build_element = page.find('.mini-pipeline-graph-dropdown-item')
-              expect(build_element['data-title']).to eq('build - failed <br> (unknown failure)')
+              expect(build_element['data-original-title']).to eq('build - failed <br> (unknown failure)')
             end
           end
         end
@@ -521,6 +521,21 @@ describe 'Pipelines', :js do
               .to change { Ci::Pipeline.count }.by(1)
 
             expect(Ci::Pipeline.last).to be_web
+          end
+
+          context 'when variables are specified' do
+            it 'creates a new pipeline with variables' do
+              page.within '.ci-variable-row-body' do
+                fill_in "Input variable key", with: "key_name"
+                fill_in "Input variable value", with: "value"
+              end
+
+              expect { click_on 'Create pipeline' }
+                .to change { Ci::Pipeline.count }.by(1)
+
+              expect(Ci::Pipeline.last.variables.map { |var| var.slice(:key, :secret_value) })
+                .to eq [{ key: "key_name", secret_value: "value" }.with_indifferent_access]
+            end
           end
         end
 

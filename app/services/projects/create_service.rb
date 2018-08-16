@@ -46,6 +46,9 @@ module Projects
 
       yield(@project) if block_given?
 
+      # If the block added errors, don't try to save the project
+      return @project if @project.errors.any?
+
       @project.creator = current_user
 
       if forked_from_project_id
@@ -142,7 +145,7 @@ module Projects
 
       if @project
         @project.errors.add(:base, message)
-        @project.mark_import_as_failed(message) if @project.import?
+        @project.mark_import_as_failed(message) if @project.persisted? && @project.import?
       end
 
       @project

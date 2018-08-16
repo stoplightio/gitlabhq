@@ -84,9 +84,14 @@ class Repository
 
   # Return absolute path to repository
   def path_to_repo
-    @path_to_repo ||= File.expand_path(
-      File.join(repository_storage_path, disk_path + '.git')
-    )
+    @path_to_repo ||=
+      begin
+        storage = Gitlab.config.repositories.storages[@project.repository_storage]
+
+        File.expand_path(
+          File.join(storage.legacy_disk_path, disk_path + '.git')
+        )
+      end
   end
 
   def inspect
@@ -849,11 +854,25 @@ class Repository
     add_remote(remote_name, url, mirror_refmap: refmap)
     fetch_remote(remote_name, forced: forced, prune: prune)
   ensure
-    remove_remote(remote_name) if tmp_remote_name
+    async_remove_remote(remote_name) if tmp_remote_name
   end
 
   def fetch_remote(remote, forced: false, ssh_auth: nil, no_tags: false, prune: true)
     gitlab_shell.fetch_remote(raw_repository, remote, ssh_auth: ssh_auth, forced: forced, no_tags: no_tags, prune: prune)
+  end
+
+  def async_remove_remote(remote_name)
+    return unless remote_name
+
+    job_id = RepositoryRemoveRemoteWorker.perform_async(project.id, remote_name)
+
+    if job_id
+      Rails.logger.info("Remove remote job scheduled for #{project.id} with remote name: #{remote_name} job ID #{job_id}.")
+    else
+      Rails.logger.info("Remove remote job failed to create for #{project.id} with remote name #{remote_name}.")
+    end
+
+    job_id
   end
 
   def fetch_source_branch!(source_repository, source_branch, local_ref)
@@ -913,10 +932,6 @@ class Repository
 
   def fetch_ref(source_repository, source_ref:, target_ref:)
     raw_repository.fetch_ref(source_repository.raw_repository, source_ref: source_ref, target_ref: target_ref)
-  end
-
-  def repository_storage_path
-    @project.repository_storage_path
   end
 
   def rebase(user, merge_request)

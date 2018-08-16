@@ -738,9 +738,14 @@ cache:
 rspec:
   script: test
   cache:
+    key: rspec
     paths:
     - binaries/
 ```
+
+Note that since cache is shared between jobs, if you're using different
+paths for different jobs, you should also set a different **cache:key**
+otherwise cache content can be overwritten.
 
 ### `cache:key`
 
@@ -756,10 +761,9 @@ or any other way that fits your workflow. This way, you can fine tune caching,
 allowing you to cache data between different jobs or even different branches.
 
 The `cache:key` variable can use any of the
-[predefined variables](../variables/README.md), and the default key, if not set,
-is `$CI_JOB_NAME-$CI_COMMIT_REF_NAME` which translates as "per-job and
-per-branch". It is the default across the project, therefore everything is
-shared between pipelines and jobs running on the same branch by default.
+[predefined variables](../variables/README.md), and the default key, if not
+set, is just literal `default` which means everything is shared between each
+pipelines and jobs by default, starting from GitLab 9.0.
 
 NOTE: **Note:**
 The `cache:key` variable cannot contain the `/` character, or the equivalent
@@ -779,7 +783,7 @@ If you use **Windows Batch** to run your shell scripts you need to replace
 
 ```yaml
 cache:
-  key: "%CI_JOB_STAGE%-%CI_COMMIT_REF_SLUG%"
+  key: "%CI_COMMIT_REF_SLUG%"
   paths:
   - binaries/
 ```
@@ -789,7 +793,7 @@ If you use **Windows PowerShell** to run your shell scripts you need to replace
 
 ```yaml
 cache:
-  key: "$env:CI_JOB_STAGE-$env:CI_COMMIT_REF_SLUG"
+  key: "$env:CI_COMMIT_REF_SLUG"
   paths:
   - binaries/
 ```
@@ -871,13 +875,21 @@ skip the download step.
 - Introduced in GitLab Runner v0.7.0 for non-Windows platforms.
 - Windows support was added in GitLab Runner v.1.0.0.
 - From GitLab 9.2, caches are restored before artifacts.
-- Currently not all executors are supported.
+- Not all executors are [supported](https://docs.gitlab.com/runner/executors/#compatibility-chart).
 - Job artifacts are only collected for successful jobs by default.
 
 `artifacts` is used to specify a list of files and directories which should be
-attached to the job after success. You can only use paths that are within the
-project workspace. To pass artifacts between different jobs, see [dependencies](#dependencies).
-Below are some examples.
+attached to the job after success.
+
+The artifacts will be sent to GitLab after the job finishes successfully and will
+be available for download in the GitLab UI.
+
+[Read more about artifacts.](../../user/project/pipelines/job_artifacts.md)
+
+### `artifacts:paths`
+
+You can only use paths that are within the project workspace. To pass artifacts
+between different jobs, see [dependencies](#dependencies).
 
 Send all files in `binaries` and `.config`:
 
@@ -886,22 +898,6 @@ artifacts:
   paths:
   - binaries/
   - .config
-```
-
-Send all Git untracked files:
-
-```yaml
-artifacts:
-  untracked: true
-```
-
-Send all Git untracked files and files in `binaries`:
-
-```yaml
-artifacts:
-  untracked: true
-  paths:
-  - binaries/
 ```
 
 To disable artifact passing, define the job with empty [dependencies](#dependencies):
@@ -935,11 +931,6 @@ release-job:
     - tags
 ```
 
-The artifacts will be sent to GitLab after the job finishes successfully and will
-be available for download in the GitLab UI.
-
-[Read more about artifacts.](../../user/project/pipelines/job_artifacts.md)
-
 ### `artifacts:name`
 
 > Introduced in GitLab 8.6 and GitLab Runner v1.1.0.
@@ -956,26 +947,30 @@ To create an archive with a name of the current job:
 job:
   artifacts:
     name: "$CI_JOB_NAME"
+    paths:
+    - binaries/
 ```
 
 To create an archive with a name of the current branch or tag including only
-the files that are untracked by Git:
+the binaries directory:
 
 ```yaml
 job:
    artifacts:
      name: "$CI_COMMIT_REF_NAME"
-     untracked: true
+    paths:
+    - binaries/
 ```
 
 To create an archive with a name of the current job and the current branch or
-tag including only the files that are untracked by Git:
+tag including only the binaries directory:
 
 ```yaml
 job:
   artifacts:
     name: "$CI_JOB_NAME-$CI_COMMIT_REF_NAME"
-    untracked: true
+    paths:
+    - binaries/
 ```
 
 To create an archive with a name of the current [stage](#stages) and branch name:
@@ -984,7 +979,8 @@ To create an archive with a name of the current [stage](#stages) and branch name
 job:
   artifacts:
     name: "$CI_JOB_STAGE-$CI_COMMIT_REF_NAME"
-    untracked: true
+    paths:
+    - binaries/
 ```
 
 ---
@@ -996,7 +992,8 @@ If you use **Windows Batch** to run your shell scripts you need to replace
 job:
   artifacts:
     name: "%CI_JOB_STAGE%-%CI_COMMIT_REF_NAME%"
-    untracked: true
+    paths:
+    - binaries/
 ```
 
 If you use **Windows PowerShell** to run your shell scripts you need to replace
@@ -1006,7 +1003,33 @@ If you use **Windows PowerShell** to run your shell scripts you need to replace
 job:
   artifacts:
     name: "$env:CI_JOB_STAGE-$env:CI_COMMIT_REF_NAME"
-    untracked: true
+    paths:
+    - binaries/
+```
+
+### `artifacts:untracked`
+
+`artifacts:untracked` is used to add all Git untracked files as artifacts (along
+to the paths defined in `artifacts:paths`).
+
+NOTE: **Note:**
+To exclude the folders/files which should not be a part of `untracked` just
+add them to `.gitignore`.
+
+Send all Git untracked files:
+
+```yaml
+artifacts:
+  untracked: true
+```
+
+Send all Git untracked files and files in `binaries`:
+
+```yaml
+artifacts:
+  untracked: true
+  paths:
+  - binaries/
 ```
 
 ### `artifacts:when`
@@ -1553,8 +1576,8 @@ capitalization, the commit will be created but the pipeline will be skipped.
 ## Validate the .gitlab-ci.yml
 
 Each instance of GitLab CI has an embedded debug tool called Lint, which validates the
-content of your `.gitlab-ci.yml` files. You can find the Lint under the page `ci/lint` of your 
-project namespace (e.g, `http://gitlab-example.com/gitlab-org/project-123/ci/lint`)
+content of your `.gitlab-ci.yml` files. You can find the Lint under the page `ci/lint` of your
+project namespace (e.g, `http://gitlab-example.com/gitlab-org/project-123/-/ci/lint`)
 
 ## Using reserved keywords
 

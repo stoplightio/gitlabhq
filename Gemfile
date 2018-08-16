@@ -33,7 +33,7 @@ gem 'grape-route-helpers', '~> 2.1.0'
 gem 'faraday', '~> 0.12'
 
 # Authentication libraries
-gem 'devise', '~> 4.2'
+gem 'devise', '~> 4.4'
 gem 'doorkeeper', '~> 4.3'
 gem 'doorkeeper-openid_connect', '~> 1.3'
 gem 'omniauth', '~> 1.8'
@@ -41,7 +41,7 @@ gem 'omniauth-auth0', '~> 2.0.0'
 gem 'omniauth-azure-oauth2', '~> 0.0.9'
 gem 'omniauth-cas3', '~> 1.1.4'
 gem 'omniauth-facebook', '~> 4.0.0'
-gem 'omniauth-github', '~> 1.1.1'
+gem 'omniauth-github', '~> 1.3'
 gem 'omniauth-gitlab', '~> 1.0.2'
 gem 'omniauth-google-oauth2', '~> 0.5.3'
 gem 'omniauth-kerberos', '~> 0.3.0', group: :kerberos
@@ -81,7 +81,7 @@ gem 'net-ldap'
 
 # Git Wiki
 # Required manually in config/initializers/gollum.rb to control load order
-gem 'gitlab-gollum-lib', '~> 4.2'
+gem 'gitlab-gollum-lib', '~> 4.2', require: false
 
 gem 'gitlab-gollum-rugged_adapter', '~> 0.4.4', require: false
 
@@ -90,7 +90,7 @@ gem 'github-linguist', '~> 5.3.3', require: 'linguist'
 
 # API
 gem 'grape', '~> 1.0'
-gem 'grape-entity', '~> 0.6.0'
+gem 'grape-entity', '~> 0.7.1'
 gem 'rack-cors', '~> 1.0.0', require: 'rack/cors'
 
 # Disable strong_params so that Mash does not respond to :permitted?
@@ -183,6 +183,9 @@ gem 're2', '~> 1.1.1'
 # Misc
 
 gem 'version_sorter', '~> 2.1.0'
+
+# User agent parsing
+gem 'device_detector'
 
 # Cache
 gem 'redis-rails', '~> 5.0.2'
@@ -282,7 +285,6 @@ gem 'batch-loader', '~> 1.2.1'
 gem 'peek', '~> 1.0.1'
 gem 'peek-gc', '~> 0.0.2'
 gem 'peek-mysql2', '~> 1.1.0', group: :mysql
-gem 'peek-performance_bar', '~> 1.3.0'
 gem 'peek-pg', '~> 1.3.0', group: :postgres
 gem 'peek-rblineprof', '~> 0.2.0'
 gem 'peek-redis', '~> 1.2.0'
@@ -295,7 +297,7 @@ group :metrics do
   gem 'influxdb', '~> 0.2', require: false
 
   # Prometheus
-  gem 'prometheus-client-mmap', '~> 0.9.1'
+  gem 'prometheus-client-mmap', '~> 0.9.3'
   gem 'raindrops', '~> 0.18'
 end
 
@@ -376,6 +378,7 @@ group :test do
   gem 'email_spec', '~> 1.6.0'
   gem 'json-schema', '~> 2.8.0'
   gem 'webmock', '~> 2.3.2'
+  gem 'rails-controller-testing' if rails5? # Rails5 only gem.
   gem 'test_after_commit', '~> 1.1' unless rails5? # Remove this gem when migrated to rails 5.0. It's been integrated to rails 5.0.
   gem 'sham_rack', '~> 1.3.6'
   gem 'concurrent-ruby', '~> 1.0.5'
@@ -413,7 +416,7 @@ group :ed25519 do
 end
 
 # Gitaly GRPC client
-gem 'gitaly-proto', '~> 0.96.0', require: 'gitaly'
+gem 'gitaly-proto', '~> 0.99.0', require: 'gitaly'
 gem 'grpc', '~> 1.11.0'
 
 # Locked until https://github.com/google/protobuf/issues/4210 is closed

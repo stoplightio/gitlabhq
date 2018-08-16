@@ -50,7 +50,7 @@ module API
           access_checker.check(params[:action], params[:changes])
           @project ||= access_checker.project
         rescue Gitlab::GitAccess::UnauthorizedError, Gitlab::GitAccess::NotFoundError => e
-          return { status: false, message: e.message }
+          break { status: false, message: e.message }
         end
 
         log_user_activity(actor)
@@ -113,7 +113,7 @@ module API
         {
           api_version: API.version,
           gitlab_version: Gitlab::VERSION,
-          gitlab_rev: Gitlab::REVISION,
+          gitlab_rev: Gitlab.revision,
           redis: redis_ping
         }
       end
@@ -142,21 +142,21 @@ module API
         if key
           key.update_last_used_at
         else
-          return { 'success' => false, 'message' => 'Could not find the given key' }
+          break { 'success' => false, 'message' => 'Could not find the given key' }
         end
 
         if key.is_a?(DeployKey)
-          return { success: false, message: 'Deploy keys cannot be used to retrieve recovery codes' }
+          break { success: false, message: 'Deploy keys cannot be used to retrieve recovery codes' }
         end
 
         user = key.user
 
         unless user
-          return { success: false, message: 'Could not find a user for the given key' }
+          break { success: false, message: 'Could not find a user for the given key' }
         end
 
         unless user.two_factor_enabled?
-          return { success: false, message: 'Two-factor authentication is not enabled for this user' }
+          break { success: false, message: 'Two-factor authentication is not enabled for this user' }
         end
 
         codes = nil
