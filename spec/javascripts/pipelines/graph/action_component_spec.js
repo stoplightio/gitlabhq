@@ -1,7 +1,7 @@
 import Vue from 'vue';
-import actionComponent from '~/pipelines/components/graph/action_component.vue';
 import MockAdapter from 'axios-mock-adapter';
 import axios from '~/lib/utils/axios_utils';
+import actionComponent from '~/pipelines/components/graph/action_component.vue';
 import mountComponent from '../../helpers/vue_mount_component_helper';
 
 describe('pipeline graph action component', () => {
@@ -36,11 +36,11 @@ describe('pipeline graph action component', () => {
     component.tooltipText = 'changed';
 
     component.$nextTick()
-      .then(() => {
-        expect(component.$el.getAttribute('data-original-title')).toBe('changed');
-      })
-      .then(done)
-      .catch(done.fail);
+    .then(() => {
+      expect(component.$el.getAttribute('data-original-title')).toBe('changed');
+    })
+    .then(done)
+    .catch(done.fail);
   });
 
   it('should render an svg', () => {
@@ -51,13 +51,15 @@ describe('pipeline graph action component', () => {
   describe('on click', () => {
     it('emits `pipelineActionRequestComplete` after a successfull request', done => {
       spyOn(component, '$emit');
+
       component.$el.click();
+
       component.$nextTick()
-      .then(() => {
-        expect(component.$emit).toHaveBeenCalledWith('pipelineActionRequestComplete');
-      })
-      .then(done)
-      .catch(done.fail);
+        .then(() => {
+          expect(component.$emit).toHaveBeenCalledWith('pipelineActionRequestComplete');
+        })
+        .then(done)
+        .catch(done.fail);
     });
   });
 });

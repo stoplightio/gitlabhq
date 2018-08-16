@@ -265,7 +265,7 @@ describe Projects::JobsController, :clean_gitlab_redis_shared_state do
       expect(json_response['text']).to eq status.text
       expect(json_response['label']).to eq status.label
       expect(json_response['icon']).to eq status.icon
-      expect(json_response['favicon']).to match_asset_path "/assets/ci_favicons/#{status.favicon}.ico"
+      expect(json_response['favicon']).to match_asset_path "/assets/ci_favicons/#{status.favicon}.png"
     end
   end
 
@@ -490,43 +490,43 @@ describe Projects::JobsController, :clean_gitlab_redis_shared_state do
                  id: job.id
     end
 
-    context 'when job has a trace artifact' do
+    context "when job has a trace artifact" do
       let(:job) { create(:ci_build, :trace_artifact, pipeline: pipeline) }
 
       it 'returns a trace' do
         response = subject
 
         expect(response).to have_gitlab_http_status(:ok)
-        expect(response.content_type).to eq 'text/plain; charset=utf-8'
-        expect(response.body).to eq job.job_artifacts_trace.open.read
+        expect(response.headers["Content-Type"]).to eq("text/plain; charset=utf-8")
+        expect(response.body).to eq(job.job_artifacts_trace.open.read)
       end
     end
 
-    context 'when job has a trace file' do
+    context "when job has a trace file" do
       let(:job) { create(:ci_build, :trace_live, pipeline: pipeline) }
 
-      it 'send a trace file' do
+      it "send a trace file" do
         response = subject
 
         expect(response).to have_gitlab_http_status(:ok)
-        expect(response.content_type).to eq 'text/plain; charset=utf-8'
-        expect(response.body).to eq 'BUILD TRACE'
+        expect(response.headers["Content-Type"]).to eq("text/plain; charset=utf-8")
+        expect(response.body).to eq("BUILD TRACE")
       end
     end
 
-    context 'when job has a trace in database' do
+    context "when job has a trace in database" do
       let(:job) { create(:ci_build, pipeline: pipeline) }
 
       before do
-        job.update_column(:trace, 'Sample trace')
+        job.update_column(:trace, "Sample trace")
       end
 
-      it 'send a trace file' do
+      it "send a trace file" do
         response = subject
 
         expect(response).to have_gitlab_http_status(:ok)
-        expect(response.content_type).to eq 'text/plain; charset=utf-8'
-        expect(response.body).to eq 'Sample trace'
+        expect(response.headers["Content-Type"]).to eq("text/plain; charset=utf-8")
+        expect(response.body).to eq("Sample trace")
       end
     end
 

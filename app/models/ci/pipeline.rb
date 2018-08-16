@@ -7,13 +7,18 @@ module Ci
     include Presentable
     include Gitlab::OptimisticLocking
     include Gitlab::Utils::StrongMemoize
+    include AtomicInternalId
 
     belongs_to :project, inverse_of: :pipelines
     belongs_to :user
     belongs_to :auto_canceled_by, class_name: 'Ci::Pipeline'
     belongs_to :pipeline_schedule, class_name: 'Ci::PipelineSchedule'
 
-    has_many :stages
+    has_internal_id :iid, scope: :project, presence: false, init: ->(s) do
+      s&.project&.pipelines&.maximum(:iid) || s&.project&.pipelines&.count
+    end
+
+    has_many :stages, -> { order(position: :asc) }, inverse_of: :pipeline
     has_many :statuses, class_name: 'CommitStatus', foreign_key: :commit_id, inverse_of: :pipeline
     has_many :builds, foreign_key: :commit_id, inverse_of: :pipeline
     has_many :trigger_requests, dependent: :destroy, foreign_key: :commit_id # rubocop:disable Cop/ActiveRecordDependent
@@ -37,11 +42,15 @@ module Ci
     delegate :id, to: :project, prefix: true
     delegate :full_path, to: :project, prefix: true
 
-    validates :source, exclusion: { in: %w(unknown), unless: :importing? }, on: :create
     validates :sha, presence: { unless: :importing? }
     validates :ref, presence: { unless: :importing? }
     validates :status, presence: { unless: :importing? }
     validate :valid_commit_sha, unless: :importing?
+
+    # Replace validator below with
+    # `validates :source, presence: { unless: :importing? }, on: :create`
+    # when removing Gitlab.rails5? code.
+    validate :valid_source, unless: :importing?, on: :create
 
     after_create :keep_around_commits, unless: :importing?
 
@@ -245,6 +254,20 @@ module Ci
       stage unless stage.statuses_count.zero?
     end
 
+    ##
+    # TODO We do not completely switch to persisted stages because of
+    # race conditions with setting statuses gitlab-ce#23257.
+    #
+    def ordered_stages
+      return legacy_stages unless complete?
+
+      if Feature.enabled?('ci_pipeline_persisted_stages')
+        stages
+      else
+        legacy_stages
+      end
+    end
+
     def legacy_stages
       # TODO, this needs refactoring, see gitlab-ce#26481.
 
@@ -402,7 +425,18 @@ module Ci
     end
 
     def has_warnings?
-      builds.latest.failed_but_allowed.any?
+      number_of_warnings.positive?
+    end
+
+    def number_of_warnings
+      BatchLoader.for(id).batch(default_value: 0) do |pipeline_ids, loader|
+        ::Ci::Build.where(commit_id: pipeline_ids)
+          .latest
+          .failed_but_allowed
+          .group(:commit_id)
+          .count
+          .each { |id, amount| loader.call(id, amount) }
+      end
     end
 
     def set_config_source
@@ -488,7 +522,8 @@ module Ci
 
     def update_status
       retry_optimistic_lock(self) do
-        case latest_builds_status
+        case latest_builds_status.to_s
+        when 'created' then nil
         when 'pending' then enqueue
         when 'running' then run
         when 'success' then succeed
@@ -496,6 +531,9 @@ module Ci
         when 'canceled' then cancel
         when 'skipped' then skip
         when 'manual' then block
+        else
+          raise HasStatus::UnknownStatusError,
+                "Unknown status `#{latest_builds_status}`"
         end
       end
     end
@@ -508,14 +546,20 @@ module Ci
       strong_memoize(:legacy_trigger) { trigger_requests.first }
     end
 
+    def persisted_variables
+      Gitlab::Ci::Variables::Collection.new.tap do |variables|
+        variables.append(key: 'CI_PIPELINE_ID', value: id.to_s) if persisted?
+      end
+    end
+
     def predefined_variables
       Gitlab::Ci::Variables::Collection.new
-        .append(key: 'CI_PIPELINE_ID', value: id.to_s)
+        .append(key: 'CI_PIPELINE_IID', value: iid.to_s)
         .append(key: 'CI_CONFIG_PATH', value: ci_yaml_file_path)
         .append(key: 'CI_PIPELINE_SOURCE', value: source.to_s)
-        .append(key: 'CI_COMMIT_MESSAGE', value: git_commit_message)
-        .append(key: 'CI_COMMIT_TITLE', value: git_commit_full_title)
-        .append(key: 'CI_COMMIT_DESCRIPTION', value: git_commit_description)
+        .append(key: 'CI_COMMIT_MESSAGE', value: git_commit_message.to_s)
+        .append(key: 'CI_COMMIT_TITLE', value: git_commit_full_title.to_s)
+        .append(key: 'CI_COMMIT_DESCRIPTION', value: git_commit_description.to_s)
     end
 
     def queued_duration
@@ -600,6 +644,12 @@ module Ci
 
       project.repository.keep_around(self.sha)
       project.repository.keep_around(self.before_sha)
+    end
+
+    def valid_source
+      if source.nil? || source == "unknown"
+        errors.add(:source, "invalid source")
+      end
     end
   end
 end

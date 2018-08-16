@@ -17,6 +17,7 @@
 - cronjob:stuck_ci_jobs
 - cronjob:stuck_import_jobs
 - cronjob:stuck_merge_jobs
+- cronjob:ci_archive_traces_cron
 - cronjob:trending_projects
 - cronjob:issue_due_scheduler
 
@@ -24,19 +25,20 @@
 - gcp_cluster:cluster_provision
 - gcp_cluster:cluster_wait_for_app_installation
 - gcp_cluster:wait_for_cluster_creation
-- gcp_cluster:check_gcp_project_billing
 - gcp_cluster:cluster_wait_for_ingress_ip_address
 
 - github_import_advance_stage
 - github_importer:github_import_import_diff_note
 - github_importer:github_import_import_issue
 - github_importer:github_import_import_note
+- github_importer:github_import_import_lfs_object
 - github_importer:github_import_import_pull_request
 - github_importer:github_import_refresh_import_jid
 - github_importer:github_import_stage_finish_import
 - github_importer:github_import_stage_import_base_data
 - github_importer:github_import_stage_import_issues_and_diff_notes
 - github_importer:github_import_stage_import_notes
+- github_importer:github_import_stage_import_lfs_objects
 - github_importer:github_import_stage_import_pull_requests
 - github_importer:github_import_stage_import_repository
 
@@ -115,3 +117,4 @@
 - upload_checksum
 - web_hook
 - repository_update_remote_mirror
+- create_note_diff_file

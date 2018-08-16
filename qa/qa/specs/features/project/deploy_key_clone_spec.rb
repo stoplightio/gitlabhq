@@ -33,13 +33,15 @@ module QA
     end
 
     keys = [
-      Runtime::Key::RSA.new(8192),
-      Runtime::Key::ECDSA.new(521),
-      Runtime::Key::ED25519.new
+      [Runtime::Key::RSA, 8192],
+      [Runtime::Key::ECDSA, 521],
+      [Runtime::Key::ED25519]
     ]
 
-    keys.each do |key|
-      scenario "user sets up a deploy key with #{key.name}(#{key.bits}) to clone code using pipelines" do
+    keys.each do |(key_class, bits)|
+      scenario "user sets up a deploy key with #{key_class}(#{bits}) to clone code using pipelines" do
+        key = key_class.new(*bits)
+
         login
 
         Factory::Resource::DeployKey.fabricate! do |resource|
@@ -73,7 +75,7 @@ module QA
               - docker
         YAML
 
-        Factory::Repository::Push.fabricate! do |resource|
+        Factory::Repository::ProjectPush.fabricate! do |resource|
           resource.project = @project
           resource.file_name = '.gitlab-ci.yml'
           resource.commit_message = 'Add .gitlab-ci.yml'
@@ -87,16 +89,14 @@ module QA
         Page::Project::Show.act { wait_for_push }
         Page::Menu::Side.act { click_ci_cd_pipelines }
         Page::Project::Pipeline::Index.act { go_to_latest_pipeline }
-
-        Page::Project::Pipeline::Show.act do
-          go_to_first_job
-
-          wait do
-            !has_content?('running')
-          end
-        end
+        Page::Project::Pipeline::Show.act { go_to_first_job }
 
         Page::Project::Job::Show.perform do |job|
+          job.wait(reload: false) do
+            job.completed? && !job.trace_loading?
+          end
+
+          expect(job.passed?).to be_truthy, "Job status did not become \"passed\"."
           expect(job.output).to include(sha1sum)
         end
       end

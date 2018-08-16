@@ -9,7 +9,7 @@ describe ProfilesController, :request_store do
 
       expect do
         post :update,
-          user: { password: 'hello12345', password_confirmation: 'hello12345' }
+             user: { password: 'hello12345', password_confirmation: 'hello12345' }
       end.not_to change { user.reload.encrypted_password }
 
       expect(response.status).to eq(302)

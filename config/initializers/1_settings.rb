@@ -289,6 +289,9 @@ Settings.cron_jobs['repository_archive_cache_worker']['job_class'] = 'Repository
 Settings.cron_jobs['import_export_project_cleanup_worker'] ||= Settingslogic.new({})
 Settings.cron_jobs['import_export_project_cleanup_worker']['cron'] ||= '0 * * * *'
 Settings.cron_jobs['import_export_project_cleanup_worker']['job_class'] = 'ImportExportProjectCleanupWorker'
+Settings.cron_jobs['ci_archive_traces_cron_worker'] ||= Settingslogic.new({})
+Settings.cron_jobs['ci_archive_traces_cron_worker']['cron'] ||= '17 * * * *'
+Settings.cron_jobs['ci_archive_traces_cron_worker']['job_class'] = 'Ci::ArchiveTracesCronWorker'
 Settings.cron_jobs['requests_profiles_worker'] ||= Settingslogic.new({})
 Settings.cron_jobs['requests_profiles_worker']['cron'] ||= '0 0 * * *'
 Settings.cron_jobs['requests_profiles_worker']['job_class'] = 'RequestsProfilesWorker'
@@ -391,8 +394,10 @@ repositories_storages          = Settings.repositories.storages.values
 repository_downloads_path      = Settings.gitlab['repository_downloads_path'].to_s.gsub(%r{/$}, '')
 repository_downloads_full_path = File.expand_path(repository_downloads_path, Settings.gitlab['user_home'])
 
-if repository_downloads_path.blank? || repositories_storages.any? { |rs| [repository_downloads_path, repository_downloads_full_path].include?(rs.legacy_disk_path.gsub(%r{/$}, '')) }
-  Settings.gitlab['repository_downloads_path'] = File.join(Settings.shared['path'], 'cache/archive')
+Gitlab::GitalyClient::StorageSettings.allow_disk_access do
+  if repository_downloads_path.blank? || repositories_storages.any? { |rs| [repository_downloads_path, repository_downloads_full_path].include?(rs.legacy_disk_path.gsub(%r{/$}, '')) }
+    Settings.gitlab['repository_downloads_path'] = File.join(Settings.shared['path'], 'cache/archive')
+  end
 end
 
 #
@@ -470,6 +475,3 @@ if Rails.env.test?
   Settings.gitlab['default_can_create_group'] = true
   Settings.gitlab['default_can_create_team']  = false
 end
-
-# Force a refresh of application settings at startup
-ApplicationSetting.expire

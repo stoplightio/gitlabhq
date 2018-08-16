@@ -42,13 +42,9 @@ module Banzai
       end
 
       def self.transform_context(context)
-        context.merge(
-          only_path: true,
+        context[:only_path] = true unless context.key?(:only_path)
 
-          # EmojiFilter
-          asset_host: Gitlab::Application.config.asset_host,
-          asset_root: Gitlab.config.gitlab.base_url
-        )
+        context
       end
     end
   end

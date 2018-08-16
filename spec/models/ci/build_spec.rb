@@ -116,6 +116,26 @@ describe Ci::Build do
     end
   end
 
+  describe '.with_live_trace' do
+    subject { described_class.with_live_trace }
+
+    context 'when build has live trace' do
+      let!(:build) { create(:ci_build, :success, :trace_live) }
+
+      it 'selects the build' do
+        is_expected.to eq([build])
+      end
+    end
+
+    context 'when build does not have live trace' do
+      let!(:build) { create(:ci_build, :success, :trace_artifact) }
+
+      it 'does not select the build' do
+        is_expected.to be_empty
+      end
+    end
+  end
+
   describe '#actionize' do
     context 'when build is a created' do
       before do
@@ -148,10 +168,9 @@ describe Ci::Build do
     end
 
     context 'when there are runners' do
-      let(:runner) { create(:ci_runner) }
+      let(:runner) { create(:ci_runner, :project, projects: [build.project]) }
 
       before do
-        build.project.runners << runner
         runner.update_attributes(contacted_at: 1.second.ago)
       end
 
@@ -628,6 +647,14 @@ describe Ci::Build do
         end
 
         it { is_expected.to eq('review/host') }
+      end
+
+      context 'when using persisted variables' do
+        let(:build) do
+          create(:ci_build, environment: 'review/x$CI_BUILD_ID')
+        end
+
+        it { is_expected.to eq('review/x') }
       end
     end
 
@@ -1270,6 +1297,46 @@ describe Ci::Build do
     end
   end
 
+  describe '#playable?' do
+    context 'when build is a manual action' do
+      context 'when build has been skipped' do
+        subject { build_stubbed(:ci_build, :manual, status: :skipped) }
+
+        it { is_expected.not_to be_playable }
+      end
+
+      context 'when build has been canceled' do
+        subject { build_stubbed(:ci_build, :manual, status: :canceled) }
+
+        it { is_expected.to be_playable }
+      end
+
+      context 'when build is successful' do
+        subject { build_stubbed(:ci_build, :manual, status: :success) }
+
+        it { is_expected.to be_playable }
+      end
+
+      context 'when build has failed' do
+        subject { build_stubbed(:ci_build, :manual, status: :failed) }
+
+        it { is_expected.to be_playable }
+      end
+
+      context 'when build is a manual untriggered action' do
+        subject { build_stubbed(:ci_build, :manual, status: :manual) }
+
+        it { is_expected.to be_playable }
+      end
+    end
+
+    context 'when build is not a manual action' do
+      subject { build_stubbed(:ci_build, :success) }
+
+      it { is_expected.not_to be_playable }
+    end
+  end
+
   describe 'project settings' do
     describe '#allow_git_fetch' do
       it 'return project allow_git_fetch configuration' do
@@ -1340,12 +1407,7 @@ describe Ci::Build do
       it { is_expected.to be_truthy }
 
       context "and there are specific runner" do
-        let(:runner) { create(:ci_runner, contacted_at: 1.second.ago) }
-
-        before do
-          build.project.runners << runner
-          runner.save
-        end
+        let!(:runner) { create(:ci_runner, :project, projects: [build.project], contacted_at: 1.second.ago) }
 
         it { is_expected.to be_falsey }
       end
@@ -1485,6 +1547,7 @@ describe Ci::Build do
     let(:container_registry_enabled) { false }
     let(:predefined_variables) do
       [
+        { key: 'CI_PIPELINE_ID', value: pipeline.id.to_s, public: true },
         { key: 'CI_JOB_ID', value: build.id.to_s, public: true },
         { key: 'CI_JOB_TOKEN', value: build.token, public: false },
         { key: 'CI_BUILD_ID', value: build.id.to_s, public: true },
@@ -1516,7 +1579,7 @@ describe Ci::Build do
         { key: 'CI_PROJECT_NAMESPACE', value: project.namespace.full_path, public: true },
         { key: 'CI_PROJECT_URL', value: project.web_url, public: true },
         { key: 'CI_PROJECT_VISIBILITY', value: 'private', public: true },
-        { key: 'CI_PIPELINE_ID', value: pipeline.id.to_s, public: true },
+        { key: 'CI_PIPELINE_IID', value: pipeline.iid.to_s, public: true },
         { key: 'CI_CONFIG_PATH', value: pipeline.ci_yaml_file_path, public: true },
         { key: 'CI_PIPELINE_SOURCE', value: pipeline.source, public: true },
         { key: 'CI_COMMIT_MESSAGE', value: pipeline.git_commit_message, public: true },
@@ -1806,7 +1869,11 @@ describe Ci::Build do
     end
 
     context 'when yaml_variables are undefined' do
-      let(:pipeline) { create(:ci_pipeline, project: project) }
+      let(:pipeline) do
+        create(:ci_pipeline, project: project,
+                             sha: project.commit.id,
+                             ref: project.default_branch)
+      end
 
       before do
         build.yaml_variables = nil
@@ -2460,6 +2527,78 @@ describe Ci::Build do
 
       it "does not match a build" do
         is_expected.not_to contain_exactly(build)
+      end
+    end
+  end
+
+  describe 'pages deployments' do
+    set(:build) { create(:ci_build, project: project, user: user) }
+
+    context 'when job is "pages"' do
+      before do
+        build.name = 'pages'
+      end
+
+      context 'when pages are enabled' do
+        before do
+          allow(Gitlab.config.pages).to receive_messages(enabled: true)
+        end
+
+        it 'is marked as pages generator' do
+          expect(build).to be_pages_generator
+        end
+
+        context 'job succeeds' do
+          it "calls pages worker" do
+            expect(PagesWorker).to receive(:perform_async).with(:deploy, build.id)
+
+            build.success!
+          end
+        end
+
+        context 'job fails' do
+          it "does not call pages worker" do
+            expect(PagesWorker).not_to receive(:perform_async)
+
+            build.drop!
+          end
+        end
+      end
+
+      context 'when pages are disabled' do
+        before do
+          allow(Gitlab.config.pages).to receive_messages(enabled: false)
+        end
+
+        it 'is not marked as pages generator' do
+          expect(build).not_to be_pages_generator
+        end
+
+        context 'job succeeds' do
+          it "does not call pages worker" do
+            expect(PagesWorker).not_to receive(:perform_async)
+
+            build.success!
+          end
+        end
+      end
+    end
+
+    context 'when job is not "pages"' do
+      before do
+        build.name = 'other-job'
+      end
+
+      it 'is not marked as pages generator' do
+        expect(build).not_to be_pages_generator
+      end
+
+      context 'job succeeds' do
+        it "does not call pages worker" do
+          expect(PagesWorker).not_to receive(:perform_async)
+
+          build.success
+        end
       end
     end
   end

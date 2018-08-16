@@ -94,7 +94,7 @@ feature 'Admin updates settings' do
     accept_terms(admin)
 
     page.within('.as-terms') do
-      check 'Require all users to accept Terms of Service when they access GitLab.'
+      check 'Require all users to accept Terms of Service and Privacy Policy when they access GitLab.'
       fill_in 'Terms of Service Agreement', with: 'Be nice!'
       click_button 'Save changes'
     end
@@ -152,7 +152,7 @@ feature 'Admin updates settings' do
 
   scenario 'Change CI/CD settings' do
     page.within('.as-ci-cd') do
-      check 'Enabled Auto DevOps (Beta) for projects by default'
+      check 'Enabled Auto DevOps for projects by default'
       fill_in 'Auto devops domain', with: 'domain.com'
       click_button 'Save changes'
     end

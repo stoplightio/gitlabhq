@@ -76,7 +76,7 @@ describe Project do
     it { is_expected.to have_many(:project_group_links) }
     it { is_expected.to have_many(:notification_settings).dependent(:delete_all) }
     it { is_expected.to have_many(:forks).through(:forked_project_links) }
-    it { is_expected.to have_many(:uploads).dependent(:destroy) }
+    it { is_expected.to have_many(:uploads) }
     it { is_expected.to have_many(:pipeline_schedules) }
     it { is_expected.to have_many(:members_and_requesters) }
     it { is_expected.to have_many(:clusters) }
@@ -238,18 +238,25 @@ describe Project do
       expect(project2.import_data).to be_nil
     end
 
-    it "does not allow blocked import_url localhost" do
+    it "does not allow import_url pointing to localhost" do
       project2 = build(:project, import_url: 'http://localhost:9000/t.git')
 
       expect(project2).to be_invalid
       expect(project2.errors[:import_url].first).to include('Requests to localhost are not allowed')
     end
 
-    it "does not allow blocked import_url port" do
+    it "does not allow import_url with invalid ports" do
       project2 = build(:project, import_url: 'http://github.com:25/t.git')
 
       expect(project2).to be_invalid
       expect(project2.errors[:import_url].first).to include('Only allowed ports are 22, 80, 443')
+    end
+
+    it "does not allow import_url with invalid user" do
+      project2 = build(:project, import_url: 'http://$user:password@github.com/t.git')
+
+      expect(project2).to be_invalid
+      expect(project2.errors[:import_url].first).to include('Username needs to start with an alphanumeric character')
     end
 
     describe 'project pending deletion' do
@@ -309,12 +316,12 @@ describe Project do
 
   describe 'project token' do
     it 'sets an random token if none provided' do
-      project = FactoryBot.create :project, runners_token: ''
+      project = FactoryBot.create(:project, runners_token: '')
       expect(project.runners_token).not_to eq('')
     end
 
     it 'does not set an random token if one provided' do
-      project = FactoryBot.create :project, runners_token: 'my-token'
+      project = FactoryBot.create(:project, runners_token: 'my-token')
       expect(project.runners_token).to eq('my-token')
     end
   end
@@ -466,6 +473,34 @@ describe Project do
 
     it 'returns the full web URL for this repo' do
       expect(project.web_url).to eq("#{Gitlab.config.gitlab.url}/#{project.namespace.full_path}/somewhere")
+    end
+  end
+
+  describe "#readme_url" do
+    let(:project) { create(:project, :repository, path: "somewhere") }
+
+    context 'with a non-existing repository' do
+      it 'returns nil' do
+        allow(project.repository).to receive(:tree).with(:head).and_return(nil)
+
+        expect(project.readme_url).to be_nil
+      end
+    end
+
+    context 'with an existing repository' do
+      context 'when no README exists' do
+        it 'returns nil' do
+          allow_any_instance_of(Tree).to receive(:readme).and_return(nil)
+
+          expect(project.readme_url).to be_nil
+        end
+      end
+
+      context 'when a README exists' do
+        it 'returns the README' do
+          expect(project.readme_url).to eql("#{Gitlab.config.gitlab.url}/#{project.namespace.full_path}/somewhere/blob/master/README.md")
+        end
+      end
     end
   end
 
@@ -639,7 +674,7 @@ describe Project do
   describe '#to_param' do
     context 'with namespace' do
       before do
-        @group = create :group, name: 'gitlab'
+        @group = create(:group, name: 'gitlab')
         @project = create(:project, name: 'gitlabhq', namespace: @group)
       end
 
@@ -866,8 +901,8 @@ describe Project do
 
   describe '#star_count' do
     it 'counts stars from multiple users' do
-      user1 = create :user
-      user2 = create :user
+      user1 = create(:user)
+      user2 = create(:user)
       project = create(:project, :public)
 
       expect(project.star_count).to eq(0)
@@ -889,7 +924,7 @@ describe Project do
     end
 
     it 'counts stars on the right project' do
-      user = create :user
+      user = create(:user)
       project1 = create(:project, :public)
       project2 = create(:project, :public)
 
@@ -932,7 +967,7 @@ describe Project do
 
     it 'is false if avatar is html page' do
       project.update_attribute(:avatar, 'uploads/avatar.html')
-      expect(project.avatar_type).to eq(['file format is not supported. Please try one of the following supported formats: png, jpg, jpeg, gif, bmp, tiff'])
+      expect(project.avatar_type).to eq(['file format is not supported. Please try one of the following supported formats: png, jpg, jpeg, gif, bmp, tiff, ico'])
     end
   end
 
@@ -1148,9 +1183,9 @@ describe Project do
 
   describe '#any_runners?' do
     context 'shared runners' do
-      let(:project) { create :project, shared_runners_enabled: shared_runners_enabled }
-      let(:specific_runner) { create :ci_runner }
-      let(:shared_runner) { create :ci_runner, :shared }
+      let(:project) { create(:project, shared_runners_enabled: shared_runners_enabled) }
+      let(:specific_runner) { create(:ci_runner, :project, projects: [project]) }
+      let(:shared_runner) { create(:ci_runner, :instance) }
 
       context 'for shared runners disabled' do
         let(:shared_runners_enabled) { false }
@@ -1160,7 +1195,7 @@ describe Project do
         end
 
         it 'has a specific runner' do
-          project.runners << specific_runner
+          specific_runner
 
           expect(project.any_runners?).to be_truthy
         end
@@ -1172,13 +1207,13 @@ describe Project do
         end
 
         it 'checks the presence of specific runner' do
-          project.runners << specific_runner
+          specific_runner
 
           expect(project.any_runners? { |runner| runner == specific_runner }).to be_truthy
         end
 
         it 'returns false if match cannot be found' do
-          project.runners << specific_runner
+          specific_runner
 
           expect(project.any_runners? { false }).to be_falsey
         end
@@ -1208,9 +1243,9 @@ describe Project do
     end
 
     context 'group runners' do
-      let(:project) { create :project, group_runners_enabled: group_runners_enabled }
-      let(:group) { create :group, projects: [project] }
-      let(:group_runner) { create :ci_runner, groups: [group] }
+      let(:project) { create(:project, group_runners_enabled: group_runners_enabled) }
+      let(:group) { create(:group, projects: [project]) }
+      let(:group_runner) { create(:ci_runner, :group, groups: [group]) }
 
       context 'for group runners disabled' do
         let(:group_runners_enabled) { false }
@@ -1251,7 +1286,7 @@ describe Project do
   end
 
   describe '#shared_runners' do
-    let!(:runner) { create(:ci_runner, :shared) }
+    let!(:runner) { create(:ci_runner, :instance) }
 
     subject { project.shared_runners }
 
@@ -1292,7 +1327,7 @@ describe Project do
   end
 
   describe '#pages_deployed?' do
-    let(:project) { create :project }
+    let(:project) { create(:project) }
 
     subject { project.pages_deployed? }
 
@@ -1310,8 +1345,8 @@ describe Project do
   end
 
   describe '#pages_url' do
-    let(:group) { create :group, name: group_name }
-    let(:project) { create :project, namespace: group, name: project_name }
+    let(:group) { create(:group, name: group_name) }
+    let(:project) { create(:project, namespace: group, name: project_name) }
     let(:domain) { 'Example.com' }
 
     subject { project.pages_url }
@@ -1337,8 +1372,8 @@ describe Project do
   end
 
   describe '#pages_group_url' do
-    let(:group) { create :group, name: group_name }
-    let(:project) { create :project, namespace: group, name: project_name }
+    let(:group) { create(:group, name: group_name) }
+    let(:project) { create(:project, namespace: group, name: project_name) }
     let(:domain) { 'Example.com' }
     let(:port) { 1234 }
 
@@ -1455,8 +1490,8 @@ describe Project do
     let(:private_group)    { create(:group, visibility_level: 0)  }
     let(:internal_group)   { create(:group, visibility_level: 10) }
 
-    let(:private_project)  { create :project, :private, group: private_group }
-    let(:internal_project) { create :project, :internal, group: internal_group }
+    let(:private_project)  { create(:project, :private, group: private_group) }
+    let(:internal_project) { create(:project, :internal, group: internal_group) }
 
     context 'when group is private project can not be internal' do
       it { expect(private_project.visibility_level_allowed?(Gitlab::VisibilityLevel::INTERNAL)).to be_falsey }
@@ -1665,6 +1700,31 @@ describe Project do
     end
   end
 
+  describe '#human_import_status_name' do
+    context 'when import_state exists' do
+      it 'returns the humanized status name' do
+        project = create(:project)
+        create(:import_state, :started, project: project)
+
+        expect(project.human_import_status_name).to eq("started")
+      end
+    end
+
+    context 'when import_state was not created yet' do
+      let(:project) { create(:project, :import_started) }
+
+      it 'ensures import_state is created and returns humanized status name' do
+        expect do
+          project.human_import_status_name
+        end.to change { ProjectImportState.count }.from(0).to(1)
+      end
+
+      it 'returns humanized status name' do
+        expect(project.human_import_status_name).to eq("started")
+      end
+    end
+  end
+
   describe 'Project import job' do
     let(:project) { create(:project, import_url: generate(:url)) }
 
@@ -1673,7 +1733,11 @@ describe Project do
         .with(project.repository_storage, project.disk_path, project.import_url)
         .and_return(true)
 
-      expect_any_instance_of(Repository).to receive(:after_import)
+      # Works around https://github.com/rspec/rspec-mocks/issues/910
+      allow(described_class).to receive(:find).with(project.id).and_return(project)
+      expect(project.repository).to receive(:after_import)
+        .and_call_original
+      expect(project.wiki.repository).to receive(:after_import)
         .and_call_original
     end
 
@@ -1885,8 +1949,6 @@ describe Project do
       update_remote_mirrors
     end
 
-    # TODO: study if remote_mirror_available_overridden is still a necessary attribute considering that
-    # it is no longer under any license
     it 'does nothing when remote mirror is disabled globally and not overridden' do
       stub_application_setting(mirror_available: false)
       project.remote_mirror_available_overridden = false
@@ -2452,8 +2514,8 @@ describe Project do
   end
 
   describe '#pages_url' do
-    let(:group) { create :group, name: 'Group' }
-    let(:nested_group) { create :group, parent: group }
+    let(:group) { create(:group, name: 'Group') }
+    let(:nested_group) { create(:group, parent: group) }
     let(:domain) { 'Example.com' }
 
     subject { project.pages_url }
@@ -2464,7 +2526,7 @@ describe Project do
     end
 
     context 'top-level group' do
-      let(:project) { create :project, namespace: group, name: project_name }
+      let(:project) { create(:project, namespace: group, name: project_name) }
 
       context 'group page' do
         let(:project_name) { 'group.example.com' }
@@ -2480,7 +2542,7 @@ describe Project do
     end
 
     context 'nested group' do
-      let(:project) { create :project, namespace: nested_group, name: project_name }
+      let(:project) { create(:project, namespace: nested_group, name: project_name) }
       let(:expected_url) { "http://group.example.com/#{nested_group.path}/#{project.path}" }
 
       context 'group page' do
@@ -2498,7 +2560,7 @@ describe Project do
   end
 
   describe '#http_url_to_repo' do
-    let(:project) { create :project }
+    let(:project) { create(:project) }
 
     it 'returns the url to the repo without a username' do
       expect(project.http_url_to_repo).to eq("#{project.web_url}.git")
@@ -3340,10 +3402,11 @@ describe Project do
   end
 
   describe '#after_import' do
-    let(:project) { build(:project) }
+    let(:project) { create(:project) }
 
     it 'runs the correct hooks' do
       expect(project.repository).to receive(:after_import)
+      expect(project.wiki.repository).to receive(:after_import)
       expect(project).to receive(:import_finish)
       expect(project).to receive(:update_project_counter_caches)
       expect(project).to receive(:remove_import_jid)
@@ -3557,7 +3620,7 @@ describe Project do
         target_branch: 'target-branch',
         source_project: project,
         source_branch: 'awesome-feature-1',
-        allow_maintainer_to_push: true
+        allow_collaboration: true
       )
     end
 
@@ -3594,9 +3657,9 @@ describe Project do
       end
     end
 
-    describe '#branch_allows_maintainer_push?' do
+    describe '#branch_allows_collaboration_push?' do
       it 'allows access if the user can merge the merge request' do
-        expect(project.branch_allows_maintainer_push?(user, 'awesome-feature-1'))
+        expect(project.branch_allows_collaboration?(user, 'awesome-feature-1'))
           .to be_truthy
       end
 
@@ -3604,7 +3667,7 @@ describe Project do
         guest = create(:user)
         target_project.add_guest(guest)
 
-        expect(project.branch_allows_maintainer_push?(guest, 'awesome-feature-1'))
+        expect(project.branch_allows_collaboration?(guest, 'awesome-feature-1'))
           .to be_falsy
       end
 
@@ -3614,31 +3677,31 @@ describe Project do
                target_branch: 'target-branch',
                source_project: project,
                source_branch: 'rejected-feature-1',
-               allow_maintainer_to_push: true)
+               allow_collaboration: true)
 
-        expect(project.branch_allows_maintainer_push?(user, 'rejected-feature-1'))
+        expect(project.branch_allows_collaboration?(user, 'rejected-feature-1'))
           .to be_falsy
       end
 
       it 'does not allow access if the user cannot merge the merge request' do
         create(:protected_branch, :masters_can_push, project: target_project, name: 'target-branch')
 
-        expect(project.branch_allows_maintainer_push?(user, 'awesome-feature-1'))
+        expect(project.branch_allows_collaboration?(user, 'awesome-feature-1'))
           .to be_falsy
       end
 
       it 'caches the result' do
-        control = ActiveRecord::QueryRecorder.new { project.branch_allows_maintainer_push?(user, 'awesome-feature-1') }
+        control = ActiveRecord::QueryRecorder.new { project.branch_allows_collaboration?(user, 'awesome-feature-1') }
 
-        expect { 3.times { project.branch_allows_maintainer_push?(user, 'awesome-feature-1') } }
+        expect { 3.times { project.branch_allows_collaboration?(user, 'awesome-feature-1') } }
           .not_to exceed_query_limit(control)
       end
 
       context 'when the requeststore is active', :request_store do
         it 'only queries per project across instances' do
-          control = ActiveRecord::QueryRecorder.new { project.branch_allows_maintainer_push?(user, 'awesome-feature-1') }
+          control = ActiveRecord::QueryRecorder.new { project.branch_allows_collaboration?(user, 'awesome-feature-1') }
 
-          expect { 2.times { described_class.find(project.id).branch_allows_maintainer_push?(user, 'awesome-feature-1') } }
+          expect { 2.times { described_class.find(project.id).branch_allows_collaboration?(user, 'awesome-feature-1') } }
             .not_to exceed_query_limit(control).with_threshold(2)
         end
       end
@@ -3739,6 +3802,14 @@ describe Project do
       let!(:deploy_token) { create(:deploy_token, projects: [project_2]) }
 
       it { is_expected.to be_nil }
+    end
+  end
+
+  context 'with uploads' do
+    it_behaves_like 'model with mounted uploader', true do
+      let(:model_object) { create(:project, :with_avatar) }
+      let(:upload_attribute) { :avatar }
+      let(:uploader_class) { AttachmentUploader }
     end
   end
 end

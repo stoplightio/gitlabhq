@@ -79,7 +79,7 @@ describe Clusters::Applications::Prometheus do
       end
 
       it 'creates proper url' do
-        expect(subject.prometheus_client.url).to eq('http://example.com/api/v1/proxy/namespaces/gitlab-managed-apps/service/prometheus-prometheus-server:80')
+        expect(subject.prometheus_client.url).to eq('http://example.com/api/v1/namespaces/gitlab-managed-apps/service/prometheus-prometheus-server:80/proxy')
       end
 
       it 'copies options and headers from kube client to proxy client' do
@@ -109,6 +109,7 @@ describe Clusters::Applications::Prometheus do
     it 'should be initialized with 3 arguments' do
       expect(subject.name).to eq('prometheus')
       expect(subject.chart).to eq('stable/prometheus')
+      expect(subject.version).to eq('6.7.3')
       expect(subject.values).to eq(prometheus.values)
     end
   end

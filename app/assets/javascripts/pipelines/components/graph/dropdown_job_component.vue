@@ -79,12 +79,14 @@ export default {
 };
 </script>
 <template>
-  <div class="ci-job-dropdown-container dropdown">
+  <div class="ci-job-dropdown-container dropdown dropright">
     <button
       v-tooltip
       type="button"
       data-toggle="dropdown"
       data-container="body"
+      data-boundary="viewport"
+      data-display="static"
       class="dropdown-menu-toggle build-content"
       :title="tooltipText"
     >
@@ -107,6 +109,7 @@ export default {
             :key="i"
           >
             <job-component
+              :dropdown-length="job.size"
               :job="item"
               css-class-job-name="mini-pipeline-graph-dropdown-item"
               @pipelineActionRequestComplete="pipelineActionRequestComplete"

@@ -2,6 +2,11 @@ require 'digest/md5'
 require 'uri'
 
 module ApplicationHelper
+  # See https://docs.gitlab.com/ee/development/ee_features.html#code-in-app-views
+  def render_if_exists(partial, locals = {})
+    render(partial, locals) if lookup_context.exists?(partial, [], true)
+  end
+
   # Check if a particular controller is the current one
   #
   # args - One or more controller names to check
@@ -265,7 +270,7 @@ module ApplicationHelper
     {
       members: members_project_autocomplete_sources_path(object, type: noteable_type, type_id: params[:id]),
       issues: issues_project_autocomplete_sources_path(object),
-      merge_requests: merge_requests_project_autocomplete_sources_path(object),
+      mergeRequests: merge_requests_project_autocomplete_sources_path(object),
       labels: labels_project_autocomplete_sources_path(object, type: noteable_type, type_id: params[:id]),
       milestones: milestones_project_autocomplete_sources_path(object),
       commands: commands_project_autocomplete_sources_path(object, type: noteable_type, type_id: params[:id])

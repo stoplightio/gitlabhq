@@ -61,8 +61,8 @@ export default class CreateMergeRequestDropdown {
   }
 
   available() {
-    this.availableButton.classList.remove('hide');
-    this.unavailableButton.classList.add('hide');
+    this.availableButton.classList.remove('hidden');
+    this.unavailableButton.classList.add('hidden');
   }
 
   bindEvents() {
@@ -232,7 +232,7 @@ export default class CreateMergeRequestDropdown {
   }
 
   hide() {
-    this.wrapperEl.classList.add('hide');
+    this.wrapperEl.classList.add('hidden');
   }
 
   init() {
@@ -352,7 +352,7 @@ export default class CreateMergeRequestDropdown {
   removeMessage(target) {
     const { input, message } = this.getTargetData(target);
     const inputClasses = ['gl-field-error-outline', 'gl-field-success-outline'];
-    const messageClasses = ['gl-field-hint', 'gl-field-error-message', 'gl-field-success-message'];
+    const messageClasses = ['text-muted', 'text-danger', 'text-success'];
 
     inputClasses.forEach(cssClass => input.classList.remove(cssClass));
     messageClasses.forEach(cssClass => message.classList.remove(cssClass));
@@ -379,7 +379,7 @@ export default class CreateMergeRequestDropdown {
 
     this.removeMessage(target);
     input.classList.add('gl-field-success-outline');
-    message.classList.add('gl-field-success-message');
+    message.classList.add('text-success');
     message.textContent = sprintf(__('%{text} is available'), { text });
     message.style.display = 'inline-block';
   }
@@ -389,7 +389,7 @@ export default class CreateMergeRequestDropdown {
     const text = target === 'branch' ? __('branch name') : __('source');
 
     this.removeMessage(target);
-    message.classList.add('gl-field-hint');
+    message.classList.add('text-muted');
     message.textContent = sprintf(__('Checking %{text} availability…'), { text });
     message.style.display = 'inline-block';
   }
@@ -400,14 +400,14 @@ export default class CreateMergeRequestDropdown {
 
     this.removeMessage(target);
     input.classList.add('gl-field-error-outline');
-    message.classList.add('gl-field-error-message');
+    message.classList.add('text-danger');
     message.textContent = text;
     message.style.display = 'inline-block';
   }
 
   unavailable() {
-    this.availableButton.classList.add('hide');
-    this.unavailableButton.classList.remove('hide');
+    this.availableButton.classList.add('hidden');
+    this.unavailableButton.classList.remove('hidden');
   }
 
   updateBranchName(suggestedBranchName) {

@@ -133,8 +133,19 @@ RSpec.configure do |config|
     RequestStore.clear!
   end
 
+  config.after(:example) do
+    Fog.unmock! if Fog.mock?
+  end
+
   config.before(:example, :mailer) do
     reset_delivered_emails!
+  end
+
+  config.before(:example, :prometheus) do
+    matching_files = File.join(::Prometheus::Client.configuration.multiprocess_files_dir, "*.db")
+    Dir[matching_files].map { |filename| File.delete(filename) if File.file?(filename) }
+
+    Gitlab::Metrics.reset_registry!
   end
 
   config.around(:each, :use_clean_rails_memory_store_caching) do |example|

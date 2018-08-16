@@ -6,6 +6,7 @@ import RepoTabs from './repo_tabs.vue';
 import IdeStatusBar from './ide_status_bar.vue';
 import RepoEditor from './repo_editor.vue';
 import FindFile from './file_finder/index.vue';
+import RightPane from './panes/right.vue';
 
 const originalStopCallback = Mousetrap.stopCallback;
 
@@ -16,6 +17,7 @@ export default {
     IdeStatusBar,
     RepoEditor,
     FindFile,
+    RightPane,
   },
   computed: {
     ...mapState([
@@ -25,6 +27,7 @@ export default {
       'currentMergeRequestId',
       'fileFindVisible',
       'emptyStateSvgPath',
+      'currentProjectId',
     ]),
     ...mapGetters(['activeFile', 'hasChanges']),
   },
@@ -102,12 +105,12 @@ export default {
             class="ide-empty-state"
           >
             <div class="row js-empty-state">
-              <div class="col-xs-12">
+              <div class="col-12">
                 <div class="svg-content svg-250">
                   <img :src="emptyStateSvgPath" />
                 </div>
               </div>
-              <div class="col-xs-12">
+              <div class="col-12">
                 <div class="text-content text-center">
                   <h4>
                     Welcome to the GitLab IDE
@@ -122,9 +125,10 @@ export default {
           </div>
         </template>
       </div>
+      <right-pane
+        v-if="currentProjectId"
+      />
     </div>
-    <ide-status-bar
-      :file="activeFile"
-    />
+    <ide-status-bar :file="activeFile"/>
   </article>
 </template>

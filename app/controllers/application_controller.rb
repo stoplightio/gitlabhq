@@ -91,6 +91,10 @@ class ApplicationController < ActionController::Base
       payload[:user_id] = logged_user.try(:id)
       payload[:username] = logged_user.try(:username)
     end
+
+    if response.status == 422 && response.body.present? && response.content_type == 'application/json'.freeze
+      payload[:response] = response.body
+    end
   end
 
   # Controllers such as GitHttpController may use alternative methods
@@ -151,14 +155,15 @@ class ApplicationController < ActionController::Base
   end
 
   def render_403
-    head :forbidden
+    respond_to do |format|
+      format.any { head :forbidden }
+      format.html { render "errors/access_denied", layout: "errors", status: 403 }
+    end
   end
 
   def render_404
     respond_to do |format|
-      format.html do
-        render file: Rails.root.join("public", "404"), layout: false, status: "404"
-      end
+      format.html { render "errors/not_found", layout: "errors", status: 404 }
       # Prevent the Rails CSRF protector from thinking a missing .js file is a JavaScript file
       format.js { render json: '', status: :not_found, content_type: 'application/json' }
       format.any { head :not_found }
@@ -279,8 +284,10 @@ class ApplicationController < ActionController::Base
     return unless current_user
     return if current_user.terms_accepted?
 
+    message = _("Please accept the Terms of Service before continuing.")
+
     if sessionless_user?
-      render_403
+      access_denied!(message)
     else
       # Redirect to the destination if the request is a get.
       # Redirect to the source if it was a post, so the user can re-submit after
@@ -291,7 +298,7 @@ class ApplicationController < ActionController::Base
                         URI(request.referer).path if request.referer
                       end
 
-      flash[:notice] = _("Please accept the Terms of Service before continuing.")
+      flash[:notice] = message
       redirect_to terms_path(redirect: redirect_path), status: :found
     end
   end

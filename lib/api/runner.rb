@@ -11,33 +11,36 @@ module API
         requires :token, type: String, desc: 'Registration token'
         optional :description, type: String, desc: %q(Runner's description)
         optional :info, type: Hash, desc: %q(Runner's metadata)
+        optional :active, type: Boolean, desc: 'Should Runner be active'
         optional :locked, type: Boolean, desc: 'Should Runner be locked for current project'
         optional :run_untagged, type: Boolean, desc: 'Should Runner handle untagged jobs'
         optional :tag_list, type: Array[String], desc: %q(List of Runner's tags)
         optional :maximum_timeout, type: Integer, desc: 'Maximum timeout set when this Runner will handle the job'
       end
       post '/' do
-        attributes = attributes_for_keys([:description, :locked, :run_untagged, :tag_list, :maximum_timeout])
+        attributes = attributes_for_keys([:description, :active, :locked, :run_untagged, :tag_list, :maximum_timeout])
           .merge(get_runner_details_from_request)
 
-        runner =
+        attributes =
           if runner_registration_token_valid?
             # Create shared runner. Requires admin access
-            Ci::Runner.create(attributes.merge(is_shared: true, runner_type: :instance_type))
+            attributes.merge(is_shared: true, runner_type: :instance_type)
           elsif project = Project.find_by(runners_token: params[:token])
             # Create a specific runner for the project
-            project.runners.create(attributes.merge(runner_type: :project_type))
+            attributes.merge(is_shared: false, runner_type: :project_type, projects: [project])
           elsif group = Group.find_by(runners_token: params[:token])
             # Create a specific runner for the group
-            group.runners.create(attributes.merge(runner_type: :group_type))
+            attributes.merge(is_shared: false, runner_type: :group_type, groups: [group])
+          else
+            forbidden!
           end
 
-        break forbidden! unless runner
+        runner = Ci::Runner.create(attributes)
 
-        if runner.id
+        if runner.persisted?
           present runner, with: Entities::RunnerRegistrationDetails
         else
-          not_found!
+          render_validation_error!(runner)
         end
       end
 
@@ -81,7 +84,11 @@ module API
       end
       post '/request' do
         authenticate_runner!
-        no_content! unless current_runner.active?
+
+        unless current_runner.active?
+          header 'X-GitLab-Last-Update', current_runner.ensure_runner_queue_value
+          break no_content!
+        end
 
         if current_runner.runner_queue_value_latest?(params[:last_update])
           header 'X-GitLab-Last-Update', params[:last_update]
@@ -122,6 +129,7 @@ module API
       end
       put '/:id' do
         job = authenticate_job!
+        job_forbidden!(job, 'Job is not running') unless job.running?
 
         job.trace.set(params[:trace]) if params[:trace]
 
@@ -129,10 +137,12 @@ module API
                                   project: job.project.full_path)
 
         case params[:state].to_s
+        when 'running'
+          job.touch if job.needs_touch?
         when 'success'
-          job.success
+          job.success!
         when 'failed'
-          job.drop(params[:failure_reason] || :unknown_failure)
+          job.drop!(params[:failure_reason] || :unknown_failure)
         end
       end
 
@@ -148,6 +158,7 @@ module API
       end
       patch '/:id/trace' do
         job = authenticate_job!
+        job_forbidden!(job, 'Job is not running') unless job.running?
 
         error!('400 Missing header Content-Range', 400) unless request.headers.key?('Content-Range')
         content_range = request.headers['Content-Range']
@@ -200,7 +211,7 @@ module API
 
         status 200
         content_type Gitlab::Workhorse::INTERNAL_API_CONTENT_TYPE
-        JobArtifactUploader.workhorse_authorize
+        JobArtifactUploader.workhorse_authorize(has_length: false, maximum_size: max_artifacts_size)
       end
 
       desc 'Upload artifacts for job' do

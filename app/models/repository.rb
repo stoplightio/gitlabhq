@@ -37,7 +37,7 @@ class Repository
                       changelog license_blob license_key gitignore koding_yml
                       gitlab_ci_yml branch_names tag_names branch_count
                       tag_count avatar exists? root_ref has_visible_content?
-                      issue_template_names merge_request_template_names).freeze
+                      issue_template_names merge_request_template_names xcode_project?).freeze
 
   # Methods that use cache_method but only memoize the value
   MEMOIZED_CACHED_METHODS = %i(license).freeze
@@ -55,7 +55,8 @@ class Repository
     gitlab_ci: :gitlab_ci_yml,
     avatar: :avatar,
     issue_template: :issue_template_names,
-    merge_request_template: :merge_request_template_names
+    merge_request_template: :merge_request_template_names,
+    xcode_config: :xcode_project?
   }.freeze
 
   def initialize(full_path, project, disk_path: nil, is_wiki: false)
@@ -267,6 +268,16 @@ class Repository
 
       { behind: number_commits_behind, ahead: number_commits_ahead }
     end
+  end
+
+  def archive_metadata(ref, storage_path, format = "tar.gz", append_sha:)
+    raw_repository.archive_metadata(
+      ref,
+      storage_path,
+      project.path,
+      format,
+      append_sha: append_sha
+    )
   end
 
   def expire_tags_cache
@@ -594,6 +605,11 @@ class Repository
   end
   cache_method :gitlab_ci_yml
 
+  def xcode_project?
+    file_on_head(:xcode_config, :tree).present?
+  end
+  cache_method :xcode_project?
+
   def head_commit
     @head_commit ||= commit(self.root_ref)
   end
@@ -914,11 +930,21 @@ class Repository
     end
   end
 
-  def file_on_head(type)
-    if head = tree(:head)
-      head.blobs.find do |blob|
-        Gitlab::FileDetector.type_of(blob.path) == type
+  def file_on_head(type, object_type = :blob)
+    return unless head = tree(:head)
+
+    objects =
+      case object_type
+      when :blob
+        head.blobs
+      when :tree
+        head.trees
+      else
+        raise ArgumentError, "Object type #{object_type} is not supported"
       end
+
+    objects.find do |object|
+      Gitlab::FileDetector.type_of(object.path) == type
     end
   end
 
@@ -930,6 +956,10 @@ class Repository
     blob_data_at(sha, path)
   end
 
+  def lfsconfig_for(sha)
+    blob_data_at(sha, '.lfsconfig')
+  end
+
   def fetch_ref(source_repository, source_ref:, target_ref:)
     raw_repository.fetch_ref(source_repository.raw_repository, source_ref: source_ref, target_ref: target_ref)
   end
@@ -939,6 +969,22 @@ class Repository
                                        branch_sha: merge_request.source_branch_sha,
                                        remote_repository: merge_request.target_project.repository.raw,
                                        remote_branch: merge_request.target_branch)
+  end
+
+  def blob_data_at(sha, path)
+    blob = blob_at(sha, path)
+    return unless blob
+
+    blob.load_all_data!
+    blob.data
+  end
+
+  def squash(user, merge_request)
+    raw.squash(user, merge_request.id, branch: merge_request.target_branch,
+                                       start_sha: merge_request.diff_start_sha,
+                                       end_sha: merge_request.diff_head_sha,
+                                       author: merge_request.author,
+                                       message: merge_request.title)
   end
 
   private
@@ -953,14 +999,6 @@ class Repository
              end
 
     ::Commit.new(commit, @project) if commit
-  end
-
-  def blob_data_at(sha, path)
-    blob = blob_at(sha, path)
-    return unless blob
-
-    blob.load_all_data!
-    blob.data
   end
 
   def cache

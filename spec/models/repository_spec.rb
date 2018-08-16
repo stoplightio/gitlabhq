@@ -136,7 +136,10 @@ describe Repository do
         before do
           options = { message: 'test tag message\n',
                       tagger: { name: 'John Smith', email: 'john@gmail.com' } }
-          repository.rugged.tags.create(annotated_tag_name, 'a48e4fc218069f68ef2e769dd8dfea3991362175', options)
+
+          Gitlab::GitalyClient::StorageSettings.allow_disk_access do
+            repository.rugged.tags.create(annotated_tag_name, 'a48e4fc218069f68ef2e769dd8dfea3991362175', options)
+          end
 
           double_first = double(committed_date: Time.now - 1.second)
           double_last = double(committed_date: Time.now)
@@ -671,7 +674,7 @@ describe Repository do
     end
   end
 
-  describe "search_files_by_content" do
+  shared_examples "search_files_by_content" do
     let(:results) { repository.search_files_by_content('feature', 'master') }
     subject { results }
 
@@ -718,7 +721,7 @@ describe Repository do
     end
   end
 
-  describe "search_files_by_name" do
+  shared_examples "search_files_by_name" do
     let(:results) { repository.search_files_by_name('files', 'master') }
 
     it 'returns result' do
@@ -756,6 +759,16 @@ describe Repository do
         expect_to_raise_storage_error { broken_repository.search_files_by_name('files', 'master') }
       end
     end
+  end
+
+  describe 'with gitaly enabled' do
+    it_behaves_like 'search_files_by_content'
+    it_behaves_like 'search_files_by_name'
+  end
+
+  describe 'with gitaly disabled', :disable_gitaly do
+    it_behaves_like 'search_files_by_content'
+    it_behaves_like 'search_files_by_name'
   end
 
   describe '#async_remove_remote' do
@@ -990,65 +1003,25 @@ describe Repository do
 
     subject { repository.add_branch(user, branch_name, target) }
 
-    context 'with Gitaly enabled' do
-      it "calls Gitaly's OperationService" do
-        expect_any_instance_of(Gitlab::GitalyClient::OperationService)
-          .to receive(:user_create_branch).with(branch_name, user, target)
-          .and_return(nil)
+    it "calls Gitaly's OperationService" do
+      expect_any_instance_of(Gitlab::GitalyClient::OperationService)
+        .to receive(:user_create_branch).with(branch_name, user, target)
+        .and_return(nil)
 
-        subject
-      end
-
-      it 'creates_the_branch' do
-        expect(subject.name).to eq(branch_name)
-        expect(repository.find_branch(branch_name)).not_to be_nil
-      end
-
-      context 'with a non-existing target' do
-        let(:target) { 'fake-target' }
-
-        it "returns false and doesn't create the branch" do
-          expect(subject).to be(false)
-          expect(repository.find_branch(branch_name)).to be_nil
-        end
-      end
+      subject
     end
 
-    context 'with Gitaly disabled', :disable_gitaly do
-      context 'when pre hooks were successful' do
-        it 'runs without errors' do
-          hook = double(trigger: [true, nil])
-          expect(Gitlab::Git::Hook).to receive(:new).exactly(3).times.and_return(hook)
+    it 'creates_the_branch' do
+      expect(subject.name).to eq(branch_name)
+      expect(repository.find_branch(branch_name)).not_to be_nil
+    end
 
-          expect { subject }.not_to raise_error
-        end
+    context 'with a non-existing target' do
+      let(:target) { 'fake-target' }
 
-        it 'creates the branch' do
-          allow_any_instance_of(Gitlab::Git::Hook).to receive(:trigger).and_return([true, nil])
-
-          expect(subject.name).to eq(branch_name)
-        end
-
-        it 'calls the after_create_branch hook' do
-          expect(repository).to receive(:after_create_branch)
-
-          subject
-        end
-      end
-
-      context 'when pre hooks failed' do
-        it 'gets an error' do
-          allow_any_instance_of(Gitlab::Git::Hook).to receive(:trigger).and_return([false, ''])
-
-          expect { subject }.to raise_error(Gitlab::Git::HooksService::PreReceiveError)
-        end
-
-        it 'does not create the branch' do
-          allow_any_instance_of(Gitlab::Git::Hook).to receive(:trigger).and_return([false, ''])
-
-          expect { subject }.to raise_error(Gitlab::Git::HooksService::PreReceiveError)
-          expect(repository.find_branch(branch_name)).to be_nil
-        end
+      it "returns false and doesn't create the branch" do
+        expect(subject).to be(false)
+        expect(repository.find_branch(branch_name)).to be_nil
       end
     end
   end
@@ -1077,6 +1050,13 @@ describe Repository do
     let(:updating_ref) { 'refs/heads/feature' }
     let(:target_project) { project }
     let(:target_repository) { target_project.repository }
+
+    around do |example|
+      # TODO Gitlab::Git::OperationService will be moved to gitaly-ruby and disappear from this repo
+      Gitlab::GitalyClient::StorageSettings.allow_disk_access do
+        example.run
+      end
+    end
 
     context 'when pre hooks were successful' do
       before do
@@ -1339,6 +1319,13 @@ describe Repository do
   end
 
   describe '#update_autocrlf_option' do
+    around do |example|
+      # TODO Gitlab::Git::OperationService will be moved to gitaly-ruby and disappear from this repo
+      Gitlab::GitalyClient::StorageSettings.allow_disk_access do
+        example.run
+      end
+    end
+
     describe 'when autocrlf is not already set to :input' do
       before do
         repository.raw_repository.autocrlf = true
@@ -1733,7 +1720,8 @@ describe Repository do
         :gitlab_ci,
         :avatar,
         :issue_template,
-        :merge_request_template
+        :merge_request_template,
+        :xcode_config
       ])
 
       repository.after_change_head
@@ -1831,7 +1819,9 @@ describe Repository do
       expect(repository.branch_count).to be_an(Integer)
 
       # NOTE: Until rugged goes away, make sure rugged and gitaly are in sync
-      rugged_count = repository.raw_repository.rugged.branches.count
+      rugged_count = Gitlab::GitalyClient::StorageSettings.allow_disk_access do
+        repository.raw_repository.rugged.branches.count
+      end
 
       expect(repository.branch_count).to eq(rugged_count)
     end
@@ -1842,7 +1832,9 @@ describe Repository do
       expect(repository.tag_count).to be_an(Integer)
 
       # NOTE: Until rugged goes away, make sure rugged and gitaly are in sync
-      rugged_count = repository.raw_repository.rugged.tags.count
+      rugged_count = Gitlab::GitalyClient::StorageSettings.allow_disk_access do
+        repository.raw_repository.rugged.tags.count
+      end
 
       expect(repository.tag_count).to eq(rugged_count)
     end
@@ -2058,6 +2050,36 @@ describe Repository do
     end
   end
 
+  describe '#xcode_project?' do
+    before do
+      allow(repository).to receive(:tree).with(:head).and_return(double(:tree, trees: [tree]))
+    end
+
+    context 'when the root contains a *.xcodeproj directory' do
+      let(:tree) { double(:tree, path: 'Foo.xcodeproj') }
+
+      it 'returns true' do
+        expect(repository.xcode_project?).to be_truthy
+      end
+    end
+
+    context 'when the root contains a *.xcworkspace directory' do
+      let(:tree) { double(:tree, path: 'Foo.xcworkspace') }
+
+      it 'returns true' do
+        expect(repository.xcode_project?).to be_truthy
+      end
+    end
+
+    context 'when the root contains no Xcode config directory' do
+      let(:tree) { double(:tree, path: 'Foo') }
+
+      it 'returns false' do
+        expect(repository.xcode_project?).to be_falsey
+      end
+    end
+  end
+
   describe "#keep_around" do
     it "does not fail if we attempt to reference bad commit" do
       expect(repository.kept_around?('abc1234')).to be_falsey
@@ -2072,7 +2094,10 @@ describe Repository do
     it "attempting to call keep_around on truncated ref does not fail" do
       repository.keep_around(sample_commit.id)
       ref = repository.send(:keep_around_ref_name, sample_commit.id)
-      path = File.join(repository.path, ref)
+
+      path = Gitlab::GitalyClient::StorageSettings.allow_disk_access do
+        File.join(repository.path, ref)
+      end
       # Corrupt the reference
       File.truncate(path, 0)
 
@@ -2087,6 +2112,13 @@ describe Repository do
   end
 
   describe '#update_ref' do
+    around do |example|
+      # TODO Gitlab::Git::OperationService will be moved to gitaly-ruby and disappear from this repo
+      Gitlab::GitalyClient::StorageSettings.allow_disk_access do
+        example.run
+      end
+    end
+
     it 'can create a ref' do
       Gitlab::Git::OperationService.new(nil, repository.raw_repository).send(:update_ref, 'refs/heads/foobar', 'refs/heads/master', Gitlab::Git::BLANK_SHA)
 
@@ -2371,7 +2403,9 @@ describe Repository do
   end
 
   def create_remote_branch(remote_name, branch_name, target)
-    rugged = repository.rugged
+    rugged = Gitlab::GitalyClient::StorageSettings.allow_disk_access do
+      repository.rugged
+    end
     rugged.references.create("refs/remotes/#{remote_name}/#{branch_name}", target.id)
   end
 
@@ -2406,6 +2440,32 @@ describe Repository do
 
     context 'with Gitaly disabled', :skip_gitaly_mock do
       it_behaves_like('#ancestor?')
+    end
+  end
+
+  describe '#archive_metadata' do
+    let(:ref) { 'master' }
+    let(:storage_path) { '/tmp' }
+
+    let(:prefix) { [project.path, ref].join('-') }
+    let(:filename) { prefix + '.tar.gz' }
+
+    subject(:result) { repository.archive_metadata(ref, storage_path, append_sha: false) }
+
+    context 'with hashed storage disabled' do
+      let(:project) { create(:project, :repository, :legacy_storage) }
+
+      it 'uses the project path to generate the filename' do
+        expect(result['ArchivePrefix']).to eq(prefix)
+        expect(File.basename(result['ArchivePath'])).to eq(filename)
+      end
+    end
+
+    context 'with hashed storage enabled' do
+      it 'uses the project path to generate the filename' do
+        expect(result['ArchivePrefix']).to eq(prefix)
+        expect(File.basename(result['ArchivePath'])).to eq(filename)
+      end
     end
   end
 

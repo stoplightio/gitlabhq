@@ -1,17 +1,15 @@
 <script>
-/* global monaco */
 import { mapState, mapGetters, mapActions } from 'vuex';
 import flash from '~/flash';
 import ContentViewer from '~/vue_shared/components/content_viewer/content_viewer.vue';
 import { activityBarViews, viewerTypes } from '../constants';
-import monacoLoader from '../monaco_loader';
 import Editor from '../lib/editor';
-import IdeFileButtons from './ide_file_buttons.vue';
+import ExternalLink from './external_link.vue';
 
 export default {
   components: {
     ContentViewer,
-    IdeFileButtons,
+    ExternalLink,
   },
   props: {
     file: {
@@ -20,7 +18,13 @@ export default {
     },
   },
   computed: {
-    ...mapState(['rightPanelCollapsed', 'viewer', 'panelResizing', 'currentActivityView']),
+    ...mapState([
+      'rightPanelCollapsed',
+      'viewer',
+      'panelResizing',
+      'currentActivityView',
+      'rightPane',
+    ]),
     ...mapGetters([
       'currentMergeRequest',
       'getStagedFile',
@@ -50,7 +54,7 @@ export default {
 
       // Compare key to allow for files opened in review mode to be cached differently
       if (oldVal.key !== this.file.key) {
-        this.initMonaco();
+        this.initEditor();
 
         if (this.currentActivityView !== activityBarViews.edit) {
           this.setFileViewMode({
@@ -79,20 +83,18 @@ export default {
         this.editor.updateDimensions();
       }
     },
+    rightPane() {
+      this.editor.updateDimensions();
+    },
   },
   beforeDestroy() {
     this.editor.dispose();
   },
   mounted() {
-    if (this.editor && monaco) {
-      this.initMonaco();
-    } else {
-      monacoLoader(['vs/editor/editor.main'], () => {
-        this.editor = Editor.create(monaco);
-
-        this.initMonaco();
-      });
+    if (!this.editor) {
+      this.editor = Editor.create();
     }
+    this.initEditor();
   },
   methods: {
     ...mapActions([
@@ -105,7 +107,7 @@ export default {
       'updateViewer',
       'removePendingTab',
     ]),
-    initMonaco() {
+    initEditor() {
       if (this.shouldHideEditor) return;
 
       this.editor.clearEditor();
@@ -118,7 +120,7 @@ export default {
           this.createEditorInstance();
         })
         .catch(err => {
-          flash('Error setting up monaco. Please try again.', 'alert', document, null, false, true);
+          flash('Error setting up editor. Please try again.', 'alert', document, null, false, true);
           throw err;
         });
     },
@@ -197,7 +199,7 @@ export default {
   >
     <div class="ide-mode-tabs clearfix" >
       <ul
-        class="nav-links pull-left"
+        class="nav-links float-left"
         v-if="!shouldHideEditor && isEditModeActive"
       >
         <li :class="editTabCSS">
@@ -224,7 +226,7 @@ export default {
           </a>
         </li>
       </ul>
-      <ide-file-buttons
+      <external-link
         :file="file"
       />
     </div>

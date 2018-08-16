@@ -340,6 +340,20 @@ describe 'Issues' do
             expect(page).to have_content('baz')
           end
         end
+
+        it 'filters by due next month and previous two weeks' do
+          foo.update(due_date: Date.today - 4.weeks)
+          bar.update(due_date: (Date.today + 2.months).beginning_of_month)
+          baz.update(due_date: Date.yesterday)
+
+          visit project_issues_path(project, due_date: Issue::DueNextMonthAndPreviousTwoWeeks.name)
+
+          page.within '.issues-holder' do
+            expect(page).not_to have_content('foo')
+            expect(page).not_to have_content('bar')
+            expect(page).to have_content('baz')
+          end
+        end
       end
 
       describe 'sorting by milestone' do
@@ -592,7 +606,7 @@ describe 'Issues' do
       end
 
       it 'clears local storage after creating a new issue', :js do
-        2.times.each do
+        2.times do
           visit new_project_issue_path(project)
           wait_for_requests
 

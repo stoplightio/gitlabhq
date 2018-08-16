@@ -327,7 +327,7 @@ Refs strategy equals to simplified only/except configuration, whereas
 kubernetes strategy accepts only `active` keyword.
 
 `variables` keyword is used to define variables expressions. In other words
-you can use predefined variables / secret variables / project / group or
+you can use predefined variables / project / group or
 environment-scoped variables to define an expression GitLab is going to
 evaluate in order to decide whether a job should be created or not.
 
@@ -344,16 +344,27 @@ job:
     kubernetes: active
 ```
 
-Example of using variables expressions:
+Examples of using variables expressions:
 
 ```yaml
 deploy:
+  script: cap staging deploy
   only:
     refs:
       - branches
     variables:
       - $RELEASE == "staging"
       - $STAGING
+```
+
+Another use case is exluding jobs depending on a commit message _(added in 11.0)_:
+
+```yaml
+end-to-end:
+  script: rake test:end-to-end
+  except:
+    variables:
+      - $CI_COMMIT_MESSAGE =~ /skip-end-to-end-tests/
 ```
 
 Learn more about variables expressions on [a separate page][variables-expressions].
@@ -1238,7 +1249,7 @@ Runner itself](../variables/README.md#predefined-variables-environment-variables
 One example would be `CI_COMMIT_REF_NAME` which has the value of
 the branch or tag name for which project is built. Apart from the variables
 you can set in `.gitlab-ci.yml`, there are also the so called
-[secret variables](../variables/README.md#secret-variables)
+[Variables](../variables/README.md#variables)
 which can be set in GitLab's UI.
 
 [Learn more about variables and their priority.][variables]

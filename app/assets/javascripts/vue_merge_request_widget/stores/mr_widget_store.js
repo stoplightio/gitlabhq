@@ -15,6 +15,11 @@ export default class MergeRequestStore {
     const currentUser = data.current_user;
     const pipelineStatus = data.pipeline ? data.pipeline.details.status : null;
 
+    this.squash = data.squash;
+    this.squashBeforeMergeHelpPath = this.squashBeforeMergeHelpPath ||
+      data.squash_before_merge_help_path;
+    this.enableSquashBeforeMerge = this.enableSquashBeforeMerge || true;
+
     this.title = data.title;
     this.targetBranch = data.target_branch;
     this.sourceBranch = data.source_branch;
@@ -78,7 +83,7 @@ export default class MergeRequestStore {
     this.canBeMerged = data.can_be_merged || false;
     this.isMergeAllowed = data.mergeable || false;
     this.mergeOngoing = data.merge_ongoing;
-    this.maintainerEditAllowed = data.allow_maintainer_to_push;
+    this.allowCollaboration = data.allow_collaboration;
 
     // Cherry-pick and Revert actions related
     this.canCherryPickInCurrentMR = currentUser.can_cherry_pick_on_current_merge_request || false;

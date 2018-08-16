@@ -12,8 +12,15 @@ describe RemoteMirror do
     context 'with an invalid URL' do
       it 'should not be valid' do
         remote_mirror = build(:remote_mirror, url: 'ftp://invalid.invalid')
+
         expect(remote_mirror).not_to be_valid
-        expect(remote_mirror.errors[:url].size).to eq(2)
+      end
+
+      it 'does not allow url with an invalid user' do
+        remote_mirror = build(:remote_mirror, url: 'http://$user:password@invalid.invalid')
+
+        expect(remote_mirror).to be_invalid
+        expect(remote_mirror.errors[:url].first).to include('Username needs to start with an alphanumeric character')
       end
     end
   end

@@ -49,11 +49,12 @@ export default {
       this.error = false;
 
       const labels = this.list.label ? [this.list.label] : [];
+      const assignees = this.list.assignee ? [this.list.assignee] : [];
       const issue = new ListIssue({
         title: this.title,
         labels,
         subscribed: true,
-        assignees: [],
+        assignees,
         project_id: this.selectedProject.id,
       });
 
@@ -92,7 +93,7 @@ export default {
 
 <template>
   <div class="board-new-issue-form">
-    <div class="card">
+    <div class="board-card">
       <form @submit="submit($event)">
         <div
           class="flash-container"
@@ -122,7 +123,7 @@ export default {
         />
         <div class="clearfix prepend-top-10">
           <button
-            class="btn btn-success pull-left"
+            class="btn btn-success float-left"
             type="submit"
             :disabled="disabled"
             ref="submit-button"
@@ -130,7 +131,7 @@ export default {
             Submit issue
           </button>
           <button
-            class="btn btn-default pull-right"
+            class="btn btn-default float-right"
             type="button"
             @click="cancel"
           >
@@ -141,4 +142,3 @@ export default {
     </div>
   </div>
 </template>
-

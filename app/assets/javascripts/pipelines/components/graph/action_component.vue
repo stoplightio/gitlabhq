@@ -15,7 +15,7 @@ import Icon from '~/vue_shared/components/icon.vue';
  * - pipelines table
  * - pipelines table in merge request page
  * - pipelines table in commit page
- * - pipelines detail page in big gra
+ * - pipelines detail page in big graph
  */
 export default {
   components: {
@@ -92,6 +92,7 @@ btn-transparent ci-action-icon-container ci-action-icon-wrapper"
     :class="cssClass"
     data-container="body"
     :disabled="isDisabled"
+    data-boundary="viewport"
   >
     <icon :name="actionIcon"/>
   </button>

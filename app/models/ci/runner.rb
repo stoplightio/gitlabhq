@@ -12,9 +12,9 @@ module Ci
     FORM_EDITABLE = %i[description tag_list active run_untagged locked access_level maximum_timeout_human_readable].freeze
 
     has_many :builds
-    has_many :runner_projects, dependent: :destroy # rubocop:disable Cop/ActiveRecordDependent
+    has_many :runner_projects, inverse_of: :runner, dependent: :destroy # rubocop:disable Cop/ActiveRecordDependent
     has_many :projects, through: :runner_projects
-    has_many :runner_namespaces
+    has_many :runner_namespaces, inverse_of: :runner
     has_many :groups, through: :runner_namespaces
 
     has_one :last_build, ->() { order('id DESC') }, class_name: 'Ci::Build'
@@ -52,12 +52,18 @@ module Ci
       #        Without that, placeholders would miss one and couldn't match.
       where(locked: false)
         .where.not("ci_runners.id IN (#{project.runners.select(:id).to_sql})")
-        .specific
+        .project_type
     end
 
     validate :tag_constraints
-    validate :either_projects_or_group
     validates :access_level, presence: true
+    validates :runner_type, presence: true
+
+    validate :no_projects, unless: :project_type?
+    validate :no_groups, unless: :group_type?
+    validate :any_project, if: :project_type?
+    validate :exactly_one_group, if: :group_type?
+    validate :validate_is_shared
 
     acts_as_taggable
 
@@ -74,7 +80,7 @@ module Ci
       project_type: 3
     }
 
-    cached_attr_reader :version, :revision, :platform, :architecture, :contacted_at, :ip_address
+    cached_attr_reader :version, :revision, :platform, :architecture, :ip_address, :contacted_at
 
     chronic_duration_attr :maximum_timeout_human_readable, :maximum_timeout
 
@@ -114,8 +120,15 @@ module Ci
         raise ArgumentError, 'Transitioning a group runner to a project runner is not supported'
       end
 
-      self.save
-      project.runner_projects.create(runner_id: self.id)
+      begin
+        transaction do
+          self.projects << project
+          self.save!
+        end
+      rescue ActiveRecord::RecordInvalid => e
+        self.errors.add(:assign_to, e.message)
+        false
+      end
     end
 
     def display_name
@@ -206,10 +219,8 @@ module Ci
 
       cache_attributes(values)
 
-      if persist_cached_data?
-        self.assign_attributes(values)
-        self.save if self.changed?
-      end
+      # We save data without validation, it will always change due to `contacted_at`
+      self.update_columns(values) if persist_cached_data?
     end
 
     def pick_build!(build)
@@ -252,13 +263,33 @@ module Ci
       self.class.owned_or_shared(project_id).where(id: self.id).any?
     end
 
-    def either_projects_or_group
-      if groups.many?
-        errors.add(:runner, 'can only be assigned to one group')
+    def no_projects
+      if projects.any?
+        errors.add(:runner, 'cannot have projects assigned')
       end
+    end
 
-      if assigned_to_group? && assigned_to_project?
-        errors.add(:runner, 'can only be assigned either to projects or to a group')
+    def no_groups
+      if groups.any?
+        errors.add(:runner, 'cannot have groups assigned')
+      end
+    end
+
+    def any_project
+      unless projects.any?
+        errors.add(:runner, 'needs to be assigned to at least one project')
+      end
+    end
+
+    def exactly_one_group
+      unless groups.one?
+        errors.add(:runner, 'needs to be assigned to exactly one group')
+      end
+    end
+
+    def validate_is_shared
+      unless is_shared? == instance_type?
+        errors.add(:is_shared, 'is not equal to instance_type?')
       end
     end
 

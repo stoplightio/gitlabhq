@@ -5,6 +5,7 @@
 >  - [Introduced][ce-3050] in GitLab 8.9.
 >  - Importing will not be possible if the import instance version differs from
 >    that of the exporter.
+>  - For GitLab admins, please read through [Project import/export administration](../../../administration/raketasks/project_import_export.md).
 >  - For existing installations, the project import option has to be enabled in
 >    application settings (`/admin/application_settings`) under 'Import sources'.
 >    Ask your administrator if you don't see the **GitLab export** button when
@@ -18,7 +19,7 @@
 >  - The exports are stored in a temporary [shared directory][tmp] and are deleted
 >    every 24 hours by a specific worker.
 >  - Group members will get exported as project members, as long as the user has
->    master or admin access to the group where the exported project lives. An admin
+>    maintainer or admin access to the group where the exported project lives. An admin
 >    in the import side is required to map the users, based on email or username.
 >    Otherwise, a supplementary comment is left to mention the original author and
 >    the MRs, notes or issues will be owned by the importer.
