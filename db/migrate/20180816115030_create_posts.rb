@@ -26,8 +26,7 @@ class CreatePosts < ActiveRecord::Migration
 
       t.foreign_key :projects, column: :project_id, on_delete: :cascade
       t.foreign_key :users, column: :creator_id, on_delete: :cascade
-      # TODO: uncomment this after files migrations will be implemented
-      # t.foreign_key :files, column: :file_id, on_delete: :cascade
+      t.foreign_key :project_files, column: :file_id, on_delete: :cascade
       
       t.index [:project_id, :iid], unique: true
       t.index :file_id
