@@ -45,7 +45,7 @@ class ProjectPolicy < BasePolicy
   desc "User has developer access"
   condition(:developer) { team_access_level >= Gitlab::Access::DEVELOPER }
 
-  desc "User has master access"
+  desc "User has maintainer access"
   condition(:master) { team_access_level >= Gitlab::Access::MASTER }
 
   desc "Project is public"
@@ -76,8 +76,13 @@ class ProjectPolicy < BasePolicy
   condition(:request_access_enabled, scope: :subject, score: 0) { project.request_access_enabled }
 
   desc "Has merge requests allowing pushes to user"
-  condition(:has_merge_requests_allowing_pushes, scope: :subject) do
+  condition(:has_merge_requests_allowing_pushes) do
     project.merge_requests_allowing_push_to_user(user).any?
+  end
+
+  with_scope :global
+  condition(:mirror_available, score: 0) do
+    ::Gitlab::CurrentSettings.current_application_settings.mirror_available
   end
 
   # We aren't checking `:read_issue` or `:read_merge_request` in this case
@@ -161,7 +166,6 @@ class ProjectPolicy < BasePolicy
     enable :upload_file
     enable :read_cycle_analytics
     enable :award_emoji
-
     # custom to stoplight, allow guests to see project files
     enable :download_code
   end
@@ -253,6 +257,8 @@ class ProjectPolicy < BasePolicy
     enable :read_cluster
     enable :create_cluster
   end
+
+  rule { (mirror_available & can?(:admin_project)) | admin }.enable :admin_remote_mirror
 
   rule { archived }.policy do
     prevent :push_code
@@ -355,9 +361,7 @@ class ProjectPolicy < BasePolicy
   # to run pipelines for the branches they have access to.
   rule { can?(:public_access) & has_merge_requests_allowing_pushes }.policy do
     enable :create_build
-    enable :update_build
     enable :create_pipeline
-    enable :update_pipeline
   end
 
   rule do

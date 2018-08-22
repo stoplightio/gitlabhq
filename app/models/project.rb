@@ -22,6 +22,9 @@ class Project < ActiveRecord::Base
   include DeploymentPlatform
   include ::Gitlab::Utils::StrongMemoize
   include ChronicDurationAttribute
+  include FastDestroyAll::Helpers
+  include WithUploads
+  include BatchDestroyDependentAssociations
 
   extend Gitlab::ConfigHelper
 
@@ -64,15 +67,29 @@ class Project < ActiveRecord::Base
   default_value_for :only_allow_merge_if_all_discussions_are_resolved, false
 
   add_authentication_token_field :runners_token
+
+  before_validation :mark_remote_mirrors_for_removal, if: -> { ActiveRecord::Base.connection.table_exists?(:remote_mirrors) }
+
   before_save :ensure_runners_token
 
   after_save :update_project_statistics, if: :namespace_id_changed?
+
+  after_save :create_import_state, if: ->(project) { project.import? && project.import_state.nil? }
+
   after_create :create_project_feature, unless: :project_feature
+
+  after_create :create_ci_cd_settings,
+    unless: :ci_cd_settings,
+    if: proc { ProjectCiCdSetting.available? }
+
   after_create :set_last_activity_at
   after_create :set_last_repository_updated_at
   after_update :update_forks_visibility_level
 
   before_destroy :remove_private_deploy_keys
+
+  use_fast_destroy :build_trace_chunks
+
   after_destroy -> { run_after_commit { remove_pages } }
   after_destroy :remove_exports
 
@@ -152,6 +169,8 @@ class Project < ActiveRecord::Base
   has_one :fork_network_member
   has_one :fork_network, through: :fork_network_member
 
+  has_one :import_state, autosave: true, class_name: 'ProjectImportState', inverse_of: :project
+
   # Merge Requests for target project should be removed with it
   has_many :merge_requests, foreign_key: 'target_project_id'
   has_many :source_of_merge_requests, foreign_key: 'source_project_id', class_name: 'MergeRequest'
@@ -200,6 +219,7 @@ class Project < ActiveRecord::Base
 
   has_one :cluster_project, class_name: 'Clusters::Project'
   has_many :clusters, through: :cluster_project, class_name: 'Clusters::Cluster'
+  has_many :cluster_ingresses, through: :clusters, source: :application_ingress, class_name: 'Clusters::Applications::Ingress'
 
   # Container repositories need to remove data from the container registry,
   # which is not managed by the DB. Hence we're still using dependent: :destroy
@@ -208,6 +228,7 @@ class Project < ActiveRecord::Base
 
   has_many :commit_statuses
   has_many :pipelines, class_name: 'Ci::Pipeline', inverse_of: :project
+  has_many :stages, class_name: 'Ci::Stage', inverse_of: :project
 
   # Ci::Build objects store data on the file system such as artifact files and
   # build traces. Currently there's no efficient way of removing this data in
@@ -215,7 +236,8 @@ class Project < ActiveRecord::Base
   # still using `dependent: :destroy` here.
   has_many :builds, class_name: 'Ci::Build', inverse_of: :project, dependent: :destroy # rubocop:disable Cop/ActiveRecordDependent
   has_many :build_trace_section_names, class_name: 'Ci::BuildTraceSectionName'
-  has_many :runner_projects, class_name: 'Ci::RunnerProject'
+  has_many :build_trace_chunks, class_name: 'Ci::BuildTraceChunk', through: :builds, source: :trace_chunks
+  has_many :runner_projects, class_name: 'Ci::RunnerProject', inverse_of: :project
   has_many :runners, through: :runner_projects, source: :runner, class_name: 'Ci::Runner'
   has_many :variables, class_name: 'Ci::Variable'
   has_many :triggers, class_name: 'Ci::Trigger'
@@ -225,22 +247,28 @@ class Project < ActiveRecord::Base
   has_many :project_deploy_tokens
   has_many :deploy_tokens, through: :project_deploy_tokens
 
-  has_many :active_runners, -> { active }, through: :runner_projects, source: :runner, class_name: 'Ci::Runner'
-
   has_one :auto_devops, class_name: 'ProjectAutoDevops'
   has_many :custom_attributes, class_name: 'ProjectCustomAttribute'
 
   has_many :project_badges, class_name: 'ProjectBadge'
+  has_one :ci_cd_settings, class_name: 'ProjectCiCdSetting', inverse_of: :project, autosave: true, dependent: :destroy # rubocop:disable Cop/ActiveRecordDependent
+
+  has_many :remote_mirrors, inverse_of: :project
 
   accepts_nested_attributes_for :variables, allow_destroy: true
   accepts_nested_attributes_for :project_feature, update_only: true
   accepts_nested_attributes_for :import_data
   accepts_nested_attributes_for :auto_devops, update_only: true
 
+  accepts_nested_attributes_for :remote_mirrors,
+                                allow_destroy: true,
+                                reject_if: ->(attrs) { attrs[:id].blank? && attrs[:url].blank? }
+
   delegate :name, to: :owner, allow_nil: true, prefix: true
   delegate :members, to: :team, prefix: true
   delegate :add_user, :add_users, to: :team
   delegate :add_guest, :add_reporter, :add_developer, :add_master, :add_role, to: :team
+  delegate :group_runners_enabled, :group_runners_enabled=, :group_runners_enabled?, to: :ci_cd_settings
 
   # Validations
   validates :creator, presence: true, on: :create
@@ -262,8 +290,10 @@ class Project < ActiveRecord::Base
 
   validates :namespace, presence: true
   validates :name, uniqueness: { scope: :namespace_id }
-  validates :import_url, addressable_url: true, if: :external_import?
-  validates :import_url, importable_url: true, if: [:external_import?, :import_url_changed?]
+  validates :import_url, url: { protocols: %w(http https ssh git),
+                                allow_localhost: false,
+                                enforce_user: true,
+                                ports: VALID_IMPORT_PORTS }, if: [:external_import?, :import_url_changed?]
   validates :star_count, numericality: { greater_than_or_equal_to: 0 }
   validate :check_limit, on: :create
   validate :check_repository_path_availability, on: :update, if: ->(project) { project.renamed? }
@@ -275,8 +305,6 @@ class Project < ActiveRecord::Base
     presence: true,
     inclusion: { in: ->(_object) { Gitlab.config.repositories.storages.keys } }
   validates :variables, variable_duplicates: { scope: :environment_scope }
-
-  has_many :uploads, as: :model, dependent: :destroy # rubocop:disable Cop/ActiveRecordDependent
 
   # Scopes
   scope :pending_delete, -> { where(pending_delete: true) }
@@ -325,6 +353,12 @@ class Project < ActiveRecord::Base
   scope :with_issues_enabled, -> { with_feature_enabled(:issues) }
   scope :with_issues_available_for_user, ->(current_user) { with_feature_available_for_user(:issues, current_user) }
   scope :with_merge_requests_enabled, -> { with_feature_enabled(:merge_requests) }
+  scope :with_remote_mirrors, -> { joins(:remote_mirrors).where(remote_mirrors: { enabled: true }).distinct }
+
+  scope :with_group_runners_enabled, -> do
+    joins(:ci_cd_settings)
+    .where(project_ci_cd_settings: { group_runners_enabled: true })
+  end
 
   enum auto_cancel_pending_pipelines: { disabled: 0, enabled: 1 }
 
@@ -375,55 +409,9 @@ class Project < ActiveRecord::Base
   scope :abandoned, -> { where('projects.last_activity_at < ?', 6.months.ago) }
 
   scope :excluding_project, ->(project) { where.not(id: project) }
-  scope :import_started, -> { where(import_status: 'started') }
 
-  state_machine :import_status, initial: :none do
-    event :import_schedule do
-      transition [:none, :finished, :failed] => :scheduled
-    end
-
-    event :force_import_start do
-      transition [:none, :finished, :failed] => :started
-    end
-
-    event :import_start do
-      transition scheduled: :started
-    end
-
-    event :import_finish do
-      transition started: :finished
-    end
-
-    event :import_fail do
-      transition [:scheduled, :started] => :failed
-    end
-
-    event :import_retry do
-      transition failed: :started
-    end
-
-    state :scheduled
-    state :started
-    state :finished
-    state :failed
-
-    after_transition [:none, :finished, :failed] => :scheduled do |project, _|
-      project.run_after_commit do
-        job_id = add_import_job
-        update(import_jid: job_id) if job_id
-      end
-    end
-
-    after_transition started: :finished do |project, _|
-      project.reset_cache_and_import_attrs
-
-      if Gitlab::ImportSources.importer_names.include?(project.import_type) && project.repo_exists?
-        project.run_after_commit do
-          Projects::AfterImportService.new(project).execute
-        end
-      end
-    end
-  end
+  scope :joins_import_state, -> { joins("LEFT JOIN project_mirror_data import_state ON import_state.project_id = projects.id") }
+  scope :import_started, -> { joins_import_state.where("import_state.status = 'started' OR projects.import_status = 'started'") }
 
   class << self
     # Searches for a list of projects based on the query given in `query`.
@@ -510,10 +498,6 @@ class Project < ActiveRecord::Base
 
   def empty_repo?
     repository.empty?
-  end
-
-  def repository_storage_path
-    Gitlab.config.repositories.storages[repository_storage]&.legacy_disk_path
   end
 
   def team
@@ -657,10 +641,6 @@ class Project < ActiveRecord::Base
     external_import? || forked? || gitlab_project_import? || bare_repository_import?
   end
 
-  def no_import?
-    import_status == 'none'
-  end
-
   def external_import?
     import_url.present?
   end
@@ -671,6 +651,105 @@ class Project < ActiveRecord::Base
 
   def import_in_progress?
     import_started? || import_scheduled?
+  end
+
+  def import_state_args
+    {
+      status: self[:import_status],
+      jid: self[:import_jid],
+      last_error: self[:import_error]
+    }
+  end
+
+  def ensure_import_state(force: false)
+    return if !force && (self[:import_status] == 'none' || self[:import_status].nil?)
+    return unless import_state.nil?
+
+    if persisted?
+      create_import_state(import_state_args)
+
+      update_column(:import_status, 'none')
+    else
+      build_import_state(import_state_args)
+
+      self[:import_status] = 'none'
+    end
+  end
+
+  def human_import_status_name
+    ensure_import_state
+
+    import_state.human_status_name
+  end
+
+  def import_schedule
+    ensure_import_state(force: true)
+
+    import_state.schedule
+  end
+
+  def force_import_start
+    ensure_import_state(force: true)
+
+    import_state.force_start
+  end
+
+  def import_start
+    ensure_import_state(force: true)
+
+    import_state.start
+  end
+
+  def import_fail
+    ensure_import_state(force: true)
+
+    import_state.fail_op
+  end
+
+  def import_finish
+    ensure_import_state(force: true)
+
+    import_state.finish
+  end
+
+  def import_jid=(new_jid)
+    ensure_import_state(force: true)
+
+    import_state.jid = new_jid
+  end
+
+  def import_jid
+    ensure_import_state
+
+    import_state&.jid
+  end
+
+  def import_error=(new_error)
+    ensure_import_state(force: true)
+
+    import_state.last_error = new_error
+  end
+
+  def import_error
+    ensure_import_state
+
+    import_state&.last_error
+  end
+
+  def import_status=(new_status)
+    ensure_import_state(force: true)
+
+    import_state.status = new_status
+  end
+
+  def import_status
+    ensure_import_state
+
+    import_state&.status || 'none'
+  end
+
+  def no_import?
+    import_status == 'none'
   end
 
   def import_started?
@@ -704,6 +783,37 @@ class Project < ActiveRecord::Base
 
   def gitea_import?
     import_type == 'gitea'
+  end
+
+  def has_remote_mirror?
+    remote_mirror_available? && remote_mirrors.enabled.exists?
+  end
+
+  def updating_remote_mirror?
+    remote_mirrors.enabled.started.exists?
+  end
+
+  def update_remote_mirrors
+    return unless remote_mirror_available?
+
+    remote_mirrors.enabled.each(&:sync)
+  end
+
+  def mark_stuck_remote_mirrors_as_failed!
+    remote_mirrors.stuck.update_all(
+      update_status: :failed,
+      last_error: 'The remote mirror took to long to complete.',
+      last_update_at: Time.now
+    )
+  end
+
+  def mark_remote_mirrors_for_removal
+    remote_mirrors.each(&:mark_for_delete_if_blank_url)
+  end
+
+  def remote_mirror_available?
+    remote_mirror_available_overridden ||
+      ::Gitlab::CurrentSettings.mirror_available
   end
 
   def check_limit
@@ -792,6 +902,13 @@ class Project < ActiveRecord::Base
 
   def web_url
     Gitlab::Routing.url_helpers.project_url(self)
+  end
+
+  def readme_url
+    readme = repository.readme
+    if readme
+      Gitlab::Routing.url_helpers.project_blob_url(self, File.join(default_branch, readme.path))
+    end
   end
 
   def new_issuable_address(author, address_type)
@@ -897,7 +1014,7 @@ class Project < ActiveRecord::Base
 
     available_services_names = Service.available_services_names - exceptions
 
-    available_services_names.map do |service_name|
+    available_services = available_services_names.map do |service_name|
       service = find_service(services, service_name)
 
       if service
@@ -914,6 +1031,14 @@ class Project < ActiveRecord::Base
         end
       end
     end
+
+    available_services.reject do |service|
+      disabled_services.include?(service.to_param)
+    end
+  end
+
+  def disabled_services
+    []
   end
 
   def find_or_initialize_service(name)
@@ -1099,7 +1224,7 @@ class Project < ActiveRecord::Base
   # Check if repository already exists on disk
   def check_repository_path_availability
     return true if skip_disk_validation
-    return false unless repository_storage_path
+    return false unless repository_storage
 
     expires_full_path_cache # we need to clear cache to validate renames correctly
 
@@ -1299,20 +1424,31 @@ class Project < ActiveRecord::Base
     @shared_runners ||= shared_runners_available? ? Ci::Runner.shared : Ci::Runner.none
   end
 
-  def active_shared_runners
-    @active_shared_runners ||= shared_runners.active
+  def group_runners
+    @group_runners ||= group_runners_enabled? ? Ci::Runner.belonging_to_parent_group_of_project(self.id) : Ci::Runner.none
+  end
+
+  def all_runners
+    union = Gitlab::SQL::Union.new([runners, group_runners, shared_runners])
+    Ci::Runner.from("(#{union.to_sql}) ci_runners")
+  end
+
+  def active_runners
+    strong_memoize(:active_runners) do
+      all_runners.active
+    end
   end
 
   def any_runners?(&block)
-    active_runners.any?(&block) || active_shared_runners.any?(&block)
+    active_runners.any?(&block)
   end
 
   def valid_runners_token?(token)
     self.runners_token && ActiveSupport::SecurityUtils.variable_size_secure_compare(token, self.runners_token)
   end
 
-  def open_issues_count
-    Projects::OpenIssuesCountService.new(self).count
+  def open_issues_count(current_user = nil)
+    Projects::OpenIssuesCountService.new(self, current_user).count
   end
 
   def open_merge_requests_count
@@ -1469,7 +1605,7 @@ class Project < ActiveRecord::Base
   def rename_repo_notify!
     # When we import a project overwriting the original project, there
     # is a move operation. In that case we don't want to send the instructions.
-    send_move_instructions(full_path_was) unless started?
+    send_move_instructions(full_path_was) unless import_started?
     expires_full_path_cache
 
     self.old_path_with_namespace = full_path_was
@@ -1480,6 +1616,7 @@ class Project < ActiveRecord::Base
 
   def after_import
     repository.after_import
+    wiki.repository.after_import
     import_finish
     remove_import_jid
     update_project_counter_caches
@@ -1523,13 +1660,8 @@ class Project < ActiveRecord::Base
     return unless import_jid
 
     Gitlab::SidekiqStatus.unset(import_jid)
-    update_column(:import_jid, nil)
-  end
 
-  def running_or_pending_build_count(force: false)
-    Rails.cache.fetch(['projects', id, 'running_or_pending_build_count'], force: force) do
-      builds.running_or_pending.count(:all)
-    end
+    import_state.update_column(:jid, nil)
   end
 
   # Lazy loading of the `pipeline_status` attribute
@@ -1542,7 +1674,8 @@ class Project < ActiveRecord::Base
     sanitized_message = Gitlab::UrlSanitizer.sanitize(error_message)
 
     import_fail
-    update_column(:import_error, sanitized_message)
+
+    import_state.update_column(:last_error, sanitized_message)
   rescue ActiveRecord::ActiveRecordError => e
     Rails.logger.error("Error setting import status to failed: #{e.message}. Original error: #{sanitized_message}")
   ensure
@@ -1630,7 +1763,7 @@ class Project < ActiveRecord::Base
 
   def container_registry_variables
     Gitlab::Ci::Variables::Collection.new.tap do |variables|
-      return variables unless Gitlab.config.registry.enabled
+      break variables unless Gitlab.config.registry.enabled
 
       variables.append(key: 'CI_REGISTRY', value: Gitlab.config.registry.host_port)
 
@@ -1850,22 +1983,34 @@ class Project < ActiveRecord::Base
                                 .limit(1)
                                 .select(1)
     source_of_merge_requests.opened
-      .where(allow_maintainer_to_push: true)
+      .where(allow_collaboration: true)
       .where('EXISTS (?)', developer_access_exists)
   end
 
-  def branch_allows_maintainer_push?(user, branch_name)
+  def branch_allows_collaboration?(user, branch_name)
     return false unless user
 
     cache_key = "user:#{user.id}:#{branch_name}:branch_allows_push"
 
-    memoized_results = strong_memoize(:branch_allows_maintainer_push) do
+    memoized_results = strong_memoize(:branch_allows_collaboration) do
       Hash.new do |result, cache_key|
-        result[cache_key] = fetch_branch_allows_maintainer_push?(user, branch_name)
+        result[cache_key] = fetch_branch_allows_collaboration?(user, branch_name)
       end
     end
 
     memoized_results[cache_key]
+  end
+
+  def licensed_features
+    []
+  end
+
+  def toggle_ci_cd_settings!(settings_attribute)
+    ci_cd_settings.toggle!(settings_attribute)
+  end
+
+  def gitlab_deploy_token
+    @gitlab_deploy_token ||= deploy_tokens.gitlab_deploy_token
   end
 
   private
@@ -1896,14 +2041,14 @@ class Project < ActiveRecord::Base
   def check_repository_absence!
     return if skip_disk_validation
 
-    if repository_storage_path.blank? || repository_with_same_path_already_exists?
+    if repository_storage.blank? || repository_with_same_path_already_exists?
       errors.add(:base, 'There is already a repository with that name on disk')
       throw :abort
     end
   end
 
   def repository_with_same_path_already_exists?
-    gitlab_shell.exists?(repository_storage_path, "#{disk_path}.git")
+    gitlab_shell.exists?(repository_storage, "#{disk_path}.git")
   end
 
   # set last_activity_at to the same as created_at
@@ -1991,18 +2136,18 @@ class Project < ActiveRecord::Base
     raise ex
   end
 
-  def fetch_branch_allows_maintainer_push?(user, branch_name)
+  def fetch_branch_allows_collaboration?(user, branch_name)
     check_access = -> do
       next false if empty_repo?
 
       merge_request = source_of_merge_requests.opened
-                        .where(allow_maintainer_to_push: true)
+                        .where(allow_collaboration: true)
                         .find_by(source_branch: branch_name)
       merge_request&.can_be_merged_by?(user)
     end
 
     if RequestStore.active?
-      RequestStore.fetch("project-#{id}:branch-#{branch_name}:user-#{user.id}:branch_allows_maintainer_push") do
+      RequestStore.fetch("project-#{id}:branch-#{branch_name}:user-#{user.id}:branch_allows_collaboration") do
         check_access.call
       end
     else

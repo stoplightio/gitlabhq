@@ -22,6 +22,12 @@ describe Gitlab::Git::Blob, seed_helper: true do
       it { expect(blob).to eq(nil) }
     end
 
+    context 'utf-8 branch' do
+      let(:blob) { Gitlab::Git::Blob.find(repository, 'Ääh-test-utf-8', "files/ruby/popen.rb")}
+
+      it { expect(blob.id).to eq(SeedRepo::RubyBlob::ID) }
+    end
+
     context 'blank path' do
       let(:blob) { Gitlab::Git::Blob.find(repository, SeedRepo::Commit::ID, '') }
 
@@ -248,6 +254,26 @@ describe Gitlab::Git::Blob, seed_helper: true do
 
     context 'when Gitaly list_blobs_by_sha_path feature is disabled', :disable_gitaly do
       it_behaves_like 'loading blobs in batch'
+    end
+  end
+
+  describe '.batch_metadata' do
+    let(:blob_references) do
+      [
+        [SeedRepo::Commit::ID, "files/ruby/popen.rb"],
+        [SeedRepo::Commit::ID, 'six']
+      ]
+    end
+
+    subject { described_class.batch_metadata(repository, blob_references) }
+
+    it 'returns an empty data attribute' do
+      first_blob, last_blob = subject
+
+      expect(first_blob.data).to be_blank
+      expect(first_blob.path).to eq("files/ruby/popen.rb")
+      expect(last_blob.data).to be_blank
+      expect(last_blob.path).to eq("six")
     end
   end
 

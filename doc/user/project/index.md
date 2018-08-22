@@ -45,6 +45,7 @@ and time spent on
 templates for issue and merge request description fields for your project
 - [Slash commands (quick actions)](quick_actions.md): Textual shortcuts for
 common actions on issues or merge requests
+- [Web IDE](web_ide/index.md)
 
 **GitLab CI/CD:**
 
@@ -71,6 +72,8 @@ website with GitLab Pages
 
 **Other features:**
 
+- [Wiki](wiki/index.md): Document your GitLab project in an integrated Wiki
+- [Snippets](../snippets.md): Store, share and collaborate on code snippets
 - [Cycle Analytics](cycle_analytics.md): Review your development lifecycle
 - [Syntax highlighting](highlighting.md): An alternative to customize
 your code blocks, overriding GitLab's default choice of language

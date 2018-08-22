@@ -2,6 +2,7 @@ class MergeRequestWidgetEntity < IssuableEntity
   expose :state
   expose :in_progress_merge_commit_sha
   expose :merge_commit_sha
+  expose :short_merge_commit_sha
   expose :merge_error
   expose :merge_params
   expose :merge_status
@@ -9,9 +10,10 @@ class MergeRequestWidgetEntity < IssuableEntity
   expose :merge_when_pipeline_succeeds
   expose :source_branch
   expose :source_project_id
+  expose :squash
   expose :target_branch
   expose :target_project_id
-  expose :allow_maintainer_to_push
+  expose :allow_collaboration
 
   expose :should_be_rebased?, as: :should_be_rebased
   expose :ff_only_enabled do |merge_request|
@@ -205,6 +207,12 @@ class MergeRequestWidgetEntity < IssuableEntity
 
   expose :commit_change_content_path do |merge_request|
     commit_change_content_project_merge_request_path(merge_request.project, merge_request)
+  end
+
+  expose :merge_commit_path do |merge_request|
+    if merge_request.merge_commit_sha
+      project_commit_path(merge_request.project, merge_request.merge_commit_sha)
+    end
   end
 
   private

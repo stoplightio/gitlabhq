@@ -125,7 +125,7 @@ module API
         # (fixed in https://github.com/rails/rails/pull/25976).
         project.tags.map(&:name).sort
       end
-      expose :ssh_url_to_repo, :http_url_to_repo, :web_url
+      expose :ssh_url_to_repo, :http_url_to_repo, :web_url, :readme_url
       expose :avatar_url do |project, options|
         project.avatar_url(only_path: false)
       end
@@ -138,6 +138,7 @@ module API
 
       def self.preload_relation(projects_relation, options =  {})
         projects_relation.preload(:project_feature, :route)
+                         .preload(:import_state)
                          .preload(namespace: [:route, :owner],
                                   tags: :taggings)
       end
@@ -151,11 +152,11 @@ module API
           expose_url(api_v4_projects_path(id: project.id))
         end
 
-        expose :issues, if: -> (*args) { issues_available?(*args) } do |project|
+        expose :issues, if: -> (project, options) { issues_available?(project, options) } do |project|
           expose_url(api_v4_projects_issues_path(id: project.id))
         end
 
-        expose :merge_requests, if: -> (*args) { mrs_available?(*args) } do |project|
+        expose :merge_requests, if: -> (project, options) { mrs_available?(project, options) } do |project|
           expose_url(api_v4_projects_merge_requests_path(id: project.id))
         end
 
@@ -241,13 +242,18 @@ module API
       expose :requested_at
     end
 
-    class Group < Grape::Entity
-      expose :id, :name, :path, :description, :visibility
+    class BasicGroupDetails < Grape::Entity
+      expose :id
+      expose :web_url
+      expose :name
+    end
+
+    class Group < BasicGroupDetails
+      expose :path, :description, :visibility
       expose :lfs_enabled?, as: :lfs_enabled
       expose :avatar_url do |group, options|
         group.avatar_url(only_path: false)
       end
-      expose :web_url
       expose :request_access_enabled
       expose :full_name, :full_path
 
@@ -283,6 +289,10 @@ module API
           options: { only_shared: true }
         ).execute
       end
+    end
+
+    class DiffRefs < Grape::Entity
+      expose :base_sha, :head_sha, :start_sha
     end
 
     class Commit < Grape::Entity
@@ -401,6 +411,10 @@ module API
       expose :state, :created_at, :updated_at
       expose :due_date
       expose :start_date
+
+      expose :web_url do |milestone, _options|
+        Gitlab::UrlBuilder.build(milestone)
+      end
     end
 
     class IssueBasic < ProjectEntity
@@ -548,7 +562,9 @@ module API
       expose :discussion_locked
       expose :should_remove_source_branch?, as: :should_remove_source_branch
       expose :force_remove_source_branch?, as: :force_remove_source_branch
-      expose :allow_maintainer_to_push, if: -> (merge_request, _) { merge_request.for_fork? }
+      expose :allow_collaboration, if: -> (merge_request, _) { merge_request.for_fork? }
+      # Deprecated
+      expose :allow_collaboration, as: :allow_maintainer_to_push, if: -> (merge_request, _) { merge_request.for_fork? }
 
       expose :web_url do |merge_request, options|
         Gitlab::UrlBuilder.build(merge_request)
@@ -557,6 +573,8 @@ module API
       expose :time_stats, using: 'API::Entities::IssuableTimeStats' do |merge_request|
         merge_request
       end
+
+      expose :squash
     end
 
     class MergeRequest < MergeRequestBasic
@@ -600,6 +618,8 @@ module API
         merge_request.metrics&.pipeline
       end
 
+      expose :diff_refs, using: Entities::DiffRefs
+
       def build_available?(options)
         options[:project]&.feature_available?(:builds, options[:current_user])
       end
@@ -641,6 +661,11 @@ module API
       expose :id, :key, :created_at
     end
 
+    class DiffPosition < Grape::Entity
+      expose :base_sha, :start_sha, :head_sha, :old_path, :new_path,
+        :position_type
+    end
+
     class Note < Grape::Entity
       # Only Issue and MergeRequest have iid
       NOTEABLE_TYPES_WITH_IID = %w(Issue MergeRequest).freeze
@@ -654,6 +679,14 @@ module API
       expose :system?, as: :system
       expose :noteable_id, :noteable_type
 
+      expose :position, if: ->(note, options) { note.diff_note? } do |note|
+        note.position.to_h
+      end
+
+      expose :resolvable?, as: :resolvable
+      expose :resolved?, as: :resolved, if: ->(note, options) { note.resolvable? }
+      expose :resolved_by, using: Entities::UserBasic, if: ->(note, options) { note.resolvable? }
+
       # Avoid N+1 queries as much as possible
       expose(:noteable_iid) { |note| note.noteable.iid if NOTEABLE_TYPES_WITH_IID.include?(note.noteable_type) }
     end
@@ -662,6 +695,12 @@ module API
       expose :id
       expose :individual_note?, as: :individual_note
       expose :notes, using: Entities::Note
+    end
+
+    class Avatar < Grape::Entity
+      expose :avatar_url do |avatarable, options|
+        avatarable.avatar_url(only_path: false, size: options[:size])
+      end
     end
 
     class AwardEmoji < Grape::Entity
@@ -874,8 +913,8 @@ module API
         end
 
         expose :project_access, using: Entities::ProjectAccess do |project, options|
-          if options.key?(:project_members)
-            (options[:project_members] || []).find { |member| member.source_id == project.id }
+          if options[:project_members]
+            options[:project_members].find { |member| member.source_id == project.id }
           else
             project.project_member(options[:current_user])
           end
@@ -883,8 +922,8 @@ module API
 
         expose :group_access, using: Entities::GroupAccess do |project, options|
           if project.group
-            if options.key?(:group_members)
-              (options[:group_members] || []).find { |member| member.source_id == project.namespace_id }
+            if options[:group_members]
+              options[:group_members].find { |member| member.source_id == project.namespace_id }
             else
               project.group.group_member(options[:current_user])
             end
@@ -895,13 +934,24 @@ module API
       def self.preload_relation(projects_relation, options = {})
         relation = super(projects_relation, options)
 
-        unless options.key?(:group_members)
-          relation = relation.preload(group: [group_members: [:source, user: [notification_settings: :source]]])
+        # MySQL doesn't support LIMIT inside an IN subquery
+        if Gitlab::Database.mysql?
+          project_ids = relation.pluck('projects.id')
+          namespace_ids = relation.pluck(:namespace_id)
+        else
+          project_ids = relation.select('projects.id')
+          namespace_ids = relation.select(:namespace_id)
         end
 
-        unless options.key?(:project_members)
-          relation = relation.preload(project_members: [:source, user: [notification_settings: :source]])
-        end
+        options[:project_members] = options[:current_user]
+          .project_members
+          .where(source_id: project_ids)
+          .preload(:source, user: [notification_settings: :source])
+
+        options[:group_members] = options[:current_user]
+          .group_members
+          .where(source_id: namespace_ids)
+          .preload(:source, user: [notification_settings: :source])
 
         relation
       end
@@ -977,8 +1027,16 @@ module API
     end
 
     class ApplicationSetting < Grape::Entity
-      expose :id
-      expose(*::ApplicationSettingsHelper.visible_attributes)
+      def self.exposed_attributes
+        attributes = ::ApplicationSettingsHelper.visible_attributes
+        attributes.delete(:performance_bar_allowed_group_path)
+        attributes.delete(:performance_bar_enabled)
+
+        attributes
+      end
+
+      expose :id, :performance_bar_allowed_group_id
+      expose(*exposed_attributes)
       expose(:restricted_visibility_levels) do |setting, _options|
         setting.restricted_visibility_levels.map { |level| Gitlab::VisibilityLevel.string_level(level) }
       end
@@ -997,7 +1055,7 @@ module API
     end
 
     class Tag < Grape::Entity
-      expose :name, :message
+      expose :name, :message, :target
 
       expose :commit, using: Entities::Commit do |repo_tag, options|
         options[:project].repository.commit(repo_tag.dereferenced_target)
@@ -1011,6 +1069,7 @@ module API
     class Runner < Grape::Entity
       expose :id
       expose :description
+      expose :ip_address
       expose :active
       expose :is_shared
       expose :name
@@ -1032,6 +1091,13 @@ module API
           runner.projects
         else
           options[:current_user].authorized_projects.where(id: runner.projects)
+        end
+      end
+      expose :groups, with: Entities::BasicGroupDetails do |runner, options|
+        if options[:current_user].admin?
+          runner.groups
+        else
+          options[:current_user].authorized_groups.where(id: runner.groups)
         end
       end
     end
@@ -1056,6 +1122,7 @@ module API
     class Job < JobBasic
       expose :artifacts_file, using: JobArtifactFile, if: -> (job, opts) { job.artifacts? }
       expose :runner, with: Runner
+      expose :artifacts_expire_at
     end
 
     class JobBasicWithProject < JobBasic

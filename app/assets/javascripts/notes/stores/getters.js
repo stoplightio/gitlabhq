@@ -1,6 +1,8 @@
 import _ from 'underscore';
+import { collapseSystemNotes } from './collapse_utils';
 
-export const notes = state => state.notes;
+export const notes = state => collapseSystemNotes(state.notes);
+
 export const targetNoteHash = state => state.targetNoteHash;
 
 export const getNotesData = state => state.notesData;
@@ -68,3 +70,6 @@ export const resolvedDiscussionCount = (state, getters) => {
 
   return Object.keys(resolvedMap).length;
 };
+
+// prevent babel-plugin-rewire from generating an invalid default during karma tests
+export default () => {};

@@ -1,7 +1,9 @@
 require 'spec_helper'
 
 describe Gitlab::GitAccess do
-  set(:user) { create(:user) }
+  include TermsHelper
+
+  let(:user) { create(:user) }
 
   let(:actor) { user }
   let(:project) { create(:project, :repository) }
@@ -550,7 +552,7 @@ describe Gitlab::GitAccess do
       it 'returns not found' do
         project.add_guest(user)
         repo = project.repository
-        FileUtils.rm_rf(repo.path)
+        Gitlab::GitalyClient::StorageSettings.allow_disk_access { FileUtils.rm_rf(repo.path) }
 
         # Sanity check for rm_rf
         expect(repo.exists?).to eq(false)
@@ -748,20 +750,22 @@ describe Gitlab::GitAccess do
 
     def merge_into_protected_branch
       @protected_branch_merge_commit ||= begin
-        stub_git_hooks
-        project.repository.add_branch(user, unprotected_branch, 'feature')
-        target_branch = project.repository.lookup('feature')
-        source_branch = project.repository.create_file(
-          user,
-          'filename',
-          'This is the file content',
-          message: 'This is a good commit message',
-          branch_name: unprotected_branch)
-        rugged = project.repository.rugged
-        author = { email: "email@example.com", time: Time.now, name: "Example Git User" }
+        Gitlab::GitalyClient::StorageSettings.allow_disk_access do
+          stub_git_hooks
+          project.repository.add_branch(user, unprotected_branch, 'feature')
+          target_branch = project.repository.lookup('feature')
+          source_branch = project.repository.create_file(
+            user,
+            'filename',
+            'This is the file content',
+            message: 'This is a good commit message',
+            branch_name: unprotected_branch)
+          rugged = project.repository.rugged
+          author = { email: "email@example.com", time: Time.now, name: "Example Git User" }
 
-        merge_index = rugged.merge_commits(target_branch, source_branch)
-        Rugged::Commit.create(rugged, author: author, committer: author, message: "commit message", parents: [target_branch, source_branch], tree: merge_index.write_tree(rugged))
+          merge_index = rugged.merge_commits(target_branch, source_branch)
+          Rugged::Commit.create(rugged, author: author, committer: author, message: "commit message", parents: [target_branch, source_branch], tree: merge_index.write_tree(rugged))
+        end
       end
     end
 
@@ -1035,6 +1039,96 @@ describe Gitlab::GitAccess do
           let(:project) { create(:project, :private, :repository) }
 
           it { expect { push_access_check }.to raise_not_found }
+        end
+      end
+    end
+  end
+
+  context 'terms are enforced' do
+    before do
+      enforce_terms
+    end
+
+    shared_examples 'access after accepting terms' do
+      let(:actions) do
+        [-> { pull_access_check },
+         -> { push_access_check }]
+      end
+
+      it 'blocks access when the user did not accept terms', :aggregate_failures do
+        actions.each do |action|
+          expect { action.call }.to raise_unauthorized(/must accept the Terms of Service in order to perform this action/)
+        end
+      end
+
+      it 'allows access when the user accepted the terms', :aggregate_failures do
+        accept_terms(user)
+
+        actions.each do |action|
+          expect { action.call }.not_to raise_error
+        end
+      end
+    end
+
+    describe 'as an anonymous user to a public project' do
+      let(:actor) { nil }
+      let(:project) { create(:project, :public, :repository) }
+
+      it { expect { pull_access_check }.not_to raise_error }
+    end
+
+    describe 'as a guest to a public project' do
+      let(:project) { create(:project, :public, :repository) }
+
+      it_behaves_like 'access after accepting terms' do
+        let(:actions) { [-> { pull_access_check }] }
+      end
+    end
+
+    describe 'as a reporter to the project' do
+      before do
+        project.add_reporter(user)
+      end
+
+      it_behaves_like 'access after accepting terms' do
+        let(:actions) { [-> { pull_access_check }] }
+      end
+    end
+
+    describe 'as a developer of the project' do
+      before do
+        project.add_developer(user)
+      end
+
+      it_behaves_like 'access after accepting terms'
+    end
+
+    describe 'as a master of the project' do
+      before do
+        project.add_master(user)
+      end
+
+      it_behaves_like 'access after accepting terms'
+    end
+
+    describe 'as an owner of the project' do
+      let(:project) { create(:project, :repository, namespace: user.namespace) }
+
+      it_behaves_like 'access after accepting terms'
+    end
+
+    describe 'when a ci build clones the project' do
+      let(:protocol) { 'http' }
+      let(:authentication_abilities) { [:build_download_code] }
+      let(:auth_result_type) { :build }
+
+      before do
+        project.add_developer(user)
+      end
+
+      it "doesn't block http pull" do
+        aggregate_failures do
+          expect { pull_access_check }.not_to raise_error
         end
       end
     end

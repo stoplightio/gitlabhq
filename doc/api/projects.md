@@ -67,6 +67,7 @@ GET /projects
     "ssh_url_to_repo": "git@example.com:diaspora/diaspora-client.git",
     "http_url_to_repo": "http://example.com/diaspora/diaspora-client.git",
     "web_url": "http://example.com/diaspora/diaspora-client",
+    "readme_url": "http://example.com/diaspora/diaspora-client/blob/master/README.md",
     "tag_list": [
       "example",
       "disapora client"
@@ -136,6 +137,7 @@ GET /projects
     "ssh_url_to_repo": "git@example.com:brightbox/puppet.git",
     "http_url_to_repo": "http://example.com/brightbox/puppet.git",
     "web_url": "http://example.com/brightbox/puppet",
+    "readme_url": "http://example.com/brightbox/puppet/blob/master/README.md",
     "tag_list": [
       "example",
       "puppet"
@@ -254,6 +256,7 @@ GET /users/:user_id/projects
     "ssh_url_to_repo": "git@example.com:diaspora/diaspora-client.git",
     "http_url_to_repo": "http://example.com/diaspora/diaspora-client.git",
     "web_url": "http://example.com/diaspora/diaspora-client",
+    "readme_url": "http://example.com/diaspora/diaspora-client/blob/master/README.md",
     "tag_list": [
       "example",
       "disapora client"
@@ -323,6 +326,7 @@ GET /users/:user_id/projects
     "ssh_url_to_repo": "git@example.com:brightbox/puppet.git",
     "http_url_to_repo": "http://example.com/brightbox/puppet.git",
     "web_url": "http://example.com/brightbox/puppet",
+    "readme_url": "http://example.com/brightbox/puppet/blob/master/README.md",
     "tag_list": [
       "example",
       "puppet"
@@ -422,6 +426,7 @@ GET /projects/:id
   "ssh_url_to_repo": "git@example.com:diaspora/diaspora-project-site.git",
   "http_url_to_repo": "http://example.com/diaspora/diaspora-project-site.git",
   "web_url": "http://example.com/diaspora/diaspora-project-site",
+  "readme_url": "http://example.com/diaspora/diaspora-project-site/blob/master/README.md",
   "tag_list": [
     "example",
     "disapora project"
@@ -712,6 +717,7 @@ Example responses:
     "ssh_url_to_repo": "git@example.com:diaspora/diaspora-project-site.git",
     "http_url_to_repo": "http://example.com/diaspora/diaspora-project-site.git",
     "web_url": "http://example.com/diaspora/diaspora-project-site",
+    "readme_url": "http://example.com/diaspora/diaspora-project-site/blob/master/README.md",
     "tag_list": [
       "example",
       "disapora project"
@@ -790,6 +796,7 @@ Example response:
   "ssh_url_to_repo": "git@example.com:diaspora/diaspora-project-site.git",
   "http_url_to_repo": "http://example.com/diaspora/diaspora-project-site.git",
   "web_url": "http://example.com/diaspora/diaspora-project-site",
+  "readme_url": "http://example.com/diaspora/diaspora-project-site/blob/master/README.md",
   "tag_list": [
     "example",
     "disapora project"
@@ -867,6 +874,7 @@ Example response:
   "ssh_url_to_repo": "git@example.com:diaspora/diaspora-project-site.git",
   "http_url_to_repo": "http://example.com/diaspora/diaspora-project-site.git",
   "web_url": "http://example.com/diaspora/diaspora-project-site",
+  "readme_url": "http://example.com/diaspora/diaspora-project-site/blob/master/README.md",
   "tag_list": [
     "example",
     "disapora project"
@@ -917,6 +925,29 @@ Example response:
 }
 ```
 
+## Languages
+
+Get languages used in a project with percentage value.
+
+```
+GET /projects/:id/languages
+```
+
+```bash
+curl --header "PRIVATE-TOKEN: 9koXpg98eAheJpvBs5tK" "https://gitlab.example.com/api/v4/projects/5/languages"
+```
+
+Example response:
+
+```json
+{
+  "Ruby": 66.69,
+  "JavaScript": 22.98,
+  "HTML": 7.91,
+  "CoffeeScript": 2.42
+}
+```
+
 ## Archive a project
 
 Archives the project if the user is either admin or the project owner of this project. This action is
@@ -945,6 +976,7 @@ Example response:
   "ssh_url_to_repo": "git@example.com:diaspora/diaspora-project-site.git",
   "http_url_to_repo": "http://example.com/diaspora/diaspora-project-site.git",
   "web_url": "http://example.com/diaspora/diaspora-project-site",
+  "readme_url": "http://example.com/diaspora/diaspora-project-site/blob/master/README.md",
   "tag_list": [
     "example",
     "disapora project"
@@ -1040,6 +1072,7 @@ Example response:
   "ssh_url_to_repo": "git@example.com:diaspora/diaspora-project-site.git",
   "http_url_to_repo": "http://example.com/diaspora/diaspora-project-site.git",
   "web_url": "http://example.com/diaspora/diaspora-project-site",
+  "readme_url": "http://example.com/diaspora/diaspora-project-site/blob/master/README.md",
   "tag_list": [
     "example",
     "disapora project"
@@ -1138,7 +1171,7 @@ The `file=` parameter must point to a file on your filesystem and be preceded
 by `@`. For example:
 
 ```bash
-curl --request POST --header "PRIVATE-TOKEN: 9koXpg98eAheJpvBs5tK" --form "file=@dk.png" https://gitlab.example.com/api/v3/projects/5/uploads
+curl --request POST --header "PRIVATE-TOKEN: 9koXpg98eAheJpvBs5tK" --form "file=@dk.png" https://gitlab.example.com/api/v4/projects/5/uploads
 ```
 
 Returned object:
@@ -1400,4 +1433,3 @@ GET /projects/:id/snapshot
 | --------- | ---- | -------- | ----------- |
 | `id`      | integer/string | yes | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) |
 | `wiki`    | boolean | no | Whether to download the wiki, rather than project, repository |
-

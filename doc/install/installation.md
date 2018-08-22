@@ -93,9 +93,9 @@ Is the system packaged Git too old? Remove it and compile from source.
 
     # Download and compile from source
     cd /tmp
-    curl --remote-name --progress https://www.kernel.org/pub/software/scm/git/git-2.16.2.tar.gz
-    echo '9acc4339b7a2ab484eea69d705923271682b7058015219cf5a7e6ed8dee5b5fb  git-2.16.2.tar.gz' | shasum -a256 -c - && tar -xzf git-2.16.2.tar.gz
-    cd git-2.16.2/
+    curl --remote-name --progress https://www.kernel.org/pub/software/scm/git/git-2.16.3.tar.gz
+    echo 'dda229e9c73f4fbb7d4324e0d993e11311673df03f73b194c554c2e9451e17cd  git-2.16.3.tar.gz' | shasum -a256 -c - && tar -xzf git-2.16.3.tar.gz
+    cd git-2.16.3/
     ./configure
     make prefix=/usr/local all
 
@@ -133,9 +133,10 @@ Remove the old Ruby 1.8 if present:
 Download Ruby and compile it:
 
     mkdir /tmp/ruby && cd /tmp/ruby
-    curl --remote-name --progress https://cache.ruby-lang.org/pub/ruby/2.3/ruby-2.3.6.tar.gz
-    echo '4e6a0f828819e15d274ae58485585fc8b7caace0  ruby-2.3.6.tar.gz' | shasum -c - && tar xzf ruby-2.3.6.tar.gz
-    cd ruby-2.3.6
+    curl --remote-name --progress https://cache.ruby-lang.org/pub/ruby/2.4/ruby-2.4.4.tar.gz
+    echo 'ec82b0d53bd0adad9b19e6b45e44d54e9ec3f10c  ruby-2.4.4.tar.gz' | shasum -c - && tar xzf ruby-2.4.4.tar.gz
+    cd ruby-2.4.4
+
     ./configure --disable-install-rdoc
     make
     sudo make install
@@ -153,12 +154,12 @@ page](https://golang.org/dl).
 
     # Remove former Go installation folder
     sudo rm -rf /usr/local/go
-
-    curl --remote-name --progress https://storage.googleapis.com/golang/go1.8.3.linux-amd64.tar.gz
-    echo '1862f4c3d3907e59b04a757cfda0ea7aa9ef39274af99a784f5be843c80c6772  go1.8.3.linux-amd64.tar.gz' | shasum -a256 -c - && \
-      sudo tar -C /usr/local -xzf go1.8.3.linux-amd64.tar.gz
+    
+    curl --remote-name --progress https://dl.google.com/go/go1.10.3.linux-amd64.tar.gz
+    echo 'fa1b0e45d3b647c252f51f5e1204aba049cde4af177ef9f2181f43004f901035  go1.10.3.linux-amd64.tar.gz' | shasum -a256 -c - && \
+      sudo tar -C /usr/local -xzf go1.10.3.linux-amd64.tar.gz
     sudo ln -sf /usr/local/go/bin/{go,godoc,gofmt} /usr/local/bin/
-    rm go1.8.3.linux-amd64.tar.gz
+    rm go1.10.3.linux-amd64.tar.gz
 
 ## 4. Node
 
@@ -300,9 +301,9 @@ sudo usermod -aG redis git
 ### Clone the Source
 
     # Clone GitLab repository
-    sudo -u git -H git clone https://gitlab.com/gitlab-org/gitlab-ce.git -b 10-7-stable gitlab
+    sudo -u git -H git clone https://gitlab.com/gitlab-org/gitlab-ce.git -b 11-0-stable gitlab
 
-**Note:** You can change `10-6-stable` to `master` if you want the *bleeding edge* version, but never install master on a production server!
+**Note:** You can change `11-0-stable` to `master` if you want the *bleeding edge* version, but never install master on a production server!
 
 ### Configure It
 

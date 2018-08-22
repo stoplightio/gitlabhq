@@ -206,7 +206,12 @@ class Service < ActiveRecord::Base
     args.each do |arg|
       class_eval %{
         def #{arg}?
-          ActiveRecord::ConnectionAdapters::Column::TRUE_VALUES.include?(#{arg})
+          # '!!' is used because nil or empty string is converted to nil
+          if Gitlab.rails5?
+            !!ActiveRecord::Type::Boolean.new.cast(#{arg})
+          else
+            !!ActiveRecord::Type::Boolean.new.type_cast_from_database(#{arg})
+          end
         end
       }
     end
@@ -249,7 +254,6 @@ class Service < ActiveRecord::Base
       emails_on_push
       external_wiki
       flowdock
-      gemnasium
       hipchat
       irker
       jira

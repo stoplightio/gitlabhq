@@ -1,3 +1,7 @@
+---
+description: 'Learn how to install, configure, update, and maintain your GitLab instance.'
+---
+
 # Administrator documentation **[CORE ONLY]**
 
 Learn how to administer your GitLab instance (Community Edition and
@@ -40,10 +44,12 @@ Learn how to install, configure, update, and maintain your GitLab instance.
 [source installations](../install/installation.md#installation-from-source).
 - [Environment variables](environment_variables.md): Supported environment variables that can be used to override their defaults values in order to configure GitLab.
 - [Plugins](plugins.md): With custom plugins, GitLab administrators can introduce custom integrations without modifying GitLab's source code.
+- [Enforcing Terms of Service](../user/admin_area/settings/terms.md)
 
 #### Customizing GitLab's appearance
 
 - [Header logo](../customization/branded_page_and_email_header.md): Change the logo on all pages and email headers.
+- [Favicon](../customization/favicon.md): Change the default favicon to your own logo.
 - [Branded login page](../customization/branded_login_page.md): Customize the login page with your own logo, title, and description.
 - [Welcome message](../customization/welcome_message.md): Add a custom welcome message to the sign-in page.
 - ["New Project" page](../customization/new_project_page.md): Customize the text to be displayed on the page that opens whenever your users create a new project.

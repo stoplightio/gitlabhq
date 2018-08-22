@@ -7,14 +7,16 @@ import SidebarService from '~/sidebar/services/sidebar_service';
 import SidebarMoveIssue from '~/sidebar/lib/sidebar_move_issue';
 import Mock from './mock_data';
 
-describe('SidebarMoveIssue', () => {
+describe('SidebarMoveIssue', function () {
   beforeEach(() => {
     Vue.http.interceptors.push(Mock.sidebarMockInterceptor);
     this.mediator = new SidebarMediator(Mock.mediator);
     this.$content = $(`
       <div class="dropdown">
         <div class="js-toggle"></div>
-        <div class="dropdown-content"></div>
+        <div class="dropdown-menu">
+          <div class="dropdown-content"></div>
+        </div>
         <div class="js-confirm-button"></div>
       </div>
     `);

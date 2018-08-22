@@ -70,6 +70,7 @@ module Gitlab
     # - Webhook URLs (:hook)
     # - Sentry DSN (:sentry_dsn)
     # - Deploy keys (:key)
+    # - File content from Web Editor (:content)
     config.filter_parameters += [/token$/, /password/, /secret/]
     config.filter_parameters += %i(
       certificate
@@ -81,6 +82,7 @@ module Gitlab
       sentry_dsn
       trace
       variables
+      content
     )
 
     # Enable escaping HTML in JSON.
@@ -113,7 +115,10 @@ module Gitlab
     config.assets.precompile << "performance_bar.css"
     config.assets.precompile << "lib/ace.js"
     config.assets.precompile << "test.css"
+    config.assets.precompile << "snippets.css"
     config.assets.precompile << "locale/**/app.js"
+    config.assets.precompile << "emoji_sprites.css"
+    config.assets.precompile << "errors.css"
 
     # Import gitlab-svgs directly from vendored directory
     config.assets.paths << "#{config.root}/node_modules/@gitlab-org/gitlab-svgs/dist"

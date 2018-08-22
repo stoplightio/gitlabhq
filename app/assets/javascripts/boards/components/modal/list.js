@@ -1,9 +1,6 @@
-/* global ListIssue */
-
 import Vue from 'vue';
 import bp from '../../../breakpoints';
-
-const ModalStore = gl.issueBoards.ModalStore;
+import ModalStore from '../../stores/modal_store';
 
 gl.issueBoards.ModalList = Vue.extend({
   props: {
@@ -57,8 +54,11 @@ gl.issueBoards.ModalList = Vue.extend({
     scrollHandler() {
       const currentPage = Math.floor(this.issues.length / this.perPage);
 
-      if ((this.scrollTop() > this.scrollHeight() - 100) && !this.loadingNewPage
-        && currentPage === this.page) {
+      if (
+        this.scrollTop() > this.scrollHeight() - 100 &&
+        !this.loadingNewPage &&
+        currentPage === this.page
+      ) {
         this.loadingNewPage = true;
         this.page += 1;
       }
@@ -134,9 +134,9 @@ gl.issueBoards.ModalList = Vue.extend({
         <div
           v-for="issue in group"
           v-if="showIssue(issue)"
-          class="card-parent">
+          class="board-card-parent">
           <div
-            class="card"
+            class="board-card"
             :class="{ 'is-active': issue.selected }"
             @click="toggleIssue($event, issue)">
             <issue-card-inner

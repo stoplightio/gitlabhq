@@ -97,8 +97,9 @@ module MergeRequestsHelper
     {
       merge_when_pipeline_succeeds: true,
       should_remove_source_branch: true,
-      sha: merge_request.diff_head_sha
-    }.merge(merge_params_ee(merge_request))
+      sha: merge_request.diff_head_sha,
+      squash: merge_request.squash
+    }
   end
 
   def tab_link_for(merge_request, tab, options = {}, &block)
@@ -125,8 +126,8 @@ module MergeRequestsHelper
     link_to(url[merge_request.project, merge_request], data: data_attrs, &block)
   end
 
-  def allow_maintainer_push_unavailable_reason(merge_request)
-    return if merge_request.can_allow_maintainer_to_push?(current_user)
+  def allow_collaboration_unavailable_reason(merge_request)
+    return if merge_request.can_allow_collaboration?(current_user)
 
     minimum_visibility = [merge_request.target_project.visibility_level,
                           merge_request.source_project.visibility_level].min
@@ -148,9 +149,5 @@ module MergeRequestsHelper
     else
       current_user.fork_of(project)
     end
-  end
-
-  def merge_params_ee(merge_request)
-    {}
   end
 end

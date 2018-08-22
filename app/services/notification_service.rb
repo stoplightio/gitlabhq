@@ -7,7 +7,32 @@
 # Ex.
 #   NotificationService.new.new_issue(issue, current_user)
 #
+# When calculating the recipients of a notification is expensive (for instance,
+# in the new issue case), `#async` will make that calculation happen in Sidekiq
+# instead:
+#
+#   NotificationService.new.async.new_issue(issue, current_user)
+#
 class NotificationService
+  class Async
+    attr_reader :parent
+    delegate :respond_to_missing, to: :parent
+
+    def initialize(parent)
+      @parent = parent
+    end
+
+    def method_missing(meth, *args)
+      return super unless parent.respond_to?(meth)
+
+      MailScheduler::NotificationServiceWorker.perform_async(meth.to_s, *args)
+    end
+  end
+
+  def async
+    @async ||= Async.new(self)
+  end
+
   # Always notify user about ssh key added
   # only if ssh key is not deploy key
   #
@@ -104,6 +129,7 @@ class NotificationService
 
   # When create a merge request we should send an email to:
   #
+  #  * mr author
   #  * mr assignee if their notification level is not Disabled
   #  * project team members with notification level higher then Participating
   #  * watchers of the mr's labels
@@ -121,6 +147,15 @@ class NotificationService
     recipients.each do |recipient|
       mailer.send(:push_to_merge_request_email, recipient.user.id, merge_request.id, current_user.id, recipient.reason, new_commits: new_commits, existing_commits: existing_commits).deliver_later
     end
+  end
+
+  # When a merge request is found to be unmergeable, we should send an email to:
+  #
+  #  * mr author
+  #  * mr merge user if set
+  #
+  def merge_request_unmergeable(merge_request)
+    merge_request_unmergeable_email(merge_request)
   end
 
   # When merge request text is updated, we should send an email to:
@@ -142,8 +177,23 @@ class NotificationService
   #  * merge_request assignee if their notification level is not Disabled
   #  * users with custom level checked with "reassign merge request"
   #
-  def reassigned_merge_request(merge_request, current_user)
-    reassign_resource_email(merge_request, current_user, :reassigned_merge_request_email)
+  def reassigned_merge_request(merge_request, current_user, previous_assignee)
+    recipients = NotificationRecipientService.build_recipients(
+      merge_request,
+      current_user,
+      action: "reassign",
+      previous_assignee: previous_assignee
+    )
+
+    recipients.each do |recipient|
+      mailer.reassigned_merge_request_email(
+        recipient.user.id,
+        merge_request.id,
+        previous_assignee&.id,
+        current_user.id,
+        recipient.reason
+      ).deliver_later
+    end
   end
 
   # When we add labels to a merge request we should send an email to:
@@ -257,7 +307,7 @@ class NotificationService
   def new_project_member(project_member)
     return true unless project_member.notifiable?(:mention, skip_read_ability: true)
 
-    mailer.member_access_granted_email(project_member.real_source_type, project_member.id).deliver_later
+    # mailer.member_access_granted_email(project_member.real_source_type, project_member.id).deliver_later
   end
 
   def update_project_member(project_member)
@@ -290,7 +340,7 @@ class NotificationService
   def new_group_member(group_member)
     return true unless group_member.notifiable?(:mention)
 
-    mailer.member_access_granted_email(group_member.real_source_type, group_member.id).deliver_later
+    # mailer.member_access_granted_email(group_member.real_source_type, group_member.id).deliver_later
   end
 
   def update_group_member(group_member)
@@ -373,6 +423,20 @@ class NotificationService
     end
   end
 
+  def issue_due(issue)
+    recipients = NotificationRecipientService.build_recipients(
+      issue,
+      issue.author,
+      action: 'due',
+      custom_action: :issue_due,
+      skip_current_user: false
+    )
+
+    recipients.each do |recipient|
+      mailer.send(:issue_due_email, recipient.user.id, issue.id, recipient.reason).deliver_later
+    end
+  end
+
   protected
 
   def new_resource_email(target, method)
@@ -407,29 +471,6 @@ class NotificationService
     end
   end
 
-  def reassign_resource_email(target, current_user, method)
-    previous_assignee_id = previous_record(target, 'assignee_id')
-    previous_assignee = User.find_by(id: previous_assignee_id) if previous_assignee_id
-
-    recipients = NotificationRecipientService.build_recipients(
-      target,
-      current_user,
-      action: "reassign",
-      previous_assignee: previous_assignee
-    )
-
-    recipients.each do |recipient|
-      mailer.send(
-        method,
-        recipient.user.id,
-        target.id,
-        previous_assignee_id,
-        current_user.id,
-        recipient.reason
-      ).deliver_later
-    end
-  end
-
   def relabeled_resource_email(target, labels, current_user, method)
     recipients = labels.flat_map { |l| l.subscribers(target.project) }.uniq
     recipients = notifiable_users(
@@ -453,16 +494,16 @@ class NotificationService
     end
   end
 
-  def mailer
-    Notify
+  def merge_request_unmergeable_email(merge_request)
+    recipients = NotificationRecipientService.build_merge_request_unmergeable_recipients(merge_request)
+
+    recipients.each do |recipient|
+      mailer.merge_request_unmergeable_email(recipient.user.id, merge_request.id).deliver_later
+    end
   end
 
-  def previous_record(object, attribute)
-    return unless object && attribute
-
-    if object.previous_changes.include?(attribute)
-      object.previous_changes[attribute].first
-    end
+  def mailer
+    Notify
   end
 
   private

@@ -374,7 +374,7 @@ GitLabDropdown = (function() {
           $relatedTarget = $(e.relatedTarget);
           $dropdownMenu = $relatedTarget.closest('.dropdown-menu');
           if ($dropdownMenu.length === 0) {
-            return _this.dropdown.removeClass('open');
+            return _this.dropdown.removeClass('show');
           }
         }
       };
@@ -602,7 +602,11 @@ GitLabDropdown = (function() {
     var selector;
     selector = '.dropdown-content';
     if (this.dropdown.find(".dropdown-toggle-page").length) {
-      selector = ".dropdown-page-one .dropdown-content";
+      if (this.options.containerSelector) {
+        selector = this.options.containerSelector;
+      } else {
+        selector = '.dropdown-page-one .dropdown-content';
+      }
     }
 
     return $(selector, this.dropdown).empty();
@@ -801,7 +805,7 @@ GitLabDropdown = (function() {
     if (this.options.filterable) {
       const initialScrollTop = $(window).scrollTop();
 
-      if (this.dropdown.is('.open')) {
+      if (this.dropdown.is('.show') && !this.filterInput.is(':focus')) {
         this.filterInput.focus();
       }
 

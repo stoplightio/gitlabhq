@@ -1,9 +1,9 @@
 <script>
-import timeTrackingHelpState from './help_state';
+import TimeTrackingHelpState from './help_state.vue';
 import TimeTrackingCollapsedState from './collapsed_state.vue';
-import timeTrackingSpentOnlyPane from './spent_only_pane';
-import timeTrackingNoTrackingPane from './no_tracking_pane';
-import timeTrackingEstimateOnlyPane from './estimate_only_pane';
+import TimeTrackingSpentOnlyPane from './spent_only_pane.vue';
+import TimeTrackingNoTrackingPane from './no_tracking_pane.vue';
+import TimeTrackingEstimateOnlyPane from './estimate_only_pane.vue';
 import TimeTrackingComparisonPane from './comparison_pane.vue';
 
 import eventHub from '../../event_hub';
@@ -12,11 +12,11 @@ export default {
   name: 'IssuableTimeTracker',
   components: {
     TimeTrackingCollapsedState,
-    'time-tracking-estimate-only-pane': timeTrackingEstimateOnlyPane,
-    'time-tracking-spent-only-pane': timeTrackingSpentOnlyPane,
-    'time-tracking-no-tracking-pane': timeTrackingNoTrackingPane,
+    TimeTrackingEstimateOnlyPane,
+    TimeTrackingSpentOnlyPane,
+    TimeTrackingNoTrackingPane,
     TimeTrackingComparisonPane,
-    'time-tracking-help-state': timeTrackingHelpState,
+    TimeTrackingHelpState,
   },
   props: {
     time_estimate: {
@@ -116,7 +116,7 @@ export default {
     <div class="title hide-collapsed">
       {{ __('Time tracking') }}
       <div
-        class="help-button pull-right"
+        class="help-button float-right"
         v-if="!showHelpState"
         @click="toggleHelpState(true)"
       >
@@ -127,7 +127,7 @@ export default {
         </i>
       </div>
       <div
-        class="close-help-button pull-right"
+        class="close-help-button float-right"
         v-if="showHelpState"
         @click="toggleHelpState(false)"
       >

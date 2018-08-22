@@ -400,11 +400,11 @@ describe ProjectPolicy do
         :merge_request,
         target_project: target_project,
         source_project: project,
-        allow_maintainer_to_push: true
+        allow_collaboration: true
       )
     end
     let(:maintainer_abilities) do
-      %w(create_build update_build create_pipeline update_pipeline)
+      %w(create_build create_pipeline)
     end
 
     subject { described_class.new(user, project) }

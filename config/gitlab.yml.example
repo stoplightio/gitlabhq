@@ -78,10 +78,15 @@ production: &base
     # username_changing_enabled: false # default: true - User can change her username/namespace
     ## Default theme ID
     ##   1 - Indigo
-    ##   2 - Dark
-    ##   3 - Light
-    ##   4 - Blue
+    ##   2 - Light Indigo
+    ##   3 - Blue
+    ##   4 - Light Blue
     ##   5 - Green
+    ##   6 - Light Green
+    ##   7 - Red
+    ##   8 - Light Red
+    ##   9 - Dark
+    ##   10 - Light
     # default_theme: 1 # default: 1
 
     ## Automatic issue closing
@@ -184,18 +189,18 @@ production: &base
     # base_dir: uploads/-/system
     object_store:
       enabled: false
-      # remote_directory: uploads # Bucket name
+      remote_directory: uploads # Bucket name
       # direct_upload: false # Use Object Storage directly for uploads instead of background uploads if enabled (Default: false)
       # background_upload: false # Temporary option to limit automatic upload (Default: true)
       # proxy_download: false # Passthrough all downloads via GitLab instead of using Redirects to Object Storage
-    connection:
-      provider: AWS
-      aws_access_key_id: AWS_ACCESS_KEY_ID
-      aws_secret_access_key: AWS_SECRET_ACCESS_KEY
-      region: us-east-1
-      # host: 'localhost' # default: s3.amazonaws.com
-      # endpoint: 'http://127.0.0.1:9000' # default: nil
-      # path_style: true # Use 'host/bucket_name/object' instead of 'bucket_name.host/object'
+      connection:
+        provider: AWS
+        aws_access_key_id: AWS_ACCESS_KEY_ID
+        aws_secret_access_key: AWS_SECRET_ACCESS_KEY
+        region: us-east-1
+        # host: 'localhost' # default: s3.amazonaws.com
+        # endpoint: 'http://127.0.0.1:9000' # default: nil
+        # path_style: true # Use 'host/bucket_name/object' instead of 'bucket_name.host/object'
 
   ## GitLab Pages
   pages:
@@ -212,6 +217,8 @@ production: &base
     artifacts_server: true
     # external_http: ["1.1.1.1:80", "[2001::1]:80"] # If defined, enables custom domain support in GitLab Pages
     # external_https: ["1.1.1.1:443", "[2001::1]:443"] # If defined, enables custom domain and certificate support in GitLab Pages
+    admin:
+      address: unix:/home/git/gitlab/tmp/sockets/private/pages-admin.socket # TCP connections are supported too (e.g. tcp://host:port)
 
   ## Mattermost
   ## For enabling Add to Mattermost button

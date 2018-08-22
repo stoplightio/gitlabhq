@@ -1,9 +1,9 @@
 import Vue from 'vue';
-
-const ModalStore = gl.issueBoards.ModalStore;
+import ModalStore from '../../stores/modal_store';
+import modalMixin from '../../mixins/modal_mixins';
 
 gl.issueBoards.ModalTabs = Vue.extend({
-  mixins: [gl.issueBoards.ModalMixins],
+  mixins: [modalMixin],
   data() {
     return ModalStore.store;
   },
@@ -24,7 +24,7 @@ gl.issueBoards.ModalTabs = Vue.extend({
             role="button"
             @click.prevent="changeTab('all')">
             Open issues
-            <span class="badge">
+            <span class="badge badge-pill">
               {{ issuesCount }}
             </span>
           </a>
@@ -35,7 +35,7 @@ gl.issueBoards.ModalTabs = Vue.extend({
             role="button"
             @click.prevent="changeTab('selected')">
             Selected issues
-            <span class="badge">
+            <span class="badge badge-pill">
               {{ selectedCount }}
             </span>
           </a>

@@ -5,18 +5,18 @@
 # This was customized to support CentOS/RHEL base images
 
 function sigterm_handler() {
-    echo "SIGTERM signal received, try to gracefully shutdown all services..."
-    gitlab-ctl stop
+	echo "SIGTERM signal received, try to gracefully shutdown all services..."
+	gitlab-ctl stop
 }
 
 function failed_pg_upgrade() {
-    echo 'Upgrading the existing database to 9.6 failed and was reverted.'
-    echo 'Please check the output, and open an issue at:'
-    echo 'https://gitlab.com/gitlab-org/omnibus-gitlab/issues'
-    echo 'If you would like to restart the instance without attempting to'
-    echo 'upgrade, add the following to your docker command:'
-    echo '-e GITLAB_SKIP_PG_UPGRADE=true'
-    exit 1
+	echo 'Upgrading the existing database to 9.6 failed and was reverted.'
+	echo 'Please check the output, and open an issue at:'
+	echo 'https://gitlab.com/gitlab-org/omnibus-gitlab/issues'
+	echo 'If you would like to restart the instance without attempting to'
+	echo 'upgrade, add the following to your docker command:'
+	echo '-e GITLAB_SKIP_PG_UPGRADE=true'
+	exit 1
 }
 
 trap "sigterm_handler; exit" TERM
@@ -58,9 +58,8 @@ GITLAB_OMNIBUS_CONFIG= /opt/gitlab/embedded/bin/runsvdir-start &
 
 grep 'load sysctl' /opt/gitlab/embedded/cookbooks/package/resources/sysctl.rb &>/dev/null
 if [[ $? -eq 0 ]]; then
-    # dont set kernel limits
-    sed -i"" -e '58,62d' /opt/gitlab/embedded/cookbooks/package/resources/sysctl.rb
-    sed -i"" -e '62,76d' /opt/gitlab/embedded/cookbooks/gitlab/recipes/postgresql.rb
+	# dont set kernel limits
+	sed -i"" -e '57,62d;34,39d' /opt/gitlab/embedded/cookbooks/package/resources/sysctl.rb
 fi
 
 echo "Configuring GitLab..."
@@ -69,7 +68,7 @@ gitlab-ctl reconfigure
 # Make sure PostgreSQL is at the latest version.
 # If it fails, print a message with a workaround and exit
 if [ "${GITLAB_SKIP_PG_UPGRADE}" != true ]; then
-    gitlab-ctl pg-upgrade -w || failed_pg_upgrade
+	gitlab-ctl pg-upgrade -w || failed_pg_upgrade
 fi
 
 # Tail all logs

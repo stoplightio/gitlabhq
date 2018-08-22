@@ -5,9 +5,9 @@ describe ProjectsHelper do
 
   describe "#project_status_css_class" do
     it "returns appropriate class" do
-      expect(project_status_css_class("started")).to eq("active")
-      expect(project_status_css_class("failed")).to eq("danger")
-      expect(project_status_css_class("finished")).to eq("success")
+      expect(project_status_css_class("started")).to eq("table-active")
+      expect(project_status_css_class("failed")).to eq("table-danger")
+      expect(project_status_css_class("finished")).to eq("table-success")
     end
   end
 
@@ -281,16 +281,16 @@ describe ProjectsHelper do
     end
   end
 
-  describe '#sanitized_import_error' do
+  describe '#sanitizerepo_repo_path' do
     let(:project) { create(:project, :repository) }
+    let(:storage_path) { Gitlab.config.repositories.storages.default.legacy_disk_path }
 
     before do
-      allow(project).to receive(:repository_storage_path).and_return('/base/repo/path')
       allow(Settings.shared).to receive(:[]).with('path').and_return('/base/repo/export/path')
     end
 
     it 'removes the repo path' do
-      repo = '/base/repo/path/namespace/test.git'
+      repo = File.join(storage_path, 'namespace/test.git')
       import_error = "Could not clone #{repo}\n"
 
       expect(sanitize_repo_path(project, import_error)).to eq('Could not clone [REPOS PATH]/namespace/test.git')
@@ -326,74 +326,6 @@ describe ProjectsHelper do
       expect(user).to receive(:recent_push).with(project).and_return(event)
 
       expect(helper.last_push_event).to eq(event)
-    end
-  end
-
-  describe "#project_feature_access_select" do
-    let(:project) { create(:project, :public) }
-    let(:user)    { create(:user) }
-
-    context "when project is internal or public" do
-      it "shows all options" do
-        helper.instance_variable_set(:@project, project)
-        result = helper.project_feature_access_select(:issues_access_level)
-        expect(result).to include("Disabled")
-        expect(result).to include("Only team members")
-        expect(result).to include("Everyone with access")
-      end
-    end
-
-    context "when project is private" do
-      before do
-        project.update_attributes(visibility_level: Gitlab::VisibilityLevel::PRIVATE)
-      end
-
-      it "shows only allowed options" do
-        helper.instance_variable_set(:@project, project)
-        result = helper.project_feature_access_select(:issues_access_level)
-        expect(result).to include("Disabled")
-        expect(result).to include("Only team members")
-        expect(result).to have_selector('option[disabled]', text: "Everyone with access")
-      end
-    end
-
-    context "when project moves from public to private" do
-      before do
-        project.update_attributes(visibility_level: Gitlab::VisibilityLevel::PRIVATE)
-      end
-
-      it "shows the highest allowed level selected" do
-        helper.instance_variable_set(:@project, project)
-        result = helper.project_feature_access_select(:issues_access_level)
-
-        expect(result).to include("Disabled")
-        expect(result).to include("Only team members")
-        expect(result).to have_selector('option[disabled]', text: "Everyone with access")
-        expect(result).to have_selector('option[selected]', text: "Only team members")
-      end
-    end
-  end
-
-  describe "#visibility_select_options" do
-    let(:project) { create(:project, :repository) }
-    let(:user)    { create(:user) }
-
-    before do
-      allow(helper).to receive(:current_user).and_return(user)
-
-      stub_application_setting(restricted_visibility_levels: [Gitlab::VisibilityLevel::PUBLIC])
-    end
-
-    it "does not include the Public restricted level" do
-      expect(helper.send(:visibility_select_options, project, Gitlab::VisibilityLevel::PRIVATE)).not_to include('Public')
-    end
-
-    it "includes the Internal level" do
-      expect(helper.send(:visibility_select_options, project, Gitlab::VisibilityLevel::PRIVATE)).to include('Internal')
-    end
-
-    it "includes the Private level" do
-      expect(helper.send(:visibility_select_options, project, Gitlab::VisibilityLevel::PRIVATE)).to include('Private')
     end
   end
 
@@ -508,6 +440,48 @@ describe ProjectsHelper do
 
     it 'parses quotes in name' do
       expect(helper.send(:git_user_name)).to eq('John \"A\" Doe53')
+    end
+  end
+
+  describe 'show_xcode_link' do
+    let!(:project) { create(:project) }
+    let(:mac_ua) { 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/66.0.3359.139 Safari/537.36' }
+    let(:ios_ua) { 'Mozilla/5.0 (iPad; CPU OS 5_1_1 like Mac OS X) AppleWebKit/534.46 (KHTML, like Gecko) Version/5.1 Mobile/9B206 Safari/7534.48.3' }
+
+    context 'when the repository is xcode compatible' do
+      before do
+        allow(project.repository).to receive(:xcode_project?).and_return(true)
+      end
+
+      it 'returns false if the visitor is not using macos' do
+        allow(helper).to receive(:browser).and_return(Browser.new(ios_ua))
+
+        expect(helper.show_xcode_link?(project)).to eq(false)
+      end
+
+      it 'returns true if the visitor is using macos' do
+        allow(helper).to receive(:browser).and_return(Browser.new(mac_ua))
+
+        expect(helper.show_xcode_link?(project)).to eq(true)
+      end
+    end
+
+    context 'when the repository is not xcode compatible' do
+      before do
+        allow(project.repository).to receive(:xcode_project?).and_return(false)
+      end
+
+      it 'returns false if the visitor is not using macos' do
+        allow(helper).to receive(:browser).and_return(Browser.new(ios_ua))
+
+        expect(helper.show_xcode_link?(project)).to eq(false)
+      end
+
+      it 'returns false if the visitor is using macos' do
+        allow(helper).to receive(:browser).and_return(Browser.new(mac_ua))
+
+        expect(helper.show_xcode_link?(project)).to eq(false)
+      end
     end
   end
 end

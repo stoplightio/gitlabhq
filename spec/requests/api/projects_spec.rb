@@ -1,12 +1,24 @@
 # -*- coding: utf-8 -*-
 require 'spec_helper'
 
+shared_examples 'languages and percentages JSON response' do
+  let(:expected_languages) { project.repository.languages.map { |language| language.values_at(:label, :value)}.to_h }
+
+  it 'returns expected language values' do
+    get api("/projects/#{project.id}/languages", user)
+
+    expect(response).to have_gitlab_http_status(:ok)
+    expect(json_response).to eq(expected_languages)
+    expect(json_response.count).to be > 1
+  end
+end
+
 describe API::Projects do
   let(:user) { create(:user) }
   let(:user2) { create(:user) }
   let(:user3) { create(:user) }
   let(:admin) { create(:admin) }
-  let(:project) { create(:project, namespace: user.namespace) }
+  let(:project) { create(:project, :repository, namespace: user.namespace) }
   let(:project2) { create(:project, namespace: user.namespace) }
   let(:snippet) { create(:project_snippet, :public, author: user, project: project, title: 'example') }
   let(:project_member) { create(:project_member, :developer, user: user3, project: project) }
@@ -208,7 +220,7 @@ describe API::Projects do
         it 'returns a simplified version of all the projects' do
           expected_keys = %w(
             id description default_branch tag_list
-            ssh_url_to_repo http_url_to_repo web_url
+            ssh_url_to_repo http_url_to_repo web_url readme_url
             name name_with_namespace
             path path_with_namespace
             star_count forks_count
@@ -673,7 +685,8 @@ describe API::Projects do
         issues_enabled: false,
         merge_requests_enabled: false,
         wiki_enabled: false,
-        request_access_enabled: true
+        request_access_enabled: true,
+        jobs_enabled: true
       })
 
       post api("/projects/user/#{user.id}", admin), project
@@ -841,6 +854,7 @@ describe API::Projects do
         expect(json_response['only_allow_merge_if_pipeline_succeeds']).to eq(project.only_allow_merge_if_pipeline_succeeds)
         expect(json_response['only_allow_merge_if_all_discussions_are_resolved']).to eq(project.only_allow_merge_if_all_discussions_are_resolved)
         expect(json_response['merge_method']).to eq(project.merge_method.to_s)
+        expect(json_response['readme_url']).to eq(project.readme_url)
       end
 
       it 'returns a project by path name' do
@@ -1690,6 +1704,42 @@ describe API::Projects do
         expect { post api("/projects/#{project.id}/unstar", user) }.not_to change { project.reload.star_count }
 
         expect(response).to have_gitlab_http_status(304)
+      end
+    end
+  end
+
+  describe 'GET /projects/:id/languages' do
+    context 'with an authorized user' do
+      it_behaves_like 'languages and percentages JSON response' do
+        let(:project) { project3 }
+      end
+
+      it 'returns not_found(404) for not existing project' do
+        get api("/projects/9999999999/languages", user)
+
+        expect(response).to have_gitlab_http_status(:not_found)
+      end
+    end
+
+    context 'with not authorized user' do
+      it 'returns not_found for existing but unauthorized project' do
+        get api("/projects/#{project3.id}/languages", user3)
+
+        expect(response).to have_gitlab_http_status(:not_found)
+      end
+    end
+
+    context 'without user' do
+      let(:project_public) { create(:project, :public, :repository) }
+
+      it_behaves_like 'languages and percentages JSON response' do
+        let(:project) { project_public }
+      end
+
+      it 'returns not_found for existing but unauthorized project' do
+        get api("/projects/#{project3.id}/languages", nil)
+
+        expect(response).to have_gitlab_http_status(:not_found)
       end
     end
   end

@@ -76,6 +76,16 @@ module Gitlab
         line_code(line) if line
       end
 
+      # Returns the raw diff content up to the given line index
+      def diff_hunk(diff_line)
+        diff_line_index = diff_line.index
+        # @@ (match) header is not kept if it's found in the top of the file,
+        # therefore we should keep an extra line on this scenario.
+        diff_line_index += 1 unless diff_lines.first.match?
+
+        diff_lines.select { |line| line.index <= diff_line_index }.map(&:text).join("\n")
+      end
+
       def old_sha
         diff_refs&.base_sha
       end

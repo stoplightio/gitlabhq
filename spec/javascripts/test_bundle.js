@@ -1,10 +1,12 @@
-/* eslint-disable jasmine/no-global-setup */
+/* eslint-disable jasmine/no-global-setup, jasmine/no-unsafe-spy, no-underscore-dangle */
+
 import $ from 'jquery';
 import 'vendor/jasmine-jquery';
 import '~/commons';
 
 import Vue from 'vue';
 import VueResource from 'vue-resource';
+import Translate from '~/vue_shared/translate';
 
 import { getDefaultAdapter } from '~/lib/utils/axios_utils';
 import { FIXTURES_PATH, TEST_HOST } from './test_constants';
@@ -28,6 +30,7 @@ Vue.config.errorHandler = function(err) {
 };
 
 Vue.use(VueResource);
+Vue.use(Translate);
 
 // enable test fixtures
 jasmine.getFixtures().fixturesPath = FIXTURES_PATH;
@@ -52,6 +55,17 @@ window.addEventListener('unhandledrejection', event => {
   console.error('Unhandled promise rejection:');
   console.error(event.reason.stack || event.reason);
 });
+
+// Add global function to spy on a module's dependencies via rewire
+window.spyOnDependency = (module, name) => {
+  const dependency = module.__GetDependency__(name);
+  const spy = jasmine.createSpy(name, dependency);
+  module.__Rewire__(name, spy);
+  return spy;
+};
+
+// Reset any rewired modules after each test (see babel-plugin-rewire)
+afterEach(__rewire_reset_all__); // eslint-disable-line
 
 // HACK: Chrome 59 disconnects if there are too many synchronous tests in a row
 // because it appears to lock up the thread that communicates to Karma's socket
