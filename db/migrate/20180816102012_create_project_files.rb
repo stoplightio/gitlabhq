@@ -5,7 +5,6 @@ class CreateProjectFiles < ActiveRecord::Migration
 
   def up
     create_table :project_files do |t|
-      t.integer :org_id, null: false
       t.integer :project_id, null: false
 
       t.string :path, null: false
@@ -20,7 +19,6 @@ class CreateProjectFiles < ActiveRecord::Migration
 
       t.foreign_key :projects, column: :project_id, on_delete: :cascade
       
-      t.index :org_id
       t.index :project_id
       t.index [:branch, :path], unique: true
     end
@@ -55,6 +53,7 @@ class CreateProjectFiles < ActiveRecord::Migration
     if Gitlab::Database.postgresql?
       execute <<-SQL
         DROP TRIGGER IF EXISTS trigger_set_project_file_timestamp ON project_files;
+        DROP FUNCTION IF EXISTS trigger_set_project_file_timestamp();
       SQL
     end
   end

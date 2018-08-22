@@ -11,7 +11,6 @@ class CreatePosts < ActiveRecord::Migration
   def up
     create_table :posts do |t|
       t.integer :iid, null: false
-      t.integer :org_id, null: false
       t.integer :project_id, null: false
       t.integer :creator_id, null: false
       t.integer :file_id
@@ -29,7 +28,6 @@ class CreatePosts < ActiveRecord::Migration
       t.foreign_key :users, column: :creator_id, on_delete: :cascade
       t.foreign_key :project_files, column: :file_id, on_delete: :cascade
       
-      t.index :org_id
       t.index [:project_id, :iid], unique: true
       t.index :file_id
       t.index :creator_id
@@ -69,13 +67,13 @@ class CreatePosts < ActiveRecord::Migration
         LANGUAGE 'plpgsql'
         VOLATILE;
 
-        CREATE TRIGGER trigger_set_post_iid
-        BEFORE INSERT OR UPDATE ON posts
-        FOR EACH ROW EXECUTE PROCEDURE trigger_set_post_iid();
-        
         CREATE TRIGGER trigger_set_post_timestamp
         BEFORE INSERT OR UPDATE ON posts
         FOR EACH ROW EXECUTE PROCEDURE trigger_set_post_timestamp();
+
+        CREATE TRIGGER trigger_set_post_iid
+        BEFORE INSERT ON posts
+        FOR EACH ROW EXECUTE PROCEDURE trigger_set_post_iid();
       SQL
     end
   end
@@ -85,8 +83,9 @@ class CreatePosts < ActiveRecord::Migration
 
     if Gitlab::Database.postgresql?
       execute <<-SQL
-        DROP TRIGGER IF EXISTS trigger_set_post_iid ON posts;
         DROP TRIGGER IF EXISTS trigger_set_post_timestamp ON posts;
+        DROP TRIGGER IF EXISTS trigger_set_post_iid ON posts;
+        DROP FUNCTION IF EXISTS trigger_set_post_timestamp();
         DROP FUNCTION IF EXISTS trigger_set_post_iid();
       SQL
     end
