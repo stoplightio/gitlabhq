@@ -10,7 +10,7 @@ class CreateDocsTable < ActiveRecord::Migration
     create_table :docs do |t|
       t.integer :org_id
       t.integer :project_id
-      t.integer :owner_id
+      # t.integer :owner_id
       t.integer :live_build_id
       t.string :hostname
       t.string :ssl_path
@@ -33,7 +33,7 @@ class CreateDocsTable < ActiveRecord::Migration
 
     create_table :doc_builds do |t|
       t.integer :doc_id
-      t.integer :author_id
+      # t.integer :author_id
       t.string :ref
       t.string :file_path
       t.string :branch
