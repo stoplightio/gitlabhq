@@ -5,6 +5,7 @@ class CreateProjectFiles < ActiveRecord::Migration
 
   def up
     create_table :project_files do |t|
+      t.integer :org_id, null: false
       t.integer :project_id, null: false
 
       t.string :path, null: false
@@ -12,13 +13,15 @@ class CreateProjectFiles < ActiveRecord::Migration
       t.string :spec
       t.string :lang
       t.integer :size
+      t.string :contents
 
       t.datetime_with_timezone :created_at
       t.datetime_with_timezone :updated_at
 
       t.foreign_key :projects, column: :project_id, on_delete: :cascade
       
-      t.index [:project_id]
+      t.index :org_id
+      t.index :project_id
       t.index [:branch, :path], unique: true
     end
 

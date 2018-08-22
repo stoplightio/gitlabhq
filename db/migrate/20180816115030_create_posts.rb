@@ -11,6 +11,7 @@ class CreatePosts < ActiveRecord::Migration
   def up
     create_table :posts do |t|
       t.integer :iid, null: false
+      t.integer :org_id, null: false
       t.integer :project_id, null: false
       t.integer :creator_id, null: false
       t.integer :file_id
@@ -28,6 +29,7 @@ class CreatePosts < ActiveRecord::Migration
       t.foreign_key :users, column: :creator_id, on_delete: :cascade
       t.foreign_key :project_files, column: :file_id, on_delete: :cascade
       
+      t.index :org_id
       t.index [:project_id, :iid], unique: true
       t.index :file_id
       t.index :creator_id
