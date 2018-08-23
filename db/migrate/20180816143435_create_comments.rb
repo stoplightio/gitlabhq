@@ -14,8 +14,7 @@ class CreateComments < ActiveRecord::Migration
       t.string :parent_type, null: false
       t.string :body
 
-      t.datetime_with_timezone :created_at, null: false
-      t.datetime_with_timezone :updated_at, null: false
+      t.timestamps null: true
 
       t.index [:parent_type, :parent_id]
       t.index :created_at

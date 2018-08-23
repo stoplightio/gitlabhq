@@ -21,8 +21,7 @@ class CreatePosts < ActiveRecord::Migration
       t.string :body
       t.string :file_loc
 
-      t.datetime_with_timezone :created_at
-      t.datetime_with_timezone :updated_at
+      t.timestamps null: true
 
       t.foreign_key :projects, column: :project_id, on_delete: :cascade
       t.foreign_key :users, column: :creator_id, on_delete: :cascade
