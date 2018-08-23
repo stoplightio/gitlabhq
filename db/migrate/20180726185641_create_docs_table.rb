@@ -17,12 +17,15 @@ class CreateDocsTable < ActiveRecord::Migration
           # integration
             # segment
             # intercom
-            # ga
+            # google_analytics
           # auth
             # default
             # basic
             # saml
+              # entry_point
             # auth0
+              # client_id
+              # domain
           # file_path
           # base_path
       t.json :config
@@ -48,7 +51,10 @@ class CreateDocsTable < ActiveRecord::Migration
             # default
             # basic
             # saml
+              # entry_point
             # auth0
+              # client_id
+              # domain
           # file_path
           # base_path
       t.json :config
