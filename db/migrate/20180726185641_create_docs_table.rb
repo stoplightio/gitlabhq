@@ -10,11 +10,8 @@ class CreateDocsTable < ActiveRecord::Migration
     create_table :docs do |t|
       t.integer :org_id
       t.integer :project_id
-      # t.integer :owner_id
       t.integer :live_build_id
-      t.string :hostname
-      t.string :ssl_path
-      t.boolean :custom_ssl
+      t.string :domain
 
       # config
           # integration
@@ -26,6 +23,8 @@ class CreateDocsTable < ActiveRecord::Migration
             # basic
             # saml
             # auth0
+          # file_path
+          # base_path
       t.json :config
 
       t.timestamps null: true
@@ -33,10 +32,7 @@ class CreateDocsTable < ActiveRecord::Migration
 
     create_table :doc_builds do |t|
       t.integer :doc_id
-      # t.integer :author_id
-      t.string :ref
-      t.string :file_path
-      t.string :branch
+      t.string :app_version
 
       # status
         # code
@@ -53,6 +49,8 @@ class CreateDocsTable < ActiveRecord::Migration
             # basic
             # saml
             # auth0
+          # file_path
+          # base_path
       t.json :config
 
       t.timestamps null: true
@@ -105,8 +103,7 @@ class CreateDocsTable < ActiveRecord::Migration
     end
 
     # docs indexes
-    add_index "docs", ["org_id"], name: "index_docs_on_org_id", using: :btree
-    add_index "docs", ["hostname"], name: "index_docs_on_hostname", using: :btree, unique: true
+    add_index "docs", ["domain"], name: "index_docs_on_domain", using: :btree, unique: true
     add_index "docs", ["project_id"], name: "index_docs_on_project_id", using: :btree
 
     # doc_builds indexes
