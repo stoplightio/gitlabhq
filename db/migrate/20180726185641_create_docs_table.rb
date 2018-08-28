@@ -53,7 +53,7 @@ class CreateDocsTable < ActiveRecord::Migration
             # saml
               # entry_point
             # auth0
-              # client_id
+              # client_secret
               # domain
           # file_path
           # base_path
