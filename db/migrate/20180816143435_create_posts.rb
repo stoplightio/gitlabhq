@@ -118,6 +118,8 @@ class CreatePosts < ActiveRecord::Migration
       execute <<-SQL
         DROP TRIGGER IF EXISTS trigger_set_post_timestamp ON posts;
         DROP TRIGGER IF EXISTS trigger_set_post_iid ON posts;
+        DROP TRIGGER IF EXISTS trigger_set_post_last_activity_at ON posts;
+        DROP TRIGGER IF EXISTS trigger_set_post_last_activity_at_comments ON comments;
         DROP FUNCTION IF EXISTS trigger_set_post_timestamp();
         DROP FUNCTION IF EXISTS trigger_set_post_iid();
         DROP FUNCTION IF EXISTS trigger_set_post_last_activity_at();
