@@ -20,6 +20,7 @@ class CreatePosts < ActiveRecord::Migration
       t.string :title
       t.string :body
       t.string :file_loc
+      t.datetime :last_activity_at
 
       t.timestamps null: true
 
@@ -66,6 +67,31 @@ class CreatePosts < ActiveRecord::Migration
         LANGUAGE 'plpgsql'
         VOLATILE;
 
+        CREATE OR REPLACE FUNCTION trigger_set_post_last_activity_at()
+        RETURNS trigger AS
+        $BODY$
+        BEGIN
+            NEW.last_activity_at = NOW();
+            RETURN NEW;
+        END;
+        $BODY$
+        LANGUAGE 'plpgsql'
+        VOLATILE;
+
+        CREATE OR REPLACE FUNCTION trigger_set_post_last_activity_at_comments()
+        RETURNS trigger AS
+        $BODY$
+        BEGIN
+            UPDATE posts
+            SET last_activity_at = NOW()
+            WHERE NEW.parent_type = 'post' AND id = NEW.parent_id;
+
+            RETURN NEW;
+        END;
+        $BODY$
+        LANGUAGE 'plpgsql'
+        VOLATILE;
+
         CREATE TRIGGER trigger_set_post_timestamp
         BEFORE INSERT OR UPDATE ON posts
         FOR EACH ROW EXECUTE PROCEDURE trigger_set_post_timestamp();
@@ -73,6 +99,14 @@ class CreatePosts < ActiveRecord::Migration
         CREATE TRIGGER trigger_set_post_iid
         BEFORE INSERT ON posts
         FOR EACH ROW EXECUTE PROCEDURE trigger_set_post_iid();
+
+        CREATE TRIGGER trigger_set_post_last_activity_at
+        BEFORE INSERT OR UPDATE ON posts
+        FOR EACH ROW EXECUTE PROCEDURE trigger_set_post_last_activity_at();
+
+        CREATE TRIGGER trigger_set_post_last_activity_at_comments
+        BEFORE INSERT OR UPDATE ON comments
+        FOR EACH ROW EXECUTE PROCEDURE trigger_set_post_last_activity_at_comments();
       SQL
     end
   end
@@ -86,6 +120,8 @@ class CreatePosts < ActiveRecord::Migration
         DROP TRIGGER IF EXISTS trigger_set_post_iid ON posts;
         DROP FUNCTION IF EXISTS trigger_set_post_timestamp();
         DROP FUNCTION IF EXISTS trigger_set_post_iid();
+        DROP FUNCTION IF EXISTS trigger_set_post_last_activity_at();
+        DROP FUNCTION IF EXISTS trigger_set_post_last_activity_at_comments();
       SQL
     end
   end
