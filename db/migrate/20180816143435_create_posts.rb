@@ -82,9 +82,15 @@ class CreatePosts < ActiveRecord::Migration
         RETURNS trigger AS
         $BODY$
         BEGIN
-            UPDATE posts
-            SET last_activity_at = NOW()
-            WHERE NEW.parent_type = 'post' AND id = NEW.parent_id;
+            IF (TG_OP = 'INSERT') THEN
+              UPDATE posts
+              SET last_activity_at = NOW()
+              WHERE NEW.parent_type = 'post' AND id = NEW.parent_id;
+            ELSIF (TG_OP = 'DELETE' OR TG_OP = 'UPDATE') THEN
+              UPDATE posts
+              SET last_activity_at = NOW()
+              WHERE OLD.parent_type = 'post' AND id = OLD.parent_id;
+            END IF;
 
             RETURN NEW;
         END;
@@ -105,7 +111,7 @@ class CreatePosts < ActiveRecord::Migration
         FOR EACH ROW EXECUTE PROCEDURE trigger_set_post_last_activity_at();
 
         CREATE TRIGGER trigger_set_post_last_activity_at_comments
-        BEFORE INSERT OR UPDATE ON comments
+        BEFORE INSERT OR UPDATE OR DELETE ON comments
         FOR EACH ROW EXECUTE PROCEDURE trigger_set_post_last_activity_at_comments();
       SQL
     end
