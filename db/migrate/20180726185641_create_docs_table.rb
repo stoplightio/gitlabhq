@@ -8,7 +8,6 @@ class CreateDocsTable < ActiveRecord::Migration
 
   def up
     create_table :docs do |t|
-      t.integer :org_id
       t.integer :project_id
       t.integer :live_build_id
       t.string :domain
