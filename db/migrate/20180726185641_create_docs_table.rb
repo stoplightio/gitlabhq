@@ -9,7 +9,7 @@ class CreateDocsTable < ActiveRecord::Migration
   def up
     create_table :docs do |t|
       t.integer :project_id
-      t.integer :live_build_id
+      t.column :live_build_id, :bigint
       t.string :domain
 
       # config
@@ -18,13 +18,15 @@ class CreateDocsTable < ActiveRecord::Migration
             # intercom
             # google_analytics
           # auth
-            # default
+            # title
+            # subtitle
+            # button_text
             # basic
             # saml
               # entry_point
             # auth0
-              # client_id
-              # domain
+              # client_secret
+              # entry_point
           # file_path
           # base_path
       t.json :config
@@ -33,7 +35,7 @@ class CreateDocsTable < ActiveRecord::Migration
     end
 
     create_table :doc_builds do |t|
-      t.integer :doc_id
+      t.column :doc_id, :bigint
       t.string :app_version
 
       # status
@@ -47,13 +49,15 @@ class CreateDocsTable < ActiveRecord::Migration
             # intercom
             # google_analytics
           # auth
-            # default
+            # title
+            # subtitle
+            # button_text
             # basic
             # saml
               # entry_point
             # auth0
               # client_secret
-              # domain
+              # entry_point
           # file_path
           # base_path
       t.json :config
@@ -95,16 +99,10 @@ class CreateDocsTable < ActiveRecord::Migration
             CREATE TRIGGER trigger_set_timestamp
             BEFORE INSERT OR UPDATE ON doc_builds
             FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
+            ALTER TABLE docs ALTER COLUMN id SET DATA TYPE bigint;
+            alter TABLE doc_builds ALTER COLUMN id SET DATA TYPE bigint;
         EOF
       end
-    else
-      execute %q{
-        ALTER TABLE doc_builds
-          ADD CONSTRAINT doc_builds_doc_id_fkey
-          FOREIGN KEY (doc_id)
-          REFERENCES docs (id)
-          ON DELETE CASCADE;
-      }
     end
 
     # docs indexes
