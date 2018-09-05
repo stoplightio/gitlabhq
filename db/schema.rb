@@ -805,6 +805,7 @@ ActiveRecord::Schema.define(version: 20180816143435) do
   end
 
   add_index "doc_builds", ["doc_id"], name: "index_doc_builds_on_doc_id", using: :btree
+  add_index "doc_builds", ["id"], name: "index_doc_builds_on_id", unique: true, using: :btree
 
   create_table "docs", id: :bigserial, force: :cascade do |t|
     t.integer  "project_id"
@@ -816,6 +817,7 @@ ActiveRecord::Schema.define(version: 20180816143435) do
   end
 
   add_index "docs", ["domain"], name: "index_docs_on_domain", unique: true, using: :btree
+  add_index "docs", ["id"], name: "index_docs_on_id", unique: true, using: :btree
   add_index "docs", ["project_id"], name: "index_docs_on_project_id", using: :btree
 
   create_table "domains_history", force: :cascade do |t|

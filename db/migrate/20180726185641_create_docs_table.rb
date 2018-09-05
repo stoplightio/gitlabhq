@@ -112,10 +112,12 @@ class CreateDocsTable < ActiveRecord::Migration
     end
 
     # docs indexes
+    add_index "docs", ["id"], name: "index_docs_on_id", using: :btree, unique: true
     add_index "docs", ["domain"], name: "index_docs_on_domain", using: :btree, unique: true
     add_index "docs", ["project_id"], name: "index_docs_on_project_id", using: :btree
 
     # doc_builds indexes
+    add_index "doc_builds", ["id"], name: "index_doc_builds_on_id", using: :btree, unique: true
     add_index "doc_builds", ["doc_id"], name: "index_doc_builds_on_doc_id", using: :btree
   end
 
