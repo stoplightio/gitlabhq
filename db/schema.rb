@@ -250,22 +250,6 @@ ActiveRecord::Schema.define(version: 20180816143435) do
 
   add_index "broadcast_messages", ["starts_at", "ends_at", "id"], name: "index_broadcast_messages_on_starts_at_and_ends_at_and_id", using: :btree
 
-  create_table "builds", force: :cascade do |t|
-    t.integer  "namespace_id"
-    t.integer  "project_id"
-    t.integer  "active_build_id"
-    t.string   "status"
-    t.string   "file_path"
-    t.string   "comment"
-    t.string   "commit"
-    t.string   "branch"
-    t.datetime "created_at",                   null: false
-    t.datetime "updated_at",                   null: false
-    t.jsonb    "config",          default: {}, null: false
-  end
-
-  add_index "builds", ["namespace_id"], name: "index_builds_on_namespace_id", using: :btree
-
   create_table "chat_names", force: :cascade do |t|
     t.integer  "user_id",      null: false
     t.integer  "service_id",   null: false
@@ -811,8 +795,8 @@ ActiveRecord::Schema.define(version: 20180816143435) do
   add_index "deployments", ["environment_id", "iid", "project_id"], name: "index_deployments_on_environment_id_and_iid_and_project_id", using: :btree
   add_index "deployments", ["project_id", "iid"], name: "index_deployments_on_project_id_and_iid", unique: true, using: :btree
 
-  create_table "doc_builds", force: :cascade do |t|
-    t.integer  "doc_id"
+  create_table "doc_builds", id: :bigserial, force: :cascade do |t|
+    t.integer  "doc_id",      limit: 8
     t.string   "app_version"
     t.json     "status"
     t.json     "config"
@@ -822,10 +806,9 @@ ActiveRecord::Schema.define(version: 20180816143435) do
 
   add_index "doc_builds", ["doc_id"], name: "index_doc_builds_on_doc_id", using: :btree
 
-  create_table "docs", force: :cascade do |t|
-    t.integer  "org_id"
+  create_table "docs", id: :bigserial, force: :cascade do |t|
     t.integer  "project_id"
-    t.integer  "live_build_id"
+    t.integer  "live_build_id", limit: 8
     t.string   "domain"
     t.json     "config"
     t.datetime "created_at"
@@ -834,21 +817,6 @@ ActiveRecord::Schema.define(version: 20180816143435) do
 
   add_index "docs", ["domain"], name: "index_docs_on_domain", unique: true, using: :btree
   add_index "docs", ["project_id"], name: "index_docs_on_project_id", using: :btree
-
-  create_table "domains", force: :cascade do |t|
-    t.integer  "namespace_id"
-    t.integer  "project_id"
-    t.integer  "active_build_id"
-    t.string   "hostname"
-    t.string   "ssl_path"
-    t.boolean  "custom_ssl"
-    t.datetime "created_at"
-    t.datetime "updated_at"
-  end
-
-  add_index "domains", ["hostname"], name: "index_domains_on_hostname", unique: true, using: :btree
-  add_index "domains", ["namespace_id"], name: "index_domains_on_namespace_id", using: :btree
-  add_index "domains", ["project_id"], name: "index_domains_on_project_id", using: :btree
 
   create_table "domains_history", force: :cascade do |t|
     t.integer  "domain_id"
@@ -1612,15 +1580,16 @@ ActiveRecord::Schema.define(version: 20180816143435) do
   add_index "personal_access_tokens", ["user_id"], name: "index_personal_access_tokens_on_user_id", using: :btree
 
   create_table "posts", force: :cascade do |t|
-    t.integer  "iid",                         null: false
-    t.integer  "project_id",                  null: false
-    t.integer  "creator_id",                  null: false
+    t.integer  "iid",                               null: false
+    t.integer  "project_id",                        null: false
+    t.integer  "creator_id",                        null: false
     t.integer  "file_id"
-    t.string   "state",      default: "open", null: false
-    t.string   "type",                        null: false
+    t.string   "state",            default: "open", null: false
+    t.string   "type",                              null: false
     t.string   "title"
     t.string   "body"
     t.string   "file_loc"
+    t.datetime "last_activity_at"
     t.datetime "created_at"
     t.datetime "updated_at"
   end
@@ -1999,6 +1968,11 @@ ActiveRecord::Schema.define(version: 20180816143435) do
 
   add_index "services", ["project_id"], name: "index_services_on_project_id", using: :btree
   add_index "services", ["template"], name: "index_services_on_template", using: :btree
+
+  create_table "sites_domains", id: false, force: :cascade do |t|
+    t.text "siteid"
+    t.text "domain"
+  end
 
   create_table "snippets", force: :cascade do |t|
     t.string   "title"
@@ -2403,7 +2377,6 @@ ActiveRecord::Schema.define(version: 20180816143435) do
   add_foreign_key "deploy_keys_projects", "projects", name: "fk_58a901ca7e", on_delete: :cascade
   add_foreign_key "deployments", "projects", name: "fk_b9a3851b82", on_delete: :cascade
   add_foreign_key "doc_builds", "docs", name: "doc_builds_doc_id_fkey", on_delete: :cascade
-  add_foreign_key "domains_history", "domains", name: "domains_history_domain_id_fkey", on_delete: :cascade
   add_foreign_key "environments", "projects", name: "fk_d1c8c1da6a", on_delete: :cascade
   add_foreign_key "events", "projects", on_delete: :cascade
   add_foreign_key "events", "users", column: "author_id", name: "fk_edfd187b6f", on_delete: :cascade

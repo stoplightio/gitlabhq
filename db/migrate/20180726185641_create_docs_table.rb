@@ -29,10 +29,14 @@ class CreateDocsTable < ActiveRecord::Migration
               # entry_point
           # file_path
           # base_path
+          # whitelabel
+          # custom_css
       t.json :config
 
       t.timestamps null: true
     end
+
+    change_column :docs, :id, :bigint, unique: true, null: false, auto_increment: true, primary_key: true
 
     create_table :doc_builds do |t|
       t.column :doc_id, :bigint
@@ -60,10 +64,14 @@ class CreateDocsTable < ActiveRecord::Migration
               # entry_point
           # file_path
           # base_path
+          # whitelabel
+          # custom_css
       t.json :config
 
       t.timestamps null: true
     end
+
+    change_column :doc_builds, :id, :bigint, unique: true, null: false, auto_increment: true, primary_key: true
 
     if Gitlab::Database.postgresql?
       execute %q{
