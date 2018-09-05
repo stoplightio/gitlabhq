@@ -99,8 +99,6 @@ class CreateDocsTable < ActiveRecord::Migration
             CREATE TRIGGER trigger_set_timestamp
             BEFORE INSERT OR UPDATE ON doc_builds
             FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
-            ALTER TABLE docs ALTER COLUMN id SET DATA TYPE bigint;
-            alter TABLE doc_builds ALTER COLUMN id SET DATA TYPE bigint;
         EOF
       end
     end
