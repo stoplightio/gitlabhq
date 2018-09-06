@@ -28,17 +28,17 @@ ActiveRecord::Schema.define(version: 20180816143435) do
   end
 
   create_table "appearances", force: :cascade do |t|
-    t.string   "title",                       null: false
-    t.text     "description",                 null: false
-    t.string   "header_logo"
-    t.string   "logo"
-    t.datetime "created_at",                  null: false
-    t.datetime "updated_at",                  null: false
-    t.text     "description_html"
-    t.integer  "cached_markdown_version"
-    t.text     "new_project_guidelines"
-    t.text     "new_project_guidelines_html"
-    t.string   "favicon"
+    t.string                 "title",                       null: false
+    t.text                   "description",                 null: false
+    t.string                 "header_logo"
+    t.string                 "logo"
+    t.datetime_with_timezone "created_at",                  null: false
+    t.datetime_with_timezone "updated_at",                  null: false
+    t.text                   "description_html"
+    t.integer                "cached_markdown_version"
+    t.text                   "new_project_guidelines"
+    t.text                   "new_project_guidelines_html"
+    t.string                 "favicon"
   end
 
   create_table "application_setting_terms", force: :cascade do |t|
@@ -345,10 +345,10 @@ ActiveRecord::Schema.define(version: 20180816143435) do
     t.integer  "auto_canceled_by_id"
     t.boolean  "retried"
     t.integer  "stage_id"
-    t.boolean  "protected"
-    t.integer  "failure_reason"
     t.integer  "artifacts_file_store"
     t.integer  "artifacts_metadata_store"
+    t.boolean  "protected"
+    t.integer  "failure_reason"
   end
 
   add_index "ci_builds", ["artifacts_expire_at"], name: "index_ci_builds_on_artifacts_expire_at", where: "(artifacts_file <> ''::text)", using: :btree
@@ -396,13 +396,13 @@ ActiveRecord::Schema.define(version: 20180816143435) do
     t.integer                "project_id",            null: false
     t.integer                "job_id",                null: false
     t.integer                "file_type",             null: false
+    t.integer                "file_store"
     t.integer                "size",        limit: 8
     t.datetime_with_timezone "created_at",            null: false
     t.datetime_with_timezone "updated_at",            null: false
     t.datetime_with_timezone "expire_at"
     t.string                 "file"
     t.binary                 "file_sha256"
-    t.integer                "file_store"
   end
 
   add_index "ci_job_artifacts", ["expire_at", "job_id"], name: "index_ci_job_artifacts_on_expire_at_and_job_id", using: :btree
@@ -795,7 +795,7 @@ ActiveRecord::Schema.define(version: 20180816143435) do
   add_index "deployments", ["environment_id", "iid", "project_id"], name: "index_deployments_on_environment_id_and_iid_and_project_id", using: :btree
   add_index "deployments", ["project_id", "iid"], name: "index_deployments_on_project_id_and_iid", unique: true, using: :btree
 
-  create_table "doc_builds", id: :bigserial, force: :cascade do |t|
+  create_table "doc_builds", force: :cascade do |t|
     t.integer  "doc_id",      limit: 8
     t.string   "app_version"
     t.json     "status"
@@ -805,9 +805,8 @@ ActiveRecord::Schema.define(version: 20180816143435) do
   end
 
   add_index "doc_builds", ["doc_id"], name: "index_doc_builds_on_doc_id", using: :btree
-  add_index "doc_builds", ["id"], name: "index_doc_builds_on_id", unique: true, using: :btree
 
-  create_table "docs", id: :bigserial, force: :cascade do |t|
+  create_table "docs", force: :cascade do |t|
     t.integer  "project_id"
     t.integer  "live_build_id", limit: 8
     t.string   "domain"
@@ -817,20 +816,7 @@ ActiveRecord::Schema.define(version: 20180816143435) do
   end
 
   add_index "docs", ["domain"], name: "index_docs_on_domain", unique: true, using: :btree
-  add_index "docs", ["id"], name: "index_docs_on_id", unique: true, using: :btree
   add_index "docs", ["project_id"], name: "index_docs_on_project_id", using: :btree
-
-  create_table "domains_history", force: :cascade do |t|
-    t.integer  "domain_id"
-    t.integer  "build_id"
-    t.string   "event"
-    t.json     "data"
-    t.datetime "created_at"
-    t.datetime "updated_at"
-  end
-
-  add_index "domains_history", ["build_id"], name: "index_domains_history_on_build_id", using: :btree
-  add_index "domains_history", ["domain_id"], name: "index_domains_history_on_domain_id", using: :btree
 
   create_table "emails", force: :cascade do |t|
     t.integer                "user_id",              null: false
@@ -872,6 +858,7 @@ ActiveRecord::Schema.define(version: 20180816143435) do
 
   add_index "events", ["action"], name: "index_events_on_action", using: :btree
   add_index "events", ["author_id", "project_id"], name: "index_events_on_author_id_and_project_id", using: :btree
+  add_index "events", ["author_id"], name: "index_events_on_author_id", using: :btree
   add_index "events", ["project_id", "id"], name: "index_events_on_project_id_and_id", using: :btree
   add_index "events", ["target_type", "target_id"], name: "index_events_on_target_type_and_target_id", using: :btree
 
@@ -1040,30 +1027,30 @@ ActiveRecord::Schema.define(version: 20180816143435) do
   add_index "issue_metrics", ["issue_id"], name: "index_issue_metrics", using: :btree
 
   create_table "issues", force: :cascade do |t|
-    t.string   "title"
-    t.integer  "author_id"
-    t.integer  "project_id"
-    t.datetime "created_at"
-    t.datetime "updated_at"
-    t.text     "description"
-    t.integer  "milestone_id"
-    t.string   "state"
-    t.integer  "iid"
-    t.integer  "updated_by_id"
-    t.boolean  "confidential",            default: false, null: false
-    t.date     "due_date"
-    t.integer  "moved_to_id"
-    t.integer  "lock_version"
-    t.text     "title_html"
-    t.text     "description_html"
-    t.integer  "time_estimate"
-    t.integer  "relative_position"
-    t.integer  "cached_markdown_version"
-    t.datetime "last_edited_at"
-    t.integer  "last_edited_by_id"
-    t.boolean  "discussion_locked"
-    t.integer  "closed_by_id"
-    t.integer  "org_id"
+    t.string                 "title"
+    t.integer                "author_id"
+    t.integer                "project_id"
+    t.datetime               "created_at"
+    t.datetime               "updated_at"
+    t.text                   "description"
+    t.integer                "milestone_id"
+    t.string                 "state"
+    t.integer                "iid"
+    t.integer                "updated_by_id"
+    t.boolean                "confidential",            default: false, null: false
+    t.date                   "due_date"
+    t.integer                "moved_to_id"
+    t.integer                "lock_version"
+    t.text                   "title_html"
+    t.text                   "description_html"
+    t.integer                "time_estimate"
+    t.integer                "relative_position"
+    t.integer                "cached_markdown_version"
+    t.datetime               "last_edited_at"
+    t.integer                "last_edited_by_id"
+    t.boolean                "discussion_locked"
+    t.datetime_with_timezone "closed_at"
+    t.integer                "closed_by_id"
   end
 
   add_index "issues", ["author_id"], name: "index_issues_on_author_id", using: :btree
@@ -1302,8 +1289,8 @@ ActiveRecord::Schema.define(version: 20180816143435) do
     t.boolean  "discussion_locked"
     t.integer  "latest_merge_request_diff_id"
     t.string   "rebase_commit_sha"
-    t.boolean  "allow_maintainer_to_push"
     t.boolean  "squash",                       default: false,       null: false
+    t.boolean  "allow_maintainer_to_push"
   end
 
   add_index "merge_requests", ["assignee_id"], name: "index_merge_requests_on_assignee_id", using: :btree
@@ -1612,12 +1599,12 @@ ActiveRecord::Schema.define(version: 20180816143435) do
   add_index "project_authorizations", ["user_id", "project_id", "access_level"], name: "index_project_authorizations_on_user_id_project_id_access_level", unique: true, using: :btree
 
   create_table "project_auto_devops", force: :cascade do |t|
-    t.integer  "project_id",                  null: false
-    t.datetime "created_at",                  null: false
-    t.datetime "updated_at",                  null: false
-    t.boolean  "enabled"
-    t.string   "domain"
-    t.integer  "deploy_strategy", default: 0, null: false
+    t.integer                "project_id",                  null: false
+    t.datetime_with_timezone "created_at",                  null: false
+    t.datetime_with_timezone "updated_at",                  null: false
+    t.boolean                "enabled"
+    t.string                 "domain"
+    t.integer                "deploy_strategy", default: 0, null: false
   end
 
   add_index "project_auto_devops", ["project_id"], name: "index_project_auto_devops_on_project_id", unique: true, using: :btree
@@ -1787,7 +1774,6 @@ ActiveRecord::Schema.define(version: 20180816143435) do
     t.boolean  "merge_requests_rebase_enabled",                              default: false,     null: false
     t.integer  "jobs_cache_index"
     t.boolean  "pages_https_only",                                           default: true
-    t.json     "provider"
     t.boolean  "is_released",                                                default: false
     t.boolean  "remote_mirror_available_overridden"
   end
@@ -1970,11 +1956,6 @@ ActiveRecord::Schema.define(version: 20180816143435) do
 
   add_index "services", ["project_id"], name: "index_services_on_project_id", using: :btree
   add_index "services", ["template"], name: "index_services_on_template", using: :btree
-
-  create_table "sites_domains", id: false, force: :cascade do |t|
-    t.text "siteid"
-    t.text "domain"
-  end
 
   create_table "snippets", force: :cascade do |t|
     t.string   "title"
@@ -2257,8 +2238,8 @@ ActiveRecord::Schema.define(version: 20180816143435) do
     t.boolean  "notified_of_own_activity"
     t.string   "preferred_language"
     t.integer  "theme_id",                                     limit: 2
-    t.string   "feed_token"
     t.integer  "accepted_term_id"
+    t.string   "feed_token"
   end
 
   add_index "users", ["admin"], name: "index_users_on_admin", using: :btree
