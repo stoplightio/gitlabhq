@@ -9,7 +9,7 @@ class CreateDocsTable < ActiveRecord::Migration
   def up
     create_table :docs do |t|
       t.integer :project_id
-      t.column :live_build_id, :bigint
+      t.integer :live_build_id
       t.string :domain
 
       # config
@@ -37,7 +37,7 @@ class CreateDocsTable < ActiveRecord::Migration
     end
 
     create_table :doc_builds do |t|
-      t.column :doc_id, :bigint
+      t.integer :doc_id
       t.string :app_version
 
       # status
