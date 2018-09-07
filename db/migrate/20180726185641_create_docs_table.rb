@@ -66,7 +66,7 @@ class CreateDocsTable < ActiveRecord::Migration
           # custom_css
       t.json :config
 
-      t.timestamps null: true
+      t.datetime :created_at, null: true
     end
 
     if Gitlab::Database.postgresql?
@@ -81,6 +81,19 @@ class CreateDocsTable < ActiveRecord::Migration
 
       ActiveRecord::Base.transaction do
         execute <<-EOF
+            CREATE OR REPLACE FUNCTION trigger_set_created_at()
+            RETURNS trigger AS
+            $BODY$
+            BEGIN
+              IF NEW.created_at IS NULL then
+                NEW.created_at = NOW();
+              END IF;
+              RETURN NEW;
+            END;
+            $BODY$
+            LANGUAGE 'plpgsql'
+            VOLATILE;
+
             CREATE OR REPLACE FUNCTION trigger_set_timestamp()
             RETURNS trigger AS
             $BODY$
@@ -100,9 +113,9 @@ class CreateDocsTable < ActiveRecord::Migration
             BEFORE INSERT OR UPDATE ON docs
             FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
 
-            CREATE TRIGGER trigger_set_timestamp
-            BEFORE INSERT OR UPDATE ON doc_builds
-            FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
+            CREATE TRIGGER trigger_set_created_at
+            BEFORE INSERT ON doc_builds
+            FOR EACH ROW EXECUTE PROCEDURE trigger_set_created_at();
         EOF
       end
     end
@@ -122,8 +135,9 @@ class CreateDocsTable < ActiveRecord::Migration
     if Gitlab::Database.postgresql?
       execute <<-EOF
         DROP TRIGGER IF EXISTS trigger_set_timestamp ON docs;
-        DROP TRIGGER IF EXISTS trigger_set_timestamp ON doc_builds;
+        DROP TRIGGER IF EXISTS trigger_set_created_at ON doc_builds;
         DROP FUNCTION IF EXISTS trigger_set_timestamp();
+        DROP FUNCTION IF EXISTS trigger_set_created_at();
       EOF
     end
   end
