@@ -796,7 +796,7 @@ ActiveRecord::Schema.define(version: 20180816143435) do
   add_index "deployments", ["project_id", "iid"], name: "index_deployments_on_project_id_and_iid", unique: true, using: :btree
 
   create_table "doc_builds", force: :cascade do |t|
-    t.integer  "doc_id",      limit: 8
+    t.integer  "doc_id"
     t.string   "app_version"
     t.json     "status"
     t.json     "config"
@@ -807,7 +807,7 @@ ActiveRecord::Schema.define(version: 20180816143435) do
 
   create_table "docs", force: :cascade do |t|
     t.integer  "project_id"
-    t.integer  "live_build_id", limit: 8
+    t.integer  "live_build_id"
     t.string   "domain"
     t.json     "config"
     t.datetime "created_at"
