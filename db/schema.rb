@@ -11,7 +11,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20180816143435) do
+ActiveRecord::Schema.define(version: 20180911230108) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -1671,7 +1671,6 @@ ActiveRecord::Schema.define(version: 20180816143435) do
     t.datetime "updated_at"
   end
 
-  add_index "project_files", ["branch", "path"], name: "index_project_files_on_branch_and_path", unique: true, using: :btree
   add_index "project_files", ["project_id"], name: "index_project_files_on_project_id", using: :btree
 
   create_table "project_group_links", force: :cascade do |t|
