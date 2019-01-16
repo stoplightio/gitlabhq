@@ -11,7 +11,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20180911230108) do
+ActiveRecord::Schema.define(version: 20190116182055) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -235,6 +235,9 @@ ActiveRecord::Schema.define(version: 20180911230108) do
 
   add_index "boards", ["group_id"], name: "index_boards_on_group_id", using: :btree
   add_index "boards", ["project_id"], name: "index_boards_on_project_id", using: :btree
+
+# Could not dump table "branches" because of following StandardError
+#   Unknown type 'branch_type' for column 'branch_type'
 
   create_table "broadcast_messages", force: :cascade do |t|
     t.text     "message",                 null: false
@@ -706,6 +709,17 @@ ActiveRecord::Schema.define(version: 20180911230108) do
 
   add_index "comments", ["created_at"], name: "index_comments_on_created_at", using: :btree
   add_index "comments", ["parent_type", "parent_id"], name: "index_comments_on_parent_type_and_parent_id", using: :btree
+
+  create_table "commit_branches", force: :cascade do |t|
+    t.text     "commit_sha",   null: false
+    t.integer  "branch_id",    null: false
+    t.datetime "committed_at", null: false
+  end
+
+  add_index "commit_branches", ["commit_sha", "branch_id"], name: "commit_branches_commit_sha_branch_id_idx", unique: true, using: :btree
+
+# Could not dump table "commits" because of following StandardError
+#   Unknown type 'commit_status' for column 'status'
 
   create_table "container_repositories", force: :cascade do |t|
     t.integer  "project_id", null: false
@@ -1400,6 +1414,23 @@ ActiveRecord::Schema.define(version: 20180911230108) do
   add_index "namespaces", ["runners_token"], name: "index_namespaces_on_runners_token", unique: true, using: :btree
   add_index "namespaces", ["type"], name: "index_namespaces_on_type", using: :btree
 
+# Could not dump table "node_edges" because of following StandardError
+#   Unknown type 'node_edge_type' for column 'type'
+
+# Could not dump table "node_history" because of following StandardError
+#   Unknown type 'node_history_change_type' for column 'change_type'
+
+  create_table "node_history_validations", force: :cascade do |t|
+    t.integer  "node_history_id",                   null: false
+    t.jsonb    "data",                              null: false
+    t.datetime "created_at",      default: "now()", null: false
+  end
+
+  add_index "node_history_validations", ["node_history_id", "data"], name: "node_history_validations_node_hist_id_data_idx", unique: true, using: :btree
+
+# Could not dump table "nodes" because of following StandardError
+#   Unknown type 'node_type' for column 'type'
+
   create_table "note_diff_files", force: :cascade do |t|
     t.integer "diff_note_id", null: false
     t.text    "diff",         null: false
@@ -1912,6 +1943,9 @@ ActiveRecord::Schema.define(version: 20180911230108) do
   add_index "remote_mirrors", ["last_successful_update_at"], name: "index_remote_mirrors_on_last_successful_update_at", using: :btree
   add_index "remote_mirrors", ["project_id"], name: "index_remote_mirrors_on_project_id", using: :btree
 
+# Could not dump table "repos" because of following StandardError
+#   Unknown type 'provider' for column 'provider'
+
   create_table "routes", force: :cascade do |t|
     t.integer  "source_id",   null: false
     t.string   "source_type", null: false
@@ -2282,6 +2316,9 @@ ActiveRecord::Schema.define(version: 20180911230108) do
   add_index "users_star_projects", ["project_id"], name: "index_users_star_projects_on_project_id", using: :btree
   add_index "users_star_projects", ["user_id", "project_id"], name: "index_users_star_projects_on_user_id_and_project_id", unique: true, using: :btree
 
+# Could not dump table "vcs_users" because of following StandardError
+#   Unknown type 'provider' for column 'provider'
+
   create_table "web_hook_logs", force: :cascade do |t|
     t.integer  "web_hook_id",            null: false
     t.string   "trigger"
@@ -2328,6 +2365,7 @@ ActiveRecord::Schema.define(version: 20180911230108) do
   add_foreign_key "badges", "projects", on_delete: :cascade
   add_foreign_key "boards", "namespaces", column: "group_id", on_delete: :cascade
   add_foreign_key "boards", "projects", name: "fk_f15266b5f9", on_delete: :cascade
+  add_foreign_key "branches", "repos", name: "branches_repo_id_fkey"
   add_foreign_key "chat_teams", "namespaces", on_delete: :cascade
   add_foreign_key "ci_build_trace_chunks", "ci_builds", column: "build_id", on_delete: :cascade
   add_foreign_key "ci_build_trace_section_names", "projects", on_delete: :cascade
@@ -2371,10 +2409,16 @@ ActiveRecord::Schema.define(version: 20180911230108) do
   add_foreign_key "clusters_applications_prometheus", "clusters", name: "fk_557e773639", on_delete: :cascade
   add_foreign_key "clusters_applications_runners", "ci_runners", column: "runner_id", name: "fk_02de2ded36", on_delete: :nullify
   add_foreign_key "clusters_applications_runners", "clusters", on_delete: :cascade
+  add_foreign_key "comments", "posts", column: "parent_id", name: "comments_parent_id_fkey", on_delete: :cascade
+  add_foreign_key "commit_branches", "branches", name: "commit_branches_branch_id"
+  add_foreign_key "commit_branches", "commits", column: "commit_sha", primary_key: "commit_sha", name: "commit_branches_commit_sha"
+  add_foreign_key "commits", "vcs_users", column: "author_vcs_user_id", name: "commits_author_vcs_user_id_fkey"
+  add_foreign_key "commits", "vcs_users", column: "committer_vcs_user_id", name: "commits_committer_vcs_user_id_fkey"
   add_foreign_key "container_repositories", "projects"
   add_foreign_key "deploy_keys_projects", "projects", name: "fk_58a901ca7e", on_delete: :cascade
   add_foreign_key "deployments", "projects", name: "fk_b9a3851b82", on_delete: :cascade
   add_foreign_key "doc_builds", "docs", name: "doc_builds_doc_id_fkey", on_delete: :cascade
+  add_foreign_key "docs", "projects", name: "docs_project_id_fkey", on_delete: :cascade
   add_foreign_key "environments", "projects", name: "fk_d1c8c1da6a", on_delete: :cascade
   add_foreign_key "events", "projects", on_delete: :cascade
   add_foreign_key "events", "users", column: "author_id", name: "fk_edfd187b6f", on_delete: :cascade
@@ -2432,6 +2476,12 @@ ActiveRecord::Schema.define(version: 20180911230108) do
   add_foreign_key "merge_requests_closing_issues", "merge_requests", on_delete: :cascade
   add_foreign_key "milestones", "namespaces", column: "group_id", name: "fk_95650a40d4", on_delete: :cascade
   add_foreign_key "milestones", "projects", name: "fk_9bd0a0c791", on_delete: :cascade
+  add_foreign_key "node_edges", "nodes", column: "from_node_id", name: "node_relationships_from_id_fkey"
+  add_foreign_key "node_edges", "nodes", column: "to_node_id", name: "node_relationships_to_id_fkey"
+  add_foreign_key "node_history", "commits", column: "commit_sha", primary_key: "commit_sha", name: "node_history_commit_sha_fkey"
+  add_foreign_key "node_history", "nodes", name: "node_history_node_id_fkey"
+  add_foreign_key "node_history_validations", "node_history", name: "node_history_validations_node_history_id_fkey"
+  add_foreign_key "nodes", "repos", name: "nodes_repo_id_fkey"
   add_foreign_key "note_diff_files", "notes", column: "diff_note_id", on_delete: :cascade
   add_foreign_key "notes", "projects", name: "fk_99e097b079", on_delete: :cascade
   add_foreign_key "oauth_openid_requests", "oauth_access_grants", column: "access_grant_id", name: "fk_oauth_openid_requests_oauth_access_grants_access_grant_id"
@@ -2454,6 +2504,7 @@ ActiveRecord::Schema.define(version: 20180911230108) do
   add_foreign_key "project_mirror_data", "projects", on_delete: :cascade
   add_foreign_key "project_providers", "projects", on_delete: :cascade
   add_foreign_key "project_statistics", "projects", on_delete: :cascade
+  add_foreign_key "projects", "namespaces", name: "project_namespace_id_fkey", on_delete: :cascade
   add_foreign_key "protected_branch_merge_access_levels", "protected_branches", name: "fk_8a3072ccb3", on_delete: :cascade
   add_foreign_key "protected_branch_push_access_levels", "protected_branches", name: "fk_9ffc86a3d9", on_delete: :cascade
   add_foreign_key "protected_branches", "projects", name: "fk_7a9c6d93e7", on_delete: :cascade
@@ -2464,6 +2515,7 @@ ActiveRecord::Schema.define(version: 20180911230108) do
   add_foreign_key "push_event_payloads", "events", name: "fk_36c74129da", on_delete: :cascade
   add_foreign_key "releases", "projects", name: "fk_47fe2a0596", on_delete: :cascade
   add_foreign_key "remote_mirrors", "projects", on_delete: :cascade
+  add_foreign_key "repos", "projects", name: "repos_project_id_fkey"
   add_foreign_key "services", "projects", name: "fk_71cce407f9", on_delete: :cascade
   add_foreign_key "snippets", "projects", name: "fk_be41fd4bb7", on_delete: :cascade
   add_foreign_key "subscriptions", "projects", on_delete: :cascade
@@ -2485,6 +2537,7 @@ ActiveRecord::Schema.define(version: 20180911230108) do
   add_foreign_key "user_synced_attributes_metadata", "users", on_delete: :cascade
   add_foreign_key "users", "application_setting_terms", column: "accepted_term_id", name: "fk_789cd90b35", on_delete: :cascade
   add_foreign_key "users_star_projects", "projects", name: "fk_22cd27ddfc", on_delete: :cascade
+  add_foreign_key "vcs_users", "users", name: "vcs_users_user_id_fkey"
   add_foreign_key "web_hook_logs", "web_hooks", on_delete: :cascade
   add_foreign_key "web_hooks", "projects", name: "fk_0c8ca6d9d1", on_delete: :cascade
 end
