@@ -710,16 +710,16 @@ ActiveRecord::Schema.define(version: 20190116182055) do
   add_index "comments", ["created_at"], name: "index_comments_on_created_at", using: :btree
   add_index "comments", ["parent_type", "parent_id"], name: "index_comments_on_parent_type_and_parent_id", using: :btree
 
-  create_table "commit_branches", force: :cascade do |t|
-    t.text     "commit_sha",   null: false
-    t.integer  "branch_id",    null: false
-    t.datetime "committed_at", null: false
+# Could not dump table "commit_branches" because of following StandardError
+#   Unknown type 'analyzer_status' for column 'analyzer_status'
+
+  create_table "commits", primary_key: "commit_sha", force: :cascade do |t|
+    t.text     "message",               null: false
+    t.integer  "author_vcs_user_id",    null: false
+    t.integer  "committer_vcs_user_id", null: false
+    t.datetime "created_at",            null: false
+    t.datetime "updated_at",            null: false
   end
-
-  add_index "commit_branches", ["commit_sha", "branch_id"], name: "commit_branches_commit_sha_branch_id_idx", unique: true, using: :btree
-
-# Could not dump table "commits" because of following StandardError
-#   Unknown type 'commit_status' for column 'status'
 
   create_table "container_repositories", force: :cascade do |t|
     t.integer  "project_id", null: false

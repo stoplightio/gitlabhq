@@ -57,8 +57,8 @@ class AddDiscoveryTables < ActiveRecord::Migration
           'PUBLIC'
         );
         
-        DROP TYPE IF EXISTS commit_status;
-        CREATE TYPE commit_status AS ENUM (
+        DROP TYPE IF EXISTS analyzer_status;
+        CREATE TYPE analyzer_status AS ENUM (
           'RUNNING',
           'COMPLETED',
           'FAILED'
@@ -104,7 +104,6 @@ class AddDiscoveryTables < ActiveRecord::Migration
           message text NOT NULL,
           author_vcs_user_id int4 NOT NULL,
           committer_vcs_user_id int4 NOT NULL,
-          status commit_status NOT NULL,
           created_at timestamp NOT NULL,
           updated_at timestamp NOT NULL,
           CONSTRAINT commits_pkey PRIMARY KEY (commit_sha),
@@ -160,6 +159,8 @@ class AddDiscoveryTables < ActiveRecord::Migration
           commit_sha text NOT NULL,
           branch_id int4 NOT NULL,
           committed_at timestamp NOT NULL,
+          analyzer_status analyzer_status NOT NULL,
+          analyzer_job_id text NOT NULL,
           CONSTRAINT commit_branches_pkey PRIMARY KEY (id),
           CONSTRAINT commit_branches_branch_id FOREIGN KEY (branch_id) REFERENCES branches(id),
           CONSTRAINT commit_branches_commit_sha FOREIGN KEY (commit_sha) REFERENCES commits(commit_sha)
@@ -259,7 +260,7 @@ class AddDiscoveryTables < ActiveRecord::Migration
 
         DROP TABLE IF EXISTS repos;
 
-        DROP TYPE IF EXISTS commit_status;
+        DROP TYPE IF EXISTS analyzer_status;
 
         DROP TYPE IF EXISTS node_visibility;
 
