@@ -74,6 +74,7 @@ class AddDiscoveryTables < ActiveRecord::Migration
           CONSTRAINT repos_pkey PRIMARY KEY (id),
           CONSTRAINT repos_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id)
         );
+        CREATE UNIQUE INDEX IF NOT EXISTS repos_repo_location_idx ON repos USING btree (repo_location);
         
         CREATE
             TRIGGER trigger_set_timestamp BEFORE INSERT
@@ -161,11 +162,19 @@ class AddDiscoveryTables < ActiveRecord::Migration
           committed_at timestamp NOT NULL,
           analyzer_status analyzer_status NOT NULL,
           analyzer_job_id text NOT NULL,
+          created_at timestamp NOT NULL,
+          updated_at timestamp NOT NULL, 
           CONSTRAINT commit_branches_pkey PRIMARY KEY (id),
           CONSTRAINT commit_branches_branch_id FOREIGN KEY (branch_id) REFERENCES branches(id),
           CONSTRAINT commit_branches_commit_sha FOREIGN KEY (commit_sha) REFERENCES commits(commit_sha)
         );
         CREATE UNIQUE INDEX IF NOT EXISTS commit_branches_commit_sha_branch_id_idx ON commit_branches USING btree (commit_sha, branch_id);
+
+        CREATE
+            TRIGGER trigger_set_timestamp BEFORE INSERT
+                OR UPDATE
+                    ON
+                    commit_branches FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
         
         CREATE TABLE IF NOT EXISTS node_history (
           id serial NOT NULL,
