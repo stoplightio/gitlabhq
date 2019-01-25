@@ -84,7 +84,7 @@ class AddDiscoveryTables < ActiveRecord::Migration
         
         CREATE TABLE IF NOT EXISTS vcs_users (
           id serial NOT NULL,
-          username text NOT NULL,
+          email text NOT NULL,
           provider provider NOT NULL,
           user_id int4,
           created_at timestamp NOT NULL,
@@ -92,7 +92,7 @@ class AddDiscoveryTables < ActiveRecord::Migration
           CONSTRAINT vcs_users_pkey PRIMARY KEY (id),
           CONSTRAINT vcs_users_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id)
         );
-        CREATE UNIQUE INDEX IF NOT EXISTS vcs_users_username_provider_idx ON vcs_users USING btree (username, provider);
+        CREATE UNIQUE INDEX IF NOT EXISTS vcs_users_email_provider_idx ON vcs_users USING btree (email, provider);
         
         CREATE
             TRIGGER trigger_set_timestamp BEFORE INSERT
