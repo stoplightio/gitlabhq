@@ -30,7 +30,8 @@ class AddDiscoveryTables < ActiveRecord::Migration
         CREATE TYPE node_history_change_type AS ENUM (
           'MAJOR',
           'MINOR',
-          'PATCH'
+          'PATCH',
+          'UNKNOWN'
         );
         
         DROP TYPE IF EXISTS provider;
