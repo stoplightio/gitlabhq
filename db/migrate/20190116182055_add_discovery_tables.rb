@@ -12,7 +12,7 @@ class AddDiscoveryTables < ActiveRecord::Migration
         CREATE TYPE node_type AS ENUM (
           'http_server',
           'http_service',
-          'model',
+          'json_schema',
           'article',
           'http_operation'
         );
