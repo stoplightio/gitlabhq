@@ -831,18 +831,6 @@ ActiveRecord::Schema.define(version: 20190116182055) do
   add_index "docs", ["domain"], name: "index_docs_on_domain", unique: true, using: :btree
   add_index "docs", ["project_id"], name: "index_docs_on_project_id", using: :btree
 
-  create_table "domains_history", force: :cascade do |t|
-    t.integer  "domain_id"
-    t.integer  "build_id"
-    t.string   "event"
-    t.json     "data"
-    t.datetime "created_at"
-    t.datetime "updated_at"
-  end
-
-  add_index "domains_history", ["build_id"], name: "index_domains_history_on_build_id", using: :btree
-  add_index "domains_history", ["domain_id"], name: "index_domains_history_on_domain_id", using: :btree
-
   create_table "emails", force: :cascade do |t|
     t.integer                "user_id",              null: false
     t.string                 "email",                null: false
@@ -1074,7 +1062,6 @@ ActiveRecord::Schema.define(version: 20190116182055) do
     t.integer  "last_edited_by_id"
     t.boolean  "discussion_locked"
     t.integer  "closed_by_id"
-    t.integer  "org_id"
   end
 
   add_index "issues", ["author_id"], name: "index_issues_on_author_id", using: :btree
@@ -1814,9 +1801,8 @@ ActiveRecord::Schema.define(version: 20190116182055) do
     t.boolean  "merge_requests_rebase_enabled",                              default: false,     null: false
     t.integer  "jobs_cache_index"
     t.boolean  "pages_https_only",                                           default: true
-    t.json     "provider"
-    t.boolean  "is_released",                                                default: false
     t.boolean  "remote_mirror_available_overridden"
+    t.boolean  "is_released",                                                default: false
   end
 
   add_index "projects", ["ci_id"], name: "index_projects_on_ci_id", using: :btree
@@ -2000,11 +1986,6 @@ ActiveRecord::Schema.define(version: 20190116182055) do
 
   add_index "services", ["project_id"], name: "index_services_on_project_id", using: :btree
   add_index "services", ["template"], name: "index_services_on_template", using: :btree
-
-  create_table "sites_domains", id: false, force: :cascade do |t|
-    t.text "siteid"
-    t.text "domain"
-  end
 
   create_table "snippets", force: :cascade do |t|
     t.string   "title"
@@ -2365,7 +2346,8 @@ ActiveRecord::Schema.define(version: 20190116182055) do
   add_foreign_key "badges", "projects", on_delete: :cascade
   add_foreign_key "boards", "namespaces", column: "group_id", on_delete: :cascade
   add_foreign_key "boards", "projects", name: "fk_f15266b5f9", on_delete: :cascade
-  add_foreign_key "branches", "repos", name: "branches_repo_id_fkey"
+  add_foreign_key "branches", "projects", name: "branches_project_id_fkey", on_delete: :cascade
+  add_foreign_key "branches", "repos", name: "branches_repo_id_fkey", on_delete: :cascade
   add_foreign_key "chat_teams", "namespaces", on_delete: :cascade
   add_foreign_key "ci_build_trace_chunks", "ci_builds", column: "build_id", on_delete: :cascade
   add_foreign_key "ci_build_trace_section_names", "projects", on_delete: :cascade
@@ -2410,7 +2392,7 @@ ActiveRecord::Schema.define(version: 20190116182055) do
   add_foreign_key "clusters_applications_runners", "ci_runners", column: "runner_id", name: "fk_02de2ded36", on_delete: :nullify
   add_foreign_key "clusters_applications_runners", "clusters", on_delete: :cascade
   add_foreign_key "comments", "posts", column: "parent_id", name: "comments_parent_id_fkey", on_delete: :cascade
-  add_foreign_key "commit_branches", "branches", name: "commit_branches_branch_id"
+  add_foreign_key "commit_branches", "branches", name: "commit_branches_branch_id", on_delete: :cascade
   add_foreign_key "commit_branches", "commits", column: "commit_sha", primary_key: "commit_sha", name: "commit_branches_commit_sha"
   add_foreign_key "commits", "vcs_users", column: "author_vcs_user_id", name: "commits_author_vcs_user_id_fkey"
   add_foreign_key "commits", "vcs_users", column: "committer_vcs_user_id", name: "commits_committer_vcs_user_id_fkey"
@@ -2476,12 +2458,13 @@ ActiveRecord::Schema.define(version: 20190116182055) do
   add_foreign_key "merge_requests_closing_issues", "merge_requests", on_delete: :cascade
   add_foreign_key "milestones", "namespaces", column: "group_id", name: "fk_95650a40d4", on_delete: :cascade
   add_foreign_key "milestones", "projects", name: "fk_9bd0a0c791", on_delete: :cascade
-  add_foreign_key "node_edges", "nodes", column: "from_node_id", name: "node_relationships_from_id_fkey"
-  add_foreign_key "node_edges", "nodes", column: "to_node_id", name: "node_relationships_to_id_fkey"
-  add_foreign_key "node_history", "commits", column: "commit_sha", primary_key: "commit_sha", name: "node_history_commit_sha_fkey"
-  add_foreign_key "node_history", "nodes", name: "node_history_node_id_fkey"
-  add_foreign_key "node_history_validations", "node_history", name: "node_history_validations_node_history_id_fkey"
-  add_foreign_key "nodes", "repos", name: "nodes_repo_id_fkey"
+  add_foreign_key "node_edges", "nodes", column: "from_node_id", name: "node_relationships_from_id_fkey", on_delete: :cascade
+  add_foreign_key "node_edges", "nodes", column: "to_node_id", name: "node_relationships_to_id_fkey", on_delete: :cascade
+  add_foreign_key "node_history", "commits", column: "commit_sha", primary_key: "commit_sha", name: "node_history_commit_sha_fkey", on_delete: :cascade
+  add_foreign_key "node_history", "nodes", name: "node_history_node_id_fkey", on_delete: :cascade
+  add_foreign_key "node_history_validations", "node_history", name: "node_history_validations_node_history_id_fkey", on_delete: :cascade
+  add_foreign_key "nodes", "projects", name: "nodes_project_id_fkey", on_delete: :cascade
+  add_foreign_key "nodes", "repos", name: "nodes_repo_id_fkey", on_delete: :cascade
   add_foreign_key "note_diff_files", "notes", column: "diff_note_id", on_delete: :cascade
   add_foreign_key "notes", "projects", name: "fk_99e097b079", on_delete: :cascade
   add_foreign_key "oauth_openid_requests", "oauth_access_grants", column: "access_grant_id", name: "fk_oauth_openid_requests_oauth_access_grants_access_grant_id"
@@ -2515,7 +2498,7 @@ ActiveRecord::Schema.define(version: 20190116182055) do
   add_foreign_key "push_event_payloads", "events", name: "fk_36c74129da", on_delete: :cascade
   add_foreign_key "releases", "projects", name: "fk_47fe2a0596", on_delete: :cascade
   add_foreign_key "remote_mirrors", "projects", on_delete: :cascade
-  add_foreign_key "repos", "projects", name: "repos_project_id_fkey"
+  add_foreign_key "repos", "projects", name: "repos_project_id_fkey", on_delete: :cascade
   add_foreign_key "services", "projects", name: "fk_71cce407f9", on_delete: :cascade
   add_foreign_key "snippets", "projects", name: "fk_be41fd4bb7", on_delete: :cascade
   add_foreign_key "subscriptions", "projects", on_delete: :cascade
@@ -2537,7 +2520,7 @@ ActiveRecord::Schema.define(version: 20190116182055) do
   add_foreign_key "user_synced_attributes_metadata", "users", on_delete: :cascade
   add_foreign_key "users", "application_setting_terms", column: "accepted_term_id", name: "fk_789cd90b35", on_delete: :cascade
   add_foreign_key "users_star_projects", "projects", name: "fk_22cd27ddfc", on_delete: :cascade
-  add_foreign_key "vcs_users", "users", name: "vcs_users_user_id_fkey"
+  add_foreign_key "vcs_users", "users", name: "vcs_users_user_id_fkey", on_delete: :cascade
   add_foreign_key "web_hook_logs", "web_hooks", on_delete: :cascade
   add_foreign_key "web_hooks", "projects", name: "fk_0c8ca6d9d1", on_delete: :cascade
 end
