@@ -17,8 +17,8 @@ class AddDiscoveryTables < ActiveRecord::Migration
           'http_operation'
         );
 
-        DROP TYPE IF EXISTS node_edge_type;
-        CREATE TYPE node_edge_type AS ENUM (
+        DROP TYPE IF EXISTS node_version_edge_type;
+        CREATE TYPE node_version_edge_type AS ENUM (
           'LINKS_TO',
           'REFERENCES',
           'SERVED_BY',
@@ -26,8 +26,8 @@ class AddDiscoveryTables < ActiveRecord::Migration
           'IS_PARENT'
         );
 
-        DROP TYPE IF EXISTS node_history_change_type;
-        CREATE TYPE node_history_change_type AS ENUM (
+        DROP TYPE IF EXISTS semver;
+        CREATE TYPE semver AS ENUM (
           'MAJOR',
           'MINOR',
           'PATCH',
@@ -44,15 +44,15 @@ class AddDiscoveryTables < ActiveRecord::Migration
           'LIVE'
         );
 
-        DROP TYPE IF EXISTS node_history_action;
-        CREATE TYPE node_history_action AS ENUM (
+        DROP TYPE IF EXISTS node_version_history_action;
+        CREATE TYPE node_version_history_action AS ENUM (
           'ADDED',
           'MODIFIED',
           'REMOVED'
         );
 
-        DROP TYPE IF EXISTS node_visibility;
-        CREATE TYPE node_visibility AS ENUM (
+        DROP TYPE IF EXISTS visibility;
+        CREATE TYPE visibility AS ENUM (
           'INTERNAL',
           'PRIVATE',
           'PUBLIC'
@@ -63,6 +63,18 @@ class AddDiscoveryTables < ActiveRecord::Migration
           'RUNNING',
           'COMPLETED',
           'FAILED'
+        );
+
+        DROP TYPE IF EXISTS validation_severity;
+        CREATE TYPE validation_severity AS ENUM (
+          'info',
+          'warn',
+          'error'
+        );
+
+        DROP TYPE IF EXISTS change_code;
+        CREATE TYPE change_code AS ENUM (
+          'UNKNOWN'
         );
 
         CREATE TABLE IF NOT EXISTS repos (
@@ -102,16 +114,18 @@ class AddDiscoveryTables < ActiveRecord::Migration
                     vcs_users FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
 
         CREATE TABLE IF NOT EXISTS commits (
+          id serial NOT NULL,
           commit_sha text NOT NULL,
           message text NOT NULL,
           author_vcs_user_id int4 NOT NULL,
           committer_vcs_user_id int4 NOT NULL,
           created_at timestamp NOT NULL,
           updated_at timestamp NOT NULL,
-          CONSTRAINT commits_pkey PRIMARY KEY (commit_sha),
+          CONSTRAINT commits_pkey PRIMARY KEY (id),
           CONSTRAINT commits_author_vcs_user_id_fkey FOREIGN KEY (author_vcs_user_id) REFERENCES vcs_users(id),
           CONSTRAINT commits_committer_vcs_user_id_fkey FOREIGN KEY (committer_vcs_user_id) REFERENCES vcs_users(id)
         );
+        CREATE UNIQUE INDEX IF NOT EXISTS commits_commit_sha_idx ON commits USING btree (commit_sha);
 
         CREATE
             TRIGGER trigger_set_timestamp BEFORE INSERT
@@ -143,7 +157,6 @@ class AddDiscoveryTables < ActiveRecord::Migration
           id serial NOT NULL,
           type node_type NOT NULL,
           id_hash text NOT NULL,
-          visibility node_visibility NOT NULL,
           repo_id int4 NOT NULL,
           project_id int4 NULL,
           created_at timestamp NOT NULL,
@@ -162,7 +175,7 @@ class AddDiscoveryTables < ActiveRecord::Migration
 
         CREATE TABLE IF NOT EXISTS commit_branches (
           id serial NOT NULL,
-          commit_sha text NOT NULL,
+          commit_id int4 NOT NULL,
           branch_id int4 NOT NULL,
           committed_at timestamp NOT NULL,
           analyzer_status analyzer_status NOT NULL,
@@ -171,9 +184,9 @@ class AddDiscoveryTables < ActiveRecord::Migration
           updated_at timestamp NOT NULL,
           CONSTRAINT commit_branches_pkey PRIMARY KEY (id),
           CONSTRAINT commit_branches_branch_id FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE CASCADE,
-          CONSTRAINT commit_branches_commit_sha FOREIGN KEY (commit_sha) REFERENCES commits(commit_sha)
+          CONSTRAINT commit_branches_commit_id FOREIGN KEY (commit_id) REFERENCES commits(id) ON DELETE CASCADE
         );
-        CREATE UNIQUE INDEX IF NOT EXISTS commit_branches_commit_sha_branch_id_idx ON commit_branches USING btree (commit_sha, branch_id);
+        CREATE UNIQUE INDEX IF NOT EXISTS commit_branches_commit_id_branch_id_idx ON commit_branches USING btree (commit_id, branch_id);
 
         CREATE
             TRIGGER trigger_set_timestamp BEFORE INSERT
@@ -181,25 +194,42 @@ class AddDiscoveryTables < ActiveRecord::Migration
                     ON
                     commit_branches FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
 
-        CREATE TABLE IF NOT EXISTS node_history (
+        CREATE TABLE IF NOT EXISTS node_versions (
           id serial NOT NULL,
           node_id int4 NOT NULL,
+          version text NOT NULL,
+          visibility visibility NOT NULL,
           "data" jsonb NOT NULL,
           data_hash text NOT NULL,
-          change_type node_history_change_type NOT NULL,
-          action node_history_action NOT NULL,
-          commit_sha text NULL,
           file_path text NOT NULL,
-          shared_version text NULL,
+          created_at timestamp NOT NULL,
+          updated_at timestamp NOT NULL,
+          CONSTRAINT node_versions_pkey PRIMARY KEY (id),
+          CONSTRAINT node_versions_node_id_fkey FOREIGN KEY (node_id) REFERENCES nodes(id) ON DELETE CASCADE
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS node_id_version_idx ON node_versions USING btree (node_id, version);
+
+        CREATE
+            TRIGGER trigger_set_timestamp BEFORE INSERT
+                OR UPDATE
+                    ON
+                    node_versions FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
+
+        CREATE TABLE IF NOT EXISTS node_version_history (
+          id serial NOT NULL,
+          node_version_id int4 NOT NULL,
+          commit_id int4 NOT NULL,
+          action node_version_history_action NOT NULL,
+          semver semver NOT NULL,         
           created_at timestamp NULL DEFAULT now(),
           deleted_at timestamp NULL,
-          CONSTRAINT node_history_pkey PRIMARY KEY (id),
-          CONSTRAINT node_history_commit_sha_fkey FOREIGN KEY (commit_sha) REFERENCES commits(commit_sha) ON DELETE CASCADE,
-          CONSTRAINT node_history_node_id_fkey FOREIGN KEY (node_id) REFERENCES nodes(id) ON DELETE CASCADE
+          CONSTRAINT node_version_history_pkey PRIMARY KEY (id),
+          CONSTRAINT node_version_history_commit_id_fkey FOREIGN KEY (commit_id) REFERENCES commits(id) ON DELETE CASCADE,
+          CONSTRAINT node_version_history_node_version_id_fkey FOREIGN KEY (node_version_id) REFERENCES node_versions(id) ON DELETE CASCADE
         );
-        CREATE UNIQUE INDEX IF NOT EXISTS node_history_node_id_commit_sha_idx ON node_history USING btree (node_id, commit_sha);
+        CREATE UNIQUE INDEX IF NOT EXISTS node_version_history_node_version_id_commit_id_idx ON node_version_history USING btree (node_version_id, commit_id);
 
-        CREATE OR REPLACE FUNCTION public.trigger_set_node_history_deleted_at()
+        CREATE OR REPLACE FUNCTION public.trigger_set_node_version_history_deleted_at()
         RETURNS trigger
         LANGUAGE plpgsql
         AS $function$
@@ -217,36 +247,48 @@ class AddDiscoveryTables < ActiveRecord::Migration
             TRIGGER trigger_set_deleted_at BEFORE INSERT
                 OR UPDATE
                     ON
-                    node_history FOR EACH ROW EXECUTE PROCEDURE trigger_set_node_history_deleted_at();
+                    node_version_history FOR EACH ROW EXECUTE PROCEDURE trigger_set_node_version_history_deleted_at();
 
 
-        CREATE TABLE IF NOT EXISTS node_edges (
+        CREATE TABLE IF NOT EXISTS node_version_edges (
           id serial NOT NULL,
-          from_node_id int4 NOT NULL,
-          "type" node_edge_type NOT NULL,
-          to_node_id int4 NOT NULL,
+          from_node_version_id int4 NOT NULL,
+          "type" node_version_edge_type NOT NULL,
+          to_node_version_id int4 NOT NULL,
           created_at timestamp NOT NULL,
           updated_at timestamp NOT NULL,
-          CONSTRAINT node_relationships_pkey PRIMARY KEY (id),
-          CONSTRAINT node_relationships_from_id_fkey FOREIGN KEY (from_node_id) REFERENCES nodes(id) ON DELETE CASCADE,
-          CONSTRAINT node_relationships_to_id_fkey FOREIGN KEY (to_node_id) REFERENCES nodes(id) ON DELETE CASCADE
+          CONSTRAINT node_version_edges_pkey PRIMARY KEY (id),
+          CONSTRAINT node_version_edges_from_id_fkey FOREIGN KEY (from_node_version_id) REFERENCES node_versions(id) ON DELETE CASCADE,
+          CONSTRAINT node_version_edges_to_id_fkey FOREIGN KEY (to_node_version_id) REFERENCES node_versions(id) ON DELETE CASCADE
         );
 
         CREATE
             TRIGGER trigger_set_timestamp BEFORE INSERT
                 OR UPDATE
                     ON
-                    node_edges FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
+                    node_version_edges FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
 
-        CREATE TABLE IF NOT EXISTS node_history_validations (
+        CREATE TABLE IF NOT EXISTS node_version_history_validations (
           id serial NOT NULL,
-          node_history_id int4 NOT NULL,
+          node_version_history_id int4 NOT NULL,
+          severity validation_severity NOT NULL,
           data jsonb NOT NULL,
           created_at timestamp NOT NULL DEFAULT now(),
-          CONSTRAINT node_history_validations_pkey PRIMARY KEY (id),
-          CONSTRAINT node_history_validations_node_history_id_fkey FOREIGN KEY (node_history_id) REFERENCES node_history(id) ON DELETE CASCADE
+          CONSTRAINT node_version_history_validations_pkey PRIMARY KEY (id),
+          CONSTRAINT node_version_history_validations_node_version_history_id_fkey FOREIGN KEY (node_version_history_id) REFERENCES node_version_history(id) ON DELETE CASCADE
         );
-        CREATE UNIQUE INDEX IF NOT EXISTS node_history_validations_node_hist_id_data_idx ON node_history_validations USING btree (node_history_id, data);
+        CREATE UNIQUE INDEX IF NOT EXISTS node_version_history_validations_node_ver_hist_id_data_idx ON node_version_history_validations USING btree (node_version_history_id, data);
+
+        CREATE TABLE IF NOT EXISTS node_version_history_changelog (
+          id serial NOT NULL,
+          node_version_history_id int4 NOT NULL,
+          semver semver NOT NULL,
+          change_code change_code NOT NULL,
+          data jsonb NOT NULL,
+          created_at timestamp NOT NULL DEFAULT now(),
+          CONSTRAINT node_version_history_changelog_pkey PRIMARY KEY (id),
+          CONSTRAINT node_version_history_changelog_node_version_history_id_fkey FOREIGN KEY (node_version_history_id) REFERENCES node_version_history(id) ON DELETE CASCADE
+        );
       EOF
     end
   end
@@ -254,13 +296,19 @@ class AddDiscoveryTables < ActiveRecord::Migration
   def down
     if Gitlab::Database.postgresql?
       execute <<-EOF
-        DROP TABLE IF EXISTS node_history_validations;
+        DROP TABLE IF EXISTS node_version_history_changelog;
 
-        DROP TABLE IF EXISTS node_edges;
+        DROP TABLE IF EXISTS node_version_history_validations;
 
-        DROP TABLE IF EXISTS node_history;
+        DROP TABLE IF EXISTS node_version_edges;
 
-        DROP FUNCTION IF EXISTS trigger_set_node_history_deleted_at();
+        DROP TABLE IF EXISTS node_version_history;
+
+        DROP FUNCTION IF EXISTS trigger_set_node_version_history_deleted_at();
+
+        DROP TABLE IF EXISTS node_version_history;
+
+        DROP TABLE IF EXISTS node_versions;
 
         DROP TABLE IF EXISTS commit_branches;
 
@@ -274,19 +322,23 @@ class AddDiscoveryTables < ActiveRecord::Migration
 
         DROP TABLE IF EXISTS repos;
 
+        DROP TYPE IF EXISTS change_code;
+
+        DROP TYPE IF EXISTS validation_severity;
+
         DROP TYPE IF EXISTS analyzer_status;
 
-        DROP TYPE IF EXISTS node_visibility;
+        DROP TYPE IF EXISTS visibility;
 
-        DROP TYPE IF EXISTS node_history_action;
+        DROP TYPE IF EXISTS node_version_history_action;
 
         DROP TYPE IF EXISTS branch_type;
 
         DROP TYPE IF EXISTS provider;
 
-        DROP TYPE IF EXISTS node_history_change_type;
+        DROP TYPE IF EXISTS semver;
 
-        DROP TYPE IF EXISTS node_edge_type;
+        DROP TYPE IF EXISTS node_version_edge_type;
 
         DROP TYPE IF EXISTS node_type;
       EOF
