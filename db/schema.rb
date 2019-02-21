@@ -1440,6 +1440,7 @@ ActiveRecord::Schema.define(version: 20190219173231) do
     t.text     "node_type",       null: false
     t.integer  "project_id",      null: false
     t.integer  "org_id",          null: false
+    t.jsonb    "data",            null: false
     t.tsvector "document"
     t.datetime "created_at",      null: false
     t.datetime "updated_at",      null: false

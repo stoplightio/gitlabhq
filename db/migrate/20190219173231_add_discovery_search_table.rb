@@ -17,6 +17,7 @@ class AddDiscoverySearchTable < ActiveRecord::Migration
             node_type text NOT NULL,
             project_id int4 NOT NULL,
             org_id int4 NOT NULL,
+            data jsonb NOT NULL,
             document tsvector,
             created_at timestamp NOT NULL,
             updated_at timestamp NOT NULL,
