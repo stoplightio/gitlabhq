@@ -7,7 +7,7 @@ class AddDiscoveryTables < ActiveRecord::Migration
 
   def up
     if Gitlab::Database.postgresql?
-      execute <<-EOF
+      execute <<-SQL
         CREATE TABLE IF NOT EXISTS repos (
           id serial NOT NULL,
           project_id int4 NOT NULL,
@@ -220,13 +220,13 @@ class AddDiscoveryTables < ActiveRecord::Migration
           CONSTRAINT node_version_history_changelog_pkey PRIMARY KEY (id),
           CONSTRAINT node_version_history_changelog_node_version_history_id_fkey FOREIGN KEY (node_version_history_id) REFERENCES node_version_history(id) ON DELETE CASCADE
         );
-      EOF
+      SQL
     end
   end
 
   def down
     if Gitlab::Database.postgresql?
-      execute <<-EOF
+      execute <<-SQL
         DROP TABLE IF EXISTS node_version_history_changelog;
 
         DROP TABLE IF EXISTS node_version_history_validations;
@@ -252,7 +252,7 @@ class AddDiscoveryTables < ActiveRecord::Migration
         DROP TABLE IF EXISTS vcs_users;
 
         DROP TABLE IF EXISTS repos;
-      EOF
+      SQL
     end
   end
 end

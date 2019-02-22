@@ -1440,14 +1440,20 @@ ActiveRecord::Schema.define(version: 20190219173231) do
     t.text     "node_type",       null: false
     t.integer  "project_id",      null: false
     t.integer  "org_id",          null: false
+    t.integer  "branch_id",       null: false
     t.jsonb    "data",            null: false
     t.tsvector "document"
     t.datetime "created_at",      null: false
     t.datetime "updated_at",      null: false
   end
 
+  add_index "node_search", ["branch_id"], name: "node_search_branch_id_idx", using: :btree
   add_index "node_search", ["document"], name: "node_search_document_idx", using: :gin
   add_index "node_search", ["node_id", "node_version_id"], name: "node_search_node_id_node_version_id_idx", unique: true, using: :btree
+  add_index "node_search", ["node_id"], name: "node_search_node_id_idx", using: :btree
+  add_index "node_search", ["node_type"], name: "node_search_node_type_idx", using: :btree
+  add_index "node_search", ["org_id"], name: "node_search_org_id_idx", using: :btree
+  add_index "node_search", ["project_id"], name: "node_search_project_id_idx", using: :btree
 
   create_table "node_version_edges", force: :cascade do |t|
     t.integer  "from_node_version_id", null: false
