@@ -220,7 +220,7 @@ class AddDiscoveryTables < ActiveRecord::Migration
           node_version_id int4 NOT NULL,
           commit_id int4 NOT NULL,
           action node_version_history_action NOT NULL,
-          semver semver NOT NULL,         
+          semver semver NOT NULL,
           created_at timestamp NULL DEFAULT now(),
           deleted_at timestamp NULL,
           CONSTRAINT node_version_history_pkey PRIMARY KEY (id),
@@ -282,9 +282,12 @@ class AddDiscoveryTables < ActiveRecord::Migration
         CREATE TABLE IF NOT EXISTS node_version_history_changelog (
           id serial NOT NULL,
           node_version_history_id int4 NOT NULL,
-          semver semver NOT NULL,
-          change_code change_code NOT NULL,
+          semver text NOT NULL,
+          code text NOT NULL,
+          operation text NOT NULL,
+          context text NOT NULL,
           data jsonb NOT NULL,
+          message text NOT NULL,
           created_at timestamp NOT NULL DEFAULT now(),
           CONSTRAINT node_version_history_changelog_pkey PRIMARY KEY (id),
           CONSTRAINT node_version_history_changelog_node_version_history_id_fkey FOREIGN KEY (node_version_history_id) REFERENCES node_version_history(id) ON DELETE CASCADE
