@@ -851,18 +851,6 @@ ActiveRecord::Schema.define(version: 20190219173231) do
   add_index "docs", ["domain"], name: "index_docs_on_domain", unique: true, using: :btree
   add_index "docs", ["project_id"], name: "index_docs_on_project_id", using: :btree
 
-  create_table "domains_history", force: :cascade do |t|
-    t.integer  "domain_id"
-    t.integer  "build_id"
-    t.string   "event"
-    t.json     "data"
-    t.datetime "created_at"
-    t.datetime "updated_at"
-  end
-
-  add_index "domains_history", ["build_id"], name: "index_domains_history_on_build_id", using: :btree
-  add_index "domains_history", ["domain_id"], name: "index_domains_history_on_domain_id", using: :btree
-
   create_table "emails", force: :cascade do |t|
     t.integer                "user_id",              null: false
     t.string                 "email",                null: false
@@ -1094,7 +1082,6 @@ ActiveRecord::Schema.define(version: 20190219173231) do
     t.integer  "last_edited_by_id"
     t.boolean  "discussion_locked"
     t.integer  "closed_by_id"
-    t.integer  "org_id"
   end
 
   add_index "issues", ["author_id"], name: "index_issues_on_author_id", using: :btree
@@ -1479,8 +1466,11 @@ ActiveRecord::Schema.define(version: 20190219173231) do
   create_table "node_version_history_changelog", force: :cascade do |t|
     t.integer  "node_version_history_id",                   null: false
     t.text     "semver",                                    null: false
-    t.text     "change_code",                               null: false
+    t.text     "code",                                      null: false
+    t.text     "operation",                                 null: false
+    t.text     "context",                                   null: false
     t.jsonb    "data",                                      null: false
+    t.text     "message",                                   null: false
     t.datetime "created_at",              default: "now()", null: false
   end
 
@@ -1898,9 +1888,8 @@ ActiveRecord::Schema.define(version: 20190219173231) do
     t.boolean  "merge_requests_rebase_enabled",                              default: false,     null: false
     t.integer  "jobs_cache_index"
     t.boolean  "pages_https_only",                                           default: true
-    t.json     "provider"
-    t.boolean  "is_released",                                                default: false
     t.boolean  "remote_mirror_available_overridden"
+    t.boolean  "is_released",                                                default: false
   end
 
   add_index "projects", ["ci_id"], name: "index_projects_on_ci_id", using: :btree
@@ -2091,11 +2080,6 @@ ActiveRecord::Schema.define(version: 20190219173231) do
 
   add_index "services", ["project_id"], name: "index_services_on_project_id", using: :btree
   add_index "services", ["template"], name: "index_services_on_template", using: :btree
-
-  create_table "sites_domains", id: false, force: :cascade do |t|
-    t.text "siteid"
-    t.text "domain"
-  end
 
   create_table "snippets", force: :cascade do |t|
     t.string   "title"
