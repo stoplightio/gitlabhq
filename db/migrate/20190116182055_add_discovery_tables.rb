@@ -7,81 +7,12 @@ class AddDiscoveryTables < ActiveRecord::Migration
 
   def up
     if Gitlab::Database.postgresql?
-      execute <<-EOF
-        DROP TYPE IF EXISTS node_type;
-        CREATE TYPE node_type AS ENUM (
-          'http_server',
-          'http_service',
-          'json_schema',
-          'article',
-          'http_operation'
-        );
-
-        DROP TYPE IF EXISTS node_version_edge_type;
-        CREATE TYPE node_version_edge_type AS ENUM (
-          'LINKS_TO',
-          'REFERENCES',
-          'SERVED_BY',
-          'INCLUDES',
-          'IS_PARENT'
-        );
-
-        DROP TYPE IF EXISTS semver;
-        CREATE TYPE semver AS ENUM (
-          'MAJOR',
-          'MINOR',
-          'PATCH',
-          'UNKNOWN'
-        );
-
-        DROP TYPE IF EXISTS provider;
-        CREATE TYPE provider AS ENUM (
-          'GITLAB'
-        );
-
-        DROP TYPE IF EXISTS branch_type;
-        CREATE TYPE branch_type AS ENUM (
-          'LIVE'
-        );
-
-        DROP TYPE IF EXISTS node_version_history_action;
-        CREATE TYPE node_version_history_action AS ENUM (
-          'ADDED',
-          'MODIFIED',
-          'REMOVED'
-        );
-
-        DROP TYPE IF EXISTS visibility;
-        CREATE TYPE visibility AS ENUM (
-          'INTERNAL',
-          'PRIVATE',
-          'PUBLIC'
-        );
-
-        DROP TYPE IF EXISTS analyzer_status;
-        CREATE TYPE analyzer_status AS ENUM (
-          'RUNNING',
-          'COMPLETED',
-          'FAILED'
-        );
-
-        DROP TYPE IF EXISTS validation_severity;
-        CREATE TYPE validation_severity AS ENUM (
-          'info',
-          'warn',
-          'error'
-        );
-
-        DROP TYPE IF EXISTS change_code;
-        CREATE TYPE change_code AS ENUM (
-          'UNKNOWN'
-        );
-
+      execute <<-SQL
         CREATE TABLE IF NOT EXISTS repos (
           id serial NOT NULL,
           project_id int4 NOT NULL,
           repo_location text NOT NULL,
-          provider provider NOT NULL,
+          provider text NOT NULL,
           created_at timestamp NOT NULL,
           updated_at timestamp NOT NULL,
           CONSTRAINT repos_pkey PRIMARY KEY (id),
@@ -98,7 +29,7 @@ class AddDiscoveryTables < ActiveRecord::Migration
         CREATE TABLE IF NOT EXISTS vcs_users (
           id serial NOT NULL,
           email text NOT NULL,
-          provider provider NOT NULL,
+          provider text NOT NULL,
           user_id int4,
           created_at timestamp NOT NULL,
           updated_at timestamp NOT NULL,
@@ -136,7 +67,7 @@ class AddDiscoveryTables < ActiveRecord::Migration
         CREATE TABLE IF NOT EXISTS branches (
           id serial NOT NULL,
           branch_name text NOT NULL,
-          branch_type branch_type NULL,
+          branch_type text NULL,
           repo_id int4 NULL,
           project_id int4 NULL,
           created_at timestamp NOT NULL,
@@ -155,7 +86,7 @@ class AddDiscoveryTables < ActiveRecord::Migration
 
         CREATE TABLE IF NOT EXISTS nodes (
           id serial NOT NULL,
-          type node_type NOT NULL,
+          type text NOT NULL,
           id_hash text NOT NULL,
           repo_id int4 NOT NULL,
           project_id int4 NULL,
@@ -178,7 +109,7 @@ class AddDiscoveryTables < ActiveRecord::Migration
           commit_id int4 NOT NULL,
           branch_id int4 NOT NULL,
           committed_at timestamp NOT NULL,
-          analyzer_status analyzer_status NOT NULL,
+          analyzer_status text NOT NULL,
           analyzer_job_id text,
           created_at timestamp NOT NULL,
           updated_at timestamp NOT NULL,
@@ -198,9 +129,7 @@ class AddDiscoveryTables < ActiveRecord::Migration
           id serial NOT NULL,
           node_id int4 NOT NULL,
           version text NOT NULL,
-          visibility visibility NOT NULL,
-          "data" jsonb NOT NULL,
-          data_hash text NOT NULL,
+          visibility text NOT NULL,
           file_path text NOT NULL,
           created_at timestamp NOT NULL,
           updated_at timestamp NOT NULL,
@@ -219,8 +148,10 @@ class AddDiscoveryTables < ActiveRecord::Migration
           id serial NOT NULL,
           node_version_id int4 NOT NULL,
           commit_id int4 NOT NULL,
-          action node_version_history_action NOT NULL,
-          semver semver NOT NULL,
+          action text NOT NULL,
+          semver text NOT NULL,
+          "data" jsonb NOT NULL,
+          data_hash text NOT NULL,
           created_at timestamp NULL DEFAULT now(),
           deleted_at timestamp NULL,
           CONSTRAINT node_version_history_pkey PRIMARY KEY (id),
@@ -253,7 +184,7 @@ class AddDiscoveryTables < ActiveRecord::Migration
         CREATE TABLE IF NOT EXISTS node_version_edges (
           id serial NOT NULL,
           from_node_version_id int4 NOT NULL,
-          "type" node_version_edge_type NOT NULL,
+          "type" text NOT NULL,
           to_node_version_id int4 NOT NULL,
           created_at timestamp NOT NULL,
           updated_at timestamp NOT NULL,
@@ -271,7 +202,7 @@ class AddDiscoveryTables < ActiveRecord::Migration
         CREATE TABLE IF NOT EXISTS node_version_history_validations (
           id serial NOT NULL,
           node_version_history_id int4 NOT NULL,
-          severity validation_severity NOT NULL,
+          severity text NOT NULL,
           data jsonb NOT NULL,
           created_at timestamp NOT NULL DEFAULT now(),
           CONSTRAINT node_version_history_validations_pkey PRIMARY KEY (id),
@@ -292,13 +223,13 @@ class AddDiscoveryTables < ActiveRecord::Migration
           CONSTRAINT node_version_history_changelog_pkey PRIMARY KEY (id),
           CONSTRAINT node_version_history_changelog_node_version_history_id_fkey FOREIGN KEY (node_version_history_id) REFERENCES node_version_history(id) ON DELETE CASCADE
         );
-      EOF
+      SQL
     end
   end
 
   def down
     if Gitlab::Database.postgresql?
-      execute <<-EOF
+      execute <<-SQL
         DROP TABLE IF EXISTS node_version_history_changelog;
 
         DROP TABLE IF EXISTS node_version_history_validations;
@@ -324,27 +255,7 @@ class AddDiscoveryTables < ActiveRecord::Migration
         DROP TABLE IF EXISTS vcs_users;
 
         DROP TABLE IF EXISTS repos;
-
-        DROP TYPE IF EXISTS change_code;
-
-        DROP TYPE IF EXISTS validation_severity;
-
-        DROP TYPE IF EXISTS analyzer_status;
-
-        DROP TYPE IF EXISTS visibility;
-
-        DROP TYPE IF EXISTS node_version_history_action;
-
-        DROP TYPE IF EXISTS branch_type;
-
-        DROP TYPE IF EXISTS provider;
-
-        DROP TYPE IF EXISTS semver;
-
-        DROP TYPE IF EXISTS node_version_edge_type;
-
-        DROP TYPE IF EXISTS node_type;
-      EOF
+      SQL
     end
   end
 end
