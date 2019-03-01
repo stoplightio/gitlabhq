@@ -8,7 +8,7 @@ class UpdateNodeVersionHistoryChangelogIndexes < ActiveRecord::Migration
   def up
     if Gitlab::Database.postgresql?
       execute <<-SQL
-        CREATE UNIQUE INDEX IF NOT EXISTS node_version_history_changelog_node_version_hisotry_id_message_idx ON node_version_history_changelog USING btree (node_version_history_id, message);
+        CREATE UNIQUE INDEX IF NOT EXISTS node_version_history_changelog_node_version_history_id_message_idx ON node_version_history_changelog USING btree (node_version_history_id, message);
       SQL
     end
   end
