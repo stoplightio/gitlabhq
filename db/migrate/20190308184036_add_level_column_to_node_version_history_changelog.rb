@@ -1,6 +1,6 @@
 # 20190308184036_add_level_column_to_node_version_history_changelog.rb
 
-class AddPathColumnToNodeVersionHistoryChangelog < ActiveRecord::Migration
+class AddLevelColumnToNodeVersionHistoryChangelog < ActiveRecord::Migration
   include Gitlab::Database::MigrationHelpers
 
   DOWNTIME = false
