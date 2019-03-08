@@ -11,7 +11,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20190308184016) do
+ActiveRecord::Schema.define(version: 20190308184036) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -1473,6 +1473,7 @@ ActiveRecord::Schema.define(version: 20190308184016) do
     t.text     "message",                                   null: false
     t.datetime "created_at",              default: "now()", null: false
     t.text     "path",                                      null: false
+    t.integer  "level",                                     null: false
   end
 
   add_index "node_version_history_changelog", ["node_version_history_id", "message"], name: "node_version_history_changelog_node_version_history_id_message_", unique: true, using: :btree
