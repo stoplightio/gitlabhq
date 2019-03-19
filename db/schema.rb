@@ -11,7 +11,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20190313155922) do
+ActiveRecord::Schema.define(version: 20190319190817) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -1474,9 +1474,15 @@ ActiveRecord::Schema.define(version: 20190313155922) do
     t.datetime "created_at",              default: "now()", null: false
     t.text     "path",                                      null: false
     t.integer  "level",                                     null: false
+    t.text     "node_type"
+    t.integer  "project_id"
+    t.integer  "org_id"
   end
 
+  add_index "node_version_history_changelog", ["node_type"], name: "node_version_history_changelog_node_type_idx", using: :btree
   add_index "node_version_history_changelog", ["node_version_history_id", "message"], name: "node_version_history_changelog_node_version_history_id_message_", unique: true, using: :btree
+  add_index "node_version_history_changelog", ["org_id"], name: "node_version_history_changelog_org_id_idx", using: :btree
+  add_index "node_version_history_changelog", ["project_id"], name: "node_version_history_changelog_project_id_idx", using: :btree
 
   create_table "node_version_history_validations", force: :cascade do |t|
     t.integer  "node_version_history_id",                   null: false
@@ -2571,7 +2577,9 @@ ActiveRecord::Schema.define(version: 20190313155922) do
   add_foreign_key "node_version_edges", "node_versions", column: "to_node_version_id", name: "node_version_edges_to_id_fkey", on_delete: :cascade
   add_foreign_key "node_version_history", "commits", name: "node_version_history_commit_id_fkey", on_delete: :cascade
   add_foreign_key "node_version_history", "node_versions", name: "node_version_history_node_version_id_fkey", on_delete: :cascade
+  add_foreign_key "node_version_history_changelog", "namespaces", column: "org_id", name: "node_version_history_changelog_org_id", on_delete: :cascade
   add_foreign_key "node_version_history_changelog", "node_version_history", name: "node_version_history_changelog_node_version_history_id_fkey", on_delete: :cascade
+  add_foreign_key "node_version_history_changelog", "projects", name: "node_version_history_changelog_project_id", on_delete: :cascade
   add_foreign_key "node_version_history_validations", "node_version_history", name: "node_version_history_validations_node_version_history_id_fkey", on_delete: :cascade
   add_foreign_key "node_versions", "nodes", name: "node_versions_node_id_fkey", on_delete: :cascade
   add_foreign_key "nodes", "projects", name: "nodes_project_id_fkey", on_delete: :cascade
