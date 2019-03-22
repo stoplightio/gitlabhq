@@ -1474,9 +1474,10 @@ ActiveRecord::Schema.define(version: 20190319190817) do
     t.datetime "created_at",              default: "now()", null: false
     t.text     "path",                                      null: false
     t.integer  "level",                                     null: false
+    t.integer  "org_id",                                    null: false
+    t.integer  "project_id",                                null: false
+    t.integer  "branch_id",                                 null: false
     t.text     "node_type"
-    t.integer  "project_id"
-    t.integer  "org_id"
   end
 
   add_index "node_version_history_changelog", ["node_type"], name: "node_version_history_changelog_node_type_idx", using: :btree
