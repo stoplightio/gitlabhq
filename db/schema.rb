@@ -11,7 +11,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20190313155922) do
+ActiveRecord::Schema.define(version: 20190322144752) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -851,6 +851,18 @@ ActiveRecord::Schema.define(version: 20190313155922) do
   add_index "docs", ["domain"], name: "index_docs_on_domain", unique: true, using: :btree
   add_index "docs", ["project_id"], name: "index_docs_on_project_id", using: :btree
 
+  create_table "domains_history", force: :cascade do |t|
+    t.integer  "domain_id"
+    t.integer  "build_id"
+    t.string   "event"
+    t.json     "data"
+    t.datetime "created_at"
+    t.datetime "updated_at"
+  end
+
+  add_index "domains_history", ["build_id"], name: "index_domains_history_on_build_id", using: :btree
+  add_index "domains_history", ["domain_id"], name: "index_domains_history_on_domain_id", using: :btree
+
   create_table "emails", force: :cascade do |t|
     t.integer                "user_id",              null: false
     t.string                 "email",                null: false
@@ -1082,6 +1094,7 @@ ActiveRecord::Schema.define(version: 20190313155922) do
     t.integer  "last_edited_by_id"
     t.boolean  "discussion_locked"
     t.integer  "closed_by_id"
+    t.integer  "org_id"
   end
 
   add_index "issues", ["author_id"], name: "index_issues_on_author_id", using: :btree
@@ -1450,7 +1463,7 @@ ActiveRecord::Schema.define(version: 20190313155922) do
     t.datetime "updated_at",           null: false
   end
 
-  create_table "node_version_history", force: :cascade do |t|
+  create_table "node_version_snapshot", force: :cascade do |t|
     t.integer  "node_version_id",                   null: false
     t.integer  "commit_id",                         null: false
     t.text     "action",                            null: false
@@ -1461,31 +1474,31 @@ ActiveRecord::Schema.define(version: 20190313155922) do
     t.datetime "deleted_at"
   end
 
-  add_index "node_version_history", ["node_version_id", "commit_id"], name: "node_version_history_node_version_id_commit_id_idx", unique: true, using: :btree
+  add_index "node_version_snapshot", ["node_version_id", "commit_id"], name: "node_version_snapshot_node_version_id_commit_id_idx", unique: true, using: :btree
 
-  create_table "node_version_history_changelog", force: :cascade do |t|
-    t.integer  "node_version_history_id",                   null: false
-    t.text     "semver",                                    null: false
-    t.text     "code",                                      null: false
-    t.text     "operation",                                 null: false
-    t.text     "context",                                   null: false
+  create_table "node_version_snapshot_changelog", force: :cascade do |t|
+    t.integer  "node_version_snapshot_id",                   null: false
+    t.text     "semver",                                     null: false
+    t.text     "code",                                       null: false
+    t.text     "operation",                                  null: false
+    t.text     "context",                                    null: false
     t.jsonb    "data"
-    t.text     "message",                                   null: false
-    t.datetime "created_at",              default: "now()", null: false
-    t.text     "path",                                      null: false
-    t.integer  "level",                                     null: false
+    t.text     "message",                                    null: false
+    t.datetime "created_at",               default: "now()", null: false
+    t.text     "path",                                       null: false
+    t.integer  "level",                                      null: false
   end
 
-  add_index "node_version_history_changelog", ["node_version_history_id", "message"], name: "node_version_history_changelog_node_version_history_id_message_", unique: true, using: :btree
+  add_index "node_version_snapshot_changelog", ["node_version_snapshot_id", "message"], name: "node_version_snapshot_changelog_snapshot_id_message_idx", unique: true, using: :btree
 
-  create_table "node_version_history_validations", force: :cascade do |t|
-    t.integer  "node_version_history_id",                   null: false
-    t.text     "severity",                                  null: false
-    t.jsonb    "data",                                      null: false
-    t.datetime "created_at",              default: "now()", null: false
+  create_table "node_version_snapshot_validations", force: :cascade do |t|
+    t.integer  "node_version_snapshot_id",                   null: false
+    t.text     "severity",                                   null: false
+    t.jsonb    "data",                                       null: false
+    t.datetime "created_at",               default: "now()", null: false
   end
 
-  add_index "node_version_history_validations", ["node_version_history_id", "data"], name: "node_version_history_validations_node_ver_hist_id_data_idx", unique: true, using: :btree
+  add_index "node_version_snapshot_validations", ["node_version_snapshot_id", "data"], name: "node_version_snapshot_validations_snapshot_id_data_idx", unique: true, using: :btree
 
   create_table "node_versions", force: :cascade do |t|
     t.integer  "node_id",    null: false
@@ -1892,8 +1905,9 @@ ActiveRecord::Schema.define(version: 20190313155922) do
     t.boolean  "merge_requests_rebase_enabled",                              default: false,     null: false
     t.integer  "jobs_cache_index"
     t.boolean  "pages_https_only",                                           default: true
-    t.boolean  "remote_mirror_available_overridden"
+    t.json     "provider"
     t.boolean  "is_released",                                                default: false
+    t.boolean  "remote_mirror_available_overridden"
   end
 
   add_index "projects", ["ci_id"], name: "index_projects_on_ci_id", using: :btree
@@ -2084,6 +2098,11 @@ ActiveRecord::Schema.define(version: 20190313155922) do
 
   add_index "services", ["project_id"], name: "index_services_on_project_id", using: :btree
   add_index "services", ["template"], name: "index_services_on_template", using: :btree
+
+  create_table "sites_domains", id: false, force: :cascade do |t|
+    t.text "siteid"
+    t.text "domain"
+  end
 
   create_table "snippets", force: :cascade do |t|
     t.string   "title"
@@ -2569,10 +2588,10 @@ ActiveRecord::Schema.define(version: 20190313155922) do
   add_foreign_key "node_search", "projects", name: "node_project_id", on_delete: :cascade
   add_foreign_key "node_version_edges", "node_versions", column: "from_node_version_id", name: "node_version_edges_from_id_fkey", on_delete: :cascade
   add_foreign_key "node_version_edges", "node_versions", column: "to_node_version_id", name: "node_version_edges_to_id_fkey", on_delete: :cascade
-  add_foreign_key "node_version_history", "commits", name: "node_version_history_commit_id_fkey", on_delete: :cascade
-  add_foreign_key "node_version_history", "node_versions", name: "node_version_history_node_version_id_fkey", on_delete: :cascade
-  add_foreign_key "node_version_history_changelog", "node_version_history", name: "node_version_history_changelog_node_version_history_id_fkey", on_delete: :cascade
-  add_foreign_key "node_version_history_validations", "node_version_history", name: "node_version_history_validations_node_version_history_id_fkey", on_delete: :cascade
+  add_foreign_key "node_version_snapshot", "commits", name: "node_version_snapshot_commit_id", on_delete: :cascade
+  add_foreign_key "node_version_snapshot", "node_versions", name: "node_version_snapshot_node_version_id", on_delete: :cascade
+  add_foreign_key "node_version_snapshot_changelog", "node_version_snapshot", name: "node_version_snapshot_changelog_node_version_snapshot_id_fkey", on_delete: :cascade
+  add_foreign_key "node_version_snapshot_validations", "node_version_snapshot", name: "node_version_snapshot_validations_node_version_snapshot_id_fkey", on_delete: :cascade
   add_foreign_key "node_versions", "nodes", name: "node_versions_node_id_fkey", on_delete: :cascade
   add_foreign_key "nodes", "projects", name: "nodes_project_id_fkey", on_delete: :cascade
   add_foreign_key "nodes", "repos", name: "nodes_repo_id_fkey", on_delete: :cascade
