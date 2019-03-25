@@ -14,6 +14,10 @@ class AddPathColumnToNodeVersionHistoryChangelog < ActiveRecord::Migration
   end
 
   def down
-
+    if Gitlab::Database.postgresql?
+      execute <<-SQL
+        ALTER TABLE node_version_history_changelog DROP COLUMN path;
+      SQL
+    end
   end
 end
