@@ -11,7 +11,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20190322144752) do
+ActiveRecord::Schema.define(version: 20190322210219) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -1464,14 +1464,15 @@ ActiveRecord::Schema.define(version: 20190322144752) do
   end
 
   create_table "node_version_snapshot", force: :cascade do |t|
-    t.integer  "node_version_id",                   null: false
-    t.integer  "commit_id",                         null: false
-    t.text     "action",                            null: false
-    t.text     "semver",                            null: false
-    t.jsonb    "data",                              null: false
-    t.text     "data_hash",                         null: false
-    t.datetime "created_at",      default: "now()"
+    t.integer  "node_version_id",                             null: false
+    t.integer  "commit_id",                                   null: false
+    t.text     "action",                                      null: false
+    t.text     "semver",                                      null: false
+    t.jsonb    "data",                                        null: false
+    t.text     "data_hash",                                   null: false
+    t.datetime "created_at",                default: "now()"
     t.datetime "deleted_at"
+    t.integer  "iid",             limit: 8,                   null: false
   end
 
   add_index "node_version_snapshot", ["node_version_id", "commit_id"], name: "node_version_snapshot_node_version_id_commit_id_idx", unique: true, using: :btree
@@ -1518,6 +1519,7 @@ ActiveRecord::Schema.define(version: 20190322144752) do
     t.integer  "project_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.text     "iid",        null: false
   end
 
   add_index "nodes", ["id_hash", "repo_id"], name: "nodes_id_hash_repo_id_idx", unique: true, using: :btree
