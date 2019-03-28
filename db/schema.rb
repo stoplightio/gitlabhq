@@ -11,7 +11,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20190322210219) do
+ActiveRecord::Schema.define(version: 20190327203437) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -726,6 +726,7 @@ ActiveRecord::Schema.define(version: 20190322210219) do
     t.text     "analyzer_job_id"
     t.datetime "created_at",      null: false
     t.datetime "updated_at",      null: false
+    t.text     "failure_reason"
   end
 
   add_index "commit_branches", ["commit_id", "branch_id"], name: "commit_branches_commit_id_branch_id_idx", unique: true, using: :btree
