@@ -11,7 +11,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20190329201604) do
+ActiveRecord::Schema.define(version: 20190401155634) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -1473,9 +1473,11 @@ ActiveRecord::Schema.define(version: 20190329201604) do
     t.text     "data_hash",                                   null: false
     t.datetime "created_at",                default: "now()"
     t.datetime "deleted_at"
-    t.integer  "iid",             limit: 8
+    t.integer  "iid",             limit: 8,                   null: false
+    t.integer  "node_id",         limit: 8,                   null: false
   end
 
+  add_index "node_version_snapshot", ["iid", "node_id"], name: "node_version_snapshot_iid_node_id_idx", unique: true, using: :btree
   add_index "node_version_snapshot", ["node_version_id", "commit_id"], name: "node_version_snapshot_node_version_id_commit_id_idx", unique: true, using: :btree
 
   create_table "node_version_snapshot_changelog", force: :cascade do |t|
@@ -1514,16 +1516,18 @@ ActiveRecord::Schema.define(version: 20190329201604) do
   add_index "node_versions", ["node_id", "version"], name: "node_id_version_idx", unique: true, using: :btree
 
   create_table "nodes", force: :cascade do |t|
-    t.text     "type",       null: false
-    t.text     "id_hash",    null: false
-    t.integer  "repo_id",    null: false
+    t.text     "type",                 null: false
+    t.text     "id_hash",              null: false
+    t.integer  "repo_id",              null: false
     t.integer  "project_id"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.text     "iid"
+    t.datetime "created_at",           null: false
+    t.datetime "updated_at",           null: false
+    t.text     "iid",                  null: false
+    t.integer  "org_id",     limit: 8, null: false
   end
 
   add_index "nodes", ["id_hash", "repo_id"], name: "nodes_id_hash_repo_id_idx", unique: true, using: :btree
+  add_index "nodes", ["iid", "org_id"], name: "nodes_iid_org_id_idx", unique: true, using: :btree
 
   create_table "note_diff_files", force: :cascade do |t|
     t.integer "diff_note_id", null: false
@@ -2593,9 +2597,11 @@ ActiveRecord::Schema.define(version: 20190329201604) do
   add_foreign_key "node_version_edges", "node_versions", column: "to_node_version_id", name: "node_version_edges_to_id_fkey", on_delete: :cascade
   add_foreign_key "node_version_snapshot", "commits", name: "node_version_snapshot_commit_id", on_delete: :cascade
   add_foreign_key "node_version_snapshot", "node_versions", name: "node_version_snapshot_node_version_id", on_delete: :cascade
+  add_foreign_key "node_version_snapshot", "nodes", name: "node_version_snapshot_node_id_fkey", on_delete: :cascade
   add_foreign_key "node_version_snapshot_changelog", "node_version_snapshot", name: "node_version_snapshot_changelog_node_version_snapshot_id_fkey", on_delete: :cascade
   add_foreign_key "node_version_snapshot_validations", "node_version_snapshot", name: "node_version_snapshot_validations_node_version_snapshot_id_fkey", on_delete: :cascade
   add_foreign_key "node_versions", "nodes", name: "node_versions_node_id_fkey", on_delete: :cascade
+  add_foreign_key "nodes", "namespaces", column: "org_id", name: "nodes_org_id_fkey", on_delete: :cascade
   add_foreign_key "nodes", "projects", name: "nodes_project_id_fkey", on_delete: :cascade
   add_foreign_key "nodes", "repos", name: "nodes_repo_id_fkey", on_delete: :cascade
   add_foreign_key "note_diff_files", "notes", column: "diff_note_id", on_delete: :cascade
