@@ -11,7 +11,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20190401155634) do
+ActiveRecord::Schema.define(version: 20190425201359) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -852,18 +852,6 @@ ActiveRecord::Schema.define(version: 20190401155634) do
   add_index "docs", ["domain"], name: "index_docs_on_domain", unique: true, using: :btree
   add_index "docs", ["project_id"], name: "index_docs_on_project_id", using: :btree
 
-  create_table "domains_history", force: :cascade do |t|
-    t.integer  "domain_id"
-    t.integer  "build_id"
-    t.string   "event"
-    t.json     "data"
-    t.datetime "created_at"
-    t.datetime "updated_at"
-  end
-
-  add_index "domains_history", ["build_id"], name: "index_domains_history_on_build_id", using: :btree
-  add_index "domains_history", ["domain_id"], name: "index_domains_history_on_domain_id", using: :btree
-
   create_table "emails", force: :cascade do |t|
     t.integer                "user_id",              null: false
     t.string                 "email",                null: false
@@ -1095,7 +1083,6 @@ ActiveRecord::Schema.define(version: 20190401155634) do
     t.integer  "last_edited_by_id"
     t.boolean  "discussion_locked"
     t.integer  "closed_by_id"
-    t.integer  "org_id"
   end
 
   add_index "issues", ["author_id"], name: "index_issues_on_author_id", using: :btree
@@ -1473,7 +1460,7 @@ ActiveRecord::Schema.define(version: 20190401155634) do
     t.text     "data_hash",                                   null: false
     t.datetime "created_at",                default: "now()"
     t.datetime "deleted_at"
-    t.integer  "iid",             limit: 8,                   null: false
+    t.integer  "iid",             limit: 8
     t.integer  "node_id",         limit: 8,                   null: false
   end
 
@@ -1522,7 +1509,7 @@ ActiveRecord::Schema.define(version: 20190401155634) do
     t.integer  "project_id"
     t.datetime "created_at",           null: false
     t.datetime "updated_at",           null: false
-    t.text     "iid",                  null: false
+    t.text     "iid"
     t.integer  "org_id",     limit: 8, null: false
   end
 
@@ -1912,9 +1899,8 @@ ActiveRecord::Schema.define(version: 20190401155634) do
     t.boolean  "merge_requests_rebase_enabled",                              default: false,     null: false
     t.integer  "jobs_cache_index"
     t.boolean  "pages_https_only",                                           default: true
-    t.json     "provider"
-    t.boolean  "is_released",                                                default: false
     t.boolean  "remote_mirror_available_overridden"
+    t.boolean  "is_released",                                                default: false
   end
 
   add_index "projects", ["ci_id"], name: "index_projects_on_ci_id", using: :btree
@@ -2105,11 +2091,6 @@ ActiveRecord::Schema.define(version: 20190401155634) do
 
   add_index "services", ["project_id"], name: "index_services_on_project_id", using: :btree
   add_index "services", ["template"], name: "index_services_on_template", using: :btree
-
-  create_table "sites_domains", id: false, force: :cascade do |t|
-    t.text "siteid"
-    t.text "domain"
-  end
 
   create_table "snippets", force: :cascade do |t|
     t.string   "title"
