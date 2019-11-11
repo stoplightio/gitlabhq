@@ -1,8 +1,44 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe API::Helpers::RelatedResourcesHelpers do
   subject(:helpers) do
     Class.new.include(described_class).new
+  end
+
+  describe '#expose_path' do
+    let(:path) { '/api/v4/awesome_endpoint' }
+
+    context 'empty relative URL root' do
+      before do
+        stub_config_setting(relative_url_root: '')
+      end
+
+      it 'returns the existing path' do
+        expect(helpers.expose_path(path)).to eq(path)
+      end
+    end
+
+    context 'slash relative URL root' do
+      before do
+        stub_config_setting(relative_url_root: '/')
+      end
+
+      it 'returns the existing path' do
+        expect(helpers.expose_path(path)).to eq(path)
+      end
+    end
+
+    context 'with relative URL root' do
+      before do
+        stub_config_setting(relative_url_root: '/gitlab/root')
+      end
+
+      it 'returns the existing path' do
+        expect(helpers.expose_path(path)).to eq("/gitlab/root" + path)
+      end
+    end
   end
 
   describe '#expose_url' do

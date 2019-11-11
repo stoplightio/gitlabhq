@@ -22,6 +22,10 @@
 
 .snippet-file-content {
   border-radius: 3px;
+
+  .file-title-flex-parent .btn-clipboard {
+    line-height: 28px;
+  }
 }
 
 .snippet-header {
@@ -35,17 +39,13 @@
   min-height: $header-height;
 }
 
-.snippet-edited-ago {
-  color: $gray-darkest;
-}
-
 .snippet-actions {
   @include media-breakpoint-up(sm) {
     float: right;
   }
 }
 
-.snippet-scope-menu .btn-new {
+.snippet-scope-menu .btn-success {
   margin-top: 15px;
 }
 

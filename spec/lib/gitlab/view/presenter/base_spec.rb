@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Gitlab::View::Presenter::Base do
@@ -40,7 +42,7 @@ describe Gitlab::View::Presenter::Base do
       end
     end
 
-    context 'subject is overriden' do
+    context 'subject is overridden' do
       it 'returns true' do
         presenter = presenter_class.new(build_stubbed(:project, :public))
 

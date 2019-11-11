@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module DiffHelper
   def mark_inline_diffs(old_line, new_line)
     old_diffs, new_diffs = Gitlab::Diff::InlineDiff.new(old_line, new_line).inline_diffs
@@ -39,7 +41,8 @@ module DiffHelper
     line_num_class = %w[diff-line-num unfold js-unfold]
     line_num_class << 'js-unfold-bottom' if bottom
 
-    html = ''
+    html = []
+
     if old_pos
       html << content_tag(:td, '...', class: [*line_num_class, 'old_line'], data: { linenumber: old_pos })
       html << content_tag(:td, text, class: [*content_line_class, 'left-side']) if view == :parallel
@@ -50,16 +53,21 @@ module DiffHelper
       html << content_tag(:td, text, class: [*content_line_class, ('right-side' if view == :parallel)])
     end
 
-    html.html_safe
+    html.join.html_safe
   end
 
   def diff_line_content(line)
     if line.blank?
       "&nbsp;".html_safe
     else
-      # We can't use `sub` because the HTML-safeness of `line` will not survive.
-      line[0] = '' if line.start_with?('+', '-', ' ')
-      line
+      # `sub` and substring-ing would destroy HTML-safeness of `line`
+      if line.start_with?('+', '-', ' ')
+        line.dup.tap do |line|
+          line[0] = ''
+        end
+      else
+        line
+      end
     end
   end
 
@@ -135,30 +143,6 @@ module DiffHelper
     !diff_file.deleted_file? && @merge_request && @merge_request.source_project
   end
 
-  def diff_render_error_reason(viewer)
-    case viewer.render_error
-    when :too_large
-      "it is too large"
-    when :server_side_but_stored_externally
-      case viewer.diff_file.external_storage
-      when :lfs
-        'it is stored in LFS'
-      else
-        'it is stored externally'
-      end
-    end
-  end
-
-  def diff_render_error_options(viewer)
-    diff_file = viewer.diff_file
-    options = []
-
-    blob_url = project_blob_path(@project, tree_join(diff_file.content_sha, diff_file.file_path))
-    options << link_to('view the blob', blob_url)
-
-    options
-  end
-
   def diff_file_changed_icon(diff_file)
     if diff_file.deleted_file?
       "file-deletion"
@@ -215,14 +199,12 @@ module DiffHelper
   end
 
   def toggle_whitespace_link(url, options)
-    options[:class] ||= ''
-    options[:class] << ' btn btn-default'
-
+    options[:class] = [*options[:class], 'btn btn-default'].join(' ')
     link_to "#{hide_whitespace? ? 'Show' : 'Hide'} whitespace changes", url, class: options[:class]
   end
 
-  def render_overflow_warning?(diff_files)
-    diffs = @merge_request_diff.presence || diff_files
+  def render_overflow_warning?(diffs_collection)
+    diffs = @merge_request_diff.presence || diffs_collection.diff_files
 
     diffs.overflow?
   end

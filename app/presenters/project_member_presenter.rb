@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class ProjectMemberPresenter < MemberPresenter
   private
 
@@ -13,3 +15,5 @@ class ProjectMemberPresenter < MemberPresenter
     :destroy_project_member
   end
 end
+
+ProjectMemberPresenter.prepend_if_ee('EE::ProjectMemberPresenter')

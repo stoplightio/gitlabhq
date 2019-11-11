@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module SlashCommands
     class Command < BaseCommand
@@ -7,7 +9,9 @@ module Gitlab
           Gitlab::SlashCommands::IssueNew,
           Gitlab::SlashCommands::IssueSearch,
           Gitlab::SlashCommands::IssueMove,
-          Gitlab::SlashCommands::Deploy
+          Gitlab::SlashCommands::IssueClose,
+          Gitlab::SlashCommands::Deploy,
+          Gitlab::SlashCommands::Run
         ]
       end
 
@@ -18,7 +22,7 @@ module Gitlab
           if command.allowed?(project, current_user)
             command.new(project, chat_name, params).execute(match)
           else
-            Gitlab::SlashCommands::Presenters::Access.new.access_denied
+            Gitlab::SlashCommands::Presenters::Access.new.access_denied(project)
           end
         else
           Gitlab::SlashCommands::Help.new(project, chat_name, params)

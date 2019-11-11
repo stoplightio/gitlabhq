@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 shared_examples_for 'allows the "read_user" scope' do |api_version|
   let(:version) { api_version || 'v4' }
 
@@ -77,7 +79,7 @@ shared_examples_for 'does not allow the "read_user" scope' do
     let(:token) { create(:personal_access_token, scopes: ['read_user'], user: user) }
 
     it 'returns a "403" response' do
-      post api_call.call(path, user, personal_access_token: token), attributes_for(:user, projects_limit: 3)
+      post api_call.call(path, user, personal_access_token: token), params: attributes_for(:user, projects_limit: 3)
 
       expect(response).to have_gitlab_http_status(403)
     end

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class SessionsController < Devise::SessionsController
   include InternalRedirect
   include AuthenticatesWithTwoFactor
@@ -6,21 +8,40 @@ class SessionsController < Devise::SessionsController
   include Recaptcha::Verify
 
   skip_before_action :check_two_factor_requirement, only: [:destroy]
+  # replaced with :require_no_authentication_without_flash
+  skip_before_action :require_no_authentication, only: [:new, :create]
 
   prepend_before_action :check_initial_setup, only: [:new]
   prepend_before_action :authenticate_with_two_factor,
-    if: :two_factor_enabled?, only: [:create]
+    if: -> { action_name == 'create' && two_factor_enabled? }
   prepend_before_action :check_captcha, only: [:create]
   prepend_before_action :store_redirect_uri, only: [:new]
   prepend_before_action :ldap_servers, only: [:new, :create]
+  prepend_before_action :require_no_authentication_without_flash, only: [:new, :create]
+  prepend_before_action :ensure_password_authentication_enabled!, if: -> { action_name == 'create' && password_based_login? }
+
   before_action :auto_sign_in_with_provider, only: [:new]
+  before_action :store_unauthenticated_sessions, only: [:new]
+  before_action :save_failed_login, if: :action_new_and_failed_login?
   before_action :load_recaptcha
 
-  after_action :log_failed_login, only: [:new], if: :failed_login?
+  after_action :log_failed_login, if: :action_new_and_failed_login?
 
-  helper_method :captcha_enabled?
+  helper_method :captcha_enabled?, :captcha_on_login_required?
 
-  CAPTCHA_HEADER = 'X-GitLab-Show-Login-Captcha'.freeze
+  # protect_from_forgery is already prepended in ApplicationController but
+  # authenticate_with_two_factor which signs in the user is prepended before
+  # that here.
+  # We need to make sure CSRF token is verified before authenticating the user
+  # because Devise.clean_up_csrf_token_on_authentication is set to true by
+  # default to avoid CSRF token fixation attacks. Authenticating the user first
+  # would cause the CSRF token to be cleared and then
+  # RequestForgeryProtection#verify_authenticity_token would fail because of
+  # token mismatch.
+  protect_from_forgery with: :exception, prepend: true
+
+  CAPTCHA_HEADER = 'X-GitLab-Show-Login-Captcha'
+  MAX_FAILED_LOGIN_ATTEMPTS = 5
 
   def new
     set_minimum_password_length
@@ -32,12 +53,18 @@ class SessionsController < Devise::SessionsController
     super do |resource|
       # User has successfully signed in, so clear any unused reset token
       if resource.reset_password_token.present?
-        resource.update_attributes(reset_password_token: nil,
-                                   reset_password_sent_at: nil)
+        resource.update(reset_password_token: nil,
+                        reset_password_sent_at: nil)
       end
 
-      # hide the signed-in notification
-      flash[:notice] = nil
+      if resource.deactivated?
+        resource.activate
+        flash[:notice] = _('Welcome back! Your account had been deactivated due to inactivity but is now reactivated.')
+      else
+        # hide the default signed-in notification
+        flash[:notice] = nil
+      end
+
       log_audit_event(current_user, resource, with: authentication_method)
       log_user_activity(current_user)
     end
@@ -52,39 +79,92 @@ class SessionsController < Devise::SessionsController
 
   private
 
+  def require_no_authentication_without_flash
+    require_no_authentication
+
+    if flash[:alert] == I18n.t('devise.failure.already_authenticated')
+      flash[:alert] = nil
+    end
+  end
+
   def captcha_enabled?
     request.headers[CAPTCHA_HEADER] && Gitlab::Recaptcha.enabled?
+  end
+
+  def captcha_on_login_required?
+    Gitlab::Recaptcha.enabled_on_login? && unverified_anonymous_user?
   end
 
   # From https://github.com/plataformatec/devise/wiki/How-To:-Use-Recaptcha-with-Devise#devisepasswordscontroller
   def check_captcha
     return unless user_params[:password].present?
-    return unless captcha_enabled?
+    return unless captcha_enabled? || captcha_on_login_required?
     return unless Gitlab::Recaptcha.load_configurations!
 
-    unless verify_recaptcha
+    if verify_recaptcha
+      increment_successful_login_captcha_counter
+    else
+      increment_failed_login_captcha_counter
+
       self.resource = resource_class.new
-      flash[:alert] = 'There was an error with the reCAPTCHA. Please solve the reCAPTCHA again.'
+      flash[:alert] = _('There was an error with the reCAPTCHA. Please solve the reCAPTCHA again.')
       flash.delete :recaptcha_error
 
       respond_with_navigational(resource) { render :new }
     end
   end
 
-  def log_failed_login
-    Gitlab::AppLogger.info("Failed Login: username=#{user_params[:login]} ip=#{request.remote_ip}")
+  def increment_failed_login_captcha_counter
+    Gitlab::Metrics.counter(
+      :failed_login_captcha_total,
+      'Number of failed CAPTCHA attempts for logins'
+    ).increment
   end
 
-  def failed_login?
-    (options = env["warden.options"]) && options[:action] == "unauthenticated"
+  def increment_successful_login_captcha_counter
+    Gitlab::Metrics.counter(
+      :successful_login_captcha_total,
+      'Number of successful CAPTCHA attempts for logins'
+    ).increment
   end
 
+  ##
+  # We do have some duplication between lib/gitlab/auth/activity.rb here, but
+  # leaving this method here because of backwards compatibility.
+  #
   def login_counter
     @login_counter ||= Gitlab::Metrics.counter(:user_session_logins_total, 'User sign in count')
   end
 
+  def log_failed_login
+    Gitlab::AppLogger.info("Failed Login: username=#{user_params[:login]} ip=#{request.remote_ip}")
+  end
+
+  def action_new_and_failed_login?
+    action_name == 'new' && failed_login?
+  end
+
+  def save_failed_login
+    session[:failed_login_attempts] ||= 0
+    session[:failed_login_attempts] += 1
+  end
+
+  def failed_login?
+    (options = request.env["warden.options"]) && options[:action] == "unauthenticated"
+  end
+
+  # storing sessions per IP lets us check if there are associated multiple
+  # anonymous sessions with one IP and prevent situations when there are
+  # multiple attempts of logging in
+  def store_unauthenticated_sessions
+    return if current_user
+
+    Gitlab::AnonymousSession.new(request.remote_ip, session_id: request.session.id).store_session_id_per_ip
+  end
+
   # Handle an "initial setup" state, where there's only one user, it's an admin,
   # and they require a password change.
+  # rubocop: disable CodeReuse/ActiveRecord
   def check_initial_setup
     return unless User.limit(2).count == 1 # Count as much 2 to know if we have exactly one
 
@@ -97,7 +177,16 @@ class SessionsController < Devise::SessionsController
     end
 
     redirect_to edit_user_password_path(reset_password_token: @token),
-      notice: "Please create a password for your new account."
+      notice: _("Please create a password for your new account.")
+  end
+  # rubocop: enable CodeReuse/ActiveRecord
+
+  def ensure_password_authentication_enabled!
+    render_403 unless Gitlab::CurrentSettings.password_authentication_enabled_for_web?
+  end
+
+  def password_based_login?
+    user_params[:login].present? || user_params[:password].present?
   end
 
   def user_params
@@ -139,6 +228,8 @@ class SessionsController < Devise::SessionsController
   end
 
   def auto_sign_in_with_provider
+    return unless Gitlab::Auth.omniauth_enabled?
+
     provider = Gitlab.config.omniauth.auto_sign_in_with_provider
     return unless provider.present?
 
@@ -181,6 +272,18 @@ class SessionsController < Devise::SessionsController
     @ldap_servers ||= Gitlab::Auth::LDAP::Config.available_servers
   end
 
+  def unverified_anonymous_user?
+    exceeded_failed_login_attempts? || exceeded_anonymous_sessions?
+  end
+
+  def exceeded_failed_login_attempts?
+    session.fetch(:failed_login_attempts, 0) > MAX_FAILED_LOGIN_ATTEMPTS
+  end
+
+  def exceeded_anonymous_sessions?
+    Gitlab::AnonymousSession.new(request.remote_ip).stored_sessions >= MAX_FAILED_LOGIN_ATTEMPTS
+  end
+
   def authentication_method
     if user_params[:otp_attempt]
       "two-factor"
@@ -191,3 +294,5 @@ class SessionsController < Devise::SessionsController
     end
   end
 end
+
+SessionsController.prepend_if_ee('EE::SessionsController')

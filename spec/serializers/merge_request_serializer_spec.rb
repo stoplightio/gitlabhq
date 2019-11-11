@@ -1,8 +1,11 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe MergeRequestSerializer do
-  let(:user) { create(:user) }
-  let(:resource) { create(:merge_request) }
+  set(:user) { create(:user) }
+  set(:resource) { create(:merge_request, description: "Description") }
+
   let(:json_entity) do
     described_class.new(current_user: user)
       .represent(resource, serializer: serializer)
@@ -20,8 +23,16 @@ describe MergeRequestSerializer do
   context 'sidebar merge request serialization' do
     let(:serializer) { 'sidebar' }
 
-    it 'matches basic merge request json schema' do
-      expect(json_entity).to match_schema('entities/merge_request_basic')
+    it 'matches merge_request_sidebar json schema' do
+      expect(json_entity).to match_schema('entities/merge_request_sidebar')
+    end
+  end
+
+  context 'sidebar_extras merge request serialization' do
+    let(:serializer) { 'sidebar_extras' }
+
+    it 'matches merge_request_sidebar_extras json schema' do
+      expect(json_entity).to match_schema('entities/merge_request_sidebar_extras')
     end
   end
 
@@ -30,6 +41,14 @@ describe MergeRequestSerializer do
 
     it 'matches basic merge request json schema' do
       expect(json_entity).to match_schema('entities/merge_request_basic')
+    end
+  end
+
+  context 'noteable merge request serialization' do
+    let(:serializer) { 'noteable' }
+
+    it 'matches noteable merge request json schema' do
+      expect(json_entity).to match_schema('entities/merge_request_noteable', strict: true)
     end
   end
 

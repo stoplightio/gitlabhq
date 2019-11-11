@@ -1,6 +1,8 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
-feature 'Groups > User sees users dropdowns in issuables list' do
+describe 'Groups > User sees users dropdowns in issuables list' do
   let(:entity) { create(:group) }
   let(:user_in_dropdown) { create(:user) }
   let!(:user_not_in_dropdown) { create(:user) }

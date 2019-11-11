@@ -9,7 +9,7 @@ describe Gitlab::ImportExport::ProjectTreeSaver do
     let!(:project) { setup_project }
 
     before do
-      project.add_master(user)
+      project.add_maintainer(user)
       allow_any_instance_of(Gitlab::ImportExport).to receive(:storage_path).and_return(export_path)
       allow_any_instance_of(MergeRequest).to receive(:source_branch_sha).and_return('ABCD')
       allow_any_instance_of(MergeRequest).to receive(:target_branch_sha).and_return('DCBA')
@@ -23,12 +23,65 @@ describe Gitlab::ImportExport::ProjectTreeSaver do
       expect(project_tree_saver.save).to be true
     end
 
+    context ':export_fast_serialize feature flag checks' do
+      before do
+        expect(Gitlab::ImportExport::Reader).to receive(:new).with(shared: shared).and_return(reader)
+        expect(reader).to receive(:project_tree).and_return(project_tree)
+      end
+
+      let(:serializer) { instance_double('Gitlab::ImportExport::FastHashSerializer') }
+      let(:reader) { instance_double('Gitlab::ImportExport::Reader') }
+      let(:project_tree) do
+        {
+          include: [{ issues: { include: [] } }],
+          preload: { issues: nil }
+        }
+      end
+
+      context 'when :export_fast_serialize feature is enabled' do
+        before do
+          stub_feature_flags(export_fast_serialize: true)
+        end
+
+        it 'uses FastHashSerializer' do
+          expect(Gitlab::ImportExport::FastHashSerializer)
+            .to receive(:new)
+            .with(project, project_tree)
+            .and_return(serializer)
+
+          expect(serializer).to receive(:execute)
+
+          project_tree_saver.save
+        end
+      end
+
+      context 'when :export_fast_serialize feature is disabled' do
+        before do
+          stub_feature_flags(export_fast_serialize: false)
+        end
+
+        it 'is serialized via built-in `as_json`' do
+          expect(project).to receive(:as_json).with(project_tree)
+
+          project_tree_saver.save
+        end
+      end
+    end
+
+    # It is mostly duplicated in
+    # `spec/lib/gitlab/import_export/fast_hash_serializer_spec.rb`
+    # except:
+    # context 'with description override' do
+    # context 'group members' do
+    # ^ These are specific for the ProjectTreeSaver
     context 'JSON' do
       let(:saved_project_json) do
         project_tree_saver.save
         project_json(project_tree_saver.full_path)
       end
 
+      # It is not duplicated in
+      # `spec/lib/gitlab/import_export/fast_hash_serializer_spec.rb`
       context 'with description override' do
         let(:params) { { description: 'Foo Bar' } }
         let(:project_tree_saver) { described_class.new(project: project, current_user: user, shared: shared, params: params) }
@@ -40,6 +93,10 @@ describe Gitlab::ImportExport::ProjectTreeSaver do
 
       it 'saves the correct json' do
         expect(saved_project_json).to include({ 'description' => 'description', 'visibility_level' => 20 })
+      end
+
+      it 'has approvals_before_merge set' do
+        expect(saved_project_json['approvals_before_merge']).to eq(1)
       end
 
       it 'has milestones' do
@@ -78,12 +135,23 @@ describe Gitlab::ImportExport::ProjectTreeSaver do
         expect(saved_project_json['releases']).not_to be_empty
       end
 
+      it 'has no author on releases' do
+        expect(saved_project_json['releases'].first['author']).to be_nil
+      end
+
+      it 'has the author ID on releases' do
+        expect(saved_project_json['releases'].first['author_id']).not_to be_nil
+      end
+
       it 'has issues' do
         expect(saved_project_json['issues']).not_to be_empty
       end
 
       it 'has issue comments' do
-        expect(saved_project_json['issues'].first['notes']).not_to be_empty
+        notes = saved_project_json['issues'].first['notes']
+
+        expect(notes).not_to be_empty
+        expect(notes.first['type']).to eq('DiscussionNote')
       end
 
       it 'has issue assignees' do
@@ -119,16 +187,16 @@ describe Gitlab::ImportExport::ProjectTreeSaver do
       end
 
       it 'has pipeline stages' do
-        expect(saved_project_json.dig('pipelines', 0, 'stages')).not_to be_empty
+        expect(saved_project_json.dig('ci_pipelines', 0, 'stages')).not_to be_empty
       end
 
       it 'has pipeline statuses' do
-        expect(saved_project_json.dig('pipelines', 0, 'stages', 0, 'statuses')).not_to be_empty
+        expect(saved_project_json.dig('ci_pipelines', 0, 'stages', 0, 'statuses')).not_to be_empty
       end
 
       it 'has pipeline builds' do
         builds_count = saved_project_json
-          .dig('pipelines', 0, 'stages', 0, 'statuses')
+          .dig('ci_pipelines', 0, 'stages', 0, 'statuses')
           .count { |hash| hash['type'] == 'Ci::Build' }
 
         expect(builds_count).to eq(1)
@@ -142,11 +210,11 @@ describe Gitlab::ImportExport::ProjectTreeSaver do
       end
 
       it 'has pipeline commits' do
-        expect(saved_project_json['pipelines']).not_to be_empty
+        expect(saved_project_json['ci_pipelines']).not_to be_empty
       end
 
       it 'has ci pipeline notes' do
-        expect(saved_project_json['pipelines'].first['notes']).not_to be_empty
+        expect(saved_project_json['ci_pipelines'].first['notes']).not_to be_empty
       end
 
       it 'has labels with no associations' do
@@ -164,9 +232,17 @@ describe Gitlab::ImportExport::ProjectTreeSaver do
       end
 
       it 'has priorities associated to labels' do
-        priorities = saved_project_json['issues'].first['label_links'].map { |link| link['label']['priorities'] }
+        priorities = saved_project_json['issues'].first['label_links'].flat_map { |link| link['label']['priorities'] }
 
-        expect(priorities.flatten).not_to be_empty
+        expect(priorities).not_to be_empty
+      end
+
+      it 'has issue resource label events' do
+        expect(saved_project_json['issues'].first['resource_label_events']).not_to be_empty
+      end
+
+      it 'has merge request resource label events' do
+        expect(saved_project_json['merge_requests'].first['resource_label_events']).not_to be_empty
       end
 
       it 'saves the correct service type' do
@@ -217,8 +293,8 @@ describe Gitlab::ImportExport::ProjectTreeSaver do
           expect(member_emails).not_to include('group@member.com')
         end
 
-        it 'does not export group members as master' do
-          Group.first.add_master(user)
+        it 'does not export group members as maintainer' do
+          Group.first.add_maintainer(user)
 
           expect(member_emails).not_to include('group@member.com')
         end
@@ -249,6 +325,10 @@ describe Gitlab::ImportExport::ProjectTreeSaver do
           expect(saved_project_json).not_to include("runners_token" => 'token')
         end
       end
+
+      it 'has a board and a list' do
+        expect(saved_project_json['boards'].first['lists']).not_to be_empty
+      end
     end
   end
 
@@ -268,7 +348,8 @@ describe Gitlab::ImportExport::ProjectTreeSaver do
                      issues: [issue],
                      snippets: [snippet],
                      releases: [release],
-                     group: group
+                     group: group,
+                     approvals_before_merge: 1
                     )
     project_label = create(:label, project: project)
     group_label = create(:group_label, group: group)
@@ -283,13 +364,16 @@ describe Gitlab::ImportExport::ProjectTreeSaver do
     create(:commit_status, project: project, pipeline: ci_build.pipeline)
 
     create(:milestone, project: project)
-    create(:note, noteable: issue, project: project)
+    create(:discussion_note, noteable: issue, project: project)
     create(:note, noteable: merge_request, project: project)
     create(:note, noteable: snippet, project: project)
     create(:note_on_commit,
            author: user,
            project: project,
            commit_id: ci_build.pipeline.sha)
+
+    create(:resource_label_event, label: project_label, issue: issue)
+    create(:resource_label_event, label: group_label, merge_request: merge_request)
 
     create(:event, :created, target: milestone, project: project, author: user)
     create(:service, project: project, type: 'CustomIssueTrackerService', category: 'issue_tracker', properties: { one: 'value' })
@@ -299,6 +383,9 @@ describe Gitlab::ImportExport::ProjectTreeSaver do
 
     create(:project_badge, project: project)
     create(:project_badge, project: project)
+
+    board = create(:board, project: project, name: 'TestBoard')
+    create(:list, board: board, position: 0, label: project_label)
 
     project
   end

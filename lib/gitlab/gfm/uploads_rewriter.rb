@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'fileutils'
 
 module Gitlab
@@ -6,7 +8,7 @@ module Gitlab
     # Class that rewrites markdown links for uploads
     #
     # Using a pattern defined in `FileUploader` it copies files to a new
-    # project and rewrites all links to uploads in in a given text.
+    # project and rewrites all links to uploads in a given text.
     #
     #
     class UploadsRewriter
@@ -16,15 +18,24 @@ module Gitlab
         @pattern = FileUploader::MARKDOWN_PATTERN
       end
 
-      def rewrite(target_project)
+      def rewrite(target_parent)
         return @text unless needs_rewrite?
 
         @text.gsub(@pattern) do |markdown|
           file = find_file(@source_project, $~[:secret], $~[:file])
           break markdown unless file.try(:exists?)
 
-          moved = FileUploader.copy_to(file, target_project)
-          moved.markdown_link
+          klass = target_parent.is_a?(Namespace) ? NamespaceFileUploader : FileUploader
+          moved = klass.copy_to(file, target_parent)
+
+          moved_markdown = moved.markdown_link
+
+          # Prevents rewrite of plain links as embedded
+          if was_embedded?(markdown)
+            moved_markdown
+          else
+            moved_markdown.sub(/\A!/, "")
+          end
         end
       end
 
@@ -38,6 +49,10 @@ module Gitlab
         end
 
         referenced_files.compact.select(&:exists?)
+      end
+
+      def was_embedded?(markdown)
+        markdown.starts_with?("!")
       end
 
       private

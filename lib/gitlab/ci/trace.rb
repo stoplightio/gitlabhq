@@ -1,11 +1,17 @@
+# frozen_string_literal: true
+
 module Gitlab
   module Ci
     class Trace
-      include ExclusiveLeaseGuard
+      include ::Gitlab::ExclusiveLeaseHelpers
+      include Checksummable
 
-      LEASE_TIMEOUT = 1.hour
+      LOCK_TTL = 10.minutes
+      LOCK_RETRIES = 2
+      LOCK_SLEEP = 0.001.seconds
 
       ArchiveError = Class.new(StandardError)
+      AlreadyArchivedError = Class.new(StandardError)
 
       attr_reader :job
 
@@ -58,7 +64,15 @@ module Gitlab
       end
 
       def exist?
-        trace_artifact&.exists? || job.trace_chunks.any? || current_path.present? || old_trace.present?
+        archived_trace_exist? || live_trace_exist?
+      end
+
+      def archived_trace_exist?
+        trace_artifact&.exists?
+      end
+
+      def live_trace_exist?
+        job.trace_chunks.any? || current_path.present? || old_trace.present?
       end
 
       def read
@@ -79,11 +93,41 @@ module Gitlab
         stream&.close
       end
 
-      def write(mode)
+      def write(mode, &blk)
+        in_write_lock do
+          unsafe_write!(mode, &blk)
+        end
+      end
+
+      def erase!
+        ##
+        # Erase the archived trace
+        trace_artifact&.destroy!
+
+        ##
+        # Erase the live trace
+        job.trace_chunks.fast_destroy_all # Destroy chunks of a live trace
+        FileUtils.rm_f(current_path) if current_path # Remove a trace file of a live trace
+        job.erase_old_trace! if job.has_old_trace? # Remove a trace in database of a live trace
+      ensure
+        @current_path = nil
+      end
+
+      def archive!
+        in_write_lock do
+          unsafe_archive!
+        end
+      end
+
+      private
+
+      def unsafe_write!(mode, &blk)
         stream = Gitlab::Ci::Trace::Stream.new do
-          if current_path
+          if trace_artifact
+            raise AlreadyArchivedError, 'Could not write to the archived trace'
+          elsif current_path
             File.open(current_path, mode)
-          elsif Feature.enabled?('ci_enable_live_trace')
+          elsif Feature.enabled?('ci_enable_live_trace', job.project)
             Gitlab::Ci::Trace::ChunkedIO.new(job)
           else
             File.open(ensure_path, mode)
@@ -97,27 +141,8 @@ module Gitlab
         stream&.close
       end
 
-      def erase!
-        trace_artifact&.destroy
-
-        paths.each do |trace_path|
-          FileUtils.rm(trace_path, force: true)
-        end
-
-        job.trace_chunks.fast_destroy_all
-        job.erase_old_trace!
-      end
-
-      def archive!
-        try_obtain_lease do
-          unsafe_archive!
-        end
-      end
-
-      private
-
       def unsafe_archive!
-        raise ArchiveError, 'Already archived' if trace_artifact
+        raise AlreadyArchivedError, 'Could not archive again' if trace_artifact
         raise ArchiveError, 'Job is not finished yet' unless job.complete?
 
         if job.trace_chunks.any?
@@ -138,6 +163,11 @@ module Gitlab
         end
       end
 
+      def in_write_lock(&blk)
+        lock_key = "trace:write:lock:#{job.id}"
+        in_lock(lock_key, ttl: LOCK_TTL, retries: LOCK_RETRIES, sleep_sec: LOCK_SLEEP, &blk)
+      end
+
       def archive_stream!(stream)
         clone_file!(stream, JobArtifactUploader.workhorse_upload_path) do |clone_path|
           create_build_trace!(job, clone_path)
@@ -146,7 +176,7 @@ module Gitlab
 
       def clone_file!(src_stream, temp_dir)
         FileUtils.mkdir_p(temp_dir)
-        Dir.mktmpdir('tmp-trace', temp_dir) do |dir_path|
+        Dir.mktmpdir("tmp-trace-#{job.id}", temp_dir) do |dir_path|
           temp_path = File.join(dir_path, "job.log")
           FileUtils.touch(temp_path)
           size = IO.copy_stream(src_stream, temp_path)
@@ -158,11 +188,13 @@ module Gitlab
 
       def create_build_trace!(job, path)
         File.open(path) do |stream|
+          # TODO: Set `file_format: :raw` after we've cleaned up legacy traces migration
+          # https://gitlab.com/gitlab-org/gitlab-foss/merge_requests/20307
           job.create_job_artifacts_trace!(
             project: job.project,
             file_type: :trace,
             file: stream,
-            file_sha256: Digest::SHA256.file(path).hexdigest)
+            file_sha256: self.class.hexdigest(path))
         end
       end
 
@@ -186,10 +218,7 @@ module Gitlab
       end
 
       def paths
-        [
-          default_path,
-          deprecated_path
-        ].compact
+        [default_path]
       end
 
       def default_directory
@@ -204,27 +233,8 @@ module Gitlab
         File.join(default_directory, "#{job.id}.log")
       end
 
-      def deprecated_path
-        File.join(
-          Settings.gitlab_ci.builds_path,
-          job.created_at.utc.strftime("%Y_%m"),
-          job.project.ci_id.to_s,
-          "#{job.id}.log"
-        ) if job.project&.ci_id
-      end
-
       def trace_artifact
         job.job_artifacts_trace
-      end
-
-      # For ExclusiveLeaseGuard concern
-      def lease_key
-        @lease_key ||= "trace:archive:#{job.id}"
-      end
-
-      # For ExclusiveLeaseGuard concern
-      def lease_timeout
-        LEASE_TIMEOUT
       end
     end
   end

@@ -1,10 +1,14 @@
+# frozen_string_literal: true
+
 module DashboardHelper
+  include IconsHelper
+
   def assigned_issues_dashboard_path
-    issues_dashboard_path(assignee_id: current_user.id)
+    issues_dashboard_path(assignee_username: current_user.username)
   end
 
   def assigned_mrs_dashboard_path
-    merge_requests_dashboard_path(assignee_id: current_user.id)
+    merge_requests_dashboard_path(assignee_username: current_user.username)
   end
 
   def dashboard_nav_links
@@ -19,6 +23,23 @@ module DashboardHelper
     links.any? { |link| dashboard_nav_link?(link) }
   end
 
+  def has_start_trial?
+    false
+  end
+
+  def feature_entry(title, href: nil, enabled: true)
+    enabled_text = enabled ? 'on' : 'off'
+    label = "#{title}: status #{enabled_text}"
+    link_or_title = href && enabled ? tag.a(title, href: href) : title
+
+    tag.p(aria: { label: label }) do
+      concat(link_or_title)
+      concat(tag.span(class: ['light', 'float-right']) do
+        concat(boolean_to_icon(enabled))
+      end)
+    end
+  end
+
   private
 
   def get_dashboard_nav_links
@@ -31,3 +52,5 @@ module DashboardHelper
     links
   end
 end
+
+DashboardHelper.prepend_if_ee('EE::DashboardHelper')

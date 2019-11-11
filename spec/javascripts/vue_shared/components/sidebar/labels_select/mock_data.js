@@ -6,6 +6,13 @@ export const mockLabels = [
     color: '#BADA55',
     text_color: '#FFFFFF',
   },
+  {
+    id: 27,
+    title: 'Foo::Bar',
+    description: 'Foobar',
+    color: '#0033CC',
+    text_color: '#FFFFFF',
+  },
 ];
 
 export const mockSuggestedColors = [
@@ -41,8 +48,8 @@ export const mockConfig = {
   },
   namespace: 'gitlab-org',
   updatePath: '/gitlab-org/my-project/issue/1',
-  labelsPath: '/gitlab-org/my-project/labels.json',
-  labelsWebUrl: '/gitlab-org/my-project/labels',
+  labelsPath: '/gitlab-org/my-project/-/labels.json',
+  labelsWebUrl: '/gitlab-org/my-project/-/labels',
   labelFilterBasePath: '/gitlab-org/my-project/issues',
   canEdit: true,
   suggestedColors: mockSuggestedColors,

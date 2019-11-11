@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe ClusterProvisionWorker do
@@ -14,7 +16,7 @@ describe ClusterProvisionWorker do
     end
 
     context 'when provider type is user' do
-      let(:cluster) { create(:cluster, provider_type: :user) }
+      let(:cluster) { create(:cluster, :provided_by_user) }
 
       it 'does not provision a cluster' do
         expect_any_instance_of(Clusters::Gcp::ProvisionService).not_to receive(:execute)

@@ -1,7 +1,9 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Gitlab::Ci::Pipeline::Chain::Populate do
-  set(:project) { create(:project) }
+  set(:project) { create(:project, :repository) }
   set(:user) { create(:user) }
 
   let(:pipeline) do
@@ -14,6 +16,7 @@ describe Gitlab::Ci::Pipeline::Chain::Populate do
     Gitlab::Ci::Pipeline::Chain::Command.new(
       project: project,
       current_user: user,
+      origin_ref: 'master',
       seeds_block: nil)
   end
 
@@ -35,8 +38,8 @@ describe Gitlab::Ci::Pipeline::Chain::Populate do
     it 'populates pipeline with stages' do
       expect(pipeline.stages).to be_one
       expect(pipeline.stages.first).not_to be_persisted
-      expect(pipeline.stages.first.builds).to be_one
-      expect(pipeline.stages.first.builds.first).not_to be_persisted
+      expect(pipeline.stages.first.statuses).to be_one
+      expect(pipeline.stages.first.statuses.first).not_to be_persisted
     end
 
     it 'correctly assigns user' do
@@ -78,6 +81,31 @@ describe Gitlab::Ci::Pipeline::Chain::Populate do
     end
   end
 
+  describe 'pipeline protect' do
+    subject { step.perform! }
+
+    context 'when ref is protected' do
+      before do
+        allow(project).to receive(:protected_for?).with('master').and_return(true)
+        allow(project).to receive(:protected_for?).with('refs/heads/master').and_return(true)
+      end
+
+      it 'does not protect the pipeline' do
+        subject
+
+        expect(pipeline.protected).to eq(true)
+      end
+    end
+
+    context 'when ref is not protected' do
+      it 'does not protect the pipeline' do
+        subject
+
+        expect(pipeline.protected).to eq(false)
+      end
+    end
+  end
+
   context 'when pipeline has validation errors' do
     let(:pipeline) do
       build(:ci_pipeline, project: project, ref: nil)
@@ -106,6 +134,7 @@ describe Gitlab::Ci::Pipeline::Chain::Populate do
       Gitlab::Ci::Pipeline::Chain::Command.new(
         project: project,
         current_user: user,
+        origin_ref: 'master',
         seeds_block: seeds_block)
     end
 
@@ -136,14 +165,14 @@ describe Gitlab::Ci::Pipeline::Chain::Populate do
         ->(pipeline) { pipeline.variables.create!(key: 'VAR', value: '123') }
       end
 
-      it 'raises exception' do
-        expect { step.perform! }.to raise_error(ActiveRecord::RecordNotSaved)
-      end
-
       it 'wastes pipeline iid' do
-        expect { step.perform! }.to raise_error
+        expect { step.perform! }.to raise_error(ActiveRecord::RecordNotSaved)
 
-        expect(InternalId.ci_pipelines.where(project_id: project.id).last.last_value).to be > 0
+        last_iid = InternalId.ci_pipelines
+          .where(project_id: project.id)
+          .last.last_value
+
+        expect(last_iid).to be > 0
       end
     end
   end
@@ -162,8 +191,8 @@ describe Gitlab::Ci::Pipeline::Chain::Populate do
         step.perform!
 
         expect(pipeline.stages.size).to eq 1
-        expect(pipeline.stages.first.builds.size).to eq 1
-        expect(pipeline.stages.first.builds.first.name).to eq 'rspec'
+        expect(pipeline.stages.first.statuses.size).to eq 1
+        expect(pipeline.stages.first.statuses.first.name).to eq 'rspec'
       end
     end
 
@@ -174,7 +203,7 @@ describe Gitlab::Ci::Pipeline::Chain::Populate do
       end
 
       let(:pipeline) do
-        build(:ci_pipeline, ref: 'master', config: config)
+        build(:ci_pipeline, ref: 'master', project: project, config: config)
       end
 
       it_behaves_like 'a correct pipeline'

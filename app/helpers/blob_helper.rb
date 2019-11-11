@@ -1,7 +1,8 @@
+# frozen_string_literal: true
+
 module BlobHelper
-  def highlight(blob_name, blob_content, repository: nil, plain: false)
-    plain ||= blob_content.length > Blob::MAXIMUM_TEXT_HIGHLIGHT_SIZE
-    highlighted = Gitlab::Highlight.highlight(blob_name, blob_content, plain: plain, repository: repository)
+  def highlight(file_name, file_content, language: nil, plain: false)
+    highlighted = Gitlab::Highlight.highlight(file_name, file_content, plain: plain, language: language)
 
     raw %(<pre class="code highlight"><code>#{highlighted}</code></pre>)
   end
@@ -17,9 +18,30 @@ module BlobHelper
   end
 
   def ide_edit_path(project = @project, ref = @ref, path = @path, options = {})
-    segments = [ide_path, 'project', project.full_path, 'edit', ref]
-    segments.concat(['-', path]) if path.present?
+    project_path =
+      if !current_user || can?(current_user, :push_code, project)
+        project.full_path
+      else
+        # We currently always fork to the user's namespace
+        # in edit_fork_button_tag
+        "#{current_user.namespace.full_path}/#{project.path}"
+      end
+
+    segments = [ide_path, 'project', project_path, 'edit', ref]
+    segments.concat(['-', encode_ide_path(path)]) if path.present?
     File.join(segments)
+  end
+
+  def ide_fork_and_edit_path(project = @project, ref = @ref, path = @path, options = {})
+    if current_user
+      project_forks_path(project,
+                        namespace_key: current_user&.namespace&.id,
+                        continue: edit_blob_fork_params(ide_edit_path(project, ref, path)))
+    end
+  end
+
+  def encode_ide_path(path)
+    url_encode(path).gsub('%2F', '/')
   end
 
   def edit_blob_button(project = @project, ref = @ref, path = @path, options = {})
@@ -30,12 +52,13 @@ module BlobHelper
     edit_button_tag(blob,
                     common_classes,
                     _('Edit'),
-                    edit_blob_path(project, ref, path, options),
+                    Feature.enabled?(:web_ide_default) ? ide_edit_path(project, ref, path, options) : edit_blob_path(project, ref, path, options),
                     project,
                     ref)
   end
 
   def ide_edit_button(project = @project, ref = @ref, path = @path, options = {})
+    return if Feature.enabled?(:web_ide_default)
     return unless blob = readable_blob(options, path, project, ref)
 
     edit_button_tag(blob,
@@ -71,7 +94,7 @@ module BlobHelper
       project,
       ref,
       path,
-      label:      "Replace",
+      label:      _("Replace"),
       action:     "replace",
       btn_class:  "default",
       modal_type: "upload"
@@ -83,7 +106,7 @@ module BlobHelper
       project,
       ref,
       path,
-      label:      "Delete",
+      label:      _("Delete"),
       action:     "delete",
       btn_class:  "remove",
       modal_type: "remove"
@@ -95,14 +118,14 @@ module BlobHelper
   end
 
   def leave_edit_message
-    "Leave edit mode?\nAll unsaved changes will be lost."
+    _("Leave edit mode? All unsaved changes will be lost.")
   end
 
   def editing_preview_title(filename)
     if Gitlab::MarkupHelper.previewable?(filename)
-      'Preview'
+      _('Preview')
     else
-      'Preview changes'
+      _('Preview changes')
     end
   end
 
@@ -114,22 +137,22 @@ module BlobHelper
     icon("#{file_type_icon_class('file', mode, name)} fw")
   end
 
-  def blob_raw_url(only_path: false)
+  def blob_raw_url(**kwargs)
     if @build && @entry
-      raw_project_job_artifacts_url(@project, @build, path: @entry.path, only_path: only_path)
+      raw_project_job_artifacts_url(@project, @build, path: @entry.path, **kwargs)
     elsif @snippet
       if @snippet.project_id
-        raw_project_snippet_url(@project, @snippet, only_path: only_path)
+        raw_project_snippet_url(@project, @snippet, **kwargs)
       else
-        raw_snippet_url(@snippet, only_path: only_path)
+        raw_snippet_url(@snippet, **kwargs)
       end
     elsif @blob
-      project_raw_url(@project, @id, only_path: only_path)
+      project_raw_url(@project, @id, **kwargs)
     end
   end
 
-  def blob_raw_path
-    blob_raw_url(only_path: true)
+  def blob_raw_path(**kwargs)
+    blob_raw_url(**kwargs, only_path: true)
   end
 
   # SVGs can contain malicious JavaScript; only include whitelisted
@@ -139,103 +162,71 @@ module BlobHelper
     Gitlab::Sanitizers::SVG.clean(data)
   end
 
-  # If we blindly set the 'real' content type when serving a Git blob we
-  # are enabling XSS attacks. An attacker could upload e.g. a Javascript
-  # file to a Git repository, trick the browser of a victim into
-  # downloading the blob, and then the 'application/javascript' content
-  # type would tell the browser to execute the attacker's Javascript. By
-  # overriding the content type and setting it to 'text/plain' (in the
-  # example of Javascript) we tell the browser of the victim not to
-  # execute untrusted data.
-  def safe_content_type(blob)
-    if blob.text?
-      'text/plain; charset=utf-8'
-    elsif blob.image?
-      blob.content_type
-    else
-      'application/octet-stream'
-    end
-  end
-
-  def cached_blob?
-    stale = stale?(etag: @blob.id) # The #stale? method sets cache headers.
-
-    # Because we are opionated we set the cache headers ourselves.
-    response.cache_control[:public] = @project.public?
-
-    response.cache_control[:max_age] =
-      if @ref && @commit && @ref == @commit.id
-        # This is a link to a commit by its commit SHA. That means that the blob
-        # is immutable. The only reason to invalidate the cache is if the commit
-        # was deleted or if the user lost access to the repository.
-        Blob::CACHE_TIME_IMMUTABLE
-      else
-        # A branch or tag points at this blob. That means that the expected blob
-        # value may change over time.
-        Blob::CACHE_TIME
-      end
-
-    response.etag = @blob.id
-    !stale
-  end
-
-  def licenses_for_select
-    return @licenses_for_select if defined?(@licenses_for_select)
-
-    licenses = Licensee::License.all
-
-    @licenses_for_select = {
-      Popular: licenses.select(&:featured).map { |license| { name: license.name, id: license.key } },
-      Other: licenses.reject(&:featured).map { |license| { name: license.name, id: license.key } }
-    }
-  end
-
   def ref_project
     @ref_project ||= @target_project || @project
   end
 
-  def gitignore_names
-    @gitignore_names ||= Gitlab::Template::GitignoreTemplate.dropdown_names
+  def template_dropdown_names(items)
+    grouped = items.group_by(&:category)
+    categories = grouped.keys
+
+    categories.each_with_object({}) do |category, hash|
+      hash[category] = grouped[category].map do |item|
+        { name: item.name, id: item.key }
+      end
+    end
+  end
+  private :template_dropdown_names
+
+  def licenses_for_select(project)
+    @licenses_for_select ||= template_dropdown_names(TemplateFinder.build(:licenses, project).execute)
   end
 
-  def gitlab_ci_ymls
-    @gitlab_ci_ymls ||= Gitlab::Template::GitlabCiYmlTemplate.dropdown_names(params[:context])
+  def gitignore_names(project)
+    @gitignore_names ||= template_dropdown_names(TemplateFinder.build(:gitignores, project).execute)
   end
 
-  def dockerfile_names
-    @dockerfile_names ||= Gitlab::Template::DockerfileTemplate.dropdown_names
+  def gitlab_ci_ymls(project)
+    @gitlab_ci_ymls ||= template_dropdown_names(TemplateFinder.build(:gitlab_ci_ymls, project).execute)
   end
 
-  def blob_editor_paths
+  def dockerfile_names(project)
+    @dockerfile_names ||= template_dropdown_names(TemplateFinder.build(:dockerfiles, project).execute)
+  end
+
+  def blob_editor_paths(project)
     {
       'relative-url-root' => Rails.application.config.relative_url_root,
       'assets-prefix' => Gitlab::Application.config.assets.prefix,
-      'blob-language' => @blob && @blob.language.try(:ace_mode)
+      'blob-filename' => @blob && @blob.path,
+      'project-id' => project.id,
+      'is-markdown' => @blob && @blob.path && Gitlab::MarkupHelper.gitlab_markdown?(@blob.path)
     }
   end
 
   def copy_file_path_button(file_path)
-    clipboard_button(text: file_path, gfm: "`#{file_path}`", class: 'btn-clipboard btn-transparent prepend-left-5', title: 'Copy file path to clipboard')
+    clipboard_button(text: file_path, gfm: "`#{file_path}`", class: 'btn-clipboard btn-transparent', title: _('Copy file path'))
   end
 
   def copy_blob_source_button(blob)
     return unless blob.rendered_as_text?(ignore_errors: false)
 
-    clipboard_button(target: ".blob-content[data-blob-id='#{blob.id}']", class: "btn btn-sm js-copy-blob-source-btn", title: "Copy source to clipboard")
+    clipboard_button(target: ".blob-content[data-blob-id='#{blob.id}']", class: "btn btn-sm js-copy-blob-source-btn", title: _("Copy file contents"))
   end
 
   def open_raw_blob_button(blob)
     return if blob.empty?
+    return if blob.binary? || blob.stored_externally?
 
-    if blob.raw_binary? || blob.stored_externally?
-      icon = sprite_icon('download')
-      title = 'Download'
-    else
-      icon = icon('file-code-o')
-      title = 'Open raw'
-    end
+    title = _('Open raw')
+    link_to icon('file-code-o'), blob_raw_path, class: 'btn btn-sm has-tooltip', target: '_blank', rel: 'noopener noreferrer', title: title, data: { container: 'body' }
+  end
 
-    link_to icon, blob_raw_path, class: 'btn btn-sm has-tooltip', target: '_blank', rel: 'noopener noreferrer', title: title, data: { container: 'body' }
+  def download_blob_button(blob)
+    return if blob.empty?
+
+    title = _('Download')
+    link_to sprite_icon('download'), blob_raw_path(inline: false), download: @path, class: 'btn btn-sm has-tooltip', target: '_blank', rel: 'noopener noreferrer', title: title, data: { container: 'body' }
   end
 
   def blob_render_error_reason(viewer)

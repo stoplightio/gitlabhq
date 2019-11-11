@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe 'CycleAnalytics#code' do
@@ -6,7 +8,8 @@ describe 'CycleAnalytics#code' do
   let(:project) { create(:project, :repository) }
   let(:from_date) { 10.days.ago }
   let(:user) { create(:user, :admin) }
-  subject { CycleAnalytics.new(project, from: from_date) }
+
+  subject { CycleAnalytics::ProjectLevel.new(project, options: { from: from_date }) }
 
   context 'with deployment' do
     generate_cycle_analytics_spec(
@@ -35,7 +38,7 @@ describe 'CycleAnalytics#code' do
         merge_merge_requests_closing_issue(user, project, issue)
         deploy_master(user, project)
 
-        expect(subject[:code].median).to be_nil
+        expect(subject[:code].project_median).to be_nil
       end
     end
   end
@@ -65,7 +68,7 @@ describe 'CycleAnalytics#code' do
 
         merge_merge_requests_closing_issue(user, project, issue)
 
-        expect(subject[:code].median).to be_nil
+        expect(subject[:code].project_median).to be_nil
       end
     end
   end

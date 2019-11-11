@@ -1,4 +1,6 @@
-require 'rails_helper'
+# frozen_string_literal: true
+
+require 'spec_helper'
 require 'carrierwave/storage/fog'
 
 class Implementation < GitlabUploader
@@ -12,7 +14,7 @@ class Implementation < GitlabUploader
 
   # user/:id
   def dynamic_segment
-    File.join(model.class.to_s.underscore, model.id.to_s)
+    File.join(model.class.underscore, model.id.to_s)
   end
 end
 
@@ -191,6 +193,18 @@ describe ObjectStorage do
           it "calls a cache path" do
             expect { |b| uploader.use_file(&b) }.to yield_with_args(%r[tmp/cache])
           end
+
+          it "cleans up the cached file" do
+            cached_path = ''
+
+            uploader.use_file do |path|
+              cached_path = path
+
+              expect(File.exist?(cached_path)).to be_truthy
+            end
+
+            expect(File.exist?(cached_path)).to be_falsey
+          end
         end
       end
 
@@ -363,7 +377,7 @@ describe ObjectStorage do
   describe '#fog_public' do
     subject { uploader.fog_public }
 
-    it { is_expected.to eq(false) }
+    it { is_expected.to eq(nil) }
   end
 
   describe '.workhorse_authorize' do
@@ -583,7 +597,7 @@ describe ObjectStorage do
     context 'when local file is used' do
       context 'when valid file is used' do
         let(:uploaded_file) do
-          fixture_file_upload(Rails.root + 'spec/fixtures/rails_sample.jpg', 'image/jpg')
+          fixture_file_upload('spec/fixtures/rails_sample.jpg', 'image/jpg')
         end
 
         it "properly caches the file" do
@@ -704,7 +718,7 @@ describe ObjectStorage do
           end
 
           let!(:fog_file) do
-            fog_connection.directories.get('uploads').files.create(
+            fog_connection.directories.new(key: 'uploads').files.create(
               key: 'tmp/uploads/test/123123',
               body: 'content'
             )
@@ -757,6 +771,14 @@ describe ObjectStorage do
           models
 
           expect { avatars }.not_to exceed_query_limit(1)
+        end
+
+        it 'does not attempt to replace methods' do
+          models.each do |model|
+            expect(model.avatar.upload).to receive(:method_missing).and_call_original
+
+            model.avatar.upload.path
+          end
         end
 
         it 'fetches a unique upload for each model' do

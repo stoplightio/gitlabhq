@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe WikiPages::CreateService do
@@ -10,6 +12,10 @@ describe WikiPages::CreateService do
       content: 'Content for wiki page',
       format: 'markdown'
     }
+  end
+
+  let(:bad_opts) do
+    { title: '' }
   end
 
   subject(:service) { described_class.new(project, user, opts) }
@@ -33,6 +39,27 @@ describe WikiPages::CreateService do
         .with(instance_of(WikiPage), 'create')
 
       service.execute
+    end
+
+    it 'counts wiki page creation' do
+      counter = Gitlab::UsageDataCounters::WikiPageCounter
+
+      expect { service.execute }.to change { counter.read(:create) }.by 1
+    end
+
+    context 'when the options are bad' do
+      subject(:service) { described_class.new(project, user, bad_opts) }
+
+      it 'does not count a creation event' do
+        counter = Gitlab::UsageDataCounters::WikiPageCounter
+
+        expect { service.execute }.not_to change { counter.read(:create) }
+      end
+
+      it 'reports the error' do
+        expect(service.execute).to be_invalid
+          .and have_attributes(errors: be_present)
+      end
     end
   end
 end

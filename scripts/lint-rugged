@@ -1,25 +1,33 @@
 #!/usr/bin/env ruby
 
 ALLOWED = [
-  # Can be fixed once Rugged is no longer used in production. Doesn't make Rugged calls.
-  'config/initializers/8_metrics.rb',
+  # https://gitlab.com/gitlab-org/gitaly/issues/760
+  'lib/elasticsearch/git/repository.rb',
 
-  # Can be deleted once wiki's are fully (mandatory) migrated
-  'config/initializers/gollum.rb',
-
-  # Needs to be migrated, https://gitlab.com/gitlab-org/gitaly/issues/953
+  # Needed to handle repositories that are not in any storage
   'lib/gitlab/bare_repository_import/repository.rb',
 
-  # Needs to be migrated, https://gitlab.com/gitlab-org/gitaly/issues/954
-  'lib/tasks/gitlab/cleanup.rake',
+  # Needed to avoid using the git binary to validate a branch name
+  'lib/gitlab/git_ref_validator.rb',
 
-  # The only place where Rugged code is still allowed in production
-  'lib/gitlab/git/'
+  # Reverted Rugged calls due to Gitaly atop NFS performance
+  # See https://docs.gitlab.com/ee/development/gitaly.html#legacy-rugged-code.
+  'lib/gitlab/git/rugged_impl/',
+  'lib/gitlab/gitaly_client/storage_settings.rb',
+
+  # Needed for logging
+  'config/initializers/peek.rb',
+  'config/initializers/lograge.rb',
+  'lib/gitlab/grape_logging/loggers/perf_logger.rb',
+  'lib/gitlab/instrumentation_helper.rb',
+  'lib/gitlab/rugged_instrumentation.rb',
+  'lib/peek/views/rugged.rb'
 ].freeze
 
 rugged_lines = IO.popen(%w[git grep -i -n rugged -- app config lib], &:read).lines
 rugged_lines = rugged_lines.select { |l| /^[^:]*\.rb:/ =~ l }
 rugged_lines = rugged_lines.reject { |l| l.start_with?(*ALLOWED) }
+rugged_lines = rugged_lines.reject { |l| /(include|prepend) Gitlab::Git::RuggedImpl/ =~ l}
 rugged_lines = rugged_lines.reject do |line|
   code, _comment = line.split('# ', 2)
   code !~ /rugged/i

@@ -1,6 +1,8 @@
-require 'rails_helper'
+# frozen_string_literal: true
 
-feature 'Mini Pipeline Graph in Commit View', :js do
+require 'spec_helper'
+
+describe 'Mini Pipeline Graph in Commit View', :js do
   let(:project) { create(:project, :public, :repository) }
 
   context 'when commit has pipelines' do
@@ -43,7 +45,7 @@ feature 'Mini Pipeline Graph in Commit View', :js do
       visit project_commit_path(project, project.commit.id)
     end
 
-    it 'should not display a mini pipeline graph' do
+    it 'does not display a mini pipeline graph' do
       expect(page).not_to have_selector('.mr-widget-pipeline-graph')
     end
   end

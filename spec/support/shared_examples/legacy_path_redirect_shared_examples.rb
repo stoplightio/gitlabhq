@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 shared_examples 'redirecting a legacy path' do |source, target|
   include RSpec::Rails::RequestExampleGroup
 
@@ -9,5 +11,13 @@ shared_examples 'redirecting a legacy path' do |source, target|
     resource
 
     expect(get(source)).not_to redirect_to(target)
+  end
+end
+
+shared_examples 'redirecting a legacy project path' do |source, target|
+  include RSpec::Rails::RequestExampleGroup
+
+  it "redirects #{source} to #{target}" do
+    expect(get(source)).to redirect_to(target)
   end
 end

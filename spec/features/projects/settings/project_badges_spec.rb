@@ -1,21 +1,23 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
-feature 'Project Badges' do
+describe 'Project Badges' do
   include WaitForRequests
 
   let(:user) { create(:user) }
   let(:group) { create(:group) }
   let(:project) { create(:project, namespace: group) }
-  let(:badge_link_url) { 'https://gitlab.com/gitlab-org/gitlab-ee/commits/master'}
-  let(:badge_image_url) { 'https://gitlab.com/gitlab-org/gitlab-ee/badges/master/build.svg'}
+  let(:badge_link_url) { 'https://gitlab.com/gitlab-org/gitlab/commits/master'}
+  let(:badge_image_url) { 'https://gitlab.com/gitlab-org/gitlab/badges/master/build.svg'}
   let!(:project_badge) { create(:project_badge, project: project) }
   let!(:group_badge) { create(:group_badge, group: group) }
 
   before do
-    group.add_master(user)
+    group.add_maintainer(user)
     sign_in(user)
 
-    visit(project_settings_badges_path(project))
+    visit(edit_project_path(project))
   end
 
   it 'shows a list of badges', :js do

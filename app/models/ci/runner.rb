@@ -1,73 +1,15 @@
+# frozen_string_literal: true
+
 module Ci
-  class Runner < ActiveRecord::Base
+  class Runner < ApplicationRecord
     extend Gitlab::Ci::Model
     include Gitlab::SQL::Pattern
     include RedisCacheable
     include ChronicDurationAttribute
+    include FromUnion
+    include TokenAuthenticatable
 
-    RUNNER_QUEUE_EXPIRY_TIME = 60.minutes
-    ONLINE_CONTACT_TIMEOUT = 1.hour
-    UPDATE_DB_RUNNER_INFO_EVERY = 40.minutes
-    AVAILABLE_SCOPES = %w[specific shared active paused online].freeze
-    FORM_EDITABLE = %i[description tag_list active run_untagged locked access_level maximum_timeout_human_readable].freeze
-
-    has_many :builds
-    has_many :runner_projects, inverse_of: :runner, dependent: :destroy # rubocop:disable Cop/ActiveRecordDependent
-    has_many :projects, through: :runner_projects
-    has_many :runner_namespaces, inverse_of: :runner
-    has_many :groups, through: :runner_namespaces
-
-    has_one :last_build, ->() { order('id DESC') }, class_name: 'Ci::Build'
-
-    before_validation :set_default_values
-
-    scope :specific, -> { where(is_shared: false) }
-    scope :shared, -> { where(is_shared: true) }
-    scope :active, -> { where(active: true) }
-    scope :paused, -> { where(active: false) }
-    scope :online, -> { where('contacted_at > ?', contact_time_deadline) }
-    scope :ordered, -> { order(id: :desc) }
-
-    scope :belonging_to_project, -> (project_id) {
-      joins(:runner_projects).where(ci_runner_projects: { project_id: project_id })
-    }
-
-    scope :belonging_to_parent_group_of_project, -> (project_id) {
-      project_groups = ::Group.joins(:projects).where(projects: { id: project_id })
-      hierarchy_groups = Gitlab::GroupHierarchy.new(project_groups).base_and_ancestors
-
-      joins(:groups).where(namespaces: { id: hierarchy_groups })
-    }
-
-    scope :owned_or_shared, -> (project_id) do
-      union = Gitlab::SQL::Union.new(
-        [belonging_to_project(project_id), belonging_to_parent_group_of_project(project_id), shared],
-        remove_duplicates: false
-      )
-      from("(#{union.to_sql}) ci_runners")
-    end
-
-    scope :assignable_for, ->(project) do
-      # FIXME: That `to_sql` is needed to workaround a weird Rails bug.
-      #        Without that, placeholders would miss one and couldn't match.
-      where(locked: false)
-        .where.not("ci_runners.id IN (#{project.runners.select(:id).to_sql})")
-        .project_type
-    end
-
-    validate :tag_constraints
-    validates :access_level, presence: true
-    validates :runner_type, presence: true
-
-    validate :no_projects, unless: :project_type?
-    validate :no_groups, unless: :group_type?
-    validate :any_project, if: :project_type?
-    validate :exactly_one_group, if: :group_type?
-    validate :validate_is_shared
-
-    acts_as_taggable
-
-    after_destroy :cleanup_runner_queue
+    add_authentication_token_field :token, encrypted: -> { Feature.enabled?(:ci_runners_tokens_optional_encryption, default_enabled: true) ? :optional : :required }
 
     enum access_level: {
       not_protected: 0,
@@ -80,9 +22,105 @@ module Ci
       project_type: 3
     }
 
+    ONLINE_CONTACT_TIMEOUT = 1.hour
+    RUNNER_QUEUE_EXPIRY_TIME = 1.hour
+
+    # This needs to be less than `ONLINE_CONTACT_TIMEOUT`
+    UPDATE_CONTACT_COLUMN_EVERY = (40.minutes..55.minutes).freeze
+
+    AVAILABLE_TYPES_LEGACY = %w[specific shared].freeze
+    AVAILABLE_TYPES = runner_types.keys.freeze
+    AVAILABLE_STATUSES = %w[active paused online offline].freeze
+    AVAILABLE_SCOPES = (AVAILABLE_TYPES_LEGACY + AVAILABLE_TYPES + AVAILABLE_STATUSES).freeze
+
+    FORM_EDITABLE = %i[description tag_list active run_untagged locked access_level maximum_timeout_human_readable].freeze
+
+    self.ignored_columns += %i[is_shared]
+
+    has_many :builds
+    has_many :runner_projects, inverse_of: :runner, dependent: :destroy # rubocop:disable Cop/ActiveRecordDependent
+    has_many :projects, through: :runner_projects
+    has_many :runner_namespaces, inverse_of: :runner
+    has_many :groups, through: :runner_namespaces
+
+    has_one :last_build, ->() { order('id DESC') }, class_name: 'Ci::Build'
+
+    before_save :ensure_token
+
+    scope :active, -> { where(active: true) }
+    scope :paused, -> { where(active: false) }
+    scope :online, -> { where('contacted_at > ?', online_contact_time_deadline) }
+    # The following query using negation is cheaper than using `contacted_at <= ?`
+    # because there are less runners online than have been created. The
+    # resulting query is quickly finding online ones and then uses the regular
+    # indexed search and rejects the ones that are in the previous set. If we
+    # did `contacted_at <= ?` the query would effectively have to do a seq
+    # scan.
+    scope :offline, -> { where.not(id: online) }
+    scope :ordered, -> { order(id: :desc) }
+
+    scope :with_recent_runner_queue, -> { where('contacted_at > ?', recent_queue_deadline) }
+
+    # BACKWARD COMPATIBILITY: There are needed to maintain compatibility with `AVAILABLE_SCOPES` used by `lib/api/runners.rb`
+    scope :deprecated_shared, -> { instance_type }
+    scope :deprecated_specific, -> { project_type.or(group_type) }
+
+    scope :belonging_to_project, -> (project_id) {
+      joins(:runner_projects).where(ci_runner_projects: { project_id: project_id })
+    }
+
+    scope :belonging_to_parent_group_of_project, -> (project_id) {
+      project_groups = ::Group.joins(:projects).where(projects: { id: project_id })
+      hierarchy_groups = Gitlab::ObjectHierarchy.new(project_groups).base_and_ancestors
+
+      joins(:groups).where(namespaces: { id: hierarchy_groups })
+    }
+
+    scope :owned_or_instance_wide, -> (project_id) do
+      from_union(
+        [
+          belonging_to_project(project_id),
+          belonging_to_parent_group_of_project(project_id),
+          instance_type
+        ],
+        remove_duplicates: false
+      )
+    end
+
+    scope :assignable_for, ->(project) do
+      # FIXME: That `to_sql` is needed to workaround a weird Rails bug.
+      #        Without that, placeholders would miss one and couldn't match.
+      #
+      # We use "unscoped" here so that any current Ci::Runner filters don't
+      # apply to the inner query, which is not necessary.
+      exclude_runners = unscoped { project.runners.select(:id) }.to_sql
+
+      where(locked: false)
+        .where.not("ci_runners.id IN (#{exclude_runners})")
+        .project_type
+    end
+
+    scope :order_contacted_at_asc, -> { order(contacted_at: :asc) }
+    scope :order_created_at_desc, -> { order(created_at: :desc) }
+    scope :with_tags, -> { preload(:tags) }
+
+    validate :tag_constraints
+    validates :access_level, presence: true
+    validates :runner_type, presence: true
+
+    validate :no_projects, unless: :project_type?
+    validate :no_groups, unless: :group_type?
+    validate :any_project, if: :project_type?
+    validate :exactly_one_group, if: :group_type?
+
+    acts_as_taggable
+
+    after_destroy :cleanup_runner_queue
+
     cached_attr_reader :version, :revision, :platform, :architecture, :ip_address, :contacted_at
 
-    chronic_duration_attr :maximum_timeout_human_readable, :maximum_timeout
+    chronic_duration_attr :maximum_timeout_human_readable, :maximum_timeout,
+        error_message: 'Maximum job timeout has a value which could not be accepted'
 
     validates :maximum_timeout, allow_nil: true,
                                 numericality: { greater_than_or_equal_to: 600,
@@ -104,17 +142,28 @@ module Ci
       fuzzy_search(query, [:token, :description])
     end
 
-    def self.contact_time_deadline
+    def self.online_contact_time_deadline
       ONLINE_CONTACT_TIMEOUT.ago
     end
 
-    def set_default_values
-      self.token = SecureRandom.hex(15) if self.token.blank?
+    def self.recent_queue_deadline
+      # we add queue expiry + online
+      # - contacted_at can be updated at any time within this interval
+      #   we have always accurate `contacted_at` but it is stored in Redis
+      #   and not persisted in database
+      (ONLINE_CONTACT_TIMEOUT + RUNNER_QUEUE_EXPIRY_TIME).ago
+    end
+
+    def self.order_by(order)
+      if order == 'contacted_asc'
+        order_contacted_at_asc
+      else
+        order_created_at_desc
+      end
     end
 
     def assign_to(project, current_user = nil)
-      if shared?
-        self.is_shared = false if shared?
+      if instance_type?
         self.runner_type = :project_type
       elsif group_type?
         raise ArgumentError, 'Transitioning a group runner to a project runner is not supported'
@@ -137,12 +186,8 @@ module Ci
       description
     end
 
-    def shared?
-      is_shared
-    end
-
     def online?
-      contacted_at && contacted_at > self.class.contact_time_deadline
+      contacted_at && contacted_at > self.class.online_contact_time_deadline
     end
 
     def status
@@ -157,10 +202,6 @@ module Ci
 
     def belongs_to_one_project?
       runner_projects.count == 1
-    end
-
-    def specific?
-      !shared?
     end
 
     def assigned_to_group?
@@ -229,10 +270,14 @@ module Ci
       end
     end
 
+    def uncached_contacted_at
+      read_attribute(:contacted_at)
+    end
+
     private
 
     def cleanup_runner_queue
-      Gitlab::Redis::Queues.with do |redis|
+      Gitlab::Redis::SharedState.with do |redis|
         redis.del(runner_queue_key)
       end
     end
@@ -243,9 +288,7 @@ module Ci
 
     def persist_cached_data?
       # Use a random threshold to prevent beating DB updates.
-      # It generates a distribution between [40m, 80m].
-
-      contacted_at_max_age = UPDATE_DB_RUNNER_INFO_EVERY + Random.rand(UPDATE_DB_RUNNER_INFO_EVERY)
+      contacted_at_max_age = Random.rand(UPDATE_CONTACT_COLUMN_EVERY)
 
       real_contacted_at = read_attribute(:contacted_at)
       real_contacted_at.nil? ||
@@ -260,7 +303,7 @@ module Ci
     end
 
     def assignable_for?(project_id)
-      self.class.owned_or_shared(project_id).where(id: self.id).any?
+      self.class.owned_or_instance_wide(project_id).where(id: self.id).any?
     end
 
     def no_projects
@@ -287,14 +330,10 @@ module Ci
       end
     end
 
-    def validate_is_shared
-      unless is_shared? == instance_type?
-        errors.add(:is_shared, 'is not equal to instance_type?')
-      end
-    end
-
     def accepting_tags?(build)
       (run_untagged? || build.has_tags?) && (build.tag_list - tag_list).empty?
     end
   end
 end
+
+Ci::Runner.prepend_if_ee('EE::Ci::Runner')

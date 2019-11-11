@@ -1,4 +1,6 @@
-class AbuseReport < ActiveRecord::Base
+# frozen_string_literal: true
+
+class AbuseReport < ApplicationRecord
   include CacheMarkdownField
 
   cache_markdown_field :message, pipeline: :single_line

@@ -2,11 +2,11 @@
   .issue-box
     - if @can_bulk_update
       .issue-check.hidden
-        = check_box_tag dom_id(issue, "selected"), nil, false, 'data-id' => issue.id, class: "selected_issue"
-    .issue-info-container
-      .issue-main-info
+        = check_box_tag dom_id(issue, "selected"), nil, false, 'data-id' => issue.id, class: "selected-issuable"
+    .issuable-info-container
+      .issuable-main-info
         .issue-title.title
-          %span.issue-title-text
+          %span.issue-title-text.js-onboarding-issue-item{ dir: "auto" }
             - if issue.confidential?
               %span.has-tooltip{ title: _('Confidential') }
                 = confidential_icon(issue)
@@ -36,19 +36,25 @@
               = issue.due_date.to_s(:medium)
           - if issue.labels.any?
             &nbsp;
-            - issue.labels.each do |label|
-              = link_to_label(label, subject: issue.project, css_class: 'label-link')
+            - presented_labels_sorted_by_title(issue.labels, issue.project).each do |label|
+              = link_to_label(label, css_class: 'label-link')
+
+          = render_if_exists "projects/issues/issue_weight", issue: issue
 
       .issuable-meta
         %ul.controls
-          - if issue.closed?
+          - if issue.moved?
             %li.issuable-status
-              CLOSED
+              = _('CLOSED (MOVED)')
+          - elsif issue.closed?
+            %li.issuable-status
+              = _('CLOSED')
           - if issue.assignees.any?
             %li
-              = render 'shared/issuable/assignees', project: @project, issue: issue
+              = render 'shared/issuable/assignees', project: @project, issuable: issue
 
           = render 'shared/issuable_meta_data', issuable: issue
 
         .float-right.issuable-updated-at.d-none.d-sm-inline-block
-          %span updated #{time_ago_with_tooltip(issue.updated_at, placement: 'bottom', html_class: 'issue_update_ago')}
+          %span
+            = _('updated %{time_ago}').html_safe % { time_ago: time_ago_with_tooltip(issue.updated_at, placement: 'bottom', html_class: 'issue_update_ago') }

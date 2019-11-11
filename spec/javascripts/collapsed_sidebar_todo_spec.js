@@ -6,7 +6,7 @@ import Sidebar from '~/right_sidebar';
 import timeoutPromise from './helpers/set_timeout_promise_helper';
 
 describe('Issuable right sidebar collapsed todo toggle', () => {
-  const fixtureName = 'issues/open-issue.html.raw';
+  const fixtureName = 'issues/open-issue.html';
   const jsonFixtureName = 'todos/todos.json';
   let mock;
 
@@ -18,10 +18,8 @@ describe('Issuable right sidebar collapsed todo toggle', () => {
     new Sidebar();
     loadFixtures(fixtureName);
 
-    document.querySelector('.js-right-sidebar')
-      .classList.toggle('right-sidebar-expanded');
-    document.querySelector('.js-right-sidebar')
-      .classList.toggle('right-sidebar-collapsed');
+    document.querySelector('.js-right-sidebar').classList.toggle('right-sidebar-expanded');
+    document.querySelector('.js-right-sidebar').classList.toggle('right-sidebar-collapsed');
 
     mock = new MockAdapter(axios);
 
@@ -44,13 +42,13 @@ describe('Issuable right sidebar collapsed todo toggle', () => {
   });
 
   it('shows add todo button', () => {
-    expect(
-      document.querySelector('.js-issuable-todo.sidebar-collapsed-icon'),
-    ).not.toBeNull();
+    expect(document.querySelector('.js-issuable-todo.sidebar-collapsed-icon')).not.toBeNull();
 
     expect(
-      document.querySelector('.js-issuable-todo.sidebar-collapsed-icon .fa-plus-square'),
-    ).not.toBeNull();
+      document
+        .querySelector('.js-issuable-todo.sidebar-collapsed-icon svg use')
+        .getAttribute('xlink:href'),
+    ).toContain('todo-add');
 
     expect(
       document.querySelector('.js-issuable-todo.sidebar-collapsed-icon .todo-undone'),
@@ -60,10 +58,10 @@ describe('Issuable right sidebar collapsed todo toggle', () => {
   it('sets default tooltip title', () => {
     expect(
       document.querySelector('.js-issuable-todo.sidebar-collapsed-icon').getAttribute('title'),
-    ).toBe('Add todo');
+    ).toBe('Add a To Do');
   });
 
-  it('toggle todo state', (done) => {
+  it('toggle todo state', done => {
     document.querySelector('.js-issuable-todo.sidebar-collapsed-icon').click();
 
     setTimeout(() => {
@@ -72,38 +70,42 @@ describe('Issuable right sidebar collapsed todo toggle', () => {
       ).not.toBeNull();
 
       expect(
-        document.querySelector('.js-issuable-todo.sidebar-collapsed-icon .fa-check-square'),
-      ).not.toBeNull();
+        document
+          .querySelector('.js-issuable-todo.sidebar-collapsed-icon svg.todo-undone use')
+          .getAttribute('xlink:href'),
+      ).toContain('todo-done');
 
       done();
     });
   });
 
-  it('toggle todo state of expanded todo toggle', (done) => {
+  it('toggle todo state of expanded todo toggle', done => {
     document.querySelector('.js-issuable-todo.sidebar-collapsed-icon').click();
 
     setTimeout(() => {
       expect(
         document.querySelector('.issuable-sidebar-header .js-issuable-todo').textContent.trim(),
-      ).toBe('Mark todo as done');
+      ).toBe('Mark as done');
 
       done();
     });
   });
 
-  it('toggles todo button tooltip', (done) => {
+  it('toggles todo button tooltip', done => {
     document.querySelector('.js-issuable-todo.sidebar-collapsed-icon').click();
 
     setTimeout(() => {
       expect(
-        document.querySelector('.js-issuable-todo.sidebar-collapsed-icon').getAttribute('data-original-title'),
-      ).toBe('Mark todo as done');
+        document
+          .querySelector('.js-issuable-todo.sidebar-collapsed-icon')
+          .getAttribute('data-original-title'),
+      ).toBe('Mark as done');
 
       done();
     });
   });
 
-  it('marks todo as done', (done) => {
+  it('marks todo as done', done => {
     document.querySelector('.js-issuable-todo.sidebar-collapsed-icon').click();
 
     timeoutPromise()
@@ -122,40 +124,46 @@ describe('Issuable right sidebar collapsed todo toggle', () => {
 
         expect(
           document.querySelector('.issuable-sidebar-header .js-issuable-todo').textContent.trim(),
-        ).toBe('Add todo');
+        ).toBe('Add a To Do');
       })
       .then(done)
       .catch(done.fail);
   });
 
-  it('updates aria-label to mark todo as done', (done) => {
+  it('updates aria-label to Mark as done', done => {
     document.querySelector('.js-issuable-todo.sidebar-collapsed-icon').click();
 
     setTimeout(() => {
       expect(
-        document.querySelector('.js-issuable-todo.sidebar-collapsed-icon').getAttribute('aria-label'),
-      ).toBe('Mark todo as done');
+        document
+          .querySelector('.js-issuable-todo.sidebar-collapsed-icon')
+          .getAttribute('aria-label'),
+      ).toBe('Mark as done');
 
       done();
     });
   });
 
-  it('updates aria-label to add todo', (done) => {
+  it('updates aria-label to add todo', done => {
     document.querySelector('.js-issuable-todo.sidebar-collapsed-icon').click();
 
     timeoutPromise()
       .then(() => {
         expect(
-          document.querySelector('.js-issuable-todo.sidebar-collapsed-icon').getAttribute('aria-label'),
-        ).toBe('Mark todo as done');
+          document
+            .querySelector('.js-issuable-todo.sidebar-collapsed-icon')
+            .getAttribute('aria-label'),
+        ).toBe('Mark as done');
 
         document.querySelector('.js-issuable-todo.sidebar-collapsed-icon').click();
       })
       .then(timeoutPromise)
       .then(() => {
         expect(
-          document.querySelector('.js-issuable-todo.sidebar-collapsed-icon').getAttribute('aria-label'),
-        ).toBe('Add todo');
+          document
+            .querySelector('.js-issuable-todo.sidebar-collapsed-icon')
+            .getAttribute('aria-label'),
+        ).toBe('Add a To Do');
       })
       .then(done)
       .catch(done.fail);

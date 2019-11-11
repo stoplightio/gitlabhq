@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Issues::ReopenService do
@@ -20,11 +22,11 @@ describe Issues::ReopenService do
       end
     end
 
-    context 'when user is authrized to reopen issue' do
+    context 'when user is authorized to reopen issue' do
       let(:user) { create(:user) }
 
       before do
-        project.add_master(user)
+        project.add_maintainer(user)
       end
 
       it 'invalidates counter cache for assignees' do

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Gitlab::Database::MigrationHelpers do
@@ -9,35 +11,87 @@ describe Gitlab::Database::MigrationHelpers do
     allow(model).to receive(:puts)
   end
 
+  describe '#remove_timestamps' do
+    it 'can remove the default timestamps' do
+      Gitlab::Database::MigrationHelpers::DEFAULT_TIMESTAMP_COLUMNS.each do |column_name|
+        expect(model).to receive(:remove_column).with(:foo, column_name)
+      end
+
+      model.remove_timestamps(:foo)
+    end
+
+    it 'can remove custom timestamps' do
+      expect(model).to receive(:remove_column).with(:foo, :bar)
+
+      model.remove_timestamps(:foo, columns: [:bar])
+    end
+  end
+
   describe '#add_timestamps_with_timezone' do
+    let(:in_transaction) { false }
+
     before do
-      allow(model).to receive(:transaction_open?).and_return(false)
+      allow(model).to receive(:transaction_open?).and_return(in_transaction)
+      allow(model).to receive(:disable_statement_timeout)
     end
 
-    context 'using PostgreSQL' do
-      before do
-        allow(Gitlab::Database).to receive(:postgresql?).and_return(true)
-        allow(model).to receive(:disable_statement_timeout)
+    it 'adds "created_at" and "updated_at" fields with the "datetime_with_timezone" data type' do
+      Gitlab::Database::MigrationHelpers::DEFAULT_TIMESTAMP_COLUMNS.each do |column_name|
+        expect(model).to receive(:add_column).with(:foo, column_name, :datetime_with_timezone, { null: false })
       end
 
-      it 'adds "created_at" and "updated_at" fields with the "datetime_with_timezone" data type' do
-        expect(model).to receive(:add_column).with(:foo, :created_at, :datetime_with_timezone, { null: false })
-        expect(model).to receive(:add_column).with(:foo, :updated_at, :datetime_with_timezone, { null: false })
-
-        model.add_timestamps_with_timezone(:foo)
-      end
+      model.add_timestamps_with_timezone(:foo)
     end
 
-    context 'using MySQL' do
-      before do
-        allow(Gitlab::Database).to receive(:postgresql?).and_return(false)
+    it 'can disable the NOT NULL constraint' do
+      Gitlab::Database::MigrationHelpers::DEFAULT_TIMESTAMP_COLUMNS.each do |column_name|
+        expect(model).to receive(:add_column).with(:foo, column_name, :datetime_with_timezone, { null: true })
       end
 
-      it 'adds "created_at" and "updated_at" fields with "datetime_with_timezone" data type' do
-        expect(model).to receive(:add_column).with(:foo, :created_at, :datetime_with_timezone, { null: false })
-        expect(model).to receive(:add_column).with(:foo, :updated_at, :datetime_with_timezone, { null: false })
+      model.add_timestamps_with_timezone(:foo, null: true)
+    end
 
-        model.add_timestamps_with_timezone(:foo)
+    it 'can add just one column' do
+      expect(model).to receive(:add_column).with(:foo, :created_at, :datetime_with_timezone, anything)
+      expect(model).not_to receive(:add_column).with(:foo, :updated_at, :datetime_with_timezone, anything)
+
+      model.add_timestamps_with_timezone(:foo, columns: [:created_at])
+    end
+
+    it 'can add choice of acceptable columns' do
+      expect(model).to receive(:add_column).with(:foo, :created_at, :datetime_with_timezone, anything)
+      expect(model).to receive(:add_column).with(:foo, :deleted_at, :datetime_with_timezone, anything)
+      expect(model).not_to receive(:add_column).with(:foo, :updated_at, :datetime_with_timezone, anything)
+
+      model.add_timestamps_with_timezone(:foo, columns: [:created_at, :deleted_at])
+    end
+
+    it 'cannot add unacceptable column names' do
+      expect do
+        model.add_timestamps_with_timezone(:foo, columns: [:bar])
+      end.to raise_error %r/Illegal timestamp column name/
+    end
+
+    context 'in a transaction' do
+      let(:in_transaction) { true }
+
+      before do
+        allow(model).to receive(:add_column).with(any_args).and_call_original
+        allow(model).to receive(:add_column)
+          .with(:foo, anything, :datetime_with_timezone, anything)
+          .and_return(nil)
+      end
+
+      it 'cannot add a default value' do
+        expect do
+          model.add_timestamps_with_timezone(:foo, default: :i_cause_an_error)
+        end.to raise_error %r/add_timestamps_with_timezone/
+      end
+
+      it 'can add columns without defaults' do
+        expect do
+          model.add_timestamps_with_timezone(:foo)
+        end.not_to raise_error
       end
     end
   end
@@ -46,56 +100,29 @@ describe Gitlab::Database::MigrationHelpers do
     context 'outside a transaction' do
       before do
         allow(model).to receive(:transaction_open?).and_return(false)
+        allow(model).to receive(:disable_statement_timeout).and_call_original
       end
 
-      context 'using PostgreSQL' do
-        before do
-          allow(Gitlab::Database).to receive(:postgresql?).and_return(true)
-          allow(model).to receive(:disable_statement_timeout)
-        end
+      it 'creates the index concurrently' do
+        expect(model).to receive(:add_index)
+          .with(:users, :foo, algorithm: :concurrently)
 
-        it 'creates the index concurrently' do
-          expect(model).to receive(:add_index)
-            .with(:users, :foo, algorithm: :concurrently)
-
-          model.add_concurrent_index(:users, :foo)
-        end
-
-        it 'creates unique index concurrently' do
-          expect(model).to receive(:add_index)
-            .with(:users, :foo, { algorithm: :concurrently, unique: true })
-
-          model.add_concurrent_index(:users, :foo, unique: true)
-        end
-
-        it 'does nothing if the index exists already' do
-          expect(model).to receive(:index_exists?)
-            .with(:users, :foo, { algorithm: :concurrently, unique: true }).and_return(true)
-          expect(model).not_to receive(:add_index)
-
-          model.add_concurrent_index(:users, :foo, unique: true)
-        end
+        model.add_concurrent_index(:users, :foo)
       end
 
-      context 'using MySQL' do
-        before do
-          allow(Gitlab::Database).to receive(:postgresql?).and_return(false)
-        end
+      it 'creates unique index concurrently' do
+        expect(model).to receive(:add_index)
+          .with(:users, :foo, { algorithm: :concurrently, unique: true })
 
-        it 'creates a regular index' do
-          expect(model).to receive(:add_index)
-            .with(:users, :foo, {})
+        model.add_concurrent_index(:users, :foo, unique: true)
+      end
 
-          model.add_concurrent_index(:users, :foo)
-        end
+      it 'does nothing if the index exists already' do
+        expect(model).to receive(:index_exists?)
+          .with(:users, :foo, { algorithm: :concurrently, unique: true }).and_return(true)
+        expect(model).not_to receive(:add_index)
 
-        it 'does nothing if the index exists already' do
-          expect(model).to receive(:index_exists?)
-            .with(:users, :foo, { unique: true }).and_return(true)
-          expect(model).not_to receive(:add_index)
-
-          model.add_concurrent_index(:users, :foo, unique: true)
-        end
+        model.add_concurrent_index(:users, :foo, unique: true)
       end
     end
 
@@ -114,29 +141,24 @@ describe Gitlab::Database::MigrationHelpers do
       before do
         allow(model).to receive(:transaction_open?).and_return(false)
         allow(model).to receive(:index_exists?).and_return(true)
+        allow(model).to receive(:disable_statement_timeout).and_call_original
+        allow(model).to receive(:supports_drop_index_concurrently?).and_return(true)
       end
 
-      context 'using PostgreSQL' do
-        before do
-          allow(model).to receive(:supports_drop_index_concurrently?).and_return(true)
-          allow(model).to receive(:disable_statement_timeout)
+      describe 'by column name' do
+        it 'removes the index concurrently' do
+          expect(model).to receive(:remove_index)
+            .with(:users, { algorithm: :concurrently, column: :foo })
+
+          model.remove_concurrent_index(:users, :foo)
         end
 
-        describe 'by column name' do
-          it 'removes the index concurrently' do
-            expect(model).to receive(:remove_index)
-              .with(:users, { algorithm: :concurrently, column: :foo })
+        it 'does nothing if the index does not exist' do
+          expect(model).to receive(:index_exists?)
+            .with(:users, :foo, { algorithm: :concurrently, unique: true }).and_return(false)
+          expect(model).not_to receive(:remove_index)
 
-            model.remove_concurrent_index(:users, :foo)
-          end
-
-          it 'does nothing if the index does not exist' do
-            expect(model).to receive(:index_exists?)
-              .with(:users, :foo, { algorithm: :concurrently, unique: true }).and_return(false)
-            expect(model).not_to receive(:remove_index)
-
-            model.remove_concurrent_index(:users, :foo, unique: true)
-          end
+          model.remove_concurrent_index(:users, :foo, unique: true)
         end
 
         describe 'by index name' do
@@ -157,17 +179,6 @@ describe Gitlab::Database::MigrationHelpers do
 
             model.remove_concurrent_index_by_name(:users, "index_x_by_y")
           end
-        end
-      end
-
-      context 'using MySQL' do
-        it 'removes an index' do
-          expect(Gitlab::Database).to receive(:postgresql?).and_return(false)
-
-          expect(model).to receive(:remove_index)
-            .with(:users, { column: :foo })
-
-          model.remove_concurrent_index(:users, :foo)
         end
       end
     end
@@ -202,56 +213,44 @@ describe Gitlab::Database::MigrationHelpers do
         allow(model).to receive(:transaction_open?).and_return(false)
       end
 
-      context 'using MySQL' do
-        before do
-          allow(Gitlab::Database).to receive(:mysql?).and_return(true)
-        end
+      it 'creates a concurrent foreign key and validates it' do
+        expect(model).to receive(:disable_statement_timeout).and_call_original
+        expect(model).to receive(:execute).with(/statement_timeout/)
+        expect(model).to receive(:execute).ordered.with(/NOT VALID/)
+        expect(model).to receive(:execute).ordered.with(/VALIDATE CONSTRAINT/)
+        expect(model).to receive(:execute).with(/RESET ALL/)
 
-        it 'creates a regular foreign key' do
-          expect(model).to receive(:add_foreign_key)
-            .with(:projects, :users, column: :user_id, on_delete: :cascade)
-
-          model.add_concurrent_foreign_key(:projects, :users, column: :user_id)
-        end
-
-        it 'does not create a foreign key if it exists already' do
-          expect(model).to receive(:foreign_key_exists?).with(:projects, :users, column: :user_id).and_return(true)
-          expect(model).not_to receive(:add_foreign_key)
-
-          model.add_concurrent_foreign_key(:projects, :users, column: :user_id)
-        end
+        model.add_concurrent_foreign_key(:projects, :users, column: :user_id)
       end
 
-      context 'using PostgreSQL' do
-        before do
-          allow(Gitlab::Database).to receive(:mysql?).and_return(false)
-        end
+      it 'appends a valid ON DELETE statement' do
+        expect(model).to receive(:disable_statement_timeout).and_call_original
+        expect(model).to receive(:execute).with(/statement_timeout/)
+        expect(model).to receive(:execute).with(/ON DELETE SET NULL/)
+        expect(model).to receive(:execute).ordered.with(/VALIDATE CONSTRAINT/)
+        expect(model).to receive(:execute).with(/RESET ALL/)
 
-        it 'creates a concurrent foreign key and validates it' do
-          expect(model).to receive(:disable_statement_timeout)
-          expect(model).to receive(:execute).ordered.with(/NOT VALID/)
-          expect(model).to receive(:execute).ordered.with(/VALIDATE CONSTRAINT/)
+        model.add_concurrent_foreign_key(:projects, :users,
+                                         column: :user_id,
+                                         on_delete: :nullify)
+      end
 
-          model.add_concurrent_foreign_key(:projects, :users, column: :user_id)
-        end
+      it 'does not create a foreign key if it exists already' do
+        expect(model).to receive(:foreign_key_exists?).with(:projects, :users, column: :user_id).and_return(true)
+        expect(model).not_to receive(:execute).with(/ADD CONSTRAINT/)
+        expect(model).to receive(:execute).with(/VALIDATE CONSTRAINT/)
 
-        it 'appends a valid ON DELETE statement' do
-          expect(model).to receive(:disable_statement_timeout)
-          expect(model).to receive(:execute).with(/ON DELETE SET NULL/)
-          expect(model).to receive(:execute).ordered.with(/VALIDATE CONSTRAINT/)
+        model.add_concurrent_foreign_key(:projects, :users, column: :user_id)
+      end
 
-          model.add_concurrent_foreign_key(:projects, :users,
-                                           column: :user_id,
-                                           on_delete: :nullify)
-        end
+      it 'allows the use of a custom key name' do
+        expect(model).to receive(:disable_statement_timeout).and_call_original
+        expect(model).to receive(:execute).with(/statement_timeout/)
+        expect(model).to receive(:execute).ordered.with(/NOT VALID/)
+        expect(model).to receive(:execute).ordered.with(/VALIDATE CONSTRAINT.+foo/)
+        expect(model).to receive(:execute).with(/RESET ALL/)
 
-        it 'does not create a foreign key if it exists already' do
-          expect(model).to receive(:foreign_key_exists?).with(:projects, :users, column: :user_id).and_return(true)
-          expect(model).not_to receive(:execute).with(/ADD CONSTRAINT/)
-          expect(model).to receive(:execute).with(/VALIDATE CONSTRAINT/)
-
-          model.add_concurrent_foreign_key(:projects, :users, column: :user_id)
-        end
+        model.add_concurrent_foreign_key(:projects, :users, column: :user_id, name: :foo)
       end
     end
   end
@@ -290,68 +289,76 @@ describe Gitlab::Database::MigrationHelpers do
   end
 
   describe '#disable_statement_timeout' do
-    context 'using PostgreSQL' do
-      it 'disables statement timeouts' do
-        expect(Gitlab::Database).to receive(:postgresql?).and_return(true)
+    it 'disables statement timeouts to current transaction only' do
+      expect(model).to receive(:execute).with('SET LOCAL statement_timeout TO 0')
 
-        expect(model).to receive(:execute).with('SET statement_timeout TO 0')
-
-        model.disable_statement_timeout
-      end
+      model.disable_statement_timeout
     end
 
-    context 'using MySQL' do
-      it 'does nothing' do
-        expect(Gitlab::Database).to receive(:postgresql?).and_return(false)
+    # this specs runs without an enclosing transaction (:delete truncation method for db_cleaner)
+    context 'with real environment', :delete do
+      before do
+        model.execute("SET statement_timeout TO '20000'")
+      end
 
-        expect(model).not_to receive(:execute)
+      after do
+        model.execute('RESET ALL')
+      end
 
-        model.disable_statement_timeout
+      it 'defines statement to 0 only for current transaction' do
+        expect(model.execute('SHOW statement_timeout').first['statement_timeout']).to eq('20s')
+
+        model.connection.transaction do
+          model.disable_statement_timeout
+          expect(model.execute('SHOW statement_timeout').first['statement_timeout']).to eq('0')
+        end
+
+        expect(model.execute('SHOW statement_timeout').first['statement_timeout']).to eq('20s')
+      end
+
+      context 'when passing a blocks' do
+        it 'disables statement timeouts on session level and executes the block' do
+          expect(model).to receive(:execute).with('SET statement_timeout TO 0')
+          expect(model).to receive(:execute).with('RESET ALL').at_least(:once)
+
+          expect { |block| model.disable_statement_timeout(&block) }.to yield_control
+        end
+
+        # this specs runs without an enclosing transaction (:delete truncation method for db_cleaner)
+        context 'with real environment', :delete do
+          before do
+            model.execute("SET statement_timeout TO '20000'")
+          end
+
+          after do
+            model.execute('RESET ALL')
+          end
+
+          it 'defines statement to 0 for any code run inside the block' do
+            expect(model.execute('SHOW statement_timeout').first['statement_timeout']).to eq('20s')
+
+            model.disable_statement_timeout do
+              model.connection.transaction do
+                expect(model.execute('SHOW statement_timeout').first['statement_timeout']).to eq('0')
+              end
+
+              expect(model.execute('SHOW statement_timeout').first['statement_timeout']).to eq('0')
+            end
+          end
+        end
       end
     end
   end
 
   describe '#true_value' do
-    context 'using PostgreSQL' do
-      before do
-        expect(Gitlab::Database).to receive(:postgresql?).and_return(true)
-      end
-
-      it 'returns the appropriate value' do
-        expect(model.true_value).to eq("'t'")
-      end
-    end
-
-    context 'using MySQL' do
-      before do
-        expect(Gitlab::Database).to receive(:postgresql?).and_return(false)
-      end
-
-      it 'returns the appropriate value' do
-        expect(model.true_value).to eq(1)
-      end
+    it 'returns the appropriate value' do
+      expect(model.true_value).to eq("'t'")
     end
   end
 
   describe '#false_value' do
-    context 'using PostgreSQL' do
-      before do
-        expect(Gitlab::Database).to receive(:postgresql?).and_return(true)
-      end
-
-      it 'returns the appropriate value' do
-        expect(model.false_value).to eq("'f'")
-      end
-    end
-
-    context 'using MySQL' do
-      before do
-        expect(Gitlab::Database).to receive(:postgresql?).and_return(false)
-      end
-
-      it 'returns the appropriate value' do
-        expect(model.false_value).to eq(0)
-      end
+    it 'returns the appropriate value' do
+      expect(model.false_value).to eq("'f'")
     end
   end
 
@@ -364,9 +371,9 @@ describe Gitlab::Database::MigrationHelpers do
       end
 
       it 'updates all the rows in a table' do
-        model.update_column_in_batches(:projects, :import_error, 'foo')
+        model.update_column_in_batches(:projects, :description_html, 'foo')
 
-        expect(Project.where(import_error: 'foo').count).to eq(5)
+        expect(Project.where(description_html: 'foo').count).to eq(5)
       end
 
       it 'updates boolean values correctly' do
@@ -486,6 +493,24 @@ describe Gitlab::Database::MigrationHelpers do
           model.add_column_with_default(:projects, :foo, :integer, default: 10, limit: 8)
         end
       end
+
+      it 'adds a column with an array default value for a jsonb type' do
+        create(:project)
+        allow(model).to receive(:transaction_open?).and_return(false)
+        allow(model).to receive(:transaction).and_yield
+        expect(model).to receive(:update_column_in_batches).with(:projects, :foo, '[{"foo":"json"}]').and_call_original
+
+        model.add_column_with_default(:projects, :foo, :jsonb, default: [{ foo: "json" }])
+      end
+
+      it 'adds a column with an object default value for a jsonb type' do
+        create(:project)
+        allow(model).to receive(:transaction_open?).and_return(false)
+        allow(model).to receive(:transaction).and_yield
+        expect(model).to receive(:update_column_in_batches).with(:projects, :foo, '{"foo":"json"}').and_call_original
+
+        model.add_column_with_default(:projects, :foo, :jsonb, default: { foo: "json" })
+      end
     end
 
     context 'inside a transaction' do
@@ -525,66 +550,47 @@ describe Gitlab::Database::MigrationHelpers do
       before do
         allow(model).to receive(:transaction_open?).and_return(false)
         allow(model).to receive(:column_for).and_return(old_column)
-
-        # Since MySQL and PostgreSQL use different quoting styles we'll just
-        # stub the methods used for this to make testing easier.
-        allow(model).to receive(:quote_column_name) { |name| name.to_s }
-        allow(model).to receive(:quote_table_name) { |name| name.to_s }
       end
 
-      context 'using MySQL' do
-        it 'renames a column concurrently' do
-          allow(Gitlab::Database).to receive(:postgresql?).and_return(false)
+      it 'renames a column concurrently' do
+        expect(model).to receive(:check_trigger_permissions!).with(:users)
 
-          expect(model).to receive(:check_trigger_permissions!).with(:users)
+        expect(model).to receive(:install_rename_triggers_for_postgresql)
+          .with(trigger_name, '"users"', '"old"', '"new"')
 
-          expect(model).to receive(:install_rename_triggers_for_mysql)
-            .with(trigger_name, 'users', 'old', 'new')
+        expect(model).to receive(:add_column)
+          .with(:users, :new, :integer,
+               limit: old_column.limit,
+               precision: old_column.precision,
+               scale: old_column.scale)
 
-          expect(model).to receive(:add_column)
-            .with(:users, :new, :integer,
-                 limit: old_column.limit,
-                 precision: old_column.precision,
-                 scale: old_column.scale)
+        expect(model).to receive(:change_column_default)
+          .with(:users, :new, old_column.default)
 
-          expect(model).to receive(:change_column_default)
-            .with(:users, :new, old_column.default)
+        expect(model).to receive(:update_column_in_batches)
 
-          expect(model).to receive(:update_column_in_batches)
+        expect(model).to receive(:change_column_null).with(:users, :new, false)
 
-          expect(model).to receive(:change_column_null).with(:users, :new, false)
+        expect(model).to receive(:copy_indexes).with(:users, :old, :new)
+        expect(model).to receive(:copy_foreign_keys).with(:users, :old, :new)
 
-          expect(model).to receive(:copy_indexes).with(:users, :old, :new)
-          expect(model).to receive(:copy_foreign_keys).with(:users, :old, :new)
+        model.rename_column_concurrently(:users, :old, :new)
+      end
 
-          model.rename_column_concurrently(:users, :old, :new)
+      context 'when default is false' do
+        let(:old_column) do
+          double(:column,
+               type: :boolean,
+               limit: nil,
+               default: false,
+               null: false,
+               precision: nil,
+               scale: nil)
         end
-      end
 
-      context 'using PostgreSQL' do
-        it 'renames a column concurrently' do
-          allow(Gitlab::Database).to receive(:postgresql?).and_return(true)
-
-          expect(model).to receive(:check_trigger_permissions!).with(:users)
-
-          expect(model).to receive(:install_rename_triggers_for_postgresql)
-            .with(trigger_name, 'users', 'old', 'new')
-
-          expect(model).to receive(:add_column)
-            .with(:users, :new, :integer,
-                 limit: old_column.limit,
-                 precision: old_column.precision,
-                 scale: old_column.scale)
-
+        it 'copies the default to the new column' do
           expect(model).to receive(:change_column_default)
             .with(:users, :new, old_column.default)
-
-          expect(model).to receive(:update_column_in_batches)
-
-          expect(model).to receive(:change_column_null).with(:users, :new, false)
-
-          expect(model).to receive(:copy_indexes).with(:users, :old, :new)
-          expect(model).to receive(:copy_foreign_keys).with(:users, :old, :new)
 
           model.rename_column_concurrently(:users, :old, :new)
         end
@@ -592,10 +598,21 @@ describe Gitlab::Database::MigrationHelpers do
     end
   end
 
-  describe '#cleanup_concurrent_column_rename' do
-    it 'cleans up the renaming procedure for PostgreSQL' do
-      allow(Gitlab::Database).to receive(:postgresql?).and_return(true)
+  describe '#undo_rename_column_concurrently' do
+    it 'reverses the operations of rename_column_concurrently' do
+      expect(model).to receive(:check_trigger_permissions!).with(:users)
 
+      expect(model).to receive(:remove_rename_triggers_for_postgresql)
+        .with(:users, /trigger_.{12}/)
+
+      expect(model).to receive(:remove_column).with(:users, :new)
+
+      model.undo_rename_column_concurrently(:users, :old, :new)
+    end
+  end
+
+  describe '#cleanup_concurrent_column_rename' do
+    it 'cleans up the renaming procedure' do
       expect(model).to receive(:check_trigger_permissions!).with(:users)
 
       expect(model).to receive(:remove_rename_triggers_for_postgresql)
@@ -605,18 +622,79 @@ describe Gitlab::Database::MigrationHelpers do
 
       model.cleanup_concurrent_column_rename(:users, :old, :new)
     end
+  end
 
-    it 'cleans up the renaming procedure for MySQL' do
-      allow(Gitlab::Database).to receive(:postgresql?).and_return(false)
+  describe '#undo_cleanup_concurrent_column_rename' do
+    context 'in a transaction' do
+      it 'raises RuntimeError' do
+        allow(model).to receive(:transaction_open?).and_return(true)
 
-      expect(model).to receive(:check_trigger_permissions!).with(:users)
+        expect { model.undo_cleanup_concurrent_column_rename(:users, :old, :new) }
+          .to raise_error(RuntimeError)
+      end
+    end
 
-      expect(model).to receive(:remove_rename_triggers_for_mysql)
-        .with(/trigger_.{12}/)
+    context 'outside a transaction' do
+      let(:new_column) do
+        double(:column,
+              type: :integer,
+              limit: 8,
+              default: 0,
+              null: false,
+              precision: 5,
+              scale: 1)
+      end
 
-      expect(model).to receive(:remove_column).with(:users, :old)
+      let(:trigger_name) { model.rename_trigger_name(:users, :old, :new) }
 
-      model.cleanup_concurrent_column_rename(:users, :old, :new)
+      before do
+        allow(model).to receive(:transaction_open?).and_return(false)
+        allow(model).to receive(:column_for).and_return(new_column)
+      end
+
+      it 'reverses the operations of cleanup_concurrent_column_rename' do
+        expect(model).to receive(:check_trigger_permissions!).with(:users)
+
+        expect(model).to receive(:install_rename_triggers_for_postgresql)
+          .with(trigger_name, '"users"', '"old"', '"new"')
+
+        expect(model).to receive(:add_column)
+          .with(:users, :old, :integer,
+              limit: new_column.limit,
+              precision: new_column.precision,
+              scale: new_column.scale)
+
+        expect(model).to receive(:change_column_default)
+          .with(:users, :old, new_column.default)
+
+        expect(model).to receive(:update_column_in_batches)
+
+        expect(model).to receive(:change_column_null).with(:users, :old, false)
+
+        expect(model).to receive(:copy_indexes).with(:users, :new, :old)
+        expect(model).to receive(:copy_foreign_keys).with(:users, :new, :old)
+
+        model.undo_cleanup_concurrent_column_rename(:users, :old, :new)
+      end
+
+      context 'when default is false' do
+        let(:new_column) do
+          double(:column,
+               type: :boolean,
+               limit: nil,
+               default: false,
+               null: false,
+               precision: nil,
+               scale: nil)
+        end
+
+        it 'copies the default to the old column' do
+          expect(model).to receive(:change_column_default)
+            .with(:users, :old, new_column.default)
+
+          model.undo_cleanup_concurrent_column_rename(:users, :old, :new)
+        end
+      end
     end
   end
 
@@ -647,21 +725,17 @@ describe Gitlab::Database::MigrationHelpers do
         .with(/CREATE OR REPLACE FUNCTION foo()/m)
 
       expect(model).to receive(:execute)
+        .with(/DROP TRIGGER IF EXISTS foo/m)
+
+      expect(model).to receive(:execute)
         .with(/CREATE TRIGGER foo/m)
 
       model.install_rename_triggers_for_postgresql('foo', :users, :old, :new)
     end
-  end
 
-  describe '#install_rename_triggers_for_mysql' do
-    it 'installs the triggers for MySQL' do
-      expect(model).to receive(:execute)
-        .with(/CREATE TRIGGER foo_insert.+ON users/m)
-
-      expect(model).to receive(:execute)
-        .with(/CREATE TRIGGER foo_update.+ON users/m)
-
-      model.install_rename_triggers_for_mysql('foo', :users, :old, :new)
+    it 'does not fail if trigger already exists' do
+      model.install_rename_triggers_for_postgresql('foo', :users, :old, :new)
+      model.install_rename_triggers_for_postgresql('foo', :users, :old, :new)
     end
   end
 
@@ -671,15 +745,6 @@ describe Gitlab::Database::MigrationHelpers do
       expect(model).to receive(:execute).with('DROP FUNCTION IF EXISTS foo()')
 
       model.remove_rename_triggers_for_postgresql('bar', 'foo')
-    end
-  end
-
-  describe '#remove_rename_triggers_for_mysql' do
-    it 'removes the triggers' do
-      expect(model).to receive(:execute).with('DROP TRIGGER IF EXISTS foo_insert')
-      expect(model).to receive(:execute).with('DROP TRIGGER IF EXISTS foo_update')
-
-      model.remove_rename_triggers_for_mysql('foo')
     end
   end
 
@@ -902,26 +967,9 @@ describe Gitlab::Database::MigrationHelpers do
   end
 
   describe '#replace_sql' do
-    context 'using postgres' do
-      before do
-        allow(Gitlab::Database).to receive(:mysql?).and_return(false)
-      end
-
-      it 'builds the sql with correct functions' do
-        expect(model.replace_sql(Arel::Table.new(:users)[:first_name], "Alice", "Eve").to_s)
-          .to include('regexp_replace')
-      end
-    end
-
-    context 'using mysql' do
-      before do
-        allow(Gitlab::Database).to receive(:mysql?).and_return(true)
-      end
-
-      it 'builds the sql with the correct functions' do
-        expect(model.replace_sql(Arel::Table.new(:users)[:first_name], "Alice", "Eve").to_s)
-          .to include('locate', 'insert')
-      end
+    it 'builds the sql with correct functions' do
+      expect(model.replace_sql(Arel::Table.new(:users)[:first_name], "Alice", "Eve").to_s)
+        .to include('regexp_replace')
     end
 
     describe 'results' do
@@ -1178,35 +1226,76 @@ describe Gitlab::Database::MigrationHelpers do
     end
   end
 
+  describe '#rename_column_using_background_migration' do
+    let!(:issue) { create(:issue, :closed, closed_at: Time.zone.now) }
+
+    it 'renames a column using a background migration' do
+      expect(model)
+        .to receive(:add_column)
+        .with(
+          'issues',
+          :closed_at_timestamp,
+          :datetime_with_timezone,
+          limit: anything,
+          precision: anything,
+          scale: anything
+        )
+
+      expect(model)
+        .to receive(:install_rename_triggers)
+        .with('issues', :closed_at, :closed_at_timestamp)
+
+      expect(BackgroundMigrationWorker)
+        .to receive(:perform_in)
+        .ordered
+        .with(
+          10.minutes,
+          'CopyColumn',
+          ['issues', :closed_at, :closed_at_timestamp, issue.id, issue.id]
+        )
+
+      expect(BackgroundMigrationWorker)
+        .to receive(:perform_in)
+        .ordered
+        .with(
+          1.hour + 10.minutes,
+          'CleanupConcurrentRename',
+          ['issues', :closed_at, :closed_at_timestamp]
+        )
+
+      expect(Gitlab::BackgroundMigration)
+        .to receive(:steal)
+        .ordered
+        .with('CopyColumn')
+
+      expect(Gitlab::BackgroundMigration)
+        .to receive(:steal)
+        .ordered
+        .with('CleanupConcurrentRename')
+
+      model.rename_column_using_background_migration(
+        'issues',
+        :closed_at,
+        :closed_at_timestamp
+      )
+    end
+  end
+
   describe '#perform_background_migration_inline?' do
     it 'returns true in a test environment' do
-      allow(Rails.env)
-        .to receive(:test?)
-        .and_return(true)
+      stub_rails_env('test')
 
       expect(model.perform_background_migration_inline?).to eq(true)
     end
 
     it 'returns true in a development environment' do
-      allow(Rails.env)
-        .to receive(:test?)
-        .and_return(false)
-
-      allow(Rails.env)
-        .to receive(:development?)
-        .and_return(true)
+      stub_rails_env('development')
 
       expect(model.perform_background_migration_inline?).to eq(true)
     end
 
     it 'returns false in a production environment' do
-      allow(Rails.env)
-        .to receive(:test?)
-        .and_return(false)
-
-      allow(Rails.env)
-        .to receive(:development?)
-        .and_return(false)
+      stub_rails_env('production')
 
       expect(model.perform_background_migration_inline?).to eq(false)
     end
@@ -1223,7 +1312,7 @@ describe Gitlab::Database::MigrationHelpers do
         .to be_falsy
     end
 
-    context 'when an index with a function exists', :postgresql do
+    context 'when an index with a function exists' do
       before do
         ActiveRecord::Base.connection.execute(
           'CREATE INDEX test_index ON projects (LOWER(path));'

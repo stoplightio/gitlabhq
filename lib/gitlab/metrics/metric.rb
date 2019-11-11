@@ -1,8 +1,10 @@
+# frozen_string_literal: true
+
 module Gitlab
   module Metrics
     # Class for storing details of a single metric (label, value, etc).
     class Metric
-      JITTER_RANGE = 0.000001..0.001
+      JITTER_RANGE = (0.000001..0.001).freeze
 
       attr_reader :series, :values, :tags, :type
 

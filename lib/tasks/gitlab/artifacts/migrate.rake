@@ -6,19 +6,31 @@ namespace :gitlab do
   namespace :artifacts do
     task migrate: :environment do
       logger = Logger.new(STDOUT)
-      logger.info('Starting transfer of artifacts')
+      logger.info('Starting transfer of artifacts to remote storage')
 
-      Ci::Build.joins(:project)
-        .with_artifacts_stored_locally
-        .find_each(batch_size: 10) do |build|
-        begin
-          build.artifacts_file.migrate!(ObjectStorage::Store::REMOTE)
-          build.artifacts_metadata.migrate!(ObjectStorage::Store::REMOTE)
+      helper = Gitlab::Artifacts::MigrationHelper.new
 
-          logger.info("Transferred artifacts of #{build.id} of #{build.artifacts_size} to object storage")
-        rescue => e
-          logger.error("Failed to transfer artifacts of #{build.id} with error: #{e.message}")
+      begin
+        helper.migrate_to_remote_storage do |artifact|
+          logger.info("Transferred artifact ID #{artifact.id} of type #{artifact.file_type} with size #{artifact.size} to object storage")
         end
+      rescue => e
+        logger.error(e.message)
+      end
+    end
+
+    task migrate_to_local: :environment do
+      logger = Logger.new(STDOUT)
+      logger.info('Starting transfer of artifacts to local storage')
+
+      helper = Gitlab::Artifacts::MigrationHelper.new
+
+      begin
+        helper.migrate_to_local_storage do |artifact|
+          logger.info("Transferred artifact ID #{artifact.id} of type #{artifact.file_type} with size #{artifact.size} to local storage")
+        end
+      rescue => e
+        logger.error(e.message)
       end
     end
   end

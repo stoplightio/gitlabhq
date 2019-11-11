@@ -1,72 +1,102 @@
+# frozen_string_literal: true
+
 require 'securerandom'
 require 'mkmf'
+require 'pathname'
 
 module QA
   module Service
     class KubernetesCluster
       include Service::Shellout
 
-      attr_reader :api_url, :ca_certificate, :token
+      attr_reader :api_url, :ca_certificate, :token, :rbac, :provider
 
-      def cluster_name
-        @cluster_name ||= "qa-cluster-#{SecureRandom.hex(4)}-#{Time.now.utc.strftime("%Y%m%d%H%M%S")}"
+      def initialize(rbac: true, provider_class: QA::Service::ClusterProvider::Gcloud)
+        @rbac = rbac
+        @provider = provider_class.new(rbac: rbac)
       end
 
       def create!
         validate_dependencies
-        login_if_not_already_logged_in
 
-        shell <<~CMD.tr("\n", ' ')
-          gcloud container clusters
-          create #{cluster_name}
-          --enable-legacy-authorization
-          --zone #{Runtime::Env.gcloud_zone}
-          && gcloud container clusters
-          get-credentials
-          --zone #{Runtime::Env.gcloud_zone}
-          #{cluster_name}
-        CMD
+        @provider.validate_dependencies
+        @provider.setup
 
-        @api_url = `kubectl config view --minify -o jsonpath='{.clusters[].cluster.server}'`
-        @ca_certificate = Base64.decode64(`kubectl get secrets -o jsonpath="{.items[0].data['ca\\.crt']}"`)
-        @token = Base64.decode64(`kubectl get secrets -o jsonpath='{.items[0].data.token}'`)
+        @api_url = fetch_api_url
+
+        credentials = @provider.filter_credentials(fetch_credentials)
+        @ca_certificate = Base64.decode64(credentials.dig('data', 'ca.crt'))
+        @token = Base64.decode64(credentials.dig('data', 'token'))
+
         self
       end
 
       def remove!
-        shell <<~CMD.tr("\n", ' ')
-          gcloud container clusters delete
-          --zone #{Runtime::Env.gcloud_zone}
-	  #{cluster_name}
-	  --quiet --async
-	CMD
+        @provider.teardown
+      end
+
+      def cluster_name
+        @provider.cluster_name
       end
 
       private
 
-      def validate_dependencies
-        find_executable('gcloud') || raise("You must first install `gcloud` executable to run these tests.")
-        find_executable('kubectl') || raise("You must first install `kubectl` executable to run these tests.")
+      def fetch_api_url
+        `kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}'`
       end
 
-      def login_if_not_already_logged_in
-        account = `gcloud auth list --filter=status:ACTIVE --format="value(account)"`
-        if account.empty?
-          attempt_login_with_env_vars
-        else
-          puts "gcloud account found. Using: #{account} for creating K8s cluster."
+      def fetch_credentials
+        return global_credentials unless rbac
+
+        @provider.set_credentials(admin_user)
+        create_service_account(admin_user)
+        account_credentials
+      end
+
+      def admin_user
+        @admin_user ||= "#{@provider.cluster_name}-admin"
+      end
+
+      def create_service_account(user)
+        service_account = <<~YAML
+          ---
+          apiVersion: v1
+          kind: ServiceAccount
+          metadata:
+            name: gitlab-account
+            namespace: default
+          ---
+          kind: ClusterRoleBinding
+          apiVersion: rbac.authorization.k8s.io/v1
+          metadata:
+            name: gitlab-account-binding
+          subjects:
+          - kind: ServiceAccount
+            name: gitlab-account
+            namespace: default
+          roleRef:
+            kind: ClusterRole
+            name: cluster-admin
+            apiGroup: rbac.authorization.k8s.io
+        YAML
+
+        shell('kubectl apply -f -', stdin_data: service_account)
+      end
+
+      def account_credentials
+        secrets = JSON.parse(`kubectl get secrets -o json`)
+
+        secrets['items'].find do |item|
+          item['metadata']['annotations']['kubernetes.io/service-account.name'] == 'gitlab-account'
         end
       end
 
-      def attempt_login_with_env_vars
-        puts "No gcloud account. Attempting to login from env vars GCLOUD_ACCOUNT_EMAIL and GCLOUD_ACCOUNT_KEY."
-        gcloud_account_key = Tempfile.new('gcloud-account-key')
-        gcloud_account_key.write(Runtime::Env.gcloud_account_key)
-        gcloud_account_key.close
-        gcloud_account_email = Runtime::Env.gcloud_account_email
-        shell("gcloud auth activate-service-account #{gcloud_account_email} --key-file #{gcloud_account_key.path}")
-      ensure
-        gcloud_account_key && gcloud_account_key.unlink
+      def global_credentials
+        JSON.parse(`kubectl get secrets -o jsonpath='{.items[0]}'`)
+      end
+
+      def validate_dependencies
+        find_executable('kubectl') || raise("You must first install `kubectl` executable to run these tests.")
       end
     end
   end

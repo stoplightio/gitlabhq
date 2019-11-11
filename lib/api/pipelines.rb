@@ -1,13 +1,15 @@
+# frozen_string_literal: true
+
 module API
   class Pipelines < Grape::API
     include PaginationParams
 
-    before { authenticate! }
+    before { authenticate_non_get! }
 
     params do
       requires :id, type: String, desc: 'The project ID'
     end
-    resource :projects, requirements: API::PROJECT_ENDPOINT_REQUIREMENTS do
+    resource :projects, requirements: API::NAMESPACE_OR_PROJECT_REQUIREMENTS do
       desc 'Get all Pipelines of the project' do
         detail 'This feature was introduced in GitLab 8.11.'
         success Entities::PipelineBasic
@@ -30,8 +32,9 @@ module API
       end
       get ':id/pipelines' do
         authorize! :read_pipeline, user_project
+        authorize! :read_build, user_project
 
-        pipelines = PipelinesFinder.new(user_project, params).execute
+        pipelines = PipelinesFinder.new(user_project, current_user, params).execute
         present paginate(pipelines), with: Entities::PipelineBasic
       end
 
@@ -40,11 +43,11 @@ module API
         success Entities::Pipeline
       end
       params do
-        requires :ref, type: String,  desc: 'Reference'
+        requires :ref, type: String, desc: 'Reference'
         optional :variables, Array, desc: 'Array of variables available in the pipeline'
       end
       post ':id/pipeline' do
-        Gitlab::QueryLimiting.whitelist('https://gitlab.com/gitlab-org/gitlab-ce/issues/42124')
+        Gitlab::QueryLimiting.whitelist('https://gitlab.com/gitlab-org/gitlab-foss/issues/42124')
 
         authorize! :create_pipeline, user_project
 
@@ -64,6 +67,19 @@ module API
         end
       end
 
+      desc 'Gets a the latest pipeline for the project branch' do
+        detail 'This feature was introduced in GitLab 12.3'
+        success Entities::Pipeline
+      end
+      params do
+        optional :ref, type: String, desc: 'branch ref of pipeline'
+      end
+      get ':id/pipelines/latest' do
+        authorize! :read_pipeline, latest_pipeline
+
+        present latest_pipeline, with: Entities::Pipeline
+      end
+
       desc 'Gets a specific pipeline for the project' do
         detail 'This feature was introduced in GitLab 8.11'
         success Entities::Pipeline
@@ -72,9 +88,37 @@ module API
         requires :pipeline_id, type: Integer, desc: 'The pipeline ID'
       end
       get ':id/pipelines/:pipeline_id' do
-        authorize! :read_pipeline, user_project
+        authorize! :read_pipeline, pipeline
 
         present pipeline, with: Entities::Pipeline
+      end
+
+      desc 'Gets the variables for a given pipeline' do
+        detail 'This feature was introduced in GitLab 11.11'
+        success Entities::Variable
+      end
+      params do
+        requires :pipeline_id, type: Integer, desc: 'The pipeline ID'
+      end
+      get ':id/pipelines/:pipeline_id/variables' do
+        authorize! :read_pipeline_variable, pipeline
+
+        present pipeline.variables, with: Entities::Variable
+      end
+
+      desc 'Deletes a pipeline' do
+        detail 'This feature was introduced in GitLab 11.6'
+        http_codes [[204, 'Pipeline was deleted'], [403, 'Forbidden']]
+      end
+      params do
+        requires :pipeline_id, type: Integer, desc: 'The pipeline ID'
+      end
+      delete ':id/pipelines/:pipeline_id' do
+        authorize! :destroy_pipeline, pipeline
+
+        destroy_conditionally!(pipeline) do
+          ::Ci::DestroyPipelineService.new(user_project, current_user).execute(pipeline)
+        end
       end
 
       desc 'Retry builds in the pipeline' do
@@ -82,10 +126,10 @@ module API
         success Entities::Pipeline
       end
       params do
-        requires :pipeline_id, type: Integer,  desc: 'The pipeline ID'
+        requires :pipeline_id, type: Integer, desc: 'The pipeline ID'
       end
       post ':id/pipelines/:pipeline_id/retry' do
-        authorize! :update_pipeline, user_project
+        authorize! :update_pipeline, pipeline
 
         pipeline.retry_failed(current_user)
 
@@ -97,21 +141,29 @@ module API
         success Entities::Pipeline
       end
       params do
-        requires :pipeline_id, type: Integer,  desc: 'The pipeline ID'
+        requires :pipeline_id, type: Integer, desc: 'The pipeline ID'
       end
       post ':id/pipelines/:pipeline_id/cancel' do
-        authorize! :update_pipeline, user_project
+        authorize! :update_pipeline, pipeline
 
         pipeline.cancel_running
 
         status 200
-        present pipeline.reload, with: Entities::Pipeline
+        present pipeline.reset, with: Entities::Pipeline
       end
     end
 
     helpers do
       def pipeline
-        @pipeline ||= user_project.pipelines.find(params[:pipeline_id])
+        strong_memoize(:pipeline) do
+          user_project.ci_pipelines.find(params[:pipeline_id])
+        end
+      end
+
+      def latest_pipeline
+        strong_memoize(:latest_pipeline) do
+          user_project.latest_pipeline_for_ref(params[:ref])
+        end
       end
     end
   end

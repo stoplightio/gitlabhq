@@ -1,46 +1,70 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 module Gitlab
   module Ci
-    describe YamlProcessor, :lib do
-      subject { described_class.new(config) }
+    describe YamlProcessor do
+      include StubRequests
 
-      describe 'our current .gitlab-ci.yml' do
-        let(:config) { File.read("#{Rails.root}/.gitlab-ci.yml") }
-
-        it 'is valid' do
-          error_message = described_class.validation_message(config)
-
-          expect(error_message).to be_nil
-        end
-      end
+      subject { described_class.new(config, user: nil) }
 
       describe '#build_attributes' do
-        subject { described_class.new(config).build_attributes(:rspec) }
+        subject { described_class.new(config, user: nil).build_attributes(:rspec) }
 
         describe 'attributes list' do
           let(:config) do
             YAML.dump(
               before_script: ['pwd'],
-              rspec: { script: 'rspec' }
+              rspec: {
+                script: 'rspec',
+                interruptible: true
+              }
             )
           end
 
           it 'returns valid build attributes' do
             expect(subject).to eq({
               stage: "test",
-              stage_idx: 1,
+              stage_idx: 2,
               name: "rspec",
-              commands: "pwd\nrspec",
-              coverage_regex: nil,
-              tag_list: [],
               options: {
                 before_script: ["pwd"],
                 script: ["rspec"]
               },
+              interruptible: true,
               allow_failure: false,
               when: "on_success",
-              environment: nil,
+              yaml_variables: []
+            })
+          end
+        end
+
+        context 'with job rules' do
+          let(:config) do
+            YAML.dump(
+              rspec: {
+                script: 'rspec',
+                rules: [
+                  { if: '$CI_COMMIT_REF_NAME == "master"' },
+                  { changes: %w[README.md] }
+                ]
+              }
+            )
+          end
+
+          it 'returns valid build attributes' do
+            expect(subject).to eq({
+              stage: 'test',
+              stage_idx: 2,
+              name: 'rspec',
+              options: { script: ['rspec'] },
+              rules: [
+                { if: '$CI_COMMIT_REF_NAME == "master"' },
+                { changes: %w[README.md] }
+              ],
+              allow_failure: false,
+              when: 'on_success',
               yaml_variables: []
             })
           end
@@ -60,14 +84,40 @@ module Gitlab
           end
         end
 
+        describe 'interruptible entry' do
+          describe 'interruptible job' do
+            let(:config) do
+              YAML.dump(rspec: { script: 'rspec', interruptible: true })
+            end
+
+            it { expect(subject[:interruptible]).to be_truthy }
+          end
+
+          describe 'interruptible job with default value' do
+            let(:config) do
+              YAML.dump(rspec: { script: 'rspec' })
+            end
+
+            it { expect(subject).not_to have_key(:interruptible) }
+          end
+
+          describe 'uninterruptible job' do
+            let(:config) do
+              YAML.dump(rspec: { script: 'rspec', interruptible: false })
+            end
+
+            it { expect(subject[:interruptible]).to be_falsy }
+          end
+        end
+
         describe 'retry entry' do
           context 'when retry count is specified' do
             let(:config) do
-              YAML.dump(rspec: { script: 'rspec', retry: 1 })
+              YAML.dump(rspec: { script: 'rspec', retry: { max: 1 } })
             end
 
             it 'includes retry count in build options attribute' do
-              expect(subject[:options]).to include(retry: 1)
+              expect(subject[:options]).to include(retry: { max: 1 })
             end
           end
 
@@ -131,6 +181,23 @@ module Gitlab
             end
           end
         end
+
+        describe 'delayed job entry' do
+          context 'when delayed is defined' do
+            let(:config) do
+              YAML.dump(rspec: {
+                script:   'rollout 10%',
+                when:     'delayed',
+                start_in: '1 day'
+              })
+            end
+
+            it 'has the attributes' do
+              expect(subject[:when]).to eq 'delayed'
+              expect(subject[:options][:start_in]).to eq '1 day'
+            end
+          end
+        end
       end
 
       describe '#stages_attributes' do
@@ -142,41 +209,39 @@ module Gitlab
         end
 
         let(:attributes) do
-          [{ name: "build",
+          [{ name: ".pre",
              index: 0,
              builds: [] },
-           { name: "test",
+           { name: "build",
              index: 1,
+             builds: [] },
+           { name: "test",
+             index: 2,
              builds:
-               [{ stage_idx: 1,
+               [{ stage_idx: 2,
                   stage: "test",
-                  commands: "rspec",
-                  tag_list: [],
                   name: "rspec",
                   allow_failure: false,
                   when: "on_success",
-                  environment: nil,
-                  coverage_regex: nil,
                   yaml_variables: [],
                   options: { script: ["rspec"] },
                   only: { refs: ["branches"] },
                   except: {} }] },
            { name: "deploy",
-             index: 2,
+             index: 3,
              builds:
-               [{ stage_idx: 2,
+               [{ stage_idx: 3,
                   stage: "deploy",
-                  commands: "cap prod",
-                  tag_list: [],
                   name: "prod",
                   allow_failure: false,
                   when: "on_success",
-                  environment: nil,
-                  coverage_regex: nil,
                   yaml_variables: [],
                   options: { script: ["cap prod"] },
                   only: { refs: ["tags"] },
-                  except: {} }] }]
+                  except: {} }] },
+           { name: ".post",
+             index: 4,
+             builds: [] }]
         end
 
         it 'returns stages seed attributes' do
@@ -266,7 +331,20 @@ module Gitlab
             end
 
             it "return commands with scripts concencaced" do
-              expect(subject[:commands]).to eq("global script\nscript")
+              expect(subject[:options][:before_script]).to eq(["global script"])
+            end
+          end
+
+          context "in default context" do
+            let(:config) do
+              {
+                default: { before_script: ["global script"] },
+                test: { script: ["script"] }
+              }
+            end
+
+            it "return commands with scripts concencaced" do
+              expect(subject[:options][:before_script]).to eq(["global script"])
             end
           end
 
@@ -279,7 +357,7 @@ module Gitlab
             end
 
             it "return commands with scripts concencaced" do
-              expect(subject[:commands]).to eq("local script\nscript")
+              expect(subject[:options][:before_script]).to eq(["local script"])
             end
           end
         end
@@ -292,12 +370,25 @@ module Gitlab
           end
 
           it "return commands with scripts concencaced" do
-            expect(subject[:commands]).to eq("script")
+            expect(subject[:options][:script]).to eq(["script"])
           end
         end
 
         describe "after_script" do
           context "in global context" do
+            let(:config) do
+              {
+                after_script: ["after_script"],
+                test: { script: ["script"] }
+              }
+            end
+
+            it "return after_script in options" do
+              expect(subject[:options][:after_script]).to eq(["after_script"])
+            end
+          end
+
+          context "in default context" do
             let(:config) do
               {
                 after_script: ["after_script"],
@@ -340,11 +431,8 @@ module Gitlab
             expect(config_processor.stage_builds_attributes("test").size).to eq(1)
             expect(config_processor.stage_builds_attributes("test").first).to eq({
               stage: "test",
-              stage_idx: 1,
+              stage_idx: 2,
               name: "rspec",
-              commands: "pwd\nrspec",
-              coverage_regex: nil,
-              tag_list: [],
               options: {
                 before_script: ["pwd"],
                 script: ["rspec"],
@@ -355,7 +443,6 @@ module Gitlab
               },
               allow_failure: false,
               when: "on_success",
-              environment: nil,
               yaml_variables: []
             })
           end
@@ -375,11 +462,8 @@ module Gitlab
             expect(config_processor.stage_builds_attributes("test").size).to eq(1)
             expect(config_processor.stage_builds_attributes("test").first).to eq({
               stage: "test",
-              stage_idx: 1,
+              stage_idx: 2,
               name: "rspec",
-              commands: "pwd\nrspec",
-              coverage_regex: nil,
-              tag_list: [],
               options: {
                 before_script: ["pwd"],
                 script: ["rspec"],
@@ -390,7 +474,6 @@ module Gitlab
               },
               allow_failure: false,
               when: "on_success",
-              environment: nil,
               yaml_variables: []
             })
           end
@@ -408,11 +491,8 @@ module Gitlab
             expect(config_processor.stage_builds_attributes("test").size).to eq(1)
             expect(config_processor.stage_builds_attributes("test").first).to eq({
               stage: "test",
-              stage_idx: 1,
+              stage_idx: 2,
               name: "rspec",
-              commands: "pwd\nrspec",
-              coverage_regex: nil,
-              tag_list: [],
               options: {
                 before_script: ["pwd"],
                 script: ["rspec"],
@@ -421,7 +501,6 @@ module Gitlab
               },
               allow_failure: false,
               when: "on_success",
-              environment: nil,
               yaml_variables: []
             })
           end
@@ -437,11 +516,8 @@ module Gitlab
             expect(config_processor.stage_builds_attributes("test").size).to eq(1)
             expect(config_processor.stage_builds_attributes("test").first).to eq({
               stage: "test",
-              stage_idx: 1,
+              stage_idx: 2,
               name: "rspec",
-              commands: "pwd\nrspec",
-              coverage_regex: nil,
-              tag_list: [],
               options: {
                 before_script: ["pwd"],
                 script: ["rspec"],
@@ -450,7 +526,6 @@ module Gitlab
               },
               allow_failure: false,
               when: "on_success",
-              environment: nil,
               yaml_variables: []
             })
           end
@@ -572,18 +647,221 @@ module Gitlab
         end
       end
 
-      describe "When" do
-        %w(on_success on_failure always).each do |when_state|
-          it "returns #{when_state} when defined" do
+      context 'when using `extends`' do
+        let(:config_processor) { Gitlab::Ci::YamlProcessor.new(config) }
+
+        subject { config_processor.builds.first }
+
+        context 'when using simple `extends`' do
+          let(:config) do
+            <<~YAML
+              .template:
+                script: test
+
+              rspec:
+                extends: .template
+                image: ruby:alpine
+            YAML
+          end
+
+          it 'correctly extends rspec job' do
+            expect(config_processor.builds).to be_one
+            expect(subject.dig(:options, :script)).to eq %w(test)
+            expect(subject.dig(:options, :image, :name)).to eq 'ruby:alpine'
+          end
+        end
+
+        context 'when using recursive `extends`' do
+          let(:config) do
+            <<~YAML
+              rspec:
+                extends: .test
+                script: rspec
+                when: always
+
+              .template:
+                before_script:
+                  - bundle install
+
+              .test:
+                extends: .template
+                script: test
+                image: image:test
+            YAML
+          end
+
+          it 'correctly extends rspec job' do
+            expect(config_processor.builds).to be_one
+            expect(subject.dig(:options, :before_script)).to eq ["bundle install"]
+            expect(subject.dig(:options, :script)).to eq %w(rspec)
+            expect(subject.dig(:options, :image, :name)).to eq 'image:test'
+            expect(subject.dig(:when)).to eq 'always'
+          end
+        end
+      end
+
+      describe "Include" do
+        let(:opts) { {} }
+
+        let(:config) do
+          {
+            include: include_content,
+            rspec: { script: "test" }
+          }
+        end
+
+        subject { Gitlab::Ci::YamlProcessor.new(YAML.dump(config), opts) }
+
+        context "when validating a ci config file with no project context" do
+          context "when a single string is provided" do
+            let(:include_content) { "/local.gitlab-ci.yml" }
+
+            it "returns a validation error" do
+              expect { subject }.to raise_error /does not have project/
+            end
+          end
+
+          context "when an array is provided" do
+            let(:include_content) { ["/local.gitlab-ci.yml"] }
+
+            it "returns a validation error" do
+              expect { subject }.to raise_error(Gitlab::Ci::YamlProcessor::ValidationError, /does not have project/)
+            end
+          end
+
+          context "when an array of wrong keyed object is provided" do
+            let(:include_content) { [{ yolo: "/local.gitlab-ci.yml" }] }
+
+            it "returns a validation error" do
+              expect { subject }.to raise_error(Gitlab::Ci::YamlProcessor::ValidationError)
+            end
+          end
+
+          context "when an array of mixed typed objects is provided" do
+            let(:include_content) do
+              [
+                'https://gitlab.com/awesome-project/raw/master/.before-script-template.yml',
+                { template: 'Auto-DevOps.gitlab-ci.yml' }
+              ]
+            end
+
+            before do
+              stub_full_request('https://gitlab.com/awesome-project/raw/master/.before-script-template.yml')
+                .to_return(
+                  status: 200,
+                  headers: { 'Content-Type' => 'application/json' },
+                  body: 'prepare: { script: ls -al }')
+            end
+
+            it "does not return any error" do
+              expect { subject }.not_to raise_error
+            end
+          end
+
+          context "when the include type is incorrect" do
+            let(:include_content) { { name: "/local.gitlab-ci.yml" } }
+
+            it "returns an invalid configuration error" do
+              expect { subject }.to raise_error(Gitlab::Ci::YamlProcessor::ValidationError)
+            end
+          end
+        end
+
+        context "when validating a ci config file within a project" do
+          let(:include_content) { "/local.gitlab-ci.yml" }
+          let(:project) { create(:project, :repository) }
+          let(:opts) { { project: project, sha: project.commit.sha } }
+
+          context "when the included internal file is present" do
+            before do
+              expect(project.repository).to receive(:blob_data_at)
+                .and_return(YAML.dump({ job1: { script: 'hello' } }))
+            end
+
+            it "does not return an error" do
+              expect { subject }.not_to raise_error
+            end
+          end
+
+          context "when the included internal file is not present" do
+            it "returns an error with missing file details" do
+              expect { subject }.to raise_error(
+                Gitlab::Ci::YamlProcessor::ValidationError,
+                "Local file `#{include_content}` does not exist!"
+              )
+            end
+          end
+        end
+      end
+
+      describe 'when:' do
+        (Gitlab::Ci::Config::Entry::Job::ALLOWED_WHEN - %w[delayed]).each do |when_state|
+          it "#{when_state} creates one build and sets when:" do
             config = YAML.dump({
-                                 rspec: { script: "rspec", when: when_state }
-                               })
+              rspec: { script: 'rspec', when: when_state }
+            })
 
             config_processor = Gitlab::Ci::YamlProcessor.new(config)
             builds = config_processor.stage_builds_attributes("test")
 
             expect(builds.size).to eq(1)
             expect(builds.first[:when]).to eq(when_state)
+          end
+        end
+
+        context 'delayed' do
+          context 'with start_in' do
+            it 'creates one build and sets when:' do
+              config = YAML.dump({
+                rspec: { script: 'rspec', when: 'delayed', start_in: '1 hour' }
+              })
+
+              config_processor = Gitlab::Ci::YamlProcessor.new(config)
+              builds = config_processor.stage_builds_attributes("test")
+
+              expect(builds.size).to eq(1)
+              expect(builds.first[:when]).to eq('delayed')
+              expect(builds.first[:options][:start_in]).to eq('1 hour')
+            end
+          end
+
+          context 'without start_in' do
+            it 'raises an error' do
+              config = YAML.dump({
+                rspec: { script: 'rspec', when: 'delayed' }
+              })
+
+              expect do
+                Gitlab::Ci::YamlProcessor.new(config)
+              end.to raise_error(YamlProcessor::ValidationError, /start in should be a duration/)
+            end
+          end
+        end
+      end
+
+      describe 'Parallel' do
+        context 'when job is parallelized' do
+          let(:parallel) { 5 }
+
+          let(:config) do
+            YAML.dump(rspec: { script: 'rspec',
+                               parallel: parallel })
+          end
+
+          it 'returns parallelized jobs' do
+            config_processor = Gitlab::Ci::YamlProcessor.new(config)
+            builds = config_processor.stage_builds_attributes('test')
+            build_options = builds.map { |build| build[:options] }
+
+            expect(builds.size).to eq(5)
+            expect(build_options).to all(include(:instance, parallel: parallel))
+          end
+
+          it 'does not have the original job' do
+            config_processor = Gitlab::Ci::YamlProcessor.new(config)
+            builds = config_processor.stage_builds_attributes('test')
+
+            expect(builds).not_to include(:rspec)
           end
         end
       end
@@ -609,6 +887,28 @@ module Gitlab
                                  script: "rspec"
                                }
                              })
+
+          config_processor = Gitlab::Ci::YamlProcessor.new(config)
+
+          expect(config_processor.stage_builds_attributes("test").size).to eq(1)
+          expect(config_processor.stage_builds_attributes("test").first[:options][:cache]).to eq(
+            paths: ["logs/", "binaries/"],
+            untracked: true,
+            key: 'key',
+            policy: 'pull-push'
+          )
+        end
+
+        it "returns cache when defined in default context" do
+          config = YAML.dump(
+            {
+              default: {
+                cache: { paths: ["logs/", "binaries/"], untracked: true, key: 'key' }
+              },
+              rspec: {
+                script: "rspec"
+              }
+            })
 
           config_processor = Gitlab::Ci::YamlProcessor.new(config)
 
@@ -683,11 +983,8 @@ module Gitlab
           expect(config_processor.stage_builds_attributes("test").size).to eq(1)
           expect(config_processor.stage_builds_attributes("test").first).to eq({
             stage: "test",
-            stage_idx: 1,
+            stage_idx: 2,
             name: "rspec",
-            commands: "pwd\nrspec",
-            coverage_regex: nil,
-            tag_list: [],
             options: {
               before_script: ["pwd"],
               script: ["rspec"],
@@ -702,7 +999,6 @@ module Gitlab
             },
             when: "on_success",
             allow_failure: false,
-            environment: nil,
             yaml_variables: []
           })
         end
@@ -811,7 +1107,7 @@ module Gitlab
           end
 
           context 'without matching job' do
-            let(:close_review) { nil  }
+            let(:close_review) { nil }
 
             it 'raises error' do
               expect { builds }.to raise_error('review job: on_stop job close_review is not defined')
@@ -840,6 +1136,48 @@ module Gitlab
             it 'raises error' do
               expect { builds }.to raise_error('review job: on_stop job close_review needs to have action stop defined')
             end
+          end
+        end
+      end
+
+      describe "Timeout" do
+        let(:config) do
+          {
+            deploy_to_production: {
+              stage:  'deploy',
+              script: 'test'
+            }
+          }
+        end
+
+        let(:processor) { Gitlab::Ci::YamlProcessor.new(YAML.dump(config)) }
+        let(:builds) { processor.stage_builds_attributes('deploy') }
+
+        context 'when no timeout was provided' do
+          it 'does not include job_timeout' do
+            expect(builds.size).to eq(1)
+            expect(builds.first[:options]).not_to include(:job_timeout)
+          end
+        end
+
+        context 'when an invalid timeout was provided' do
+          before do
+            config[:deploy_to_production][:timeout] = 'not-a-number'
+          end
+
+          it 'raises an error for invalid number' do
+            expect { builds }.to raise_error('jobs:deploy_to_production timeout should be a duration')
+          end
+        end
+
+        context 'when some valid timeout was provided' do
+          before do
+            config[:deploy_to_production][:timeout] = '1m 3s'
+          end
+
+          it 'returns provided timeout value' do
+            expect(builds.size).to eq(1)
+            expect(builds.first[:options]).to include(job_timeout: 63)
           end
         end
       end
@@ -886,6 +1224,175 @@ module Gitlab
 
           it { expect { subject }.to raise_error(Gitlab::Ci::YamlProcessor::ValidationError, 'test1 job: dependency deploy is not defined in prior stages') }
         end
+
+        context 'when a job depends on another job that references a not-yet defined stage' do
+          let(:config) do
+            {
+              "stages" => [
+                "version"
+              ],
+              "version" => {
+                "stage" => "version",
+                "dependencies" => ["release:components:versioning"],
+                "script" => ["./versioning/versioning"]
+              },
+              ".release_go" => {
+                "stage" => "build",
+                "script" => ["cd versioning"]
+              },
+              "release:components:versioning" => {
+                "stage" => "build",
+                "script" => ["cd versioning"]
+              }
+            }
+          end
+
+          it { expect { subject }.to raise_error(Gitlab::Ci::YamlProcessor::ValidationError, /is not defined in prior stages/) }
+        end
+      end
+
+      describe "Needs" do
+        let(:needs) { }
+        let(:dependencies) { }
+
+        let(:config) do
+          {
+            build1: { stage: 'build', script: 'test' },
+            build2: { stage: 'build', script: 'test' },
+            test1: { stage: 'test', script: 'test', needs: needs, dependencies: dependencies },
+            test2: { stage: 'test', script: 'test' },
+            deploy: { stage: 'test', script: 'test' }
+          }
+        end
+
+        subject { Gitlab::Ci::YamlProcessor.new(YAML.dump(config)) }
+
+        context 'no needs' do
+          it { expect { subject }.not_to raise_error }
+        end
+
+        context 'needs two builds' do
+          let(:needs) { %w(build1 build2) }
+
+          it "does create jobs with valid specification" do
+            expect(subject.builds.size).to eq(5)
+            expect(subject.builds[0]).to eq(
+              stage: "build",
+              stage_idx: 1,
+              name: "build1",
+              options: {
+                script: ["test"]
+              },
+              when: "on_success",
+              allow_failure: false,
+              yaml_variables: []
+            )
+            expect(subject.builds[2]).to eq(
+              stage: "test",
+              stage_idx: 2,
+              name: "test1",
+              options: {
+                script: ["test"],
+                # This does not make sense, there is a follow-up:
+                # https://gitlab.com/gitlab-org/gitlab-foss/issues/65569
+                bridge_needs: %w[build1 build2]
+              },
+              needs_attributes: [
+                { name: "build1" },
+                { name: "build2" }
+              ],
+              when: "on_success",
+              allow_failure: false,
+              yaml_variables: []
+            )
+          end
+        end
+
+        context 'needs two builds defined as symbols' do
+          let(:needs) { [:build1, :build2] }
+
+          it { expect { subject }.not_to raise_error }
+        end
+
+        context 'undefined need' do
+          let(:needs) { ['undefined'] }
+
+          it { expect { subject }.to raise_error(Gitlab::Ci::YamlProcessor::ValidationError, 'test1 job: undefined need: undefined') }
+        end
+
+        context 'needs to deploy' do
+          let(:needs) { ['deploy'] }
+
+          it { expect { subject }.to raise_error(Gitlab::Ci::YamlProcessor::ValidationError, 'test1 job: need deploy is not defined in prior stages') }
+        end
+
+        context 'needs and dependencies that are mismatching' do
+          let(:needs) { %w(build1) }
+          let(:dependencies) { %w(build2) }
+
+          it { expect { subject }.to raise_error(Gitlab::Ci::YamlProcessor::ValidationError, 'jobs:test1 dependencies the build2 should be part of needs') }
+        end
+      end
+
+      context 'with when/rules conflict' do
+        subject { Gitlab::Ci::YamlProcessor.new(YAML.dump(config)) }
+
+        let(:config) do
+          {
+            var_default:     { stage: 'build',  script: 'test', rules: [{ if: '$VAR == null' }] },
+            var_when:        { stage: 'build',  script: 'test', rules: [{ if: '$VAR == null', when: 'always' }] },
+            var_and_changes: { stage: 'build',  script: 'test', rules: [{ if: '$VAR == null', changes: %w[README], when: 'always' }] },
+            changes_not_var: { stage: 'test',   script: 'test', rules: [{ if: '$VAR != null', changes: %w[README] }] },
+            var_not_changes: { stage: 'test',   script: 'test', rules: [{ if: '$VAR == null', changes: %w[other/file.rb], when: 'always' }] },
+            nothing:         { stage: 'test',   script: 'test', rules: [{ when: 'manual' }] },
+            var_never:       { stage: 'deploy', script: 'test', rules: [{ if: '$VAR == null', when: 'never' }] },
+            var_delayed:     { stage: 'deploy', script: 'test', rules: [{ if: '$VAR == null', when: 'delayed', start_in: '3 hours' }] },
+            two_rules:       { stage: 'deploy', script: 'test', rules: [{ if: '$VAR == null', when: 'on_success' }, { changes: %w[README], when: 'manual' }] }
+          }
+        end
+
+        it 'raises no exceptions' do
+          expect { subject }.not_to raise_error
+        end
+
+        it 'returns all jobs regardless of their inclusion' do
+          expect(subject.builds.count).to eq(config.keys.count)
+        end
+
+        context 'used with job-level when' do
+          let(:config) do
+            {
+              var_default: {
+                stage: 'build',
+                script: 'test',
+                when: 'always',
+                rules: [{ if: '$VAR == null' }]
+              }
+            }
+          end
+
+          it 'raises a ValidationError' do
+            expect { subject }.to raise_error(YamlProcessor::ValidationError, /may not be used with `rules`: when/)
+          end
+        end
+
+        context 'used with job-level when:delayed' do
+          let(:config) do
+            {
+              var_default: {
+                stage: 'build',
+                script: 'test',
+                when: 'delayed',
+                start_in: '10 minutes',
+                rules: [{ if: '$VAR == null' }]
+              }
+            }
+          end
+
+          it 'raises a ValidationError' do
+            expect { subject }.to raise_error(YamlProcessor::ValidationError, /may not be used with `rules`: when, start_in/)
+          end
+        end
       end
 
       describe "Hidden jobs" do
@@ -897,17 +1404,13 @@ module Gitlab
             expect(subject.size).to eq(1)
             expect(subject.first).to eq({
               stage: "test",
-              stage_idx: 1,
+              stage_idx: 2,
               name: "normal_job",
-              commands: "test",
-              coverage_regex: nil,
-              tag_list: [],
               options: {
                 script: ["test"]
               },
               when: "on_success",
               allow_failure: false,
-              environment: nil,
               yaml_variables: []
             })
           end
@@ -945,32 +1448,24 @@ module Gitlab
             expect(subject.size).to eq(2)
             expect(subject.first).to eq({
               stage: "build",
-              stage_idx: 0,
+              stage_idx: 1,
               name: "job1",
-              commands: "execute-script-for-job",
-              coverage_regex: nil,
-              tag_list: [],
               options: {
                 script: ["execute-script-for-job"]
               },
               when: "on_success",
               allow_failure: false,
-              environment: nil,
               yaml_variables: []
             })
             expect(subject.second).to eq({
               stage: "build",
-              stage_idx: 0,
+              stage_idx: 1,
               name: "job2",
-              commands: "execute-script-for-job",
-              coverage_regex: nil,
-              tag_list: [],
               options: {
                 script: ["execute-script-for-job"]
               },
               when: "on_success",
               allow_failure: false,
-              environment: nil,
               yaml_variables: []
             })
           end
@@ -1113,7 +1608,7 @@ module Gitlab
           config = YAML.dump({ services: [10, "test"], rspec: { script: "test" } })
           expect do
             Gitlab::Ci::YamlProcessor.new(config)
-          end.to raise_error(Gitlab::Ci::YamlProcessor::ValidationError, "service config should be a hash or a string")
+          end.to raise_error(Gitlab::Ci::YamlProcessor::ValidationError, "services:service config should be a hash or a string")
         end
 
         it "returns errors if job services parameter is not an array" do
@@ -1127,14 +1622,14 @@ module Gitlab
           config = YAML.dump({ rspec: { script: "test", services: [10, "test"] } })
           expect do
             Gitlab::Ci::YamlProcessor.new(config)
-          end.to raise_error(Gitlab::Ci::YamlProcessor::ValidationError, "service config should be a hash or a string")
+          end.to raise_error(Gitlab::Ci::YamlProcessor::ValidationError, "jobs:rspec:services:service config should be a hash or a string")
         end
 
         it "returns error if job configuration is invalid" do
           config = YAML.dump({ extra: "bundle update" })
           expect do
             Gitlab::Ci::YamlProcessor.new(config)
-          end.to raise_error(Gitlab::Ci::YamlProcessor::ValidationError, "jobs:extra config should be a hash")
+          end.to raise_error(Gitlab::Ci::YamlProcessor::ValidationError, "root config contains unknown keys: extra")
         end
 
         it "returns errors if services configuration is not correct" do
@@ -1176,14 +1671,14 @@ module Gitlab
           config = YAML.dump({ rspec: { script: "test", type: "acceptance" } })
           expect do
             Gitlab::Ci::YamlProcessor.new(config)
-          end.to raise_error(Gitlab::Ci::YamlProcessor::ValidationError, "rspec job: stage parameter should be build, test, deploy")
+          end.to raise_error(Gitlab::Ci::YamlProcessor::ValidationError, "rspec job: stage parameter should be .pre, build, test, deploy, .post")
         end
 
         it "returns errors if job stage is not a defined stage" do
           config = YAML.dump({ types: %w(build test), rspec: { script: "test", type: "acceptance" } })
           expect do
             Gitlab::Ci::YamlProcessor.new(config)
-          end.to raise_error(Gitlab::Ci::YamlProcessor::ValidationError, "rspec job: stage parameter should be build, test")
+          end.to raise_error(Gitlab::Ci::YamlProcessor::ValidationError, "rspec job: stage parameter should be .pre, build, test, .post")
         end
 
         it "returns errors if stages is not an array" do
@@ -1218,7 +1713,7 @@ module Gitlab
           config = YAML.dump({ rspec: { script: "test", when: 1 } })
           expect do
             Gitlab::Ci::YamlProcessor.new(config)
-          end.to raise_error(Gitlab::Ci::YamlProcessor::ValidationError, "jobs:rspec when should be on_success, on_failure, always or manual")
+          end.to raise_error(Gitlab::Ci::YamlProcessor::ValidationError, "jobs:rspec when should be one of: #{Gitlab::Ci::Config::Entry::Job::ALLOWED_WHEN.join(', ')}")
         end
 
         it "returns errors if job artifacts:name is not an a string" do
@@ -1312,24 +1807,28 @@ module Gitlab
           end.to raise_error(Gitlab::Ci::YamlProcessor::ValidationError, "jobs:rspec dependencies should be an array of strings")
         end
 
-        it 'returns errors if pipeline variables expression is invalid' do
+        it 'returns errors if pipeline variables expression policy is invalid' do
           config = YAML.dump({ rspec: { script: 'test', only: { variables: ['== null'] } } })
 
           expect { Gitlab::Ci::YamlProcessor.new(config) }
             .to raise_error(Gitlab::Ci::YamlProcessor::ValidationError,
                             'jobs:rspec:only variables invalid expression syntax')
         end
-      end
 
-      describe "Validate configuration templates" do
-        templates = Dir.glob("#{Rails.root.join('vendor/gitlab-ci-yml')}/**/*.gitlab-ci.yml")
+        it 'returns errors if pipeline changes policy is invalid' do
+          config = YAML.dump({ rspec: { script: 'test', only: { changes: [1] } } })
 
-        templates.each do |file|
-          it "does not return errors for #{file}" do
-            file = File.read(file)
+          expect { Gitlab::Ci::YamlProcessor.new(config) }
+            .to raise_error(Gitlab::Ci::YamlProcessor::ValidationError,
+                            'jobs:rspec:only changes should be an array of strings')
+        end
 
-            expect { Gitlab::Ci::YamlProcessor.new(file) }.not_to raise_error
-          end
+        it 'returns errors if extended hash configuration is invalid' do
+          config = YAML.dump({ rspec: { extends: 'something', script: 'test' } })
+
+          expect { Gitlab::Ci::YamlProcessor.new(config) }
+            .to raise_error(Gitlab::Ci::YamlProcessor::ValidationError,
+                            'rspec: unknown keys in `extends` (something)')
         end
       end
 

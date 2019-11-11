@@ -2,23 +2,25 @@
 
 We use the [CarrierWave] gem to handle file upload, store and retrieval.
 
+File uploads should be accelerated by workhorse, for details please refer to [uploads development documentation](uploads.md).
+
 There are many places where file uploading is used, according to contexts:
 
-* System
+- System
   - Instance Logo (logo visible in sign in/sign up pages)
   - Header Logo (one displayed in the navigation bar)
-* Group
+- Group
   - Group avatars
-* User
+- User
   - User avatars
   - User snippet attachments
-* Project
+- Project
   - Project avatars
   - Issues/MR/Notes Markdown attachments
   - Issues/MR/Notes Legacy Markdown attachments
   - CI Artifacts (archive, metadata, trace)
   - LFS Objects
-
+  - Merge request diffs
 
 ## Disk storage
 
@@ -33,10 +35,11 @@ they are still not 100% standardized. You can see them below:
 | User avatars                          | yes    | uploads/-/system/user/avatar/:id/:filename                  | `AvatarUploader`       | User       |
 | User snippet attachments              | yes    | uploads/-/system/personal_snippet/:id/:random_hex/:filename | `PersonalFileUploader` | Snippet    |
 | Project avatars                       | yes    | uploads/-/system/project/avatar/:id/:filename               | `AvatarUploader`       | Project    |
-| Issues/MR/Notes Markdown attachments        | yes    | uploads/:project_path_with_namespace/:random_hex/:filename  | `FileUploader`         | Project    |
-| Issues/MR/Notes Legacy Markdown attachments | no     | uploads/-/system/note/attachment/:id/:filename              | `AttachmentUploader`   | Note       |
-| CI Artifacts (CE)                     | yes    | shared/artifacts/:disk_hash[0..1]/:disk_hash[2..3]/:disk_hash/:year_:month_:date/:job_id/:job_artifact_id (:disk_hash is SHA256 digest of project_id) | `JobArtifactUploader`  | Ci::JobArtifact  |
+| Issues/MR/Notes Markdown attachments  | yes    | uploads/:project_path_with_namespace/:random_hex/:filename  | `FileUploader`         | Project    |
+| Issues/MR/Notes Legacy Markdown attachments | no | uploads/-/system/note/attachment/:id/:filename            | `AttachmentUploader`   | Note       |
+| CI Artifacts (CE)                     | yes    | `shared/artifacts/:disk_hash[0..1]/:disk_hash[2..3]/:disk_hash/:year_:month_:date/:job_id/:job_artifact_id` (:disk_hash is SHA256 digest of project_id) | `JobArtifactUploader`  | Ci::JobArtifact  |
 | LFS Objects  (CE)                     | yes    | shared/lfs-objects/:hex/:hex/:object_hash                   | `LfsObjectUploader`    | LfsObject  |
+| External merge request diffs          | yes    | shared/external-diffs/merge_request_diffs/mr-:parent_id/diff-:id | `ExternalDiffUploader` | MergeRequestDiff |
 
 CI Artifacts and LFS Objects behave differently in CE and EE. In CE they inherit the `GitlabUploader`
 while in EE they inherit the `ObjectStorage` and store files in and S3 API compatible object store.
@@ -45,9 +48,14 @@ In the case of Issues/MR/Notes Markdown attachments, there is a different approa
 instead of basing the path into a mutable variable `:project_path_with_namespace`, it's possible to use the
 hash of the project ID instead, if project migrates to the new approach (introduced in 10.2).
 
+> Note: We provide an [all-in-one rake task] to migrate all uploads to object
+> storage in one go. If a new Uploader class or model type is introduced, make
+> sure you add a rake task invocation corresponding to it to the [category
+> list].
+
 ### Path segments
 
-Files are stored at multiple locations and use different path schemes. 
+Files are stored at multiple locations and use different path schemes.
 All the `GitlabUploader` derived classes should comply with this path segment schema:
 
 ```
@@ -56,7 +64,7 @@ All the `GitlabUploader` derived classes should comply with this path segment sc
 | `<gitlab_root>/public/` | `uploads/-/system/`       | `user/avatar/:id/`                | `:filename`                      |
 | ----------------------- + ------------------------- + --------------------------------- + -------------------------------- |
 | `CarrierWave.root`      | `GitlabUploader.base_dir` | `GitlabUploader#dynamic_segment`  | `CarrierWave::Uploader#filename` |
-|                         | `CarrierWave::Uploader#store_dir`                             |                                  | 
+|                         | `CarrierWave::Uploader#store_dir`                             |                                  |
 
 |   FileUploader
 | ----------------------- + ------------------------- + --------------------------------- + -------------------------------- |
@@ -64,7 +72,7 @@ All the `GitlabUploader` derived classes should comply with this path segment sc
 | `<gitlab_root>/shared/` | `snippets/`               | `:secret/`                        | `:filename`                      |
 | ----------------------- + ------------------------- + --------------------------------- + -------------------------------- |
 | `CarrierWave.root`      | `GitlabUploader.base_dir` | `GitlabUploader#dynamic_segment`  | `CarrierWave::Uploader#filename` |
-|                         | `CarrierWave::Uploader#store_dir`                             |                                  | 
+|                         | `CarrierWave::Uploader#store_dir`                             |                                  |
 |                         |                           | `FileUploader#upload_path                                            |
 
 |   ObjectStore::Concern (store = remote)
@@ -72,7 +80,7 @@ All the `GitlabUploader` derived classes should comply with this path segment sc
 | `<bucket_name>`         | <ignored>                 | `user/avatar/:id/`                  | `:filename`                      |
 | ----------------------- + ------------------------- + ----------------------------------- + -------------------------------- |
 | `#fog_dir`              | `GitlabUploader.base_dir` | `GitlabUploader#dynamic_segment`    | `CarrierWave::Uploader#filename` |
-|                         |                           | `ObjectStorage::Concern#store_dir`  |                                  | 
+|                         |                           | `ObjectStorage::Concern#store_dir`  |                                  |
 |                         |                           | `ObjectStorage::Concern#upload_path                                    |
 ```
 
@@ -86,8 +94,8 @@ in your uploader, you need to either 1) include `RecordsUpload::Concern` and pre
 
 The `CarrierWave::Uploader#store_dir` is overridden to
 
- - `GitlabUploader.base_dir` + `GitlabUploader.dynamic_segment` when the store is LOCAL
- - `GitlabUploader.dynamic_segment` when the store is REMOTE (the bucket name is used to namespace)
+- `GitlabUploader.base_dir` + `GitlabUploader.dynamic_segment` when the store is LOCAL
+- `GitlabUploader.dynamic_segment` when the store is REMOTE (the bucket name is used to namespace)
 
 ### Using `ObjectStorage::Extension::RecordsUploads`
 
@@ -137,3 +145,5 @@ end
 
 [CarrierWave]: https://github.com/carrierwaveuploader/carrierwave
 [Hashed Storage]: ../administration/repository_storage_types.md
+[all-in-one rake task]: ../administration/raketasks/uploads/migrate.md
+[category list]: https://gitlab.com/gitlab-org/gitlab/blob/master/lib/tasks/gitlab/uploads/migrate.rake

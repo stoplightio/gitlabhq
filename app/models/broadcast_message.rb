@@ -1,8 +1,10 @@
-class BroadcastMessage < ActiveRecord::Base
+# frozen_string_literal: true
+
+class BroadcastMessage < ApplicationRecord
   include CacheMarkdownField
   include Sortable
 
-  cache_markdown_field :message, pipeline: :broadcast_message
+  cache_markdown_field :message, pipeline: :broadcast_message, whitelisted: true
 
   validates :message,   presence: true
   validates :starts_at, presence: true
@@ -14,20 +16,22 @@ class BroadcastMessage < ActiveRecord::Base
   default_value_for :color, '#E75E40'
   default_value_for :font,  '#FFFFFF'
 
-  CACHE_KEY = 'broadcast_message_current'.freeze
+  CACHE_KEY = 'broadcast_message_current_json'
 
   after_commit :flush_redis_cache
 
   def self.current
-    messages = Rails.cache.fetch(CACHE_KEY, expires_in: cache_expires_in) { current_and_future_messages.to_a }
+    messages = cache.fetch(CACHE_KEY, as: BroadcastMessage, expires_in: cache_expires_in) do
+      current_and_future_messages
+    end
 
-    return messages if messages.empty?
+    return [] unless messages&.present?
 
     now_or_future = messages.select(&:now_or_future?)
 
     # If there are cached entries but none are to be displayed we'll purge the
     # cache so we don't keep running this code all the time.
-    Rails.cache.delete(CACHE_KEY) if now_or_future.empty?
+    cache.expire(CACHE_KEY) if now_or_future.empty?
 
     now_or_future.select(&:now?)
   end
@@ -36,8 +40,12 @@ class BroadcastMessage < ActiveRecord::Base
     where('ends_at > :now', now: Time.zone.now).order_id_asc
   end
 
+  def self.cache
+    Gitlab::JsonCache.new(cache_key_with_version: false)
+  end
+
   def self.cache_expires_in
-    nil
+    2.weeks
   end
 
   def active?
@@ -65,6 +73,8 @@ class BroadcastMessage < ActiveRecord::Base
   end
 
   def flush_redis_cache
-    Rails.cache.delete(CACHE_KEY)
+    self.class.cache.expire(CACHE_KEY)
   end
 end
+
+BroadcastMessage.prepend_if_ee('EE::BroadcastMessage')

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module API
   # Environments RESTfull API endpoints
   class Environments < Grape::API
@@ -9,18 +11,23 @@ module API
     params do
       requires :id, type: String, desc: 'The project ID'
     end
-    resource :projects, requirements: API::PROJECT_ENDPOINT_REQUIREMENTS do
+    resource :projects, requirements: API::NAMESPACE_OR_PROJECT_REQUIREMENTS do
       desc 'Get all environments of the project' do
         detail 'This feature was introduced in GitLab 8.11.'
         success Entities::Environment
       end
       params do
         use :pagination
+        optional :name, type: String, desc: 'Returns the environment with this name'
+        optional :search, type: String, desc: 'Returns list of environments matching the search criteria'
+        mutually_exclusive :name, :search, message: 'cannot be used together'
       end
       get ':id/environments' do
         authorize! :read_environment, user_project
 
-        present paginate(user_project.environments), with: Entities::Environment
+        environments = ::EnvironmentsFinder.new(user_project, current_user, params).find
+
+        present paginate(environments), with: Entities::Environment, current_user: current_user
       end
 
       desc 'Creates a new environment' do
@@ -38,7 +45,7 @@ module API
         environment = user_project.environments.create(declared_params)
 
         if environment.persisted?
-          present environment, with: Entities::Environment
+          present environment, with: Entities::Environment, current_user: current_user
         else
           render_validation_error!(environment)
         end
@@ -61,7 +68,7 @@ module API
 
         update_params = declared_params(include_missing: false).extract!(:name, :external_url)
         if environment.update(update_params)
-          present environment, with: Entities::Environment
+          present environment, with: Entities::Environment, current_user: current_user
         else
           render_validation_error!(environment)
         end
@@ -72,7 +79,7 @@ module API
         success Entities::Environment
       end
       params do
-        requires :environment_id, type: Integer,  desc: 'The environment ID'
+        requires :environment_id, type: Integer, desc: 'The environment ID'
       end
       delete ':id/environments/:environment_id' do
         authorize! :update_environment, user_project
@@ -86,17 +93,33 @@ module API
         success Entities::Environment
       end
       params do
-        requires :environment_id, type: Integer,  desc: 'The environment ID'
+        requires :environment_id, type: Integer, desc: 'The environment ID'
       end
       post ':id/environments/:environment_id/stop' do
-        authorize! :create_deployment, user_project
+        authorize! :read_environment, user_project
 
         environment = user_project.environments.find(params[:environment_id])
+        authorize! :stop_environment, environment
 
         environment.stop_with_action!(current_user)
 
         status 200
-        present environment, with: Entities::Environment
+        present environment, with: Entities::Environment, current_user: current_user
+      end
+
+      desc 'Get a single environment' do
+        success Entities::Environment
+      end
+      params do
+        requires :environment_id, type: Integer, desc: 'The environment ID'
+      end
+      get ':id/environments/:environment_id' do
+        authorize! :read_environment, user_project
+
+        environment = user_project.environments.find(params[:environment_id])
+        present environment, with: Entities::Environment, current_user: current_user,
+                             except: [:project, { last_deployment: [:environment] }],
+                             last_deployment: true
       end
     end
   end

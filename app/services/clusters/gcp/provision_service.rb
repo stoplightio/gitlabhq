@@ -1,6 +1,10 @@
+# frozen_string_literal: true
+
 module Clusters
   module Gcp
     class ProvisionService
+      CLOUD_RUN_ADDONS = %i[http_load_balancing istio_config cloud_run_config].freeze
+
       attr_reader :provider
 
       def execute(provider)
@@ -20,12 +24,17 @@ module Clusters
       private
 
       def get_operation_id
+        enable_addons = provider.cloud_run? ? CLOUD_RUN_ADDONS : []
+
         operation = provider.api_client.projects_zones_clusters_create(
           provider.gcp_project_id,
           provider.zone,
           provider.cluster.name,
           provider.num_nodes,
-          machine_type: provider.machine_type)
+          machine_type: provider.machine_type,
+          legacy_abac: provider.legacy_abac,
+          enable_addons: enable_addons
+        )
 
         unless operation.status == 'PENDING' || operation.status == 'RUNNING'
           return provider.make_errored!("Operation status is unexpected; #{operation.status_message}")

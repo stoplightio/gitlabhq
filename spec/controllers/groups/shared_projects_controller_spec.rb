@@ -1,11 +1,15 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Groups::SharedProjectsController do
   def get_shared_projects(params = {})
-    get :index, params.reverse_merge(format: :json, group_id: group.full_path)
+    get :index, params: params.reverse_merge(format: :json, group_id: group.full_path)
   end
 
   def share_project(project)
+    group.add_developer(user)
+
     Projects::GroupLinks::CreateService.new(
       project,
       user,
@@ -13,9 +17,9 @@ describe Groups::SharedProjectsController do
     ).execute(group)
   end
 
-  set(:group) { create(:group) }
-  set(:user) { create(:user) }
-  set(:shared_project) do
+  let_it_be(:group) { create(:group) }
+  let_it_be(:user) { create(:user) }
+  let_it_be(:shared_project) do
     shared_project = create(:project, namespace: user.namespace)
     share_project(shared_project)
 

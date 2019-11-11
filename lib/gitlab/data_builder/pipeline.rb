@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module DataBuilder
     module Pipeline
@@ -7,6 +9,7 @@ module Gitlab
         {
           object_kind: 'pipeline',
           object_attributes: hook_attrs(pipeline),
+          merge_request: pipeline.merge_request && merge_request_attrs(pipeline.merge_request),
           user: pipeline.user.try(:hook_attrs),
           project: pipeline.project.hook_attrs(backward: false),
           commit: pipeline.commit.try(:hook_attrs),
@@ -17,16 +20,33 @@ module Gitlab
       def hook_attrs(pipeline)
         {
           id: pipeline.id,
-          ref: pipeline.ref,
+          ref: pipeline.source_ref,
           tag: pipeline.tag,
           sha: pipeline.sha,
           before_sha: pipeline.before_sha,
+          source: pipeline.source,
           status: pipeline.status,
           detailed_status: pipeline.detailed_status(nil).label,
           stages: pipeline.stages_names,
           created_at: pipeline.created_at,
           finished_at: pipeline.finished_at,
-          duration: pipeline.duration
+          duration: pipeline.duration,
+          variables: pipeline.variables.map(&:hook_attrs)
+        }
+      end
+
+      def merge_request_attrs(merge_request)
+        {
+          id: merge_request.id,
+          iid: merge_request.iid,
+          title: merge_request.title,
+          source_branch: merge_request.source_branch,
+          source_project_id: merge_request.source_project_id,
+          target_branch: merge_request.target_branch,
+          target_project_id: merge_request.target_project_id,
+          state: merge_request.state,
+          merge_status: merge_request.merge_status,
+          url: Gitlab::UrlBuilder.build(merge_request)
         }
       end
 
@@ -44,7 +64,7 @@ module Gitlab
           user: build.user.try(:hook_attrs),
           runner: build.runner && runner_hook_attrs(build.runner),
           artifacts_file: {
-            filename: build.artifacts_file.filename,
+            filename: build.artifacts_file&.filename,
             size: build.artifacts_size
           }
         }
@@ -55,7 +75,7 @@ module Gitlab
           id: runner.id,
           description: runner.description,
           active: runner.active?,
-          is_shared: runner.is_shared?
+          is_shared: runner.instance_type?
         }
       end
     end

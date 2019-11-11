@@ -2,6 +2,7 @@ require 'spec_helper'
 
 describe Gitlab::GitAccess do
   include TermsHelper
+  include GitHelpers
 
   let(:user) { create(:user) }
 
@@ -13,15 +14,7 @@ describe Gitlab::GitAccess do
   let(:authentication_abilities) { %i[read_project download_code push_code] }
   let(:redirected_path) { nil }
   let(:auth_result_type) { nil }
-
-  let(:access) do
-    described_class.new(actor, project,
-      protocol, authentication_abilities: authentication_abilities,
-                namespace_path: namespace_path, project_path: project_path,
-                redirected_path: redirected_path, auth_result_type: auth_result_type)
-  end
-
-  let(:changes) { '_any' }
+  let(:changes) { Gitlab::GitAccess::ANY }
   let(:push_access_check) { access.check('git-receive-pack', changes) }
   let(:pull_access_check) { access.check('git-upload-pack', changes) }
 
@@ -48,7 +41,7 @@ describe Gitlab::GitAccess do
 
       before do
         disable_protocol('http')
-        project.add_master(user)
+        project.add_maintainer(user)
       end
 
       it 'blocks http push and pull' do
@@ -113,7 +106,7 @@ describe Gitlab::GitAccess do
         context 'when actor is a User' do
           context 'when the User can read the project' do
             before do
-              project.add_master(user)
+              project.add_maintainer(user)
             end
 
             it 'allows push and pull access' do
@@ -254,7 +247,7 @@ describe Gitlab::GitAccess do
 
   shared_examples '#check with a key that is not valid' do
     before do
-      project.add_master(user)
+      project.add_maintainer(user)
     end
 
     context 'key is too small' do
@@ -307,7 +300,7 @@ describe Gitlab::GitAccess do
 
   describe '#add_project_moved_message!', :clean_gitlab_redis_shared_state do
     before do
-      project.add_master(user)
+      project.add_maintainer(user)
     end
 
     context 'when a redirect was not followed to find the project' do
@@ -335,7 +328,7 @@ describe Gitlab::GitAccess do
 
   describe '#check_authentication_abilities!' do
     before do
-      project.add_master(user)
+      project.add_maintainer(user)
     end
 
     context 'when download' do
@@ -381,7 +374,7 @@ describe Gitlab::GitAccess do
 
   describe '#check_command_disabled!' do
     before do
-      project.add_master(user)
+      project.add_maintainer(user)
     end
 
     context 'over http' do
@@ -444,7 +437,7 @@ describe Gitlab::GitAccess do
         let(:project) { nil }
 
         context 'when changes is _any' do
-          let(:changes) { '_any' }
+          let(:changes) { Gitlab::GitAccess::ANY }
 
           context 'when authentication abilities include push code' do
             let(:authentication_abilities) { [:push_code] }
@@ -490,7 +483,7 @@ describe Gitlab::GitAccess do
       end
 
       context 'when project exists' do
-        let(:changes) { '_any' }
+        let(:changes) { Gitlab::GitAccess::ANY }
         let!(:project) { create(:project) }
 
         it 'does not create a new project' do
@@ -504,7 +497,7 @@ describe Gitlab::GitAccess do
         let(:project_path) { "nonexistent" }
         let(:project) { nil }
         let(:namespace_path) { user.namespace.path }
-        let(:changes) { '_any' }
+        let(:changes) { Gitlab::GitAccess::ANY }
 
         it 'does not create a new project' do
           expect { access.send(:ensure_project_on_push!, cmd, changes) }.not_to change { Project.count }
@@ -514,7 +507,7 @@ describe Gitlab::GitAccess do
 
     context 'when pull' do
       let(:cmd) { 'git-upload-pack' }
-      let(:changes) { '_any' }
+      let(:changes) { Gitlab::GitAccess::ANY }
 
       context 'when project does not exist' do
         let(:project_path) { "new-project" }
@@ -529,8 +522,8 @@ describe Gitlab::GitAccess do
   end
 
   describe '#check_download_access!' do
-    it 'allows masters to pull' do
-      project.add_master(user)
+    it 'allows maintainers to pull' do
+      project.add_maintainer(user)
 
       expect { pull_access_check }.not_to raise_error
     end
@@ -542,10 +535,17 @@ describe Gitlab::GitAccess do
     end
 
     it 'disallows blocked users to pull' do
-      project.add_master(user)
+      project.add_maintainer(user)
       user.block
 
       expect { pull_access_check }.to raise_unauthorized('Your account has been blocked.')
+    end
+
+    it 'disallows deactivated users to pull' do
+      project.add_maintainer(user)
+      user.deactivate!
+
+      expect { pull_access_check }.to raise_unauthorized("Your account has been deactivated by your administrator. Please log back in from a web browser to reactivate your account at #{Gitlab.config.gitlab.url}")
     end
 
     context 'when the project repository does not exist' do
@@ -716,21 +716,35 @@ describe Gitlab::GitAccess do
       project.add_developer(user)
     end
 
-    it 'checks LFS integrity only for first change' do
-      expect_any_instance_of(Gitlab::Checks::LfsIntegrity).to receive(:objects_missing?).exactly(1).times
+    context 'when LFS is not enabled' do
+      it 'does not run LFSIntegrity check' do
+        expect(Gitlab::Checks::LfsIntegrity).not_to receive(:new)
 
-      push_access_check
+        push_access_check
+      end
+    end
+
+    context 'when LFS is enabled' do
+      it 'checks LFS integrity only for first change' do
+        allow(project).to receive(:lfs_enabled?).and_return(true)
+
+        expect_any_instance_of(Gitlab::Checks::LfsIntegrity).to receive(:objects_missing?).exactly(1).times
+
+        push_access_check
+      end
     end
   end
 
   describe '#check_push_access!' do
+    let(:unprotected_branch) { 'unprotected_branch' }
+
     before do
       merge_into_protected_branch
     end
-    let(:unprotected_branch) { 'unprotected_branch' }
 
     let(:changes) do
-      { push_new_branch: "#{Gitlab::Git::BLANK_SHA} 570e7b2ab refs/heads/wow",
+      { any: Gitlab::GitAccess::ANY,
+        push_new_branch: "#{Gitlab::Git::BLANK_SHA} 570e7b2ab refs/heads/wow",
         push_master: '6f6d7e7ed 570e7b2ab refs/heads/master',
         push_protected_branch: '6f6d7e7ed 570e7b2ab refs/heads/feature',
         push_remove_protected_branch: "570e7b2ab #{Gitlab::Git::BLANK_SHA} "\
@@ -741,31 +755,21 @@ describe Gitlab::GitAccess do
         merge_into_protected_branch: "0b4bc9a #{merge_into_protected_branch} refs/heads/feature" }
     end
 
-    def stub_git_hooks
-      # Running the `pre-receive` hook is expensive, and not necessary for this test.
-      allow_any_instance_of(Gitlab::Git::HooksService).to receive(:execute) do |service, &block|
-        block.call(service)
-      end
-    end
-
     def merge_into_protected_branch
       @protected_branch_merge_commit ||= begin
-        Gitlab::GitalyClient::StorageSettings.allow_disk_access do
-          stub_git_hooks
-          project.repository.add_branch(user, unprotected_branch, 'feature')
-          target_branch = project.repository.lookup('feature')
-          source_branch = project.repository.create_file(
-            user,
-            'filename',
-            'This is the file content',
-            message: 'This is a good commit message',
-            branch_name: unprotected_branch)
-          rugged = project.repository.rugged
-          author = { email: "email@example.com", time: Time.now, name: "Example Git User" }
+        project.repository.add_branch(user, unprotected_branch, 'feature')
+        rugged = rugged_repo(project.repository)
+        target_branch = rugged.rev_parse('feature')
+        source_branch = project.repository.create_file(
+          user,
+          'filename',
+          'This is the file content',
+          message: 'This is a good commit message',
+          branch_name: unprotected_branch)
+        author = { email: "email@example.com", time: Time.now, name: "Example Git User" }
 
-          merge_index = rugged.merge_commits(target_branch, source_branch)
-          Rugged::Commit.create(rugged, author: author, committer: author, message: "commit message", parents: [target_branch, source_branch], tree: merge_index.write_tree(rugged))
-        end
+        merge_index = rugged.merge_commits(target_branch, source_branch)
+        Rugged::Commit.create(rugged, author: author, committer: author, message: "commit message", parents: [target_branch, source_branch], tree: merge_index.write_tree(rugged))
       end
     end
 
@@ -779,13 +783,16 @@ describe Gitlab::GitAccess do
         it "has the correct permissions for #{role}s" do
           if role == :admin
             user.update_attribute(:admin, true)
+            project.add_guest(user)
           else
             project.add_role(user, role)
           end
 
+          protected_branch.save
+
           aggregate_failures do
             matrix.each do |action, allowed|
-              check = -> { access.send(:check_push_access!, changes[action]) }
+              check = -> { push_changes(changes[action]) }
 
               if allowed
                 expect(&check).not_to raise_error,
@@ -802,6 +809,7 @@ describe Gitlab::GitAccess do
 
     permissions_matrix = {
       admin: {
+        any: true,
         push_new_branch: true,
         push_master: true,
         push_protected_branch: true,
@@ -812,7 +820,8 @@ describe Gitlab::GitAccess do
         merge_into_protected_branch: true
       },
 
-      master: {
+      maintainer: {
+        any: true,
         push_new_branch: true,
         push_master: true,
         push_protected_branch: true,
@@ -824,17 +833,19 @@ describe Gitlab::GitAccess do
       },
 
       developer: {
+        any: true,
         push_new_branch: true,
         push_master: true,
         push_protected_branch: false,
         push_remove_protected_branch: false,
-        push_tag: false,
+        push_tag: true,
         push_new_tag: true,
         push_all: false,
         merge_into_protected_branch: false
       },
 
       reporter: {
+        any: false,
         push_new_branch: false,
         push_master: false,
         push_protected_branch: false,
@@ -846,6 +857,7 @@ describe Gitlab::GitAccess do
       },
 
       guest: {
+        any: false,
         push_new_branch: false,
         push_master: false,
         push_protected_branch: false,
@@ -859,25 +871,19 @@ describe Gitlab::GitAccess do
 
     [%w(feature exact), ['feat*', 'wildcard']].each do |protected_branch_name, protected_branch_type|
       context do
-        before do
-          create(:protected_branch, name: protected_branch_name, project: project)
-        end
+        let(:protected_branch) { create(:protected_branch, :maintainers_can_push, name: protected_branch_name, project: project) }
 
         run_permission_checks(permissions_matrix)
       end
 
       context "when developers are allowed to push into the #{protected_branch_type} protected branch" do
-        before do
-          create(:protected_branch, :developers_can_push, name: protected_branch_name, project: project)
-        end
+        let(:protected_branch) { create(:protected_branch, :developers_can_push, name: protected_branch_name, project: project) }
 
         run_permission_checks(permissions_matrix.deep_merge(developer: { push_protected_branch: true, push_all: true, merge_into_protected_branch: true }))
       end
 
       context "developers are allowed to merge into the #{protected_branch_type} protected branch" do
-        before do
-          create(:protected_branch, :developers_can_merge, name: protected_branch_name, project: project)
-        end
+        let(:protected_branch) { create(:protected_branch, :developers_can_merge, name: protected_branch_name, project: project) }
 
         context "when a merge request exists for the given source/target branch" do
           context "when the merge request is in progress" do
@@ -904,20 +910,16 @@ describe Gitlab::GitAccess do
       end
 
       context "when developers are allowed to push and merge into the #{protected_branch_type} protected branch" do
-        before do
-          create(:protected_branch, :developers_can_merge, :developers_can_push, name: protected_branch_name, project: project)
-        end
+        let(:protected_branch) { create(:protected_branch, :developers_can_merge, :developers_can_push, name: protected_branch_name, project: project) }
 
         run_permission_checks(permissions_matrix.deep_merge(developer: { push_protected_branch: true, push_all: true, merge_into_protected_branch: true }))
       end
 
       context "when no one is allowed to push to the #{protected_branch_name} protected branch" do
-        before do
-          create(:protected_branch, :no_one_can_push, name: protected_branch_name, project: project)
-        end
+        let(:protected_branch) { build(:protected_branch, :no_one_can_push, name: protected_branch_name, project: project) }
 
         run_permission_checks(permissions_matrix.deep_merge(developer: { push_protected_branch: false, push_all: false, merge_into_protected_branch: false },
-                                                            master: { push_protected_branch: false, push_all: false, merge_into_protected_branch: false },
+                                                            maintainer: { push_protected_branch: false, push_all: false, merge_into_protected_branch: false },
                                                             admin: { push_protected_branch: false, push_all: false, merge_into_protected_branch: false }))
       end
     end
@@ -930,9 +932,41 @@ describe Gitlab::GitAccess do
         project.add_developer(user)
       end
 
+      it 'does not allow deactivated users to push' do
+        user.deactivate!
+
+        expect { push_access_check }.to raise_unauthorized("Your account has been deactivated by your administrator. Please log back in from a web browser to reactivate your account at #{Gitlab.config.gitlab.url}")
+      end
+
       it 'cleans up the files' do
         expect(project.repository).to receive(:clean_stale_repository_files).and_call_original
         expect { push_access_check }.not_to raise_error
+      end
+
+      it 'avoids N+1 queries', :request_store do
+        # Run this once to establish a baseline. Cached queries should get
+        # cached, so that when we introduce another change we shouldn't see
+        # additional queries.
+        access.check('git-receive-pack', changes)
+
+        control_count = ActiveRecord::QueryRecorder.new do
+          access.check('git-receive-pack', changes)
+        end
+
+        changes = ['6f6d7e7ed 570e7b2ab refs/heads/master', '6f6d7e7ed 570e7b2ab refs/heads/feature']
+
+        # There is still an N+1 query with protected branches
+        expect { access.check('git-receive-pack', changes) }.not_to exceed_query_limit(control_count).with_threshold(2)
+      end
+
+      it 'raises TimeoutError when #check_single_change_access raises a timeout error' do
+        message = "Push operation timed out\n\nTiming information for debugging purposes:\nRunning checks for ref: wow"
+
+        expect_next_instance_of(Gitlab::Checks::ChangeAccess) do |check|
+          expect(check).to receive(:exec).and_raise(Gitlab::Checks::TimedLogger::TimeoutError)
+        end
+
+        expect { access.check('git-receive-pack', changes) }.to raise_error(described_class::TimeoutError, message)
       end
     end
   end
@@ -973,7 +1007,7 @@ describe Gitlab::GitAccess do
     let(:project) { create(:project, :repository, :read_only) }
 
     it 'denies push access' do
-      project.add_master(user)
+      project.add_maintainer(user)
 
       expect { push_access_check }.to raise_unauthorized('The repository is temporarily read-only. Please try again later.')
     end
@@ -1103,9 +1137,9 @@ describe Gitlab::GitAccess do
       it_behaves_like 'access after accepting terms'
     end
 
-    describe 'as a master of the project' do
+    describe 'as a maintainer of the project' do
       before do
-        project.add_master(user)
+        project.add_maintainer(user)
       end
 
       it_behaves_like 'access after accepting terms'
@@ -1135,6 +1169,17 @@ describe Gitlab::GitAccess do
   end
 
   private
+
+  def access
+    described_class.new(actor, project, protocol,
+                        authentication_abilities: authentication_abilities,
+                        namespace_path: namespace_path, project_path: project_path,
+                        redirected_path: redirected_path, auth_result_type: auth_result_type)
+  end
+
+  def push_changes(changes)
+    access.check('git-receive-pack', changes)
+  end
 
   def raise_unauthorized(message)
     raise_error(Gitlab::GitAccess::UnauthorizedError, message)

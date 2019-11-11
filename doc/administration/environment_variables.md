@@ -13,6 +13,7 @@ override certain values.
 
 Variable | Type | Description
 -------- | ---- | -----------
+`ENABLE_BOOTSNAP`                          | string  | Enables Bootsnap for speeding up initial Rails boot (`1` to enable)
 `GITLAB_CDN_HOST`                          | string  | Sets the base URL for a CDN to serve static assets (e.g. `//mycdnsubdomain.fictional-cdn.com`)
 `GITLAB_ROOT_PASSWORD`                     | string  | Sets the password for the `root` user on installation
 `GITLAB_HOST`                              | string  | The full URL of the GitLab server (including `http://` or `https://`)
@@ -42,7 +43,7 @@ The list of `GITLAB_DATABASE_XXX` variables that you can set is:
 
 Variable | Default value | Overridden by `DATABASE_URL`?
 -------- | ------------- | -----------------------------
-`GITLAB_DATABASE_ADAPTER`   | `postgresql` (for MySQL use `mysql2`) | Yes
+`GITLAB_DATABASE_ADAPTER`   | `postgresql`                          | Yes
 `GITLAB_DATABASE_DATABASE`  | `gitlab_#{ENV['RAILS_ENV']`           | Yes
 `GITLAB_DATABASE_USERNAME`  | `root`                                | Yes
 `GITLAB_DATABASE_PASSWORD`  | None                                  | Yes
@@ -64,4 +65,4 @@ instructions](https://docs.gitlab.com/omnibus/settings/environment-variables.htm
 
 It's possible to preconfigure the GitLab docker image by adding the environment
 variable `GITLAB_OMNIBUS_CONFIG` to the `docker run` command.
-For more information see the ['preconfigure-docker-container' section in the Omnibus documentation](http://docs.gitlab.com/omnibus/docker/#preconfigure-docker-container).
+For more information see the ['preconfigure-docker-container' section in the Omnibus documentation](https://docs.gitlab.com/omnibus/docker/#preconfigure-docker-container).

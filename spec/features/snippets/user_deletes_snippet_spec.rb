@@ -1,6 +1,8 @@
-require 'rails_helper'
+# frozen_string_literal: true
 
-feature 'User deletes snippet' do
+require 'spec_helper'
+
+describe 'User deletes snippet' do
   let(:user) { create(:user) }
   let(:content) { 'puts "test"' }
   let(:snippet) { create(:personal_snippet, :public, content: content, author: user) }

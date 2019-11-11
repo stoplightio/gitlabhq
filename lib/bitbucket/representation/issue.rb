@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Bitbucket
   module Representation
     class Issue < Representation::Base
@@ -12,7 +14,7 @@ module Bitbucket
       end
 
       def author
-        raw.dig('reporter', 'username')
+        raw.dig('reporter', 'nickname')
       end
 
       def description

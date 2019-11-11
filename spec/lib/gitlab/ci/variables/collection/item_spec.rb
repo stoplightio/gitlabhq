@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Gitlab::Ci::Variables::Collection::Item do
@@ -6,7 +8,7 @@ describe Gitlab::Ci::Variables::Collection::Item do
   let(:expected_value) { variable_value }
 
   let(:variable) do
-    { key: variable_key, value: variable_value, public: true }
+    { key: variable_key, value: variable_value, public: true, masked: false }
   end
 
   describe '.new' do
@@ -36,7 +38,7 @@ describe Gitlab::Ci::Variables::Collection::Item do
     shared_examples 'raises error for invalid type' do
       it do
         expect { described_class.new(key: variable_key, value: variable_value) }
-          .to raise_error ArgumentError, /`value` must be of type String, while it was:/
+          .to raise_error ArgumentError, /`#{variable_key}` must be of type String or nil value, while it was:/
       end
     end
 
@@ -75,12 +77,20 @@ describe Gitlab::Ci::Variables::Collection::Item do
       expect(resource).to eq variable
     end
 
+    it 'supports using a hash with stringified values' do
+      variable = { 'key' => 'VARIABLE', 'value' => 'my value' }
+
+      resource = described_class.fabricate(variable)
+
+      expect(resource).to eq(key: 'VARIABLE', value: 'my value')
+    end
+
     it 'supports using an active record resource' do
       variable = create(:ci_variable, key: 'CI_VAR', value: '123')
       resource = described_class.fabricate(variable)
 
       expect(resource).to be_a(described_class)
-      expect(resource).to eq(key: 'CI_VAR', value: '123', public: false)
+      expect(resource).to eq(key: 'CI_VAR', value: '123', public: false, masked: false)
     end
 
     it 'supports using another collection item' do
@@ -126,7 +136,7 @@ describe Gitlab::Ci::Variables::Collection::Item do
           .to_runner_variable
 
         expect(runner_variable)
-          .to eq(key: 'VAR', value: 'value', public: true, file: true)
+          .to eq(key: 'VAR', value: 'value', public: true, file: true, masked: false)
       end
     end
   end

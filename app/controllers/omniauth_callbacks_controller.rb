@@ -1,8 +1,11 @@
+# frozen_string_literal: true
+
 class OmniauthCallbacksController < Devise::OmniauthCallbacksController
   include AuthenticatesWithTwoFactor
   include Devise::Controllers::Rememberable
+  include AuthHelper
 
-  protect_from_forgery except: [:kerberos, :saml, :cas3]
+  protect_from_forgery except: [:kerberos, :saml, :cas3, :failure], with: :exception, prepend: true
 
   def handle_omniauth
     omniauth_flow(Gitlab::Auth::OAuth)
@@ -37,6 +40,8 @@ class OmniauthCallbacksController < Devise::OmniauthCallbacksController
 
   def saml
     omniauth_flow(Gitlab::Auth::Saml)
+  rescue Gitlab::Auth::Saml::IdentityLinker::UnverifiedRequest
+    redirect_unverified_saml_initiation
   end
 
   def omniauth_error
@@ -70,15 +75,28 @@ class OmniauthCallbacksController < Devise::OmniauthCallbacksController
     end
   end
 
+  def salesforce
+    if oauth.dig('extra', 'email_verified')
+      handle_omniauth
+    else
+      fail_salesforce_login
+    end
+  end
+
   private
 
   def omniauth_flow(auth_module, identity_linker: nil)
+    if fragment = request.env.dig('omniauth.params', 'redirect_fragment').presence
+      store_redirect_fragment(fragment)
+    end
+
     if current_user
+      return render_403 unless link_provider_allowed?(oauth['provider'])
+
       log_audit_event(current_user, with: oauth['provider'])
+      identity_linker ||= auth_module::IdentityLinker.new(current_user, oauth, session)
 
-      identity_linker ||= auth_module::IdentityLinker.new(current_user, oauth)
-
-      identity_linker.link
+      link_identity(identity_linker)
 
       if identity_linker.changed?
         redirect_identity_linked
@@ -92,16 +110,20 @@ class OmniauthCallbacksController < Devise::OmniauthCallbacksController
     end
   end
 
+  def link_identity(identity_linker)
+    identity_linker.link
+  end
+
   def redirect_identity_exists
     redirect_to after_sign_in_path_for(current_user)
   end
 
   def redirect_identity_link_failed(error_message)
-    redirect_to profile_account_path, notice: "Authentication failed: #{error_message}"
+    redirect_to profile_account_path, notice: _("Authentication failed: %{error_message}") % { error_message: error_message }
   end
 
   def redirect_identity_linked
-    redirect_to profile_account_path, notice: 'Authentication method updated'
+    redirect_to profile_account_path, notice: _('Authentication method updated')
   end
 
   def handle_service_ticket(provider, ticket)
@@ -110,8 +132,12 @@ class OmniauthCallbacksController < Devise::OmniauthCallbacksController
     session[:service_tickets][provider] = ticket
   end
 
+  def build_auth_user(auth_user_class)
+    auth_user_class.new(oauth)
+  end
+
   def sign_in_user_flow(auth_user_class)
-    auth_user = auth_user_class.new(oauth)
+    auth_user = build_auth_user(auth_user_class)
     user = auth_user.find_and_update!
 
     if auth_user.valid_sign_in?
@@ -119,10 +145,15 @@ class OmniauthCallbacksController < Devise::OmniauthCallbacksController
 
       set_remember_me(user)
 
-      if user.two_factor_enabled?
+      if user.two_factor_enabled? && !auth_user.bypass_two_factor?
         prompt_for_two_factor(user)
       else
-        sign_in_and_redirect(user)
+        if user.deactivated?
+          user.activate
+          flash[:notice] = _('Welcome back! Your account had been deactivated due to inactivity but is now reactivated.')
+        end
+
+        sign_in_and_redirect(user, event: :authentication)
       end
     else
       fail_login(user)
@@ -135,14 +166,13 @@ class OmniauthCallbacksController < Devise::OmniauthCallbacksController
 
   def handle_signup_error
     label = Gitlab::Auth::OAuth::Provider.label_for(oauth['provider'])
-    message = "Signing in using your #{label} account without a pre-existing GitLab account is not allowed."
+    message = [_("Signing in using your %{label} account without a pre-existing GitLab account is not allowed.") % { label: label }]
 
     if Gitlab::CurrentSettings.allow_signup?
-      message << " Create a GitLab account first, and then connect it to your #{label} account."
+      message << _("Create a GitLab account first, and then connect it to your %{label} account.") % { label: label }
     end
 
-    flash[:notice] = message
-
+    flash[:notice] = message.join(' ')
     redirect_to new_user_session_path
   end
 
@@ -157,14 +187,26 @@ class OmniauthCallbacksController < Devise::OmniauthCallbacksController
   end
 
   def fail_auth0_login
-    flash[:alert] = 'Wrong extern UID provided. Make sure Auth0 is configured correctly.'
+    fail_login_with_message(_('Wrong extern UID provided. Make sure Auth0 is configured correctly.'))
+  end
+
+  def fail_salesforce_login
+    fail_login_with_message(_('Email not verified. Please verify your email in Salesforce.'))
+  end
+
+  def fail_login_with_message(message)
+    flash[:alert] = message
 
     redirect_to new_user_session_path
   end
 
+  def redirect_unverified_saml_initiation
+    redirect_to profile_account_path, notice: _('Request to link SAML account must be authorized')
+  end
+
   def handle_disabled_provider
     label = Gitlab::Auth::OAuth::Provider.label_for(oauth['provider'])
-    flash[:alert] = "Signing in using #{label} has been disabled"
+    flash[:alert] = _("Signing in using %{label} has been disabled") % { label: label }
 
     redirect_to new_user_session_path
   end
@@ -188,4 +230,15 @@ class OmniauthCallbacksController < Devise::OmniauthCallbacksController
     request_params = request.env['omniauth.params']
     (request_params['remember_me'] == '1') if request_params.present?
   end
+
+  def store_redirect_fragment(redirect_fragment)
+    key = stored_location_key_for(:user)
+    location = session[key]
+    if uri = parse_uri(location)
+      uri.fragment = redirect_fragment
+      store_location_for(:user, uri.to_s)
+    end
+  end
 end
+
+OmniauthCallbacksController.prepend_if_ee('EE::OmniauthCallbacksController')

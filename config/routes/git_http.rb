@@ -34,13 +34,25 @@ scope(path: '*namespace_id/:project_id',
     end
   end
 
+  # Redirect /group/project.wiki.git to the project wiki
+  scope(format: true, constraints: { project_id: Gitlab::PathRegex.project_wiki_git_route_regex, format: :git }) do
+    wiki_redirect = redirect do |params, request|
+      project_id = params[:project_id].delete_suffix('.wiki')
+      path = [params[:namespace_id], project_id, 'wikis'].join('/')
+      path << "?#{request.query_string}" unless request.query_string.blank?
+      path
+    end
+
+    get '/', to: wiki_redirect
+  end
+
   # Redirect /group/project/info/refs to /group/project.git/info/refs
   scope(constraints: { project_id: Gitlab::PathRegex.project_route_regex }) do
     # Allow /info/refs, /info/refs?service=git-upload-pack, and
     # /info/refs?service=git-receive-pack, but nothing else.
     #
     git_http_handshake = lambda do |request|
-      ::Constraints::ProjectUrlConstrainer.new.matches?(request) &&
+      ::Constraints::ProjectUrlConstrainer.new.matches?(request, existence_check: false) &&
         (request.query_string.blank? ||
          request.query_string.match(/\Aservice=git-(upload|receive)-pack\z/))
     end

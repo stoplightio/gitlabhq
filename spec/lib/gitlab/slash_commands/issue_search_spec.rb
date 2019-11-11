@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Gitlab::SlashCommands::IssueSearch do
@@ -22,7 +24,7 @@ describe Gitlab::SlashCommands::IssueSearch do
 
     context 'the user has access' do
       before do
-        project.add_master(user)
+        project.add_maintainer(user)
       end
 
       it 'returns all results' do

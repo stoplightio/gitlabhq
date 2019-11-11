@@ -1,31 +1,44 @@
+# frozen_string_literal: true
+
 require 'capybara/dsl'
 
 module QA
   module Page
     class Base
+      prepend Support::Page::Logging if Runtime::Env.debug?
       include Capybara::DSL
       include Scenario::Actable
+      extend Validatable
       extend SingleForwardable
+
+      ElementNotFound = Class.new(RuntimeError)
 
       def_delegators :evaluator, :view, :views
 
-      def refresh
-        visit current_url
+      def assert_no_element(name)
+        assert_no_selector(element_selector_css(name))
       end
 
-      def wait(max: 60, time: 0.1, reload: true)
-        start = Time.now
+      def refresh
+        page.refresh
+      end
 
-        while Time.now - start < max
-          result = yield
-          return result if result
-
-          sleep(time)
-
-          refresh if reload
+      def wait(max: 60, interval: 0.1, reload: true)
+        QA::Support::Waiter.wait(max: max, interval: interval) do
+          yield || (reload && refresh && false)
         end
+      end
 
-        false
+      def retry_until(max_attempts: 3, reload: false, sleep_interval: 0)
+        QA::Support::Retrier.retry_until(max_attempts: max_attempts, reload_page: (reload && self), sleep_interval: sleep_interval) do
+          yield
+        end
+      end
+
+      def retry_on_exception(max_attempts: 3, reload: false, sleep_interval: 0.5)
+        QA::Support::Retrier.retry_on_exception(max_attempts: max_attempts, reload_page: (reload && self), sleep_interval: sleep_interval) do
+          yield
+        end
       end
 
       def scroll_to(selector, text: nil)
@@ -53,37 +66,119 @@ module QA
           xhr.send();
         JS
 
-        return false unless wait(time: 0.5, max: 60, reload: false) do
+        return false unless wait(interval: 0.5, max: 60, reload: false) do
           page.evaluate_script('xhr.readyState == XMLHttpRequest.DONE')
         end
 
         page.evaluate_script('xhr.status') == 200
       end
 
-      def find_element(name)
-        find(element_selector_css(name))
+      def find_element(name, **kwargs)
+        find(element_selector_css(name), kwargs)
+      end
+
+      def active_element?(name)
+        find_element(name, class: 'active')
       end
 
       def all_elements(name)
         all(element_selector_css(name))
       end
 
-      def click_element(name)
-        find_element(name).click
+      def check_element(name)
+        find_element(name).set(true)
+      end
+
+      def uncheck_element(name)
+        find_element(name).set(false)
+      end
+
+      # replace with (..., page = self.class)
+      def click_element(name, page = nil, text: nil)
+        find_element(name, text: text).click
+        page.validate_elements_present! if page
       end
 
       def fill_element(name, content)
         find_element(name).set(content)
       end
 
-      def within_element(name)
-        page.within(element_selector_css(name)) do
+      def select_element(name, value)
+        element = find_element(name)
+
+        return if element.text == value
+
+        element.select value
+      end
+
+      def has_element?(name, text: nil, wait: Capybara.default_max_wait_time)
+        has_css?(element_selector_css(name), wait: wait, text: text)
+      end
+
+      def has_no_element?(name, text: nil, wait: Capybara.default_max_wait_time)
+        has_no_css?(element_selector_css(name), wait: wait, text: text)
+      end
+
+      def has_text?(text)
+        page.has_text? text
+      end
+
+      def has_no_text?(text)
+        page.has_no_text? text
+      end
+
+      def finished_loading?
+        has_no_css?('.fa-spinner', wait: Capybara.default_max_wait_time)
+      end
+
+      def finished_loading_block?
+        has_no_css?('.fa-spinner.block-loading', wait: Capybara.default_max_wait_time)
+      end
+
+      def wait_for_animated_element(name)
+        # It would be ideal if we could detect when the animation is complete
+        # but in some cases there's nothing we can easily access via capybara
+        # so instead we wait for the element, and then we wait a little longer
+        raise ElementNotFound, %Q(Couldn't find element named "#{name}") unless has_element?(name)
+
+        sleep 1
+      end
+
+      def within_element(name, text: nil)
+        page.within(element_selector_css(name), text: text) do
           yield
         end
       end
 
+      def within_element_by_index(name, index)
+        # Finding all elements can be flaky if the elements don't all load
+        # immediately. So we wait for any to appear before trying to find a
+        # specific one.
+        has_element?(name)
+
+        page.within all_elements(name)[index] do
+          yield
+        end
+      end
+
+      def scroll_to_element(name, *args)
+        scroll_to(element_selector_css(name), *args)
+      end
+
       def element_selector_css(name)
         Page::Element.new(name).selector_css
+      end
+
+      def click_link_with_text(text)
+        click_link text
+      end
+
+      def click_body
+        find('body').click
+      end
+
+      def visit_link_in_element(name)
+        visit find_element(name)['href']
       end
 
       def self.path
@@ -99,11 +194,15 @@ module QA
           return ["Page class does not have views / elements defined!"]
         end
 
-        views.map(&:errors).flatten
+        views.flat_map(&:errors)
       end
 
       def self.elements
-        views.map(&:elements).flatten
+        views.flat_map(&:elements)
+      end
+
+      def send_keys_to_element(name, keys)
+        find_element(name).send_keys(keys)
       end
 
       class DSL

@@ -62,6 +62,11 @@ describe('IDE jobs detail view', () => {
     expect(vm.$el.querySelector('.build-loader-animation').style.display).toBe('');
   });
 
+  it('hides output when loading', () => {
+    expect(vm.$el.querySelector('.bash')).not.toBe(null);
+    expect(vm.$el.querySelector('.bash').style.display).toBe('none');
+  });
+
   it('hide loading icon when isLoading is false', done => {
     vm.$store.state.pipelines.detailJob.isLoading = false;
 
@@ -104,8 +109,7 @@ describe('IDE jobs detail view', () => {
 
       vm.scrollPos = 1;
 
-      vm
-        .$nextTick()
+      vm.$nextTick()
         .then(() => vm.$el.querySelector('.btn-scroll').click())
         .then(() => vm.$nextTick())
         .then(() => {

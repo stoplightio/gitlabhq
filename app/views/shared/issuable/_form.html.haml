@@ -1,6 +1,7 @@
 - form = local_assigns.fetch(:f)
 - commits = local_assigns[:commits]
 - project = @target_project || @project
+- presenter = local_assigns.fetch(:presenter, nil)
 
 = form_errors(issuable)
 
@@ -16,7 +17,9 @@
 
   = render 'shared/issuable/form/template_selector', issuable: issuable
   = render 'shared/issuable/form/title', issuable: issuable, form: form, has_wip_commits: commits && commits.detect(&:work_in_progress?)
+#js-suggestions{ data: { project_path: @project.full_path } }
 
+= render 'shared/form_elements/apply_template_warning'
 = render 'shared/form_elements/description', model: issuable, form: form, project: project
 
 - if issuable.respond_to?(:confidential)
@@ -29,7 +32,7 @@
 
 = render 'shared/issuable/form/metadata', issuable: issuable, form: form
 
-= render_if_exists 'shared/issuable/approvals', issuable: issuable, form: form
+= render_if_exists 'shared/issuable/approvals', issuable: issuable, presenter: presenter, form: form
 
 = render 'shared/issuable/form/branch_chooser', issuable: issuable, form: form
 
@@ -45,13 +48,13 @@
         = hidden_field_tag 'merge_request_to_resolve_discussions_of', @merge_request_to_resolve_discussions_of.iid
         - if @discussion_to_resolve
           = hidden_field_tag 'discussion_to_resolve', @discussion_to_resolve.id
-          Creating this issue will resolve the discussion in
+          Creating this issue will resolve the thread in
         - else
-          Creating this issue will resolve all discussions in
+          Creating this issue will resolve all threads in
         = link_to_discussions_to_resolve(@merge_request_to_resolve_discussions_of, @discussion_to_resolve)
       - else
         The
-        = @discussion_to_resolve ? 'discussion' : 'discussions'
+        = @discussion_to_resolve ? 'thread' : 'threads'
         at
         = link_to_discussions_to_resolve(@merge_request_to_resolve_discussions_of, @discussion_to_resolve)
         will stay unresolved. Ask someone with permission to resolve
@@ -64,14 +67,14 @@
       = link_to 'Cancel', polymorphic_path([@project.namespace.becomes(Namespace), @project, issuable.class]), class: 'btn btn-cancel'
     - else
       - if can?(current_user, :"destroy_#{issuable.to_ability_name}", @project)
-        = link_to 'Delete', polymorphic_path([@project.namespace.becomes(Namespace), @project, issuable]), data: { confirm: "#{issuable.human_class_name} will be removed! Are you sure?" }, method: :delete, class: 'btn btn-danger btn-grouped'
+        = link_to 'Delete', polymorphic_path([@project.namespace.becomes(Namespace), @project, issuable], params: { destroy_confirm: true }), data: { confirm: "#{issuable.human_class_name} will be removed! Are you sure?" }, method: :delete, class: 'btn btn-danger btn-grouped'
       = link_to 'Cancel', polymorphic_path([@project.namespace.becomes(Namespace), @project, issuable]), class: 'btn btn-grouped btn-cancel'
 
   %span.append-right-10
     - if issuable.new_record?
-      = form.submit "Submit #{issuable.class.model_name.human.downcase}", class: 'btn btn-create qa-issuable-create-button'
+      = form.submit "Submit #{issuable.class.model_name.human.downcase}", class: 'btn btn-success qa-issuable-create-button'
     - else
-      = form.submit 'Save changes', class: 'btn btn-save'
+      = form.submit 'Save changes', class: 'btn btn-success'
 
   - if !issuable.persisted? && !issuable.project.empty_repo? && (guide_url = issuable.project.present.contribution_guide_path)
     .inline.prepend-top-10

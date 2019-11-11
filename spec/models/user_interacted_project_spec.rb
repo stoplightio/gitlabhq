@@ -1,8 +1,11 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe UserInteractedProject do
   describe '.track' do
     subject { described_class.track(event) }
+
     let(:event) { build(:event) }
 
     Event::ACTIONS.each do |action|

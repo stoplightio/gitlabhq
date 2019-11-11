@@ -11,8 +11,6 @@ Read more about [system hooks](../system_hooks/system_hooks.md).
 
 Get a list of all system hooks.
 
----
-
 ```
 GET /hooks
 ```
@@ -20,7 +18,7 @@ GET /hooks
 Example request:
 
 ```bash
-curl --header "PRIVATE-TOKEN: 9koXpg98eAheJpvBs5tK" https://gitlab.example.com/api/v4/hooks
+curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/hooks
 ```
 
 Example response:
@@ -34,6 +32,7 @@ Example response:
     "push_events":true,
     "tag_push_events":false,
     "merge_requests_events": true,
+    "repository_update_events": true,
     "enable_ssl_verification":true
   }
 ]
@@ -42,8 +41,6 @@ Example response:
 ## Add new system hook
 
 Add a new system hook.
-
----
 
 ```
 POST /hooks
@@ -56,12 +53,13 @@ POST /hooks
 | `push_events` | boolean |  no | When true, the hook will fire on push events |
 | `tag_push_events` | boolean | no | When true, the hook will fire on new tags being pushed |
 | `merge_requests_events` | boolean | no | Trigger hook on merge requests events |
+| `repository_update_events` | boolean | no | Trigger hook on repository update events |
 | `enable_ssl_verification` | boolean | no | Do SSL verification when triggering the hook |
 
 Example request:
 
 ```bash
-curl --request POST --header "PRIVATE-TOKEN: 9koXpg98eAheJpvBs5tK" "https://gitlab.example.com/api/v4/hooks?url=https://gitlab.example.com/hook"
+curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/hooks?url=https://gitlab.example.com/hook"
 ```
 
 Example response:
@@ -75,6 +73,7 @@ Example response:
     "push_events":true,
     "tag_push_events":false,
     "merge_requests_events": true,
+    "repository_update_events": true,
     "enable_ssl_verification":true
   }
 ]
@@ -93,7 +92,7 @@ GET /hooks/:id
 Example request:
 
 ```bash
-curl --header "PRIVATE-TOKEN: 9koXpg98eAheJpvBs5tK" https://gitlab.example.com/api/v4/hooks/2
+curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/hooks/2
 ```
 
 Example response:
@@ -113,8 +112,6 @@ Example response:
 
 Deletes a system hook.
 
----
-
 ```
 DELETE /hooks/:id
 ```
@@ -126,5 +123,5 @@ DELETE /hooks/:id
 Example request:
 
 ```bash
-curl --request DELETE --header "PRIVATE-TOKEN: 9koXpg98eAheJpvBs5tK" https://gitlab.example.com/api/v4/hooks/2
+curl --request DELETE --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/hooks/2
 ```

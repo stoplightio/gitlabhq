@@ -1,3 +1,7 @@
+---
+type: reference
+---
+
 # Time Tracking
 
 > Introduced in GitLab 8.14.
@@ -7,29 +11,30 @@ requests within GitLab.
 
 ## Overview
 
-Time Tracking lets you:
-* record the time spent working on an issue or a merge request,
-* add an estimate of the amount of time needed to complete an issue or a merge
-request.
+Time Tracking allows you to:
+
+- Record the time spent working on an issue or a merge request.
+- Add an estimate of the amount of time needed to complete an issue or a merge
+  request.
 
 You don't have to indicate an estimate to enter the time spent, and vice versa.
 
 Data about time tracking is shown on the issue/merge request sidebar, as shown
 below.
 
-![Time tracking in the sidebar](time-tracking/time-tracking-sidebar.png)
+![Time tracking in the sidebar](time_tracking/img/time_tracking_sidebar_v8_16.png)
 
 ## How to enter data
 
-Time Tracking uses two [quick actions] that GitLab introduced with this new
-feature: `/spend` and `/estimate`.
+Time Tracking uses two [quick actions](../user/project/quick_actions.md)
+that GitLab introduced with this new feature: `/spend` and `/estimate`.
 
 Quick actions can be used in the body of an issue or a merge request, but also
 in a comment in both an issue or a merge request.
 
 Below is an example of how you can use those new quick actions inside a comment.
 
-![Time tracking example in a comment](time-tracking/time-tracking-example.png)
+![Time tracking example in a comment](time_tracking/img/time_tracking_example_v12_2.png)
 
 Adding time entries (time spent or estimates) is limited to project members.
 
@@ -37,13 +42,14 @@ Adding time entries (time spent or estimates) is limited to project members.
 
 To enter an estimate, write `/estimate`, followed by the time. For example, if
 you need to enter an estimate of 3 days, 5 hours and 10 minutes, you would write
-`/estimate 3d 5h 10m`.
+`/estimate 3d 5h 10m`. Time units that we support are listed at the bottom of
+this help page.
 
 Every time you enter a new time estimate, any previous time estimates will be
 overridden by this new value. There should only be one valid estimate in an
 issue or a merge request.
 
-To remove an estimation entirely, use `/remove_estimation`.
+To remove an estimation entirely, use `/remove_estimate`.
 
 ### Time spent
 
@@ -62,12 +68,24 @@ To remove all the time spent at once, use `/remove_time_spent`.
 ## Configuration
 
 The following time units are available:
-* weeks (w)
-* days (d)
-* hours (h)
-* minutes (m)
 
-Default conversion rates are 1w = 5d and 1d = 8h.
+- Months (mo)
+- Weeks (w)
+- Days (d)
+- Hours (h)
+- Minutes (m)
 
-[landing]: https://about.gitlab.com/features/time-tracking
-[quick actions]: ../user/project/quick_actions.md
+Default conversion rates are 1mo = 4w, 1w = 5d and 1d = 8h.
+
+### Limit displayed units to hours **(CORE ONLY)**
+
+> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/merge_requests/29469/) in GitLab 12.1.
+
+In GitLab self-managed instances, the display of time units can be limited to
+hours through the option in **Admin Area > Settings > Preferences** under **Localization**.
+
+With this option enabled, `75h` is displayed instead of `1w 4d 3h`.
+
+## Other interesting links
+
+- [Time Tracking landing page in the GitLab handbook](https://about.gitlab.com/solutions/time-tracking/)

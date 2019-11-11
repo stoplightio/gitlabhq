@@ -1,11 +1,14 @@
+# frozen_string_literal: true
+
 module Groups
   class TransferService < Groups::BaseService
     ERROR_MESSAGES = {
-      database_not_supported: 'Database is not supported.',
-      namespace_with_same_path: 'The parent group already has a subgroup with the same path.',
-      group_is_already_root: 'Group is already a root group.',
-      same_parent_as_current: 'Group is already associated to the parent group.',
-      invalid_policies: "You don't have enough permissions."
+      database_not_supported: s_('TransferGroup|Database is not supported.'),
+      namespace_with_same_path: s_('TransferGroup|The parent group already has a subgroup with the same path.'),
+      group_is_already_root: s_('TransferGroup|Group is already a root group.'),
+      same_parent_as_current: s_('TransferGroup|Group is already associated to the parent group.'),
+      invalid_policies: s_("TransferGroup|You don't have enough permissions."),
+      group_contains_images: s_('TransferGroup|Cannot update the path because there are projects under this group that contain Docker images in their Container Registry. Please remove the images from your projects first and try again.')
     }.freeze
 
     TransferError = Class.new(StandardError)
@@ -24,7 +27,7 @@ module Groups
 
     rescue TransferError, ActiveRecord::RecordInvalid, Gitlab::UpdatePathError => e
       @group.errors.clear
-      @error = "Transfer failed: " + e.message
+      @error = s_("TransferGroup|Transfer failed: %{error_message}") % { error_message: e.message }
       false
     end
 
@@ -33,15 +36,18 @@ module Groups
     def proceed_to_transfer
       Group.transaction do
         update_group_attributes
+        ensure_ownership
       end
+
+      true
     end
 
     def ensure_allowed_transfer
       raise_transfer_error(:group_is_already_root) if group_is_already_root?
-      raise_transfer_error(:database_not_supported) unless Group.supports_nested_groups?
       raise_transfer_error(:same_parent_as_current) if same_parent?
       raise_transfer_error(:invalid_policies) unless valid_policies?
       raise_transfer_error(:namespace_with_same_path) if namespace_with_same_path?
+      raise_transfer_error(:group_contains_images) if group_projects_contain_registry_images?
     end
 
     def group_is_already_root?
@@ -62,8 +68,14 @@ module Groups
       end
     end
 
+    # rubocop: disable CodeReuse/ActiveRecord
     def namespace_with_same_path?
       Namespace.exists?(path: @group.path, parent: @new_parent_group)
+    end
+    # rubocop: enable CodeReuse/ActiveRecord
+
+    def group_projects_contain_registry_images?
+      @group.has_container_repositories?
     end
 
     def update_group_attributes
@@ -76,6 +88,7 @@ module Groups
       @group.save!
     end
 
+    # rubocop: disable CodeReuse/ActiveRecord
     def update_children_and_projects_visibility
       descendants = @group.descendants.where("visibility_level > ?", @new_parent_group.visibility_level)
 
@@ -87,6 +100,14 @@ module Groups
         .all_projects
         .where("visibility_level > ?", @new_parent_group.visibility_level)
         .update_all(visibility_level: @new_parent_group.visibility_level)
+    end
+    # rubocop: enable CodeReuse/ActiveRecord
+
+    def ensure_ownership
+      return if @new_parent_group
+      return unless @group.owners.empty?
+
+      @group.add_owner(current_user)
     end
 
     def raise_transfer_error(message)

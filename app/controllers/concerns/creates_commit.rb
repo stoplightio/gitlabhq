@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module CreatesCommit
   extend ActiveSupport::Concern
   include Gitlab::Utils::StrongMemoize
@@ -29,7 +31,7 @@ module CreatesCommit
 
       respond_to do |format|
         format.html { redirect_to success_path }
-        format.json { render json: { message: "success", filePath: success_path } }
+        format.json { render json: { message: _("success"), filePath: success_path } }
       end
     else
       flash[:alert] = result[:message]
@@ -43,7 +45,7 @@ module CreatesCommit
             redirect_to failure_path
           end
         end
-        format.json { render json: { message: "failed", filePath: failure_path } }
+        format.json { render json: { message: _("failed"), filePath: failure_path } }
       end
     end
   end
@@ -58,15 +60,22 @@ module CreatesCommit
   private
 
   def update_flash_notice(success_notice)
-    flash[:notice] = success_notice || "Your changes have been successfully committed."
+    flash[:notice] = success_notice || _("Your changes have been successfully committed.")
 
     if create_merge_request?
-      if merge_request_exists?
-        flash[:notice] = nil
-      else
-        target = different_project? ? "project" : "branch"
-        flash[:notice] << " You can now submit a merge request to get this change into the original #{target}."
-      end
+      flash[:notice] =
+        if merge_request_exists?
+          nil
+        else
+          mr_message =
+            if different_project?
+              _("You can now submit a merge request to get this change into the original project.")
+            else
+              _("You can now submit a merge request to get this change into the original branch.")
+            end
+
+          flash[:notice] += " " + mr_message
+        end
     end
   end
 
@@ -99,6 +108,7 @@ module CreatesCommit
   end
 
   # rubocop:disable Gitlab/ModuleWithInstanceVariables
+  # rubocop: disable CodeReuse/ActiveRecord
   def merge_request_exists?
     strong_memoize(:merge_request) do
       MergeRequestsFinder.new(current_user, project_id: @project.id)
@@ -110,6 +120,7 @@ module CreatesCommit
           target_branch: @start_branch)
     end
   end
+  # rubocop: enable CodeReuse/ActiveRecord
   # rubocop:enable Gitlab/ModuleWithInstanceVariables
 
   def different_project?

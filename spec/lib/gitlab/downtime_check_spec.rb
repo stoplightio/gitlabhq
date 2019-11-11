@@ -1,7 +1,10 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Gitlab::DowntimeCheck do
   subject { described_class.new }
+
   let(:path) { 'foo.rb' }
 
   describe '#check' do

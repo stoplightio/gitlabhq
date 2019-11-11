@@ -1,5 +1,6 @@
 <script>
 import Icon from '../../../vue_shared/components/icon.vue';
+import router from '../../ide_router';
 
 export default {
   components: {
@@ -29,35 +30,23 @@ export default {
     pathWithID() {
       return `${this.item.projectPathWithNamespace}!${this.item.iid}`;
     },
-  },
-  methods: {
-    clickItem() {
-      this.$emit('click', this.item);
+    mergeRequestHref() {
+      const path = `/project/${this.item.projectPathWithNamespace}/merge_requests/${this.item.iid}`;
+
+      return router.resolve(path).href;
     },
   },
 };
 </script>
 
 <template>
-  <button
-    type="button"
-    class="btn-link d-flex align-items-center"
-    @click="clickItem"
-  >
-    <span class="d-flex append-right-default ide-merge-request-current-icon">
-      <icon
-        v-if="isActive"
-        name="mobile-issue-close"
-        :size="18"
-      />
+  <a :href="mergeRequestHref" class="btn-link d-flex align-items-center">
+    <span class="d-flex append-right-default ide-search-list-current-icon">
+      <icon v-if="isActive" :size="18" name="mobile-issue-close" />
     </span>
     <span>
-      <strong>
-        {{ item.title }}
-      </strong>
-      <span class="ide-merge-request-project-path d-block mt-1">
-        {{ pathWithID }}
-      </span>
+      <strong> {{ item.title }} </strong>
+      <span class="ide-merge-request-project-path d-block mt-1"> {{ pathWithID }} </span>
     </span>
-  </button>
+  </a>
 </template>

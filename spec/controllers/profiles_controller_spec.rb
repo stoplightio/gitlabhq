@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require('spec_helper')
 
 describe ProfilesController, :request_store do
@@ -9,7 +11,7 @@ describe ProfilesController, :request_store do
 
       expect do
         post :update,
-             user: { password: 'hello12345', password_confirmation: 'hello12345' }
+             params: { user: { password: 'hello12345', password_confirmation: 'hello12345' } }
       end.not_to change { user.reload.encrypted_password }
 
       expect(response.status).to eq(302)
@@ -21,7 +23,7 @@ describe ProfilesController, :request_store do
       sign_in(user)
 
       put :update,
-          user: { email: "john@gmail.com", name: "John" }
+          params: { user: { email: "john@gmail.com", name: "John" } }
 
       user.reload
 
@@ -35,7 +37,7 @@ describe ProfilesController, :request_store do
       sign_in(user)
 
       put :update,
-          user: { email: "john@gmail.com", name: "John" }
+          params: { user: { email: "john@gmail.com", name: "John" } }
 
       user.reload
 
@@ -52,7 +54,7 @@ describe ProfilesController, :request_store do
       sign_in(ldap_user)
 
       put :update,
-          user: { email: "john@gmail.com", name: "John" }
+          params: { user: { email: "john@gmail.com", name: "John" } }
 
       ldap_user.reload
 
@@ -69,7 +71,7 @@ describe ProfilesController, :request_store do
       sign_in(ldap_user)
 
       put :update,
-          user: { email: "john@gmail.com", name: "John", location: "City, Country" }
+          params: { user: { email: "john@gmail.com", name: "John", location: "City, Country" } }
 
       ldap_user.reload
 
@@ -77,6 +79,15 @@ describe ProfilesController, :request_store do
       expect(ldap_user.unconfirmed_email).not_to eq('john@gmail.com')
       expect(ldap_user.name).not_to eq('John')
       expect(ldap_user.location).to eq('City, Country')
+    end
+
+    it 'allows setting a user status' do
+      sign_in(user)
+
+      put :update, params: { user: { status: { message: 'Working hard!' } } }
+
+      expect(user.reload.status.message).to eq('Working hard!')
+      expect(response).to have_gitlab_http_status(302)
     end
   end
 
@@ -89,7 +100,7 @@ describe ProfilesController, :request_store do
       sign_in(user)
 
       put :update_username,
-        user: { username: new_username }
+        params: { user: { username: new_username } }
 
       user.reload
 
@@ -101,7 +112,9 @@ describe ProfilesController, :request_store do
       sign_in(user)
 
       put :update_username,
-          user: { username: new_username },
+          params: {
+            user: { username: new_username }
+          },
           format: :json
 
       expect(response.status).to eq(200)
@@ -112,7 +125,9 @@ describe ProfilesController, :request_store do
       sign_in(user)
 
       put :update_username,
-          user: { username: 'invalid username.git' },
+          params: {
+            user: { username: 'invalid username.git' }
+          },
           format: :json
 
       expect(response.status).to eq(422)
@@ -122,7 +137,7 @@ describe ProfilesController, :request_store do
     it 'raises a correct error when the username is missing' do
       sign_in(user)
 
-      expect { put :update_username, user: { gandalf: 'you shall not pass' } }
+      expect { put :update_username, params: { user: { gandalf: 'you shall not pass' } } }
         .to raise_error(ActionController::ParameterMissing)
     end
 
@@ -133,12 +148,12 @@ describe ProfilesController, :request_store do
         sign_in(user)
 
         put :update_username,
-          user: { username: new_username }
+          params: { user: { username: new_username } }
 
         user.reload
 
         expect(response.status).to eq(302)
-        expect(gitlab_shell.exists?(project.repository_storage, "#{new_username}/#{project.path}.git")).to be_truthy
+        expect(gitlab_shell.repository_exists?(project.repository_storage, "#{new_username}/#{project.path}.git")).to be_truthy
       end
     end
 
@@ -151,12 +166,12 @@ describe ProfilesController, :request_store do
         sign_in(user)
 
         put :update_username,
-          user: { username: new_username }
+          params: { user: { username: new_username } }
 
         user.reload
 
         expect(response.status).to eq(302)
-        expect(gitlab_shell.exists?(project.repository_storage, "#{project.disk_path}.git")).to be_truthy
+        expect(gitlab_shell.repository_exists?(project.repository_storage, "#{project.disk_path}.git")).to be_truthy
         expect(before_disk_path).to eq(project.disk_path)
       end
     end

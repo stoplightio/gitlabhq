@@ -1,16 +1,25 @@
+# frozen_string_literal: true
+
 FactoryBot.define do
   factory :project_auto_devops do
     project
-    enabled true
-    domain "example.com"
-    deploy_strategy :continuous
+    enabled { true }
+    deploy_strategy { :continuous }
 
-    trait :manual do
-      deploy_strategy :manual
+    trait :continuous_deployment do
+      deploy_strategy { ProjectAutoDevops.deploy_strategies[:continuous] }
+    end
+
+    trait :manual_deployment do
+      deploy_strategy { ProjectAutoDevops.deploy_strategies[:manual] }
+    end
+
+    trait :timed_incremental_deployment do
+      deploy_strategy { ProjectAutoDevops.deploy_strategies[:timed_incremental] }
     end
 
     trait :disabled do
-      enabled false
+      enabled { false }
     end
   end
 end

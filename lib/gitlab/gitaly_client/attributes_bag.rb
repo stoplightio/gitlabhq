@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module GitalyClient
     # This module expects an `ATTRS` const to be defined on the subclass
@@ -6,7 +8,7 @@ module Gitlab
       extend ActiveSupport::Concern
 
       included do
-        attr_accessor(*const_get(:ATTRS))
+        attr_accessor(*const_get(:ATTRS, false))
       end
 
       def initialize(params)
@@ -24,7 +26,7 @@ module Gitlab
       end
 
       def attributes
-        self.class.const_get(:ATTRS)
+        self.class.const_get(:ATTRS, false)
       end
     end
   end

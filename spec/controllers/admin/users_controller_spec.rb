@@ -1,11 +1,38 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Admin::UsersController do
   let(:user) { create(:user) }
-  set(:admin) { create(:admin) }
+  let_it_be(:admin) { create(:admin) }
 
   before do
     sign_in(admin)
+  end
+
+  describe 'GET #index' do
+    it 'retrieves all users' do
+      get :index
+
+      expect(assigns(:users)).to match_array([user, admin])
+    end
+
+    it 'filters by admins' do
+      get :index, params: { filter: 'admins' }
+
+      expect(assigns(:users)).to eq([admin])
+    end
+  end
+
+  describe 'GET :id' do
+    it 'finds a user case-insensitively' do
+      user = create(:user, username: 'CaseSensitive')
+
+      get :show, params: { id: user.username.downcase }
+
+      expect(response).to be_redirect
+      expect(response.location).to end_with(user.username)
+    end
   end
 
   describe 'DELETE #user with projects' do
@@ -17,7 +44,7 @@ describe Admin::UsersController do
     end
 
     it 'deletes user and ghosts their contributions' do
-      delete :destroy, id: user.username, format: :json
+      delete :destroy, params: { id: user.username }, format: :json
 
       expect(response).to have_gitlab_http_status(200)
       expect(User.exists?(user.id)).to be_falsy
@@ -25,7 +52,7 @@ describe Admin::UsersController do
     end
 
     it 'deletes the user and their contributions when hard delete is specified' do
-      delete :destroy, id: user.username, hard_delete: true, format: :json
+      delete :destroy, params: { id: user.username, hard_delete: true }, format: :json
 
       expect(response).to have_gitlab_http_status(200)
       expect(User.exists?(user.id)).to be_falsy
@@ -33,9 +60,99 @@ describe Admin::UsersController do
     end
   end
 
+  describe 'PUT #activate' do
+    shared_examples 'a request that activates the user' do
+      it 'activates the user' do
+        put :activate, params: { id: user.username }
+        user.reload
+        expect(user.active?).to be_truthy
+        expect(flash[:notice]).to eq('Successfully activated')
+      end
+    end
+
+    context 'for a deactivated user' do
+      before do
+        user.deactivate
+      end
+
+      it_behaves_like 'a request that activates the user'
+    end
+
+    context 'for an active user' do
+      it_behaves_like 'a request that activates the user'
+    end
+
+    context 'for a blocked user' do
+      before do
+        user.block
+      end
+
+      it 'does not activate the user' do
+        put :activate, params: { id: user.username }
+        user.reload
+        expect(user.active?).to be_falsey
+        expect(flash[:notice]).to eq('Error occurred. A blocked user must be unblocked to be activated')
+      end
+    end
+  end
+
+  describe 'PUT #deactivate' do
+    shared_examples 'a request that deactivates the user' do
+      it 'deactivates the user' do
+        put :deactivate, params: { id: user.username }
+        user.reload
+        expect(user.deactivated?).to be_truthy
+        expect(flash[:notice]).to eq('Successfully deactivated')
+      end
+    end
+
+    context 'for an active user' do
+      let(:activity) { {} }
+      let(:user) { create(:user, **activity) }
+
+      context 'with no recent activity' do
+        let(:activity) { { last_activity_on: ::User::MINIMUM_INACTIVE_DAYS.next.days.ago } }
+
+        it_behaves_like 'a request that deactivates the user'
+      end
+
+      context 'with recent activity' do
+        let(:activity) { { last_activity_on: ::User::MINIMUM_INACTIVE_DAYS.pred.days.ago } }
+
+        it 'does not deactivate the user' do
+          put :deactivate, params: { id: user.username }
+          user.reload
+          expect(user.deactivated?).to be_falsey
+          expect(flash[:notice]).to eq("The user you are trying to deactivate has been active in the past #{::User::MINIMUM_INACTIVE_DAYS} days and cannot be deactivated")
+        end
+      end
+    end
+
+    context 'for a deactivated user' do
+      before do
+        user.deactivate
+      end
+
+      it_behaves_like 'a request that deactivates the user'
+    end
+
+    context 'for a blocked user' do
+      before do
+        user.block
+      end
+
+      it 'does not deactivate the user' do
+        put :deactivate, params: { id: user.username }
+        user.reload
+        expect(user.deactivated?).to be_falsey
+        expect(flash[:notice]).to eq('Error occurred. A blocked user cannot be deactivated')
+      end
+    end
+  end
+
   describe 'PUT block/:id' do
     it 'blocks user' do
-      put :block, id: user.username
+      put :block, params: { id: user.username }
       user.reload
       expect(user.blocked?).to be_truthy
       expect(flash[:notice]).to eq 'Successfully blocked'
@@ -51,7 +168,7 @@ describe Admin::UsersController do
       end
 
       it 'does not unblock user' do
-        put :unblock, id: user.username
+        put :unblock, params: { id: user.username }
         user.reload
         expect(user.blocked?).to be_truthy
         expect(flash[:alert]).to eq 'This user cannot be unlocked manually from GitLab'
@@ -64,7 +181,7 @@ describe Admin::UsersController do
       end
 
       it 'unblocks user' do
-        put :unblock, id: user.username
+        put :unblock, params: { id: user.username }
         user.reload
         expect(user.blocked?).to be_falsey
         expect(flash[:notice]).to eq 'Successfully unblocked'
@@ -79,7 +196,7 @@ describe Admin::UsersController do
     end
 
     it 'unlocks user' do
-      put :unlock, id: user.username
+      put :unlock, params: { id: user.username }
       user.reload
       expect(user.access_locked?).to be_falsey
     end
@@ -93,7 +210,7 @@ describe Admin::UsersController do
     end
 
     it 'confirms user' do
-      put :confirm, id: user.username
+      put :confirm, params: { id: user.username }
       user.reload
       expect(user.confirmed?).to be_truthy
     end
@@ -121,17 +238,17 @@ describe Admin::UsersController do
     end
 
     def go
-      patch :disable_two_factor, id: user.to_param
+      patch :disable_two_factor, params: { id: user.to_param }
     end
   end
 
   describe 'POST create' do
     it 'creates the user' do
-      expect { post :create, user: attributes_for(:user) }.to change { User.count }.by(1)
+      expect { post :create, params: { user: attributes_for(:user) } }.to change { User.count }.by(1)
     end
 
     it 'shows only one error message for an invalid email' do
-      post :create, user: attributes_for(:user, email: 'bogus')
+      post :create, params: { user: attributes_for(:user, email: 'bogus') }
       expect(assigns[:user].errors).to contain_exactly("Email is invalid")
     end
   end
@@ -147,7 +264,7 @@ describe Admin::UsersController do
           }
         }
 
-        post :update, params
+        post :update, params: params
       end
 
       context 'when the admin changes his own password' do
@@ -227,13 +344,13 @@ describe Admin::UsersController do
       end
 
       it "shows a notice" do
-        post :impersonate, id: user.username
+        post :impersonate, params: { id: user.username }
 
         expect(flash[:alert]).to eq("You cannot impersonate a blocked user")
       end
 
       it "doesn't sign us in as the user" do
-        post :impersonate, id: user.username
+        post :impersonate, params: { id: user.username }
 
         expect(warden.user).to eq(admin)
       end
@@ -241,27 +358,45 @@ describe Admin::UsersController do
 
     context "when the user is not blocked" do
       it "stores the impersonator in the session" do
-        post :impersonate, id: user.username
+        post :impersonate, params: { id: user.username }
 
         expect(session[:impersonator_id]).to eq(admin.id)
       end
 
       it "signs us in as the user" do
-        post :impersonate, id: user.username
+        post :impersonate, params: { id: user.username }
 
         expect(warden.user).to eq(user)
       end
 
+      it 'logs the beginning of the impersonation event' do
+        expect(Gitlab::AppLogger).to receive(:info).with("User #{admin.username} has started impersonating #{user.username}").and_call_original
+
+        post :impersonate, params: { id: user.username }
+      end
+
       it "redirects to root" do
-        post :impersonate, id: user.username
+        post :impersonate, params: { id: user.username }
 
         expect(response).to redirect_to(root_path)
       end
 
       it "shows a notice" do
-        post :impersonate, id: user.username
+        post :impersonate, params: { id: user.username }
 
         expect(flash[:alert]).to eq("You are now impersonating #{user.username}")
+      end
+    end
+
+    context "when impersonation is disabled" do
+      before do
+        stub_config_setting(impersonation_enabled: false)
+      end
+
+      it "shows error page" do
+        post :impersonate, params: { id: user.username }
+
+        expect(response).to have_gitlab_http_status(404)
       end
     end
   end

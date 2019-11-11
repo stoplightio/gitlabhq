@@ -1,11 +1,13 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
-feature 'Multi-file editor new directory', :js do
+describe 'Multi-file editor new directory', :js do
   let(:user) { create(:user) }
   let(:project) { create(:project, :repository) }
 
   before do
-    project.add_master(user)
+    project.add_maintainer(user)
     sign_in(user)
 
     visit project_tree_path(project, :master)
@@ -22,9 +24,7 @@ feature 'Multi-file editor new directory', :js do
   end
 
   it 'creates directory in current directory' do
-    find('.add-to-tree').click
-
-    click_link('New directory')
+    all('.ide-tree-actions button').last.click
 
     page.within('.modal') do
       find('.form-control').set('folder name')
@@ -32,12 +32,12 @@ feature 'Multi-file editor new directory', :js do
       click_button('Create directory')
     end
 
-    find('.add-to-tree').click
+    expect(page).to have_content('folder name')
 
-    click_link('New file')
+    first('.ide-tree-actions button').click
 
-    page.within('.modal-dialog') do
-      find('.form-control').set('file name')
+    page.within('.modal') do
+      find('.form-control').set('folder name/file name')
 
       click_button('Create file')
     end
@@ -46,12 +46,19 @@ feature 'Multi-file editor new directory', :js do
 
     find('.js-ide-commit-mode').click
 
-    find('.multi-file-commit-list-item').hover
-    first('.multi-file-discard-btn .btn').click
+    click_button 'Stage'
 
     fill_in('commit-message', with: 'commit message ide')
 
-    click_button('Commit')
+    find(:css, ".js-ide-commit-new-mr input").set(false)
+
+    wait_for_requests
+
+    page.within '.multi-file-commit-form' do
+      click_button('Commit')
+
+      wait_for_requests
+    end
 
     find('.js-ide-edit-mode').click
 

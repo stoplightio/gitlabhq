@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'ostruct'
 
 FactoryBot.define do
@@ -5,7 +7,7 @@ FactoryBot.define do
     transient do
       attrs do
         {
-          title: 'Title',
+          title: 'Title.with.dot',
           content: 'Content for wiki page',
           format: 'markdown'
         }

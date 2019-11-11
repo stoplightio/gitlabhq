@@ -1,49 +1,44 @@
 <script>
-  import ciIcon from '../../vue_shared/components/ci_icon.vue';
-  import loadingIcon from '../../vue_shared/components/loading_icon.vue';
+import { GlLoadingIcon } from '@gitlab/ui';
+import ciIcon from '../../vue_shared/components/ci_icon.vue';
 
-  export default {
-    components: {
-      ciIcon,
-      loadingIcon,
+export default {
+  components: {
+    ciIcon,
+    GlLoadingIcon,
+  },
+  props: {
+    status: {
+      type: String,
+      required: true,
     },
-    props: {
-      status: {
-        type: String,
-        required: true,
-      },
-      showDisabledButton: {
-        type: Boolean,
-        required: false,
-        default: false,
-      },
+    showDisabledButton: {
+      type: Boolean,
+      required: false,
+      default: false,
     },
-    computed: {
-      isLoading() {
-        return this.status === 'loading';
-      },
-      statusObj() {
-        return {
-          group: this.status,
-          icon: `status_${this.status}`,
-        };
-      },
+  },
+  computed: {
+    isLoading() {
+      return this.status === 'loading';
     },
-  };
+    statusObj() {
+      return {
+        group: this.status,
+        icon: `status_${this.status}`,
+      };
+    },
+  },
+};
 </script>
 <template>
-  <div class="space-children flex-container-block append-right-10">
-    <div
-      v-if="isLoading"
-      class="mr-widget-icon"
-    >
-      <loading-icon />
+  <div class="d-flex align-self-start">
+    <div class="square s24 h-auto d-flex-center append-right-default">
+      <div v-if="isLoading" class="mr-widget-icon d-inline-flex">
+        <gl-loading-icon size="md" class="mr-loading-icon d-inline-flex" />
+      </div>
+      <ci-icon v-else :status="statusObj" :size="24" />
     </div>
-
-    <ci-icon
-      v-else
-      :status="statusObj"
-    />
 
     <button
       v-if="showDisabledButton"
@@ -51,7 +46,7 @@
       class="js-disabled-merge-button btn btn-success btn-sm"
       disabled="true"
     >
-      {{ s__("mrWidget|Merge") }}
+      {{ s__('mrWidget|Merge') }}
     </button>
   </div>
 </template>

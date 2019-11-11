@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require_relative '../support/helpers/repo_helpers'
 
 include ActionDispatch::TestProcess
@@ -39,13 +41,14 @@ FactoryBot.define do
 
     factory :legacy_diff_note_on_merge_request, traits: [:on_merge_request, :legacy_diff_note], class: LegacyDiffNote do
       association :project, :repository
+      position { '' }
     end
 
     factory :diff_note_on_merge_request, traits: [:on_merge_request], class: DiffNote do
       association :project, :repository
 
       transient do
-        line_number 14
+        line_number { 14 }
         diff_refs { noteable.try(:diff_refs) }
       end
 
@@ -59,9 +62,36 @@ FactoryBot.define do
         )
       end
 
+      trait :folded_position do
+        position do
+          Gitlab::Diff::Position.new(
+            old_path: "files/ruby/popen.rb",
+            new_path: "files/ruby/popen.rb",
+            old_line: 1,
+            new_line: 1,
+            diff_refs: diff_refs
+          )
+        end
+      end
+
       trait :resolved do
         resolved_at { Time.now }
         resolved_by { create(:user) }
+      end
+
+      factory :image_diff_note_on_merge_request do
+        position do
+          Gitlab::Diff::Position.new(
+            old_path: "files/images/any_image.png",
+            new_path: "files/images/any_image.png",
+            width: 10,
+            height: 10,
+            x: 1,
+            y: 1,
+            diff_refs: diff_refs,
+            position_type: "image"
+          )
+        end
       end
     end
 
@@ -69,7 +99,7 @@ FactoryBot.define do
       association :project, :repository
 
       transient do
-        line_number 14
+        line_number { 14 }
         diff_refs { project.commit(commit_id).try(:diff_refs) }
       end
 
@@ -86,14 +116,14 @@ FactoryBot.define do
 
     trait :on_commit do
       association :project, :repository
-      noteable nil
-      noteable_type 'Commit'
-      noteable_id nil
-      commit_id RepoHelpers.sample_commit.id
+      noteable { nil }
+      noteable_type { 'Commit' }
+      noteable_id { nil }
+      commit_id { RepoHelpers.sample_commit.id }
     end
 
     trait :legacy_diff_note do
-      line_code "0_184_184"
+      line_code { "0_184_184" }
     end
 
     trait :on_issue do
@@ -114,31 +144,31 @@ FactoryBot.define do
 
     trait :on_personal_snippet do
       noteable { create(:personal_snippet) }
-      project nil
+      project { nil }
     end
 
     trait :system do
-      system true
+      system { true }
     end
 
     trait :downvote do
-      note "thumbsdown"
+      note { "thumbsdown" }
     end
 
     trait :upvote do
-      note "thumbsup"
+      note { "thumbsup" }
     end
 
     trait :with_attachment do
-      attachment { fixture_file_upload(Rails.root.join( "spec/fixtures/dk.png"), "image/png") }
+      attachment { fixture_file_upload("spec/fixtures/dk.png", "image/png") }
     end
 
     trait :with_svg_attachment do
-      attachment { fixture_file_upload(Rails.root.join("spec/fixtures/unsanitized.svg"), "image/svg+xml") }
+      attachment { fixture_file_upload("spec/fixtures/unsanitized.svg", "image/svg+xml") }
     end
 
     transient do
-      in_reply_to nil
+      in_reply_to { nil }
     end
 
     before(:create) do |note, evaluator|

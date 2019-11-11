@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe 'Projects > Files > User creates a directory', :js do
@@ -11,6 +13,8 @@ describe 'Projects > Files > User creates a directory', :js do
   let(:user) { create(:user) }
 
   before do
+    stub_feature_flags(vue_file_list: false)
+
     project.add_developer(user)
     sign_in(user)
     visit project_tree_path(project, 'master')

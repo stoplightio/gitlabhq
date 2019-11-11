@@ -1,7 +1,15 @@
+import { join as joinPaths } from 'path';
+
+// Returns a decoded url parameter value
+// - Treats '+' as '%20'
+function decodeUrlParameter(val) {
+  return decodeURIComponent(val.replace(/\+/g, '%20'));
+}
+
 // Returns an array containing the value(s) of the
 // of the key passed as an argument
-export function getParameterValues(sParam) {
-  const sPageURL = decodeURIComponent(window.location.search.substring(1));
+export function getParameterValues(sParam, url = window.location) {
+  const sPageURL = decodeURIComponent(new URL(url).search.substring(1));
 
   return sPageURL.split('&').reduce((acc, urlParam) => {
     const sParameterName = urlParam.split('=');
@@ -17,45 +25,60 @@ export function getParameterValues(sParam) {
 // @param {Object} params - url keys and value to merge
 // @param {String} url
 export function mergeUrlParams(params, url) {
-  let newUrl = Object.keys(params).reduce((acc, paramName) => {
-    const paramValue = encodeURIComponent(params[paramName]);
-    const pattern = new RegExp(`\\b(${paramName}=).*?(&|$)`);
+  const re = /^([^?#]*)(\?[^#]*)?(.*)/;
+  const merged = {};
+  const urlparts = url.match(re);
 
-    if (paramValue === null) {
-      return acc.replace(pattern, '');
-    } else if (url.search(pattern) !== -1) {
-      return acc.replace(pattern, `$1${paramValue}$2`);
-    }
-
-    return `${acc}${acc.indexOf('?') > 0 ? '&' : '?'}${paramName}=${paramValue}`;
-  }, decodeURIComponent(url));
-
-  // Remove a trailing ampersand
-  const lastChar = newUrl[newUrl.length - 1];
-
-  if (lastChar === '&') {
-    newUrl = newUrl.slice(0, -1);
+  if (urlparts[2]) {
+    urlparts[2]
+      .substr(1)
+      .split('&')
+      .forEach(part => {
+        if (part.length) {
+          const kv = part.split('=');
+          merged[decodeUrlParameter(kv[0])] = decodeUrlParameter(kv.slice(1).join('='));
+        }
+      });
   }
 
-  return newUrl;
+  Object.assign(merged, params);
+
+  const query = Object.keys(merged)
+    .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(merged[key])}`)
+    .join('&');
+
+  return `${urlparts[1]}?${query}${urlparts[3]}`;
 }
 
-export function removeParamQueryString(url, param) {
-  const decodedUrl = decodeURIComponent(url);
-  const urlVariables = decodedUrl.split('&');
+/**
+ * Removes specified query params from the url by returning a new url string that no longer
+ * includes the param/value pair. If no url is provided, `window.location.href` is used as
+ * the default value.
+ *
+ * @param {string[]} params - the query param names to remove
+ * @param {string} [url=windowLocation().href] - url from which the query param will be removed
+ * @returns {string} A copy of the original url but without the query param
+ */
+export function removeParams(params, url = window.location.href) {
+  const [rootAndQuery, fragment] = url.split('#');
+  const [root, query] = rootAndQuery.split('?');
 
-  return urlVariables.filter(variable => variable.indexOf(param) === -1).join('&');
-}
+  if (!query) {
+    return url;
+  }
 
-export function removeParams(params) {
-  const url = document.createElement('a');
-  url.href = window.location.href;
+  const encodedParams = params.map(param => encodeURIComponent(param));
+  const updatedQuery = query
+    .split('&')
+    .filter(paramPair => {
+      const [foundParam] = paramPair.split('=');
+      return encodedParams.indexOf(foundParam) < 0;
+    })
+    .join('&');
 
-  params.forEach(param => {
-    url.search = removeParamQueryString(url.search, param);
-  });
-
-  return url.href;
+  const writableQuery = updatedQuery.length > 0 ? `?${updatedQuery}` : '';
+  const writableFragment = fragment ? `#${fragment}` : '';
+  return `${root}${writableQuery}${writableFragment}`;
 }
 
 export function getLocationHash(url = window.location.href) {
@@ -63,6 +86,28 @@ export function getLocationHash(url = window.location.href) {
 
   return hashIndex === -1 ? null : url.substring(hashIndex + 1);
 }
+
+/**
+ * Returns a boolean indicating whether the URL hash contains the given string value
+ */
+export function doesHashExistInUrl(hashName) {
+  const hash = getLocationHash();
+  return hash && hash.includes(hashName);
+}
+
+/**
+ * Apply the fragment to the given url by returning a new url string that includes
+ * the fragment. If the given url already contains a fragment, the original fragment
+ * will be removed.
+ *
+ * @param {string} url - url to which the fragment will be applied
+ * @param {string} fragment - fragment to append
+ */
+export const setUrlFragment = (url, fragment) => {
+  const [rootUrl] = url.split('#');
+  const encodedFragment = encodeURIComponent(fragment.replace(/^#/, ''));
+  return `${rootUrl}#${encodedFragment}`;
+};
 
 export function visitUrl(url, external = false) {
   if (external) {
@@ -91,3 +136,49 @@ export function webIDEUrl(route = undefined) {
   }
   return returnUrl;
 }
+
+/**
+ * Returns current base URL
+ */
+export function getBaseURL() {
+  const { protocol, host } = window.location;
+  return `${protocol}//${host}`;
+}
+
+/**
+ * Returns true if url is an absolute or root-relative URL
+ *
+ * @param {String} url
+ */
+export function isAbsoluteOrRootRelative(url) {
+  return /^(https?:)?\//.test(url);
+}
+
+/**
+ * Checks if the provided URL is a safe URL (absolute http(s) or root-relative URL)
+ *
+ * @param {String} url that will be checked
+ * @returns {Boolean}
+ */
+export function isSafeURL(url) {
+  if (!isAbsoluteOrRootRelative(url)) {
+    return false;
+  }
+
+  try {
+    const parsedUrl = new URL(url, getBaseURL());
+    return ['http:', 'https:'].includes(parsedUrl.protocol);
+  } catch (e) {
+    return false;
+  }
+}
+
+export function getWebSocketProtocol() {
+  return window.location.protocol.replace('http', 'ws');
+}
+
+export function getWebSocketUrl(path) {
+  return `${getWebSocketProtocol()}//${joinPaths(window.location.host, path)}`;
+}
+
+export { joinPaths };

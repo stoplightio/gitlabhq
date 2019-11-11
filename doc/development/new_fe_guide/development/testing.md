@@ -1,3 +1,5 @@
-# Testing
+---
+redirect_to: '../../testing_guide/frontend_testing.md'
+---
 
-> TODO: Add content
+This document was moved to [another location](../../testing_guide/frontend_testing.md).

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Projects::MergeRequests::ApplicationController < Projects::ApplicationController
   before_action :check_merge_requests_available!
   before_action :merge_request
@@ -6,7 +8,17 @@ class Projects::MergeRequests::ApplicationController < Projects::ApplicationCont
   private
 
   def merge_request
-    @issuable = @merge_request ||= @project.merge_requests.find_by!(iid: params[:id])
+    @issuable =
+      @merge_request ||=
+        merge_request_includes(@project.merge_requests).find_by_iid!(params[:id])
+  end
+
+  def merge_request_includes(association)
+    association.includes(preloadable_mr_relations) # rubocop:disable CodeReuse/ActiveRecord
+  end
+
+  def preloadable_mr_relations
+    [:metrics, :assignees, { author: :status }]
   end
 
   def merge_request_params
@@ -16,7 +28,6 @@ class Projects::MergeRequests::ApplicationController < Projects::ApplicationCont
   def merge_request_params_attributes
     [
       :allow_collaboration,
-      :assignee_id,
       :description,
       :force_remove_source_branch,
       :lock_version,
@@ -30,13 +41,27 @@ class Projects::MergeRequests::ApplicationController < Projects::ApplicationCont
       :task_num,
       :title,
       :discussion_locked,
-      label_ids: []
+      label_ids: [],
+      assignee_ids: [],
+      update_task: [:index, :checked, :line_number, :line_source]
     ]
   end
 
   def set_pipeline_variables
-    @pipelines = @merge_request.all_pipelines
-    @pipeline = @merge_request.head_pipeline
-    @statuses_count = @pipeline.present? ? @pipeline.statuses.relevant.count : 0
+    @pipelines =
+      if can?(current_user, :read_pipeline, @merge_request.source_project)
+        @merge_request.all_pipelines
+      else
+        Ci::Pipeline.none
+      end
+  end
+
+  def close_merge_request_if_no_source_project
+    return if @merge_request.source_project
+    return unless @merge_request.open?
+
+    @merge_request.close
   end
 end
+
+Projects::MergeRequests::ApplicationController.prepend_if_ee('EE::Projects::MergeRequests::ApplicationController')

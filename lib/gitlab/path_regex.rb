@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module PathRegex
     extend self
@@ -39,7 +41,7 @@ module Gitlab
       import
       invites
       jwt
-      koding
+      login
       notification_settings
       oauth
       profile
@@ -51,10 +53,10 @@ module Gitlab
       sent_notifications
       slash-command-logo.png
       snippets
-      u
       unsubscribes
       uploads
       users
+      v2
     ].freeze
 
     # This list should contain all words following `/*namespace_id/:project_id` in
@@ -123,13 +125,14 @@ module Gitlab
     # allow non-regex validations, etc), `NAMESPACE_FORMAT_REGEX_JS` serves as a Javascript-compatible version of
     # `NAMESPACE_FORMAT_REGEX`, with the negative lookbehind assertion removed. This means that the client-side validation
     # will pass for usernames ending in `.atom` and `.git`, but will be caught by the server-side validation.
-    PATH_REGEX_STR = '[a-zA-Z0-9_\.][a-zA-Z0-9_\-\.]*'.freeze
-    NAMESPACE_FORMAT_REGEX_JS = PATH_REGEX_STR + '[a-zA-Z0-9_\-]|[a-zA-Z0-9_]'.freeze
+    PATH_START_CHAR = '[a-zA-Z0-9_\.]'
+    PATH_REGEX_STR = PATH_START_CHAR + '[a-zA-Z0-9_\-\.]*'
+    NAMESPACE_FORMAT_REGEX_JS = PATH_REGEX_STR + '[a-zA-Z0-9_\-]|[a-zA-Z0-9_]'
 
     NO_SUFFIX_REGEX = /(?<!\.git|\.atom)/.freeze
     NAMESPACE_FORMAT_REGEX = /(?:#{NAMESPACE_FORMAT_REGEX_JS})#{NO_SUFFIX_REGEX}/.freeze
     PROJECT_PATH_FORMAT_REGEX = /(?:#{PATH_REGEX_STR})#{NO_SUFFIX_REGEX}/.freeze
-    FULL_NAMESPACE_FORMAT_REGEX = %r{(#{NAMESPACE_FORMAT_REGEX}/)*#{NAMESPACE_FORMAT_REGEX}}.freeze
+    FULL_NAMESPACE_FORMAT_REGEX = %r{(#{NAMESPACE_FORMAT_REGEX}/){,#{Namespace::NUMBER_OF_ANCESTORS_ALLOWED}}#{NAMESPACE_FORMAT_REGEX}}.freeze
 
     def root_namespace_route_regex
       @root_namespace_route_regex ||= begin
@@ -170,6 +173,10 @@ module Gitlab
 
     def project_git_route_regex
       @project_git_route_regex ||= /#{project_route_regex}\.git/.freeze
+    end
+
+    def project_wiki_git_route_regex
+      @project_wiki_git_route_regex ||= /#{PATH_REGEX_STR}\.wiki/.freeze
     end
 
     def full_namespace_path_regex
@@ -234,8 +241,10 @@ module Gitlab
 
     def single_line_regexp(regex)
       # Turns a multiline extended regexp into a single line one,
-      # beacuse `rake routes` breaks on multiline regexes.
+      # because `rake routes` breaks on multiline regexes.
       Regexp.new(regex.source.gsub(/\(\?#.+?\)/, '').gsub(/\s*/, ''), regex.options ^ Regexp::EXTENDED).freeze
     end
   end
 end
+
+Gitlab::PathRegex.prepend_if_ee('EE::Gitlab::PathRegex')

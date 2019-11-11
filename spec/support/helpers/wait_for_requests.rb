@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module WaitForRequests
   extend self
 
@@ -24,7 +26,9 @@ module WaitForRequests
 
   # Wait for client-side AJAX requests
   def wait_for_requests
-    wait_for('JS requests complete') { finished_all_js_requests? }
+    wait_for('JS requests complete', max_wait_time: 2 * Capybara.default_max_wait_time) do
+      finished_all_js_requests?
+    end
   end
 
   # Wait for active Rack requests and client-side AJAX requests
@@ -45,34 +49,16 @@ module WaitForRequests
     return true unless javascript_test?
 
     finished_all_ajax_requests? &&
-      finished_all_vue_resource_requests?
+      finished_all_axios_requests?
   end
 
-  # Waits until the passed block returns true
-  def wait_for(condition_name, max_wait_time: Capybara.default_max_wait_time, polling_interval: 0.01)
-    wait_until = Time.now + max_wait_time.seconds
-    loop do
-      break if yield
-
-      if Time.now > wait_until
-        raise "Condition not met: #{condition_name}"
-      else
-        sleep(polling_interval)
-      end
-    end
-  end
-
-  def finished_all_vue_resource_requests?
-    Capybara.page.evaluate_script('window.activeVueResources || 0').zero?
+  def finished_all_axios_requests?
+    Capybara.page.evaluate_script('window.pendingRequests || 0').zero?
   end
 
   def finished_all_ajax_requests?
     return true if Capybara.page.evaluate_script('typeof jQuery === "undefined"')
 
     Capybara.page.evaluate_script('jQuery.active').zero?
-  end
-
-  def javascript_test?
-    Capybara.current_driver == Capybara.javascript_driver
   end
 end

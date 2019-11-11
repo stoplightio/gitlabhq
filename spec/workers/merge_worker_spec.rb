@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe MergeWorker do
@@ -8,7 +10,7 @@ describe MergeWorker do
     let!(:author) { merge_request.author }
 
     before do
-      source_project.add_master(author)
+      source_project.add_maintainer(author)
       source_project.repository.expire_branches_cache
     end
 

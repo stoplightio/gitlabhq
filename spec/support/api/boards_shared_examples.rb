@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 shared_examples_for 'group and project boards' do |route_definition, ee = false|
   let(:root_url) { route_definition.gsub(":id", board_parent.id.to_s) }
 
@@ -12,6 +14,16 @@ shared_examples_for 'group and project boards' do |route_definition, ee = false|
     else
       expect(response).to match_response_schema(schema_file)
     end
+  end
+
+  it 'avoids N+1 queries' do
+    pat = create(:personal_access_token, user: user)
+    control = ActiveRecord::QueryRecorder.new { get api(root_url, personal_access_token: pat) }
+
+    create(:milestone, "#{board_parent.class.name.underscore}": board_parent)
+    create(:board, "#{board_parent.class.name.underscore}": board_parent)
+
+    expect { get api(root_url, personal_access_token: pat) }.not_to exceed_query_limit(control)
   end
 
   describe "GET #{route_definition}" do
@@ -88,7 +100,7 @@ shared_examples_for 'group and project boards' do |route_definition, ee = false|
     let(:url) { "#{root_url}/#{board.id}/lists" }
 
     it 'creates a new issue board list for labels' do
-      post api(url, user), label_id: ux_label.id
+      post api(url, user), params: { label_id: ux_label.id }
 
       expect(response).to have_gitlab_http_status(201)
       expect(json_response['label']['name']).to eq(ux_label.title)
@@ -96,13 +108,13 @@ shared_examples_for 'group and project boards' do |route_definition, ee = false|
     end
 
     it 'returns 400 when creating a new list if label_id is invalid' do
-      post api(url, user), label_id: 23423
+      post api(url, user), params: { label_id: 23423 }
 
       expect(response).to have_gitlab_http_status(400)
     end
 
     it 'returns 403 for members with guest role' do
-      put api("#{url}/#{test_list.id}", guest), position: 1
+      put api("#{url}/#{test_list.id}", guest), params: { position: 1 }
 
       expect(response).to have_gitlab_http_status(403)
     end
@@ -112,23 +124,20 @@ shared_examples_for 'group and project boards' do |route_definition, ee = false|
     let(:url) { "#{root_url}/#{board.id}/lists" }
 
     it "updates a list" do
-      put api("#{url}/#{test_list.id}", user),
-        position: 1
+      put api("#{url}/#{test_list.id}", user), params: { position: 1 }
 
       expect(response).to have_gitlab_http_status(200)
       expect(json_response['position']).to eq(1)
     end
 
     it "returns 404 error if list id not found" do
-      put api("#{url}/44444", user),
-        position: 1
+      put api("#{url}/44444", user), params: { position: 1 }
 
       expect(response).to have_gitlab_http_status(404)
     end
 
     it "returns 403 for members with guest role" do
-      put api("#{url}/#{test_list.id}", guest),
-        position: 1
+      put api("#{url}/#{test_list.id}", guest), params: { position: 1 }
 
       expect(response).to have_gitlab_http_status(403)
     end
@@ -162,7 +171,7 @@ shared_examples_for 'group and project boards' do |route_definition, ee = false|
         if board_parent.try(:namespace)
           board_parent.update(namespace: owner.namespace)
         else
-          board.parent.add_owner(owner)
+          board.resource_parent.add_owner(owner)
         end
       end
 

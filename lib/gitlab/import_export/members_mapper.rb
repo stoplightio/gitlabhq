@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module ImportExport
     class MembersMapper
@@ -33,7 +35,7 @@ module Gitlab
       end
 
       def include?(old_author_id)
-        map.keys.include?(old_author_id) && map[old_author_id] != default_user_id
+        map.has_key?(old_author_id) && map[old_author_id] != default_user_id
       end
 
       private
@@ -45,9 +47,11 @@ module Gitlab
       end
 
       def ensure_default_member!
-        @project.project_members.destroy_all
+        @project.project_members.destroy_all # rubocop: disable DestroyAll
 
-        ProjectMember.create!(user: @user, access_level: ProjectMember::MASTER, source_id: @project.id, importing: true)
+        ProjectMember.create!(user: @user, access_level: ProjectMember::MAINTAINER, source_id: @project.id, importing: true)
+      rescue => e
+        raise e, "Error adding importer user to project members. #{e.message}"
       end
 
       def add_team_member(member, existing_user = nil)
@@ -57,7 +61,11 @@ module Gitlab
       end
 
       def member_hash(member)
-        parsed_hash(member).merge('source_id' => @project.id, 'importing' => true)
+        parsed_hash(member).merge(
+          'source_id' => @project.id,
+          'importing' => true,
+          'access_level' => [member['access_level'], ProjectMember::MAINTAINER].min
+        ).except('user_id')
       end
 
       def parsed_hash(member)

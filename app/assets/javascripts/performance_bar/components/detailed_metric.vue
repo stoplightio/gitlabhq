@@ -1,9 +1,14 @@
 <script>
-import GlModal from '~/vue_shared/components/gl_modal.vue';
+import RequestWarning from './request_warning.vue';
+
+import DeprecatedModal2 from '~/vue_shared/components/deprecated_modal_2.vue';
+import Icon from '~/vue_shared/components/icon.vue';
 
 export default {
   components: {
-    GlModal,
+    RequestWarning,
+    GlModal: DeprecatedModal2,
+    Icon,
   },
   props: {
     currentRequest: {
@@ -14,11 +19,14 @@ export default {
       type: String,
       required: true,
     },
-    header: {
+    title: {
       type: String,
-      required: true,
+      required: false,
+      default() {
+        return this.metric;
+      },
     },
-    details: {
+    header: {
       type: String,
       required: true,
     },
@@ -32,16 +40,26 @@ export default {
       return this.currentRequest.details[this.metric];
     },
     detailsList() {
-      return this.metricDetails[this.details];
+      return this.metricDetails.details;
+    },
+    warnings() {
+      return this.metricDetails.warnings || [];
+    },
+    htmlId() {
+      if (this.currentRequest) {
+        return `performance-bar-warning-${this.currentRequest.id}-${this.metric}`;
+      }
+
+      return '';
     },
   },
 };
 </script>
 <template>
   <div
+    v-if="currentRequest.details && metricDetails"
     :id="`peek-view-${metric}`"
-    class="view"
-    v-if="currentRequest.details"
+    class="view qa-performance-bar-detailed-metric"
   >
     <button
       :data-target="`#modal-peek-${metric}-details`"
@@ -49,9 +67,7 @@ export default {
       type="button"
       data-toggle="modal"
     >
-      {{ metricDetails.duration }}
-      /
-      {{ metricDetails.calls }}
+      {{ metricDetails.duration }} / {{ metricDetails.calls }}
     </button>
     <gl-modal
       :id="`modal-peek-${metric}-details`"
@@ -59,36 +75,49 @@ export default {
       modal-size="xl"
       class="performance-bar-modal"
     >
-      <table
-        class="table"
-      >
+      <table class="table">
         <template v-if="detailsList.length">
-          <tr
-            v-for="(item, index) in detailsList"
-            :key="index"
-          >
-            <td><strong>{{ item.duration }}ms</strong></td>
-            <td
-              v-for="key in keys"
-              :key="key"
-              class="break-word"
-            >
-              {{ item[key] }}
+          <tr v-for="(item, index) in detailsList" :key="index">
+            <td>
+              <span>{{ sprintf(__('%{duration}ms'), { duration: item.duration }) }}</span>
+            </td>
+            <td>
+              <div class="js-toggle-container">
+                <div
+                  v-for="(key, keyIndex) in keys"
+                  :key="key"
+                  class="break-word"
+                  :class="{ 'mb-3 bold': keyIndex == 0 }"
+                >
+                  {{ item[key] }}
+                  <button
+                    v-if="keyIndex == 0 && item.backtrace"
+                    class="text-expander js-toggle-button"
+                    type="button"
+                    :aria-label="__('Toggle backtrace')"
+                  >
+                    <icon :size="12" name="ellipsis_h" />
+                  </button>
+                </div>
+                <pre v-if="item.backtrace" class="backtrace-row js-toggle-content mt-2">{{
+                  item.backtrace
+                }}</pre>
+              </div>
             </td>
           </tr>
         </template>
         <template v-else>
           <tr>
             <td>
-              No {{ header.toLowerCase() }} for this request.
+              {{ sprintf(__('No %{header} for this request.'), { header: header.toLowerCase() }) }}
             </td>
           </tr>
         </template>
       </table>
 
-      <div slot="footer">
-      </div>
+      <div slot="footer"></div>
     </gl-modal>
-    {{ metric }}
+    {{ title }}
+    <request-warning :html-id="htmlId" :warnings="warnings" />
   </div>
 </template>

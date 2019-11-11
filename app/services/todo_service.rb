@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # TodoService class
 #
 # Used for creating/updating todos after certain user actions
@@ -40,19 +42,19 @@ class TodoService
   # updates the todo counts for those users.
   #
   def destroy_target(target)
-    todo_users = User.where(id: target.todos.pending.select(:user_id)).to_a
+    todo_users = UsersWithPendingTodosFinder.new(target).execute.to_a
 
     yield target
 
     todo_users.each(&:update_todos_count_cache)
   end
 
-  # When we reassign an issue we should:
+  # When we reassign an issuable we should:
   #
-  #  * create a pending todo for new assignee if issue is assigned
+  #  * create a pending todo for new assignee if issuable is assigned
   #
-  def reassigned_issue(issue, current_user, old_assignees = [])
-    create_assignment_todo(issue, current_user, old_assignees)
+  def reassigned_issuable(issuable, current_user, old_assignees = [])
+    create_assignment_todo(issuable, current_user, old_assignees)
   end
 
   # When create a merge request we should:
@@ -78,14 +80,6 @@ class TodoService
   #
   def close_merge_request(merge_request, current_user)
     mark_pending_todos_as_done(merge_request, current_user)
-  end
-
-  # When we reassign a merge request we should:
-  #
-  #  * creates a pending todo for new assignee if merge request is assigned
-  #
-  def reassigned_merge_request(merge_request, current_user)
-    create_assignment_todo(merge_request, current_user)
   end
 
   # When merge a merge request we should:
@@ -197,21 +191,20 @@ class TodoService
   end
 
   def todo_exist?(issuable, current_user)
-    TodosFinder.new(current_user).execute.exists?(target: issuable)
+    TodosFinder.new(current_user).any_for_target?(issuable, :pending)
   end
 
   private
 
   def todos_by_ids(ids, current_user)
-    current_user.todos.where(id: Array(ids))
+    current_user.todos_limited_to(Array(ids))
   end
 
   def update_todos_state(todos, current_user, state)
-    # Only update those that are not really on that state
-    todos = todos.where.not(state: state)
-    todos_ids = todos.pluck(:id)
-    todos.unscope(:order).update_all(state: state)
+    todos_ids = todos.update_state(state)
+
     current_user.update_todos_count_cache
+
     todos_ids
   end
 
@@ -260,15 +253,15 @@ class TodoService
     end
   end
 
-  def create_mention_todos(project, target, author, note = nil, skip_users = [])
+  def create_mention_todos(parent, target, author, note = nil, skip_users = [])
     # Create Todos for directly addressed users
-    directly_addressed_users = filter_directly_addressed_users(project, note || target, author, skip_users)
-    attributes = attributes_for_todo(project, target, author, Todo::DIRECTLY_ADDRESSED, note)
+    directly_addressed_users = filter_directly_addressed_users(parent, note || target, author, skip_users)
+    attributes = attributes_for_todo(parent, target, author, Todo::DIRECTLY_ADDRESSED, note)
     create_todos(directly_addressed_users, attributes)
 
     # Create Todos for mentioned users
-    mentioned_users = filter_mentioned_users(project, note || target, author, skip_users)
-    attributes = attributes_for_todo(project, target, author, Todo::MENTIONED, note)
+    mentioned_users = filter_mentioned_users(parent, note || target, author, skip_users)
+    attributes = attributes_for_todo(parent, target, author, Todo::MENTIONED, note)
     create_todos(mentioned_users, attributes)
   end
 
@@ -299,36 +292,34 @@ class TodoService
 
   def attributes_for_todo(project, target, author, action, note = nil)
     attributes_for_target(target).merge!(
-      project_id: project.id,
+      project_id: project&.id,
       author_id: author.id,
       action: action,
       note: note
     )
   end
 
-  def filter_todo_users(users, project, target)
-    reject_users_without_access(users, project, target).uniq
+  def filter_todo_users(users, parent, target)
+    reject_users_without_access(users, parent, target).uniq
   end
 
-  def filter_mentioned_users(project, target, author, skip_users = [])
+  def filter_mentioned_users(parent, target, author, skip_users = [])
     mentioned_users = target.mentioned_users(author) - skip_users
-    filter_todo_users(mentioned_users, project, target)
+    filter_todo_users(mentioned_users, parent, target)
   end
 
-  def filter_directly_addressed_users(project, target, author, skip_users = [])
+  def filter_directly_addressed_users(parent, target, author, skip_users = [])
     directly_addressed_users = target.directly_addressed_users(author) - skip_users
-    filter_todo_users(directly_addressed_users, project, target)
+    filter_todo_users(directly_addressed_users, parent, target)
   end
 
-  def reject_users_without_access(users, project, target)
-    if target.is_a?(Note) && (target.for_issue? || target.for_merge_request?)
-      target = target.noteable
-    end
+  def reject_users_without_access(users, parent, target)
+    target = target.noteable if target.is_a?(Note)
 
-    if target.is_a?(Issuable)
+    if target.respond_to?(:to_ability_name)
       select_users(users, :"read_#{target.to_ability_name}", target)
     else
-      select_users(users, :read_project, project)
+      select_users(users, :read_project, parent)
     end
   end
 
@@ -339,7 +330,8 @@ class TodoService
   end
 
   def pending_todos(user, criteria = {})
-    valid_keys = [:project_id, :target_id, :target_type, :commit_id]
-    user.todos.pending.where(criteria.slice(*valid_keys))
+    PendingTodosFinder.new(user, criteria).execute
   end
 end
+
+TodoService.prepend_if_ee('EE::TodoService')

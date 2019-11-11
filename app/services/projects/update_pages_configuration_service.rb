@@ -1,5 +1,9 @@
+# frozen_string_literal: true
+
 module Projects
   class UpdatePagesConfigurationService < BaseService
+    include Gitlab::Utils::StrongMemoize
+
     attr_reader :project
 
     def initialize(project)
@@ -7,19 +11,31 @@ module Projects
     end
 
     def execute
-      update_file(pages_config_file, pages_config.to_json)
+      if file_equals?(pages_config_file, pages_config_json)
+        return success(reload: false)
+      end
+
+      update_file(pages_config_file, pages_config_json)
       reload_daemon
-      success
+      success(reload: true)
     rescue => e
       error(e.message)
     end
 
     private
 
+    def pages_config_json
+      strong_memoize(:pages_config_json) do
+        pages_config.to_json
+      end
+    end
+
     def pages_config
       {
         domains: pages_domains_config,
-        https_only: project.pages_https_only?
+        https_only: project.pages_https_only?,
+        id: project.project_id,
+        access_control: !project.public_pages?
       }
     end
 
@@ -29,7 +45,9 @@ module Projects
           domain: domain.domain,
           certificate: domain.certificate,
           key: domain.key,
-          https_only: project.pages_https_only? && domain.https?
+          https_only: project.pages_https_only? && domain.https?,
+          id: project.project_id,
+          access_control: !project.public_pages?
         }
       end
     end
@@ -61,11 +79,6 @@ module Projects
     end
 
     def update_file(file, data)
-      unless data
-        FileUtils.remove(file, force: true)
-        return
-      end
-
       temp_file = "#{file}.#{SecureRandom.hex(16)}"
       File.open(temp_file, 'w') do |f|
         f.write(data)
@@ -74,6 +87,19 @@ module Projects
     ensure
       # In case if the updating fails
       FileUtils.remove(temp_file, force: true)
+    end
+
+    def file_equals?(file, data)
+      existing_data = read_file(file)
+      data == existing_data.to_s
+    end
+
+    def read_file(file)
+      File.open(file, 'r') do |f|
+        f.read
+      end
+    rescue
+      nil
     end
   end
 end

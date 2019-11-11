@@ -1,9 +1,10 @@
 ---
-redirect_from: 'https://docs.gitlab.com/ee/articles/artifactory_and_gitlab/index.html'
+disqus_identifier: 'https://docs.gitlab.com/ee/articles/artifactory_and_gitlab/index.html'
 author: Fabio Busatto
 author_gitlab: bikebilly
-level: intermediary
+level: intermediate
 article_type: tutorial
+type: tutorial
 date: 2017-08-15
 ---
 
@@ -11,15 +12,15 @@ date: 2017-08-15
 
 ## Introduction
 
-In this article, we will show how you can leverage the power of [GitLab CI/CD](https://about.gitlab.com/features/gitlab-ci-cd/)
-to build a [Maven](https://maven.apache.org/) project, deploy it to [Artifactory](https://www.jfrog.com/artifactory/), and then use it from another Maven application as a dependency.
+In this article, we will show how you can leverage the power of [GitLab CI/CD](https://about.gitlab.com/product/continuous-integration/)
+to build a [Maven](https://maven.apache.org/) project, deploy it to [Artifactory](https://jfrog.com/artifactory/), and then use it from another Maven application as a dependency.
 
 You'll create two different projects:
 
-- `simple-maven-dep`: the app built and deployed to Artifactory (available at https://gitlab.com/gitlab-examples/maven/simple-maven-dep)
-- `simple-maven-app`: the app using the previous one as a dependency (available at https://gitlab.com/gitlab-examples/maven/simple-maven-app)
+- `simple-maven-dep`: the app built and deployed to Artifactory (see the [simple-maven-dep](https://gitlab.com/gitlab-examples/maven/simple-maven-dep) example project)
+- `simple-maven-app`: the app using the previous one as a dependency (see the [simple-maven-app](https://gitlab.com/gitlab-examples/maven/simple-maven-app) example project)
 
-We assume that you already have a GitLab account on [GitLab.com](https://gitlab.com/), and that you know the basic usage of Git and [GitLab CI/CD](https://about.gitlab.com/features/gitlab-ci-cd/).
+We assume that you already have a GitLab account on [GitLab.com](https://gitlab.com/), and that you know the basic usage of Git and [GitLab CI/CD](https://about.gitlab.com/product/continuous-integration/).
 We also assume that an Artifactory instance is available and reachable from the internet, and that you have valid credentials to deploy on it.
 
 ## Create the simple Maven dependency
@@ -38,9 +39,10 @@ project:
 1. Create a new project by selecting **Import project from ➔ Repo by URL**
 1. Add the following URL:
 
-    ```
-    https://gitlab.com/gitlab-examples/maven/simple-maven-dep.git
-    ```
+   ```
+   https://gitlab.com/gitlab-examples/maven/simple-maven-dep.git
+   ```
+
 1. Click **Create project**
 
 This application is nothing more than a basic class with a stub for a JUnit based test suite.
@@ -62,15 +64,15 @@ The application is ready to use, but you need some additional steps to deploy it
 1. Copy the snippet in the `pom.xml` file for your project, just after the
    `dependencies` section. The snippet should look like this:
 
-    ```xml
-    <distributionManagement>
-      <repository>
-        <id>central</id>
-        <name>83d43b5afeb5-releases</name>
-        <url>${env.MAVEN_REPO_URL}/libs-release-local</url>
-      </repository>
-    </distributionManagement>
-    ```
+   ```xml
+   <distributionManagement>
+     <repository>
+       <id>central</id>
+       <name>83d43b5afeb5-releases</name>
+       <url>${env.MAVEN_REPO_URL}/libs-release-local</url>
+     </repository>
+   </distributionManagement>
+   ```
 
 Another step you need to do before you can deploy the dependency to Artifactory
 is to configure the authentication data. It is a simple task, but Maven requires
@@ -85,29 +87,29 @@ parameter in `.gitlab-ci.yml` to use the custom location instead of the default 
 1. Create a file called `settings.xml` in the `.m2` folder
 1. Copy the following content into a `settings.xml` file:
 
-    ```xml
-    <settings xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.1.0 http://maven.apache.org/xsd/settings-1.1.0.xsd"
-        xmlns="http://maven.apache.org/SETTINGS/1.1.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-      <servers>
-        <server>
-          <id>central</id>
-          <username>${env.MAVEN_REPO_USER}</username>
-          <password>${env.MAVEN_REPO_PASS}</password>
-        </server>
-      </servers>
-    </settings>
-    ```
+   ```xml
+   <settings xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.1.0 http://maven.apache.org/xsd/settings-1.1.0.xsd"
+       xmlns="http://maven.apache.org/SETTINGS/1.1.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+     <servers>
+       <server>
+         <id>central</id>
+         <username>${env.MAVEN_REPO_USER}</username>
+         <password>${env.MAVEN_REPO_PASS}</password>
+       </server>
+     </servers>
+   </settings>
+   ```
 
     Username and password will be replaced by the correct values using variables.
 
 ### Configure GitLab CI/CD for `simple-maven-dep`
 
-Now it's time we set up [GitLab CI/CD](https://about.gitlab.com/features/gitlab-ci-cd/) to automatically build, test and deploy the dependency!
+Now it's time we set up [GitLab CI/CD](https://about.gitlab.com/product/continuous-integration/) to automatically build, test and deploy the dependency!
 
 GitLab CI/CD uses a file in the root of the repo, named `.gitlab-ci.yml`, to read the definitions for jobs
-that will be executed by the configured GitLab Runners. You can read more about this file in the [GitLab Documentation](https://docs.gitlab.com/ee/ci/yaml/).
+that will be executed by the configured GitLab Runners. You can read more about this file in the [GitLab Documentation](../../yaml/README.md).
 
-First of all, remember to set up variables for your deployment. Navigate to your project's **Settings > CI/CD > Variables** page
+First of all, remember to set up variables for your deployment. Navigate to your project's **Settings > CI/CD > Environment variables** page
 and add the following ones (replace them with your current values, of course):
 
 - **MAVEN_REPO_URL**: `http://artifactory.example.com:8081/artifactory` (your Artifactory URL)
@@ -186,9 +188,10 @@ We'll use again a Maven app that can be cloned from our example project:
 1. Create a new project by selecting **Import project from ➔ Repo by URL**
 1. Add the following URL:
 
-    ```
-    https://gitlab.com/gitlab-examples/maven/simple-maven-app.git
-    ```
+   ```
+   https://gitlab.com/gitlab-examples/maven/simple-maven-app.git
+   ```
+
 1. Click **Create project**
 
 This one is a simple app as well. If you look at the `src/main/java/com/example/app/App.java`
@@ -203,13 +206,13 @@ Since Maven doesn't know how to resolve the dependency, you need to modify the c
 1. Copy the snippet in the `dependencies` section of the `pom.xml` file.
    The snippet should look like this:
 
-    ```xml
-    <dependency>
-      <groupId>com.example.dep</groupId>
-      <artifactId>simple-maven-dep</artifactId>
-      <version>1.0</version>
-    </dependency>
-    ```
+   ```xml
+   <dependency>
+     <groupId>com.example.dep</groupId>
+     <artifactId>simple-maven-dep</artifactId>
+     <version>1.0</version>
+   </dependency>
+   ```
 
 ### Configure the Artifactory repository location
 
@@ -230,7 +233,7 @@ Now you are ready to use the Artifactory repository to resolve dependencies and 
 
 You need a last step to have everything in place: configure the `.gitlab-ci.yml` file for this project, as you already did for `simple-maven-dep`.
 
-You want to leverage [GitLab CI/CD](https://about.gitlab.com/features/gitlab-ci-cd/) to automatically build, test and run your awesome application,
+You want to leverage [GitLab CI/CD](https://about.gitlab.com/product/continuous-integration/) to automatically build, test and run your awesome application,
 and see if you can get the greeting as expected!
 
 All you need to do is to add the following `.gitlab-ci.yml` to the repo:

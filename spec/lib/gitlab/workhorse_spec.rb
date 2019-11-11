@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Gitlab::Workhorse do
@@ -12,37 +14,83 @@ describe Gitlab::Workhorse do
     [key, command, params]
   end
 
+  before do
+    allow(Feature::Gitaly).to receive(:server_feature_flags).and_return({
+      'gitaly-feature-foobar' => 'true'
+    })
+  end
+
   describe ".send_git_archive" do
     let(:ref) { 'master' }
     let(:format) { 'zip' }
     let(:storage_path) { Gitlab.config.gitlab.repository_downloads_path }
-    let(:base_params) { repository.archive_metadata(ref, storage_path, format, append_sha: nil) }
-    let(:gitaly_params) do
-      base_params.merge(
-        'GitalyServer' => {
-          'address' => Gitlab::GitalyClient.address(project.repository_storage),
-          'token' => Gitlab::GitalyClient.token(project.repository_storage)
-        },
-        'GitalyRepository' => repository.gitaly_repository.to_h.deep_stringify_keys
-      )
-    end
+    let(:path) { 'some/path' if Feature.enabled?(:git_archive_path, default_enabled: true) }
+    let(:metadata) { repository.archive_metadata(ref, storage_path, format, append_sha: nil, path: path) }
     let(:cache_disabled) { false }
 
     subject do
-      described_class.send_git_archive(repository, ref: ref, format: format, append_sha: nil)
+      described_class.send_git_archive(repository, ref: ref, format: format, append_sha: nil, path: path)
     end
 
     before do
       allow(described_class).to receive(:git_archive_cache_disabled?).and_return(cache_disabled)
     end
 
-    context 'when Gitaly workhorse_archive feature is enabled' do
+    context 'feature flag disabled' do
+      before do
+        stub_feature_flags(git_archive_path: false)
+      end
+
+      it 'sets the header correctly' do
+        key, command, params = decode_workhorse_header(subject)
+
+        expected_params = metadata.merge(
+          'GitalyRepository' => repository.gitaly_repository.to_h,
+          'GitalyServer' => {
+            features: { 'gitaly-feature-foobar' => 'true' },
+            address: Gitlab::GitalyClient.address(project.repository_storage),
+            token: Gitlab::GitalyClient.token(project.repository_storage)
+          }
+        )
+
+        expect(key).to eq('Gitlab-Workhorse-Send-Data')
+        expect(command).to eq('git-archive')
+        expect(params).to eq(expected_params.deep_stringify_keys)
+      end
+
+      context 'when archive caching is disabled' do
+        let(:cache_disabled) { true }
+
+        it 'tells workhorse not to use the cache' do
+          _, _, params = decode_workhorse_header(subject)
+          expect(params).to include({ 'DisableCache' => true })
+        end
+      end
+    end
+
+    context 'feature flag enabled' do
       it 'sets the header correctly' do
         key, command, params = decode_workhorse_header(subject)
 
         expect(key).to eq('Gitlab-Workhorse-Send-Data')
         expect(command).to eq('git-archive')
-        expect(params).to include(gitaly_params)
+        expect(params).to eq({
+          'GitalyServer' => {
+            features: { 'gitaly-feature-foobar' => 'true' },
+            address: Gitlab::GitalyClient.address(project.repository_storage),
+            token: Gitlab::GitalyClient.token(project.repository_storage)
+          },
+          'ArchivePath' => metadata['ArchivePath'],
+          'GetArchiveRequest' => Base64.encode64(
+            Gitaly::GetArchiveRequest.new(
+              repository: repository.gitaly_repository,
+              commit_id: metadata['CommitId'],
+              prefix: metadata['ArchivePrefix'],
+              format: Gitaly::GetArchiveRequest::Format::ZIP,
+              path: path
+            ).to_proto
+          )
+        }.deep_stringify_keys)
       end
 
       context 'when archive caching is disabled' do
@@ -70,38 +118,27 @@ describe Gitlab::Workhorse do
     let(:diff_refs) { double(base_sha: "base", head_sha: "head") }
     subject { described_class.send_git_patch(repository, diff_refs) }
 
-    context 'when Gitaly workhorse_send_git_patch feature is enabled' do
-      it 'sets the header correctly' do
-        key, command, params = decode_workhorse_header(subject)
+    it 'sets the header correctly' do
+      key, command, params = decode_workhorse_header(subject)
 
-        expect(key).to eq("Gitlab-Workhorse-Send-Data")
-        expect(command).to eq("git-format-patch")
-        expect(params).to eq({
-          'GitalyServer' => {
-            address: Gitlab::GitalyClient.address(project.repository_storage),
-            token: Gitlab::GitalyClient.token(project.repository_storage)
-          },
-          'RawPatchRequest' => Gitaly::RawPatchRequest.new(
-            repository: repository.gitaly_repository,
-            left_commit_id: 'base',
-            right_commit_id: 'head'
-          ).to_json
-        }.deep_stringify_keys)
-      end
-    end
-
-    context 'when Gitaly workhorse_send_git_patch feature is disabled', :disable_gitaly do
-      it 'sets the header correctly' do
-        key, command, params = decode_workhorse_header(subject)
-
-        expect(key).to eq("Gitlab-Workhorse-Send-Data")
-        expect(command).to eq("git-format-patch")
-        expect(params).to eq("RepoPath" => repository.path_to_repo, "ShaFrom" => "base", "ShaTo" => "head")
-      end
+      expect(key).to eq("Gitlab-Workhorse-Send-Data")
+      expect(command).to eq("git-format-patch")
+      expect(params).to eq({
+        'GitalyServer' => {
+          features: { 'gitaly-feature-foobar' => 'true' },
+          address: Gitlab::GitalyClient.address(project.repository_storage),
+          token: Gitlab::GitalyClient.token(project.repository_storage)
+        },
+        'RawPatchRequest' => Gitaly::RawPatchRequest.new(
+          repository: repository.gitaly_repository,
+          left_commit_id: 'base',
+          right_commit_id: 'head'
+        ).to_json
+      }.deep_stringify_keys)
     end
   end
 
-  describe '.terminal_websocket' do
+  describe '.channel_websocket' do
     def terminal(ca_pem: nil)
       out = {
         subprotocols: ['foo'],
@@ -115,25 +152,25 @@ describe Gitlab::Workhorse do
 
     def workhorse(ca_pem: nil)
       out = {
-        'Terminal' => {
+        'Channel' => {
           'Subprotocols' => ['foo'],
           'Url' => 'wss://example.com/terminal.ws',
           'Header' => { 'Authorization' => ['Token x'] },
           'MaxSessionTime' => 600
         }
       }
-      out['Terminal']['CAPem'] = ca_pem if ca_pem
+      out['Channel']['CAPem'] = ca_pem if ca_pem
       out
     end
 
     context 'without ca_pem' do
-      subject { described_class.terminal_websocket(terminal) }
+      subject { described_class.channel_websocket(terminal) }
 
       it { is_expected.to eq(workhorse) }
     end
 
     context 'with ca_pem' do
-      subject { described_class.terminal_websocket(terminal(ca_pem: "foo")) }
+      subject { described_class.channel_websocket(terminal(ca_pem: "foo")) }
 
       it { is_expected.to eq(workhorse(ca_pem: "foo")) }
     end
@@ -143,85 +180,23 @@ describe Gitlab::Workhorse do
     let(:diff_refs) { double(base_sha: "base", head_sha: "head") }
     subject { described_class.send_git_diff(repository, diff_refs) }
 
-    context 'when Gitaly workhorse_send_git_diff feature is enabled' do
-      it 'sets the header correctly' do
-        key, command, params = decode_workhorse_header(subject)
+    it 'sets the header correctly' do
+      key, command, params = decode_workhorse_header(subject)
 
-        expect(key).to eq("Gitlab-Workhorse-Send-Data")
-        expect(command).to eq("git-diff")
-        expect(params).to eq({
-          'GitalyServer' => {
-            address: Gitlab::GitalyClient.address(project.repository_storage),
-            token: Gitlab::GitalyClient.token(project.repository_storage)
-          },
-          'RawDiffRequest' => Gitaly::RawDiffRequest.new(
-            repository: repository.gitaly_repository,
-            left_commit_id: 'base',
-            right_commit_id: 'head'
-          ).to_json
-        }.deep_stringify_keys)
-      end
-    end
-
-    context 'when Gitaly workhorse_send_git_diff feature is disabled', :disable_gitaly do
-      it 'sets the header correctly' do
-        key, command, params = decode_workhorse_header(subject)
-
-        expect(key).to eq("Gitlab-Workhorse-Send-Data")
-        expect(command).to eq("git-diff")
-        expect(params).to eq("RepoPath" => repository.path_to_repo, "ShaFrom" => "base", "ShaTo" => "head")
-      end
-    end
-  end
-
-  describe ".secret" do
-    subject { described_class.secret }
-
-    before do
-      described_class.instance_variable_set(:@secret, nil)
-      described_class.write_secret
-    end
-
-    it 'returns 32 bytes' do
-      expect(subject).to be_a(String)
-      expect(subject.length).to eq(32)
-      expect(subject.encoding).to eq(Encoding::ASCII_8BIT)
-    end
-
-    it 'accepts a trailing newline' do
-      open(described_class.secret_path, 'a') { |f| f.write "\n" }
-      expect(subject.length).to eq(32)
-    end
-
-    it 'raises an exception if the secret file cannot be read' do
-      File.delete(described_class.secret_path)
-      expect { subject }.to raise_exception(Errno::ENOENT)
-    end
-
-    it 'raises an exception if the secret file contains the wrong number of bytes' do
-      File.truncate(described_class.secret_path, 0)
-      expect { subject }.to raise_exception(RuntimeError)
-    end
-  end
-
-  describe ".write_secret" do
-    let(:secret_path) { described_class.secret_path }
-    before do
-      begin
-        File.delete(secret_path)
-      rescue Errno::ENOENT
-      end
-
-      described_class.write_secret
-    end
-
-    it 'uses mode 0600' do
-      expect(File.stat(secret_path).mode & 0777).to eq(0600)
-    end
-
-    it 'writes base64 data' do
-      bytes = Base64.strict_decode64(File.read(secret_path))
-      expect(bytes).not_to be_empty
+      expect(key).to eq("Gitlab-Workhorse-Send-Data")
+      expect(command).to eq("git-diff")
+      expect(params).to eq({
+        'GitalyServer' => {
+          features: { 'gitaly-feature-foobar' => 'true' },
+          address: Gitlab::GitalyClient.address(project.repository_storage),
+          token: Gitlab::GitalyClient.token(project.repository_storage)
+        },
+        'RawDiffRequest' => Gitaly::RawDiffRequest.new(
+          repository: repository.gitaly_repository,
+          left_commit_id: 'base',
+          right_commit_id: 'head'
+        ).to_json
+      }.deep_stringify_keys)
     end
   end
 
@@ -272,27 +247,25 @@ describe Gitlab::Workhorse do
         GL_ID: "user-#{user.id}",
         GL_USERNAME: user.username,
         GL_REPOSITORY: "project-#{project.id}",
-        RepoPath: repo_path,
         ShowAllRefs: false
       }
     end
 
-    subject { described_class.git_http_ok(repository, false, user, action) }
+    subject { described_class.git_http_ok(repository, Gitlab::GlRepository::PROJECT, user, action) }
 
     it { expect(subject).to include(params) }
 
-    context 'when is_wiki' do
+    context 'when the repo_type is a wiki' do
       let(:params) do
         {
           GL_ID: "user-#{user.id}",
           GL_USERNAME: user.username,
           GL_REPOSITORY: "wiki-#{project.id}",
-          RepoPath: repo_path,
           ShowAllRefs: false
         }
       end
 
-      subject { described_class.git_http_ok(repository, true, user, action) }
+      subject { described_class.git_http_ok(repository, Gitlab::GlRepository::WIKI, user, action) }
 
       it { expect(subject).to include(params) }
     end
@@ -301,6 +274,7 @@ describe Gitlab::Workhorse do
       let(:gitaly_params) do
         {
           GitalyServer: {
+            features: { 'gitaly-feature-foobar' => 'true' },
             address: Gitlab::GitalyClient.address('default'),
             token: Gitlab::GitalyClient.token('default')
           }
@@ -332,7 +306,7 @@ describe Gitlab::Workhorse do
         end
 
         context 'show_all_refs enabled' do
-          subject { described_class.git_http_ok(repository, false, user, action, show_all_refs: true) }
+          subject { described_class.git_http_ok(repository, Gitlab::GlRepository::PROJECT, user, action, show_all_refs: true) }
 
           it { is_expected.to include(ShowAllRefs: true) }
         end
@@ -350,7 +324,7 @@ describe Gitlab::Workhorse do
         it { expect(subject).to include(gitaly_params) }
 
         context 'show_all_refs enabled' do
-          subject { described_class.git_http_ok(repository, false, user, action, show_all_refs: true) }
+          subject { described_class.git_http_ok(repository, Gitlab::GlRepository::PROJECT, user, action, show_all_refs: true) }
 
           it { is_expected.to include(ShowAllRefs: true) }
         end
@@ -360,6 +334,22 @@ describe Gitlab::Workhorse do
         let(:action) { 'download' }
 
         it { expect { subject }.to raise_exception('Unsupported action: download') }
+      end
+    end
+
+    context 'when receive_max_input_size has been updated' do
+      it 'returns custom git config' do
+        allow(Gitlab::CurrentSettings).to receive(:receive_max_input_size) { 1 }
+
+        expect(subject[:GitConfigOptions]).to be_present
+      end
+    end
+
+    context 'when receive_max_input_size is empty' do
+      it 'returns an empty git config' do
+        allow(Gitlab::CurrentSettings).to receive(:receive_max_input_size) { nil }
+
+        expect(subject[:GitConfigOptions]).to be_empty
       end
     end
   end
@@ -376,6 +366,7 @@ describe Gitlab::Workhorse do
       end
 
       it 'set and notify' do
+        expect(Gitlab::Redis::SharedState).to receive(:with).and_call_original
         expect_any_instance_of(::Redis).to receive(:publish)
           .with(described_class::NOTIFICATION_CHANNEL, "test-key=test-value")
 
@@ -425,34 +416,23 @@ describe Gitlab::Workhorse do
 
     subject { described_class.send_git_blob(repository, blob) }
 
-    context 'when Gitaly workhorse_raw_show feature is enabled' do
-      it 'sets the header correctly' do
-        key, command, params = decode_workhorse_header(subject)
+    it 'sets the header correctly' do
+      key, command, params = decode_workhorse_header(subject)
 
-        expect(key).to eq('Gitlab-Workhorse-Send-Data')
-        expect(command).to eq('git-blob')
-        expect(params).to eq({
-          'GitalyServer' => {
-            address: Gitlab::GitalyClient.address(project.repository_storage),
-            token: Gitlab::GitalyClient.token(project.repository_storage)
-          },
-          'GetBlobRequest' => {
-            repository: repository.gitaly_repository.to_h,
-            oid: blob.id,
-            limit: -1
-          }
-        }.deep_stringify_keys)
-      end
-    end
-
-    context 'when Gitaly workhorse_raw_show feature is disabled', :disable_gitaly do
-      it 'sets the header correctly' do
-        key, command, params = decode_workhorse_header(subject)
-
-        expect(key).to eq('Gitlab-Workhorse-Send-Data')
-        expect(command).to eq('git-blob')
-        expect(params).to eq('RepoPath' => repository.path_to_repo, 'BlobId' => blob.id)
-      end
+      expect(key).to eq('Gitlab-Workhorse-Send-Data')
+      expect(command).to eq('git-blob')
+      expect(params).to eq({
+        'GitalyServer' => {
+          features: { 'gitaly-feature-foobar' => 'true' },
+          address: Gitlab::GitalyClient.address(project.repository_storage),
+          token: Gitlab::GitalyClient.token(project.repository_storage)
+        },
+        'GetBlobRequest' => {
+          repository: repository.gitaly_repository.to_h,
+          oid: blob.id,
+          limit: -1
+        }
+      }.deep_stringify_keys)
     end
   end
 
@@ -485,6 +465,7 @@ describe Gitlab::Workhorse do
       expect(command).to eq('git-snapshot')
       expect(params).to eq(
         'GitalyServer' => {
+          'features' => { 'gitaly-feature-foobar' => 'true' },
           'address' => Gitlab::GitalyClient.address(project.repository_storage),
           'token' => Gitlab::GitalyClient.token(project.repository_storage)
         },

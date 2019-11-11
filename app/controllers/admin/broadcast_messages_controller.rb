@@ -1,12 +1,16 @@
+# frozen_string_literal: true
+
 class Admin::BroadcastMessagesController < Admin::ApplicationController
   include BroadcastMessagesHelper
 
   before_action :finder, only: [:edit, :update, :destroy]
 
+  # rubocop: disable CodeReuse/ActiveRecord
   def index
     @broadcast_messages = BroadcastMessage.order(ends_at: :desc).page(params[:page])
     @broadcast_message  = BroadcastMessage.new
   end
+  # rubocop: enable CodeReuse/ActiveRecord
 
   def edit
   end
@@ -15,7 +19,7 @@ class Admin::BroadcastMessagesController < Admin::ApplicationController
     @broadcast_message = BroadcastMessage.new(broadcast_message_params)
 
     if @broadcast_message.save
-      redirect_to admin_broadcast_messages_path, notice: 'Broadcast Message was successfully created.'
+      redirect_to admin_broadcast_messages_path, notice: _('Broadcast Message was successfully created.')
     else
       render :index
     end
@@ -23,7 +27,7 @@ class Admin::BroadcastMessagesController < Admin::ApplicationController
 
   def update
     if @broadcast_message.update(broadcast_message_params)
-      redirect_to admin_broadcast_messages_path, notice: 'Broadcast Message was successfully updated.'
+      redirect_to admin_broadcast_messages_path, notice: _('Broadcast Message was successfully updated.')
     else
       render :edit
     end

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 FactoryBot.define do
   factory :term_agreement do
     term
@@ -5,10 +7,10 @@ FactoryBot.define do
   end
 
   trait :declined do
-    accepted false
+    accepted { false }
   end
 
   trait :accepted do
-    accepted true
+    accepted { true }
   end
 end

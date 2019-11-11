@@ -1,17 +1,24 @@
 <script>
 import _ from 'underscore';
-import { mapActions, mapState, mapGetters } from 'vuex';
+import { mapState, mapGetters, createNamespacedHelpers } from 'vuex';
 import { sprintf, __ } from '~/locale';
-import * as consts from '../../stores/modules/commit/constants';
+import consts from '../../stores/modules/commit/constants';
 import RadioGroup from './radio_group.vue';
+import NewMergeRequestOption from './new_merge_request_option.vue';
+
+const { mapState: mapCommitState, mapActions: mapCommitActions } = createNamespacedHelpers(
+  'commit',
+);
 
 export default {
   components: {
     RadioGroup,
+    NewMergeRequestOption,
   },
   computed: {
     ...mapState(['currentBranchId', 'changedFiles', 'stagedFiles']),
-    ...mapGetters(['currentProject']),
+    ...mapCommitState(['commitAction']),
+    ...mapGetters(['currentBranch']),
     commitToCurrentBranchText() {
       return sprintf(
         __('Commit to %{branchName} branch'),
@@ -19,46 +26,60 @@ export default {
         false,
       );
     },
-    disableMergeRequestRadio() {
+    containsStagedChanges() {
       return this.changedFiles.length > 0 && this.stagedFiles.length > 0;
     },
   },
+  watch: {
+    containsStagedChanges() {
+      this.updateSelectedCommitAction();
+    },
+  },
   mounted() {
-    if (this.disableMergeRequestRadio) {
-      this.updateCommitAction(consts.COMMIT_TO_CURRENT_BRANCH);
-    }
+    this.updateSelectedCommitAction();
   },
   methods: {
-    ...mapActions('commit', ['updateCommitAction']),
+    ...mapCommitActions(['updateCommitAction']),
+    updateSelectedCommitAction() {
+      if (!this.currentBranch) {
+        return;
+      }
+
+      const { can_push: canPush = false, default: isDefault = false } = this.currentBranch;
+
+      if (canPush && !isDefault) {
+        this.updateCommitAction(consts.COMMIT_TO_CURRENT_BRANCH);
+      } else {
+        this.updateCommitAction(consts.COMMIT_TO_NEW_BRANCH);
+      }
+    },
   },
   commitToCurrentBranch: consts.COMMIT_TO_CURRENT_BRANCH,
   commitToNewBranch: consts.COMMIT_TO_NEW_BRANCH,
-  commitToNewBranchMR: consts.COMMIT_TO_NEW_BRANCH_MR,
+  currentBranchPermissionsTooltip: __(
+    "This option is disabled as you don't have write permissions for the current branch",
+  ),
 };
 </script>
 
 <template>
-  <div class="append-bottom-15 ide-commit-radios">
+  <div class="append-bottom-15 ide-commit-options">
     <radio-group
       :value="$options.commitToCurrentBranch"
-      :checked="true"
+      :disabled="currentBranch && !currentBranch.can_push"
+      :title="$options.currentBranchPermissionsTooltip"
     >
       <span
+        class="ide-radio-label"
+        data-qa-selector="commit_to_current_branch_radio"
         v-html="commitToCurrentBranchText"
-      >
-      </span>
+      ></span>
     </radio-group>
     <radio-group
       :value="$options.commitToNewBranch"
       :label="__('Create a new branch')"
       :show-input="true"
     />
-    <radio-group
-      v-if="currentProject.merge_requests_enabled"
-      :value="$options.commitToNewBranchMR"
-      :label="__('Create a new branch and merge request')"
-      :show-input="true"
-      :disabled="disableMergeRequestRadio"
-    />
+    <new-merge-request-option />
   </div>
 </template>

@@ -1,22 +1,23 @@
 import Vue from 'vue';
 import DiffWithNote from '~/notes/components/diff_with_note.vue';
-import { convertObjectPropsToCamelCase } from '~/lib/utils/common_utils';
-import mountComponent from 'spec/helpers/vue_mount_component_helper';
+import { createStore } from '~/mr_notes/stores';
+import { mountComponentWithStore } from 'spec/helpers';
 
 const discussionFixture = 'merge_requests/diff_discussion.json';
 const imageDiscussionFixture = 'merge_requests/image_diff_discussion.json';
 
 describe('diff_with_note', () => {
+  let store;
   let vm;
   const diffDiscussionMock = getJSONFixture(discussionFixture)[0];
-  const diffDiscussion = convertObjectPropsToCamelCase(diffDiscussionMock);
+  const diffDiscussion = diffDiscussionMock;
   const Component = Vue.extend(DiffWithNote);
   const props = {
     discussion: diffDiscussion,
   };
   const selectors = {
     get container() {
-      return vm.$refs.fileHolder;
+      return vm.$el;
     },
     get diffTable() {
       return this.container.querySelector('.diff-content table');
@@ -29,9 +30,34 @@ describe('diff_with_note', () => {
     },
   };
 
+  beforeEach(() => {
+    store = createStore();
+    store.replaceState({
+      ...store.state,
+      notes: {
+        noteableData: {
+          current_user: {},
+        },
+      },
+    });
+  });
+
   describe('text diff', () => {
     beforeEach(() => {
-      vm = mountComponent(Component, props);
+      vm = mountComponentWithStore(Component, { props, store });
+    });
+
+    it('removes trailing "+" char', () => {
+      const richText = vm.$el.querySelectorAll('.line_holder')[4].querySelector('.line_content')
+        .textContent[0];
+
+      expect(richText).not.toEqual('+');
+    });
+
+    it('removes trailing "-" char', () => {
+      const richText = vm.$el.querySelector('#LC13').parentNode.textContent[0];
+
+      expect(richText).not.toEqual('-');
     });
 
     it('shows text diff', () => {
@@ -51,13 +77,12 @@ describe('diff_with_note', () => {
   describe('image diff', () => {
     beforeEach(() => {
       const imageDiffDiscussionMock = getJSONFixture(imageDiscussionFixture)[0];
-      props.discussion = convertObjectPropsToCamelCase(imageDiffDiscussionMock);
+      props.discussion = imageDiffDiscussionMock;
     });
 
     it('shows image diff', () => {
-      vm = mountComponent(Component, props);
+      vm = mountComponentWithStore(Component, { props, store });
 
-      expect(selectors.container).toHaveClass('js-image-file');
       expect(selectors.diffTable).not.toExist();
     });
   });

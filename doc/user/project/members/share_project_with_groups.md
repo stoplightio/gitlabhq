@@ -20,18 +20,18 @@ To share 'Project Acme' with the 'Engineering' group:
 
 1. For 'Project Acme' use the left navigation menu to go to **Settings > Members**
 
-    ![share project with groups](img/share_project_with_groups.png)
+   ![share project with groups](img/share_project_with_groups.png)
 
 1. Select the 'Share with group' tab
 1. Add the 'Engineering' group with the maximum access level of your choice
 1. Click **Share** to share it
 
-    ![share project with groups tab](img/share_project_with_groups_tab.png)
+   ![share project with groups tab](img/share_project_with_groups_tab.png)
 
 1. After sharing 'Project Acme' with 'Engineering', the project will be listed
    on the group dashboard
 
-    !['Project Acme' is listed as a shared project for 'Engineering'](img/other_group_sees_shared_project.png)
+   !['Project Acme' is listed as a shared project for 'Engineering'](img/other_group_sees_shared_project.png)
 
 Note that you can only share a project with:
 
@@ -43,6 +43,10 @@ Admins are able to share projects with any group in the system.
 ## Maximum access level
 
 In the example above, the maximum access level of 'Developer' for members from 'Engineering' means that users with higher access levels in 'Engineering' ('Maintainer' or 'Owner') will only have 'Developer' access to 'Project Acme'.
+
+## Sharing public project with private group
+
+When sharing a public project with a private group, owners and maintainers of the project will see the name of the group in the `members` page. Owners will also have the possibility to see members of the private group they don't have access to when mentioning them in the issue or merge request.
 
 ## Share project with group lock
 

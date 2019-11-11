@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 shared_examples 'lists move service' do
   let!(:planning)    { create(:list, board: board, position: 0) }
   let!(:development) { create(:list, board: board, position: 1) }
@@ -14,7 +16,7 @@ shared_examples 'lists move service' do
       expect(current_list_positions).to eq [0, 1, 2, 3]
     end
 
-    it 'keeps position of lists when new positon is equal to old position' do
+    it 'keeps position of lists when new position is equal to old position' do
       service = described_class.new(parent, user, position: planning.position)
 
       service.execute(planning)
@@ -22,7 +24,7 @@ shared_examples 'lists move service' do
       expect(current_list_positions).to eq [0, 1, 2, 3]
     end
 
-    it 'keeps position of lists when new positon is negative' do
+    it 'keeps position of lists when new position is negative' do
       service = described_class.new(parent, user, position: -1)
 
       service.execute(planning)
@@ -30,7 +32,7 @@ shared_examples 'lists move service' do
       expect(current_list_positions).to eq [0, 1, 2, 3]
     end
 
-    it 'keeps position of lists when new positon is equal to number of labels lists' do
+    it 'keeps position of lists when new position is equal to number of labels lists' do
       service = described_class.new(parent, user, position: board.lists.label.size)
 
       service.execute(planning)
@@ -38,7 +40,7 @@ shared_examples 'lists move service' do
       expect(current_list_positions).to eq [0, 1, 2, 3]
     end
 
-    it 'keeps position of lists when new positon is greater than number of labels lists' do
+    it 'keeps position of lists when new position is greater than number of labels lists' do
       service = described_class.new(parent, user, position: board.lists.label.size + 1)
 
       service.execute(planning)
@@ -46,7 +48,7 @@ shared_examples 'lists move service' do
       expect(current_list_positions).to eq [0, 1, 2, 3]
     end
 
-    it 'increments position of intermediate lists when new positon is equal to first position' do
+    it 'increments position of intermediate lists when new position is equal to first position' do
       service = described_class.new(parent, user, position: 0)
 
       service.execute(staging)
@@ -54,7 +56,7 @@ shared_examples 'lists move service' do
       expect(current_list_positions).to eq [1, 2, 3, 0]
     end
 
-    it 'decrements position of intermediate lists when new positon is equal to last position' do
+    it 'decrements position of intermediate lists when new position is equal to last position' do
       service = described_class.new(parent, user, position: board.lists.label.last.position)
 
       service.execute(planning)

@@ -1,6 +1,13 @@
+# frozen_string_literal: true
+
 module ContainerRegistry
   class Tag
+    include Gitlab::Utils::StrongMemoize
+
     attr_reader :repository, :name
+
+    # https://github.com/docker/distribution/commit/3150937b9f2b1b5b096b2634d0e7c44d4a0f89fb
+    TAG_NAME_REGEX = /^[\w][\w.-]{0,127}$/.freeze
 
     delegate :registry, :client, to: :repository
     delegate :revision, :short_revision, to: :config_blob, allow_nil: true
@@ -9,8 +16,16 @@ module ContainerRegistry
       @repository, @name = repository, name
     end
 
+    def valid_name?
+      !name.match(TAG_NAME_REGEX).nil?
+    end
+
     def valid?
       manifest.present?
+    end
+
+    def latest?
+      name == "latest"
     end
 
     def v1?
@@ -22,7 +37,9 @@ module ContainerRegistry
     end
 
     def manifest
-      @manifest ||= client.repository_manifest(repository.path, name)
+      strong_memoize(:manifest) do
+        client.repository_manifest(repository.path, name)
+      end
     end
 
     def path
@@ -40,46 +57,63 @@ module ContainerRegistry
     end
 
     def digest
-      @digest ||= client.repository_tag_digest(repository.path, name)
+      strong_memoize(:digest) do
+        client.repository_tag_digest(repository.path, name)
+      end
     end
 
     def config_blob
-      return @config_blob if defined?(@config_blob)
       return unless manifest && manifest['config']
 
-      @config_blob = repository.blob(manifest['config'])
+      strong_memoize(:config_blob) do
+        repository.blob(manifest['config'])
+      end
     end
 
     def config
-      return unless config_blob
+      return unless config_blob&.data
 
-      @config ||= ContainerRegistry::Config.new(self, config_blob) if config_blob.data
+      strong_memoize(:config) do
+        ContainerRegistry::Config.new(self, config_blob)
+      end
     end
 
     def created_at
       return unless config
 
-      @created_at ||= DateTime.rfc3339(config['created'])
-    end
-
-    def layers
-      return @layers if defined?(@layers)
-      return unless manifest
-
-      layers = manifest['layers'] || manifest['fsLayers']
-
-      @layers = layers.map do |layer|
-        repository.blob(layer)
+      strong_memoize(:created_at) do
+        DateTime.rfc3339(config['created'])
       end
     end
 
+    def layers
+      return unless manifest
+
+      strong_memoize(:layers) do
+        layers = manifest['layers'] || manifest['fsLayers']
+
+        layers.map do |layer|
+          repository.blob(layer)
+        end
+      end
+    end
+
+    def put(digests)
+      repository.client.put_tag(repository.path, name, digests)
+    end
+
+    # rubocop: disable CodeReuse/ActiveRecord
     def total_size
       return unless layers
 
       layers.map(&:size).sum if v2?
     end
+    # rubocop: enable CodeReuse/ActiveRecord
 
-    def delete
+    # Deletes the image associated with this tag
+    # Note this will delete the image and all tags associated with it.
+    # Consider using DeleteTagsService instead.
+    def unsafe_delete
       return unless digest
 
       client.delete_repository_tag(repository.path, digest)

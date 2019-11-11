@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Gitlab::RouteMap do
@@ -60,7 +62,7 @@ describe Gitlab::RouteMap do
 
       subject do
         map = described_class.new(<<-"MAP".strip_heredoc)
-        - source: '#{malicious_regexp}'
+        - source: '#{malicious_regexp_re2}'
           public: '/'
         MAP
 

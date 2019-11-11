@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 shared_examples 'project features apply to issuables' do |klass|
   let(:described_class) { klass }
 
@@ -18,7 +20,7 @@ shared_examples 'project features apply to issuables' do |klass|
 
   before do
     _ = issuable
-    gitlab_sign_in(user) if user
+    sign_in(user) if user
     visit path
   end
 

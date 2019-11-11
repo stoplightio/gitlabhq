@@ -1,5 +1,9 @@
+# frozen_string_literal: true
+
 class DeleteMergedBranchesWorker
   include ApplicationWorker
+
+  feature_category :source_code_management
 
   def perform(project_id, user_id)
     begin

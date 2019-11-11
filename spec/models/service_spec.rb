@@ -1,9 +1,13 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Service do
   describe "Associations" do
     it { is_expected.to belong_to :project }
     it { is_expected.to have_one :service_hook }
+    it { is_expected.to have_one :jira_tracker_data }
+    it { is_expected.to have_one :issue_tracker_data }
   end
 
   describe 'Validations' do
@@ -74,17 +78,76 @@ describe Service do
   end
 
   describe "Template" do
+    let(:project) { create(:project) }
+
     describe '.build_from_template' do
       context 'when template is invalid' do
         it 'sets service template to inactive when template is invalid' do
-          project = create(:project)
-          template = JiraService.new(template: true, active: true)
+          template = build(:prometheus_service, template: true, active: true, properties: {})
           template.save(validate: false)
 
           service = described_class.build_from_template(project.id, template)
 
           expect(service).to be_valid
           expect(service.active).to be false
+        end
+      end
+
+      describe 'build issue tracker from a template' do
+        let(:title) { 'custom title' }
+        let(:description) { 'custom description' }
+        let(:url) { 'http://jira.example.com' }
+        let(:api_url) { 'http://api-jira.example.com' }
+        let(:username) { 'jira-username' }
+        let(:password) { 'jira-password' }
+        let(:data_params) do
+          {
+            url: url, api_url: api_url,
+            username: username, password: password
+          }
+        end
+
+        shared_examples 'service creation from a template' do
+          it 'creates a correct service' do
+            service = described_class.build_from_template(project.id, template)
+
+            expect(service).to be_active
+            expect(service.title).to eq(title)
+            expect(service.description).to eq(description)
+            expect(service.url).to eq(url)
+            expect(service.api_url).to eq(api_url)
+            expect(service.username).to eq(username)
+            expect(service.password).to eq(password)
+          end
+        end
+
+        # this  will be removed as part of https://gitlab.com/gitlab-org/gitlab/issues/29404
+        context 'when data are stored in properties' do
+          let(:properties) { data_params.merge(title: title, description: description) }
+          let!(:template) do
+            create(:jira_service, :without_properties_callback, template: true, properties: properties.merge(additional: 'something'))
+          end
+
+          it_behaves_like 'service creation from a template'
+        end
+
+        context 'when data are stored in separated fields' do
+          let(:template) do
+            create(:jira_service, data_params.merge(properties: {}, title: title, description: description, template: true))
+          end
+
+          it_behaves_like 'service creation from a template'
+        end
+
+        context 'when data are stored in both properties and separated fields' do
+          let(:properties) { data_params.merge(title: title, description: description) }
+          let(:template) do
+            create(:jira_service, :without_properties_callback, active: true, template: true, properties: properties).tap do |service|
+              create(:jira_tracker_data, data_params.merge(service: service))
+            end
+          end
+
+          it_behaves_like 'service creation from a template'
         end
       end
     end
@@ -100,7 +163,6 @@ describe Service do
             api_key: '123456789'
           })
       end
-      let(:project) { create(:project) }
 
       describe 'is prefilled for projects pushover service' do
         it "has all fields prefilled" do
@@ -240,7 +302,8 @@ describe Service do
     let(:service) do
       GitlabIssueTrackerService.create(
         project: create(:project),
-        title: 'random title'
+        title: 'random title',
+        project_url: 'http://gitlab.example.com'
       )
     end
 
@@ -248,8 +311,12 @@ describe Service do
       expect { service }.not_to raise_error
     end
 
-    it 'creates the properties' do
-      expect(service.properties).to eq({ "title" => "random title" })
+    it 'sets title correctly' do
+      expect(service.title).to eq('random title')
+    end
+
+    it 'sets data correctly' do
+      expect(service.data_fields.project_url).to eq('http://gitlab.example.com')
     end
   end
 
@@ -280,7 +347,7 @@ describe Service do
         service.save!
 
         expect do
-          service.update_attributes(active: false)
+          service.update(active: false)
         end.to change { service.project.has_external_issue_tracker }.from(true).to(false)
       end
     end
@@ -289,7 +356,7 @@ describe Service do
   describe "#deprecated?" do
     let(:project) { create(:project, :repository) }
 
-    it 'should return false by default' do
+    it 'returns false by default' do
       service = create(:service, project: project)
       expect(service.deprecated?).to be_falsy
     end
@@ -298,17 +365,17 @@ describe Service do
   describe "#deprecation_message" do
     let(:project) { create(:project, :repository) }
 
-    it 'should be empty by default' do
+    it 'is empty by default' do
       service = create(:service, project: project)
       expect(service.deprecation_message).to be_nil
     end
   end
 
   describe '.find_by_template' do
-    let!(:kubernetes_service) { create(:kubernetes_service, template: true) }
+    let!(:service) { create(:service, template: true) }
 
     it 'returns service template' do
-      expect(KubernetesService.find_by_template).to eq(kubernetes_service)
+      expect(described_class.find_by_template).to eq(service)
     end
   end
 
@@ -343,6 +410,33 @@ describe Service do
 
     it 'filters out sensitive fields' do
       expect(service.api_field_names).to eq(['safe_field'])
+    end
+  end
+
+  context 'logging' do
+    let(:project) { create(:project) }
+    let(:service) { create(:service, project: project) }
+    let(:test_message) { "test message" }
+    let(:arguments) do
+      {
+        service_class: service.class.name,
+        project_path: project.full_path,
+        project_id: project.id,
+        message: test_message,
+        additional_argument: 'some argument'
+      }
+    end
+
+    it 'logs info messages using json logger' do
+      expect(Gitlab::JsonLogger).to receive(:info).with(arguments)
+
+      service.log_info(test_message, additional_argument: 'some argument')
+    end
+
+    it 'logs error messages using json logger' do
+      expect(Gitlab::JsonLogger).to receive(:error).with(arguments)
+
+      service.log_error(test_message, additional_argument: 'some argument')
     end
   end
 end

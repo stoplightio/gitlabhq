@@ -1,4 +1,6 @@
-require 'rails_helper'
+# frozen_string_literal: true
+
+require 'spec_helper'
 
 describe 'Issue Boards', :js do
   include DragTo
@@ -13,7 +15,7 @@ describe 'Issue Boards', :js do
   let!(:issue3) { create(:labeled_issue, project: project, title: 'testing 3', labels: [label], relative_position: 1) }
 
   before do
-    project.add_master(user)
+    project.add_maintainer(user)
 
     sign_in(user)
   end
@@ -78,7 +80,7 @@ describe 'Issue Boards', :js do
     end
 
     it 'moves from bottom to top' do
-      drag(from_index: 2, to_index: 0)
+      drag(from_index: 2, to_index: 0, duration: 1020)
 
       wait_for_requests
 
@@ -130,7 +132,7 @@ describe 'Issue Boards', :js do
     end
 
     it 'moves to bottom of another list' do
-      drag(list_from_index: 1, list_to_index: 2, to_index: 2)
+      drag(list_from_index: 1, list_to_index: 2, to_index: 2, duration: 1020)
 
       wait_for_requests
 

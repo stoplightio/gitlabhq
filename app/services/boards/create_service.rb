@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Boards
   class CreateService < Boards::BaseService
     def execute
@@ -7,7 +9,7 @@ module Boards
     private
 
     def can_create_board?
-      parent.boards.size == 0
+      parent.boards.empty? || parent.multiple_issue_boards_available?
     end
 
     def create_board!
@@ -22,3 +24,5 @@ module Boards
     end
   end
 end
+
+Boards::CreateService.prepend_if_ee('EE::Boards::CreateService')

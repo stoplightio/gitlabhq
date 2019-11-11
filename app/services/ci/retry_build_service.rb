@@ -1,9 +1,11 @@
+# frozen_string_literal: true
+
 module Ci
   class RetryBuildService < ::BaseService
-    CLONE_ACCESSORS = %i[pipeline project ref tag options commands name
+    CLONE_ACCESSORS = %i[pipeline project ref tag options name
                          allow_failure stage stage_id stage_idx trigger_request
                          yaml_variables when environment coverage_regex
-                         description tag_list protected].freeze
+                         description tag_list protected needs].freeze
 
     def execute(build)
       reprocess!(build).tap do |new_build|
@@ -17,6 +19,7 @@ module Ci
       end
     end
 
+    # rubocop: disable CodeReuse/ActiveRecord
     def reprocess!(build)
       unless can?(current_user, :update_build, build)
         raise Gitlab::Access::AccessDeniedError
@@ -36,8 +39,18 @@ module Ci
           .where(name: build.name)
           .update_all(retried: true)
 
-        project.builds.create!(Hash[attributes])
+        create_build!(attributes)
       end
+    end
+    # rubocop: enable CodeReuse/ActiveRecord
+
+    private
+
+    def create_build!(attributes)
+      build = project.builds.new(Hash[attributes])
+      build.deployment = ::Gitlab::Ci::Pipeline::Seed::Deployment.new(build).to_resource
+      build.save!
+      build
     end
   end
 end

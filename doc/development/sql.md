@@ -15,14 +15,11 @@ FROM issues
 WHERE title LIKE 'WIP:%';
 ```
 
-On PostgreSQL the `LIKE` statement is case-sensitive. On MySQL this depends on
-the case-sensitivity of the collation, which is usually case-insensitive. To
-perform a case-insensitive `LIKE` on PostgreSQL you have to use `ILIKE` instead.
-This statement in turn isn't supported on MySQL.
+On PostgreSQL the `LIKE` statement is case-sensitive. To perform a case-insensitive
+`LIKE` you have to use `ILIKE` instead.
 
-To work around this problem you should write `LIKE` queries using Arel instead
-of raw SQL fragments as Arel automatically uses `ILIKE` on PostgreSQL and `LIKE`
-on MySQL. This means that instead of this:
+To handle this automatically you should use `LIKE` queries using Arel instead
+of raw SQL fragments, as Arel automatically uses `ILIKE` on PostgreSQL.
 
 ```ruby
 Issue.where('title LIKE ?', 'WIP:%')
@@ -45,7 +42,7 @@ table = Issue.arel_table
 Issue.where(table[:title].matches('WIP:%').or(table[:foo].matches('WIP:%')))
 ```
 
-For PostgreSQL this produces:
+On PostgreSQL, this produces:
 
 ```sql
 SELECT *
@@ -53,18 +50,10 @@ FROM issues
 WHERE (title ILIKE 'WIP:%' OR foo ILIKE 'WIP:%')
 ```
 
-In turn for MySQL this produces:
-
-```sql
-SELECT *
-FROM issues
-WHERE (title LIKE 'WIP:%' OR foo LIKE 'WIP:%')
-```
-
 ## LIKE & Indexes
 
-Neither PostgreSQL nor MySQL use any indexes when using `LIKE` / `ILIKE` with a
-wildcard at the start. For example, this will not use any indexes:
+PostgreSQL won't use any indexes when using `LIKE` / `ILIKE` with a wildcard at
+the start. For example, this will not use any indexes:
 
 ```sql
 SELECT *
@@ -75,9 +64,8 @@ WHERE title ILIKE '%WIP:%';
 Because the value for `ILIKE` starts with a wildcard the database is not able to
 use an index as it doesn't know where to start scanning the indexes.
 
-MySQL provides no known solution to this problem. Luckily PostgreSQL _does_
-provide a solution: trigram GIN indexes. These indexes can be created as
-follows:
+Luckily, PostgreSQL _does_ provide a solution: trigram GIN indexes. These
+indexes can be created as follows:
 
 ```sql
 CREATE INDEX [CONCURRENTLY] index_name_here
@@ -86,7 +74,7 @@ USING GIN(column_name gin_trgm_ops);
 ```
 
 The key here is the `GIN(column_name gin_trgm_ops)` part. This creates a [GIN
-index][gin-index] with the operator class set to `gin_trgm_ops`. These indexes
+index](https://www.postgresql.org/docs/current/gin.html) with the operator class set to `gin_trgm_ops`. These indexes
 _can_ be used by `ILIKE` / `LIKE` and can lead to greatly improved performance.
 One downside of these indexes is that they can easily get quite large (depending
 on the amount of data indexed).
@@ -94,7 +82,9 @@ on the amount of data indexed).
 To keep naming of these indexes consistent please use the following naming
 pattern:
 
-    index_TABLE_on_COLUMN_trigram
+```
+index_TABLE_on_COLUMN_trigram
+```
 
 For example, a GIN/trigram index for `issues.title` would be called
 `index_issues_on_title_trigram`.
@@ -106,7 +96,7 @@ transaction. Transactions for migrations can be disabled using the following
 pattern:
 
 ```ruby
-class MigrationName < ActiveRecord::Migration
+class MigrationName < ActiveRecord::Migration[4.2]
   disable_ddl_transaction!
 end
 ```
@@ -114,7 +104,7 @@ end
 For example:
 
 ```ruby
-class AddUsersLowerUsernameEmailIndexes < ActiveRecord::Migration
+class AddUsersLowerUsernameEmailIndexes < ActiveRecord::Migration[4.2]
   disable_ddl_transaction!
 
   def up
@@ -154,6 +144,21 @@ MergeRequest.where(source_project_id: Project.all.select(:id))
 The _only_ time you should use `pluck` is when you actually need to operate on
 the values in Ruby itself (e.g. write them to a file). In almost all other cases
 you should ask yourself "Can I not just use a sub-query?".
+
+In line with our `CodeReuse/ActiveRecord` cop, you should only use forms like
+`pluck(:id)` or `pluck(:user_id)` within model code. In the former case, you can
+use the `ApplicationRecord`-provided `.pluck_primary_key` helper method instead.
+In the latter, you should add a small helper method to the relevant model.
+
+## Inherit from ApplicationRecord
+
+Most models in the GitLab codebase should inherit from `ApplicationRecord`,
+rather than from `ActiveRecord::Base`. This allows helper methods to be easily
+added.
+
+An exception to this rule exists for models created in database migrations. As
+these should be isolated from application code, they should continue to subclass
+from `ActiveRecord::Base`.
 
 ## Use UNIONs
 
@@ -242,4 +247,24 @@ WHERE EXISTS (
 )
 ```
 
-[gin-index]: http://www.postgresql.org/docs/current/static/gin.html
+## `.find_or_create_by` is not atomic
+
+The inherent pattern with methods like `.find_or_create_by` and
+`.first_or_create` and others is that they are not atomic. This means,
+it first runs a `SELECT`, and if there are no results an `INSERT` is
+performed. With concurrent processes in mind, there is a race condition
+which may lead to trying to insert two similar records. This may not be
+desired, or may cause one of the queries to fail due to a constraint
+violation, for example.
+
+Using transactions does not solve this problem.
+
+To solve this we've added the `ApplicationRecord.safe_find_or_create_by`.
+
+This method can be used just as you would the normal
+`find_or_create_by` but it wraps the call in a *new* transaction and
+retries if it were to fail because of an
+`ActiveRecord::RecordNotUnique` error.
+
+To be able to use this method, make sure the model you want to use
+this on inherits from `ApplicationRecord`.

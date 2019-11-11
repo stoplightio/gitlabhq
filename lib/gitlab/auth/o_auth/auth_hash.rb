@@ -1,9 +1,13 @@
+# frozen_string_literal: true
+
 # Class to parse and transform the info provided by omniauth
 #
 module Gitlab
   module Auth
     module OAuth
       class AuthHash
+        prepend_if_ee('::EE::Gitlab::Auth::OAuth::AuthHash') # rubocop: disable Cop/InjectEnterpriseEditionModule
+
         attr_reader :auth_hash
         def initialize(auth_hash)
           @auth_hash = auth_hash
@@ -53,13 +57,12 @@ module Gitlab
         private
 
         def info
-          auth_hash.info
+          auth_hash['info']
         end
 
         def get_info(key)
           value = info[key]
-          Gitlab::Utils.force_utf8(value) if value
-          value
+          value.is_a?(String) ? Gitlab::Utils.force_utf8(value) : value
         end
 
         def username_and_email
@@ -78,7 +81,7 @@ module Gitlab
         end
 
         # Get the first part of the email address (before @)
-        # In addtion in removes illegal characters
+        # In addition in removes illegal characters
         def generate_username(email)
           email.match(/^[^@]*/)[0].mb_chars.normalize(:kd).gsub(/[^\x00-\x7F]/, '').to_s
         end

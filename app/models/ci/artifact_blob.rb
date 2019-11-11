@@ -1,8 +1,10 @@
+# frozen_string_literal: true
+
 module Ci
   class ArtifactBlob
     include BlobLike
 
-    EXTENSIONS_SERVED_BY_PAGES = %w[.html .htm .txt .json].freeze
+    EXTENSIONS_SERVED_BY_PAGES = %w[.html .htm .txt .json .xml .log].freeze
 
     attr_reader :entry
 
@@ -51,7 +53,7 @@ module Ci
       pages_config.enabled &&
         pages_config.artifacts_server &&
         EXTENSIONS_SERVED_BY_PAGES.include?(File.extname(name)) &&
-        job.project.public?
+        (pages_config.access_control || job.project.public?)
     end
 
     private

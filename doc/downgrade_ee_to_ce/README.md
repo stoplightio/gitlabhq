@@ -47,14 +47,14 @@ to avoid getting this error, you need to remove all instances of the
 
 **Omnibus Installation**
 
-```
-$ sudo gitlab-rails runner "Service.where(type: ['JenkinsService', 'JenkinsDeprecatedService', 'GithubService']).delete_all"
+```sh
+sudo gitlab-rails runner "Service.where(type: ['JenkinsService', 'JenkinsDeprecatedService', 'GithubService']).delete_all"
 ```
 
 **Source Installation**
 
-```
-$ bundle exec rails runner "Service.where(type: ['JenkinsService', 'JenkinsDeprecatedService', 'GithubService']).delete_all" production
+```sh
+bundle exec rails runner "Service.where(type: ['JenkinsService', 'JenkinsDeprecatedService', 'GithubService']).delete_all" production
 ```
 
 ### Variables environment scopes
@@ -81,7 +81,7 @@ To downgrade an Omnibus installation, it is sufficient to install the Community
 Edition package on top of the currently installed one. You can do this manually,
 by directly [downloading the package](https://packages.gitlab.com/gitlab/gitlab-ce)
 you need, or by adding our CE package repository and following the
-[CE installation instructions](https://about.gitlab.com/installation/?version=ce).
+[CE installation instructions](https://about.gitlab.com/install/?version=ce).
 
 **Source Installation**
 
@@ -89,10 +89,10 @@ To downgrade a source installation, you need to replace the current remote of
 your GitLab installation with the Community Edition's remote, fetch the latest
 changes, and checkout the latest stable branch:
 
-```
-$ git remote set-url origin git@gitlab.com:gitlab-org/gitlab-ce.git
-$ git fetch --all
-$ git checkout 8-x-stable
+```sh
+git remote set-url origin git@gitlab.com:gitlab-org/gitlab-foss.git
+git fetch --all
+git checkout 8-x-stable
 ```
 
 Remember to follow the correct [update guides](../update/README.md) to make

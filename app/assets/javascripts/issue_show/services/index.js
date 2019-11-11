@@ -10,11 +10,20 @@ export default class Service {
     return axios.get(this.realtimeEndpoint);
   }
 
-  deleteIssuable() {
-    return axios.delete(this.endpoint);
+  deleteIssuable(payload) {
+    return axios.delete(this.endpoint, { params: payload });
   }
 
   updateIssuable(data) {
     return axios.put(this.endpoint, data);
+  }
+
+  // eslint-disable-next-line class-methods-use-this
+  loadTemplates(templateNamesEndpoint) {
+    if (!templateNamesEndpoint) {
+      return Promise.resolve([]);
+    }
+
+    return axios.get(templateNamesEndpoint);
   }
 }

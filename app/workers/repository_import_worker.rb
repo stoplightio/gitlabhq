@@ -1,13 +1,21 @@
+# frozen_string_literal: true
+
 class RepositoryImportWorker
   include ApplicationWorker
   include ExceptionBacktrace
   include ProjectStartImport
   include ProjectImportOptions
 
-  def perform(project_id)
-    project = Project.find(project_id)
+  feature_category :importers
 
-    return unless start_import(project)
+  # technical debt: https://gitlab.com/gitlab-org/gitlab/issues/33991
+  sidekiq_options memory_killer_memory_growth_kb: ENV.fetch('MEMORY_KILLER_REPOSITORY_IMPORT_WORKER_MEMORY_GROWTH_KB', 50).to_i
+  sidekiq_options memory_killer_max_memory_growth_kb: ENV.fetch('MEMORY_KILLER_REPOSITORY_IMPORT_WORKER_MAX_MEMORY_GROWTH_KB', 300_000).to_i
+
+  def perform(project_id)
+    @project = Project.find(project_id)
+
+    return unless start_import
 
     Gitlab::Metrics.add_event(:import_repository)
 
@@ -19,7 +27,7 @@ class RepositoryImportWorker
     return if service.async?
 
     if result[:status] == :error
-      fail_import(project, result[:message]) if project.gitlab_project_import?
+      fail_import(result[:message]) if template_import?
 
       raise result[:message]
     end
@@ -29,14 +37,22 @@ class RepositoryImportWorker
 
   private
 
-  def start_import(project)
-    return true if start(project)
+  attr_reader :project
 
-    Rails.logger.info("Project #{project.full_path} was in inconsistent state (#{project.import_status}) while importing.")
+  def start_import
+    return true if start(project.import_state)
+
+    Rails.logger.info("Project #{project.full_path} was in inconsistent state (#{project.import_status}) while importing.") # rubocop:disable Gitlab/RailsLogger
     false
   end
 
-  def fail_import(project, message)
-    project.mark_import_as_failed(message)
+  def fail_import(message)
+    project.import_state.mark_as_failed(message)
+  end
+
+  def template_import?
+    project.gitlab_project_import?
   end
 end
+
+RepositoryImportWorker.prepend_if_ee('EE::RepositoryImportWorker')

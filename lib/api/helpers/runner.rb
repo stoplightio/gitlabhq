@@ -1,12 +1,15 @@
+# frozen_string_literal: true
+
 module API
   module Helpers
     module Runner
-      JOB_TOKEN_HEADER = 'HTTP_JOB_TOKEN'.freeze
+      prepend_if_ee('EE::API::Helpers::Runner') # rubocop: disable Cop/InjectEnterpriseEditionModule
+
+      JOB_TOKEN_HEADER = 'HTTP_JOB_TOKEN'
       JOB_TOKEN_PARAM = :token
 
       def runner_registration_token_valid?
-        ActiveSupport::SecurityUtils.variable_size_secure_compare(params[:token],
-                                                                  Gitlab::CurrentSettings.runners_registration_token)
+        ActiveSupport::SecurityUtils.secure_compare(params[:token], Gitlab::CurrentSettings.runners_registration_token)
       end
 
       def authenticate_runner!
@@ -24,7 +27,7 @@ module API
       end
 
       def get_runner_ip
-        { ip_address: request.ip }
+        { ip_address: ip_address }
       end
 
       def current_runner
@@ -56,8 +59,9 @@ module API
         token && job.valid_token?(token)
       end
 
-      def max_artifacts_size
-        Gitlab::CurrentSettings.max_artifacts_size.megabytes.to_i
+      def max_artifacts_size(job)
+        max_size = job.project.closest_setting(:max_artifacts_size)
+        max_size.megabytes.to_i
       end
 
       def job_forbidden!(job, reason)

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "spec_helper"
 
 describe Files::MultiService do
@@ -11,6 +13,7 @@ describe Files::MultiService do
   let(:new_file_path) { 'files/ruby/popen.rb' }
   let(:file_content) { 'New content' }
   let(:action) { 'update' }
+  let(:commit_message) { 'Update File' }
 
   let!(:original_commit_id) do
     Gitlab::Git::Commit.last_for_path(project.repository, branch_name, original_file_path).sha
@@ -30,7 +33,7 @@ describe Files::MultiService do
 
   let(:commit_params) do
     {
-      commit_message: "Update File",
+      commit_message: commit_message,
       branch_name: branch_name,
       start_branch: branch_name,
       actions: actions
@@ -38,7 +41,7 @@ describe Files::MultiService do
   end
 
   before do
-    project.add_master(user)
+    project.add_maintainer(user)
   end
 
   describe '#execute' do
@@ -84,9 +87,45 @@ describe Files::MultiService do
       end
     end
 
+    describe 'changing execute_filemode of a file' do
+      let(:commit_message) { 'Chmod +x file' }
+      let(:file_path) { original_file_path }
+      let(:default_action) do
+        {
+          action: 'chmod',
+          file_path: file_path,
+          execute_filemode: true
+        }
+      end
+
+      it 'accepts the commit' do
+        results = subject.execute
+
+        expect(results[:status]).to eq(:success)
+      end
+
+      it 'updates the execute_filemode of the file' do
+        expect { subject.execute }.to change { repository.blob_at_branch(branch_name, file_path).mode }.from('100644').to('100755')
+      end
+
+      context "when the file doesn't exists" do
+        let(:file_path) { 'files/wrong_path.rb' }
+
+        it 'rejects the commit' do
+          results = subject.execute
+
+          expect(results[:status]).to eq(:error)
+          expect(results[:message]).to eq("A file with this name doesn't exist")
+        end
+      end
+    end
+
     context 'when moving a file' do
       let(:action) { 'move' }
       let(:new_file_path) { 'files/ruby/new_popen.rb' }
+
+      let(:result) { subject.execute }
+      let(:blob) { repository.blob_at_branch(branch_name, new_file_path) }
 
       context 'when original file has been updated' do
         before do
@@ -94,20 +133,38 @@ describe Files::MultiService do
         end
 
         it 'rejects the commit' do
-          results = subject.execute
-
-          expect(results[:status]).to eq(:error)
-          expect(results[:message]).to match(original_file_path)
+          expect(result[:status]).to eq(:error)
+          expect(result[:message]).to match(original_file_path)
         end
       end
 
-      context 'when original file have not been updated' do
+      context 'when original file has not been updated' do
         it 'moves the file' do
-          results = subject.execute
-          blob = project.repository.blob_at_branch(branch_name, new_file_path)
-
-          expect(results[:status]).to eq(:success)
+          expect(result[:status]).to eq(:success)
           expect(blob).to be_present
+          expect(blob.data).to eq(file_content)
+        end
+
+        context 'when content is nil' do
+          let(:file_content) { nil }
+
+          it 'moves the existing content untouched' do
+            original_content = repository.blob_at_branch(branch_name, original_file_path).data
+
+            expect(result[:status]).to eq(:success)
+            expect(blob).to be_present
+            expect(blob.data).to eq(original_content)
+          end
+        end
+
+        context 'when content is an empty string' do
+          let(:file_content) { '' }
+
+          it 'moves the file and empties it' do
+            expect(result[:status]).to eq(:success)
+            expect(blob).not_to be_nil
+            expect(blob.data).to eq('')
+          end
         end
       end
     end
@@ -178,6 +235,22 @@ describe Files::MultiService do
         blob = project.repository.blob_at_branch(branch_name, new_file_path)
 
         expect(blob).to be_present
+      end
+    end
+
+    context 'when force is set to true and branch already exists' do
+      let(:commit_params) do
+        {
+          commit_message: commit_message,
+          branch_name: 'feature',
+          start_branch: 'master',
+          actions: actions,
+          force: true
+        }
+      end
+
+      it 'is still a success' do
+        expect(subject.execute[:status]).to eq(:success)
       end
     end
   end

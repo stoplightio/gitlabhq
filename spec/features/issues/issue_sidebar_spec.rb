@@ -1,6 +1,8 @@
-require 'rails_helper'
+# frozen_string_literal: true
 
-feature 'Issue Sidebar' do
+require 'spec_helper'
+
+describe 'Issue Sidebar' do
   include MobileHelpers
 
   let(:group) { create(:group, :nested) }
@@ -112,7 +114,7 @@ feature 'Issue Sidebar' do
 
     context 'editing issue labels', :js do
       before do
-        issue.update_attributes(labels: [label])
+        issue.update(labels: [label])
         page.within('.block.labels') do
           find('.edit-link').click
         end
@@ -130,7 +132,7 @@ feature 'Issue Sidebar' do
         end
       end
 
-      context 'creating a project label', :js do
+      context 'creating a project label', :js, :quarantine do
         before do
           page.within('.block.labels') do
             click_link 'Create project'

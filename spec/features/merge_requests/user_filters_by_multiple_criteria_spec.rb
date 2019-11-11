@@ -1,4 +1,6 @@
-require 'rails_helper'
+# frozen_string_literal: true
+
+require 'spec_helper'
 
 describe 'Merge requests > User filters by multiple criteria', :js do
   include FilteredSearchHelpers
@@ -10,7 +12,7 @@ describe 'Merge requests > User filters by multiple criteria', :js do
 
   before do
     sign_in(user)
-    mr = create(:merge_request, title: 'Bugfix2', author: user, assignee: user, source_project: project, target_project: project, milestone: milestone)
+    mr = create(:merge_request, title: 'Bugfix2', author: user, assignees: [user], source_project: project, target_project: project, milestone: milestone)
     mr.labels << wontfix
 
     visit project_merge_requests_path(project)

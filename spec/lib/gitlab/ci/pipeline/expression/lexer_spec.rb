@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Gitlab::Ci::Pipeline::Expression::Lexer do
@@ -57,6 +59,28 @@ describe Gitlab::Ci::Pipeline::Expression::Lexer do
 
       expect { lexer.tokens }
         .to raise_error described_class::SyntaxError
+    end
+
+    context 'with complex expressions' do
+      using RSpec::Parameterized::TableSyntax
+
+      subject { described_class.new(expression).tokens.map(&:value) }
+
+      where(:expression, :tokens) do
+        '$PRESENT_VARIABLE =~ /my var/ && $EMPTY_VARIABLE =~ /nope/' | ['$PRESENT_VARIABLE', '=~', '/my var/', '&&', '$EMPTY_VARIABLE', '=~', '/nope/']
+        '$EMPTY_VARIABLE == "" && $PRESENT_VARIABLE'                 | ['$EMPTY_VARIABLE', '==', '""', '&&', '$PRESENT_VARIABLE']
+        '$EMPTY_VARIABLE == "" && $PRESENT_VARIABLE != "nope"'       | ['$EMPTY_VARIABLE', '==', '""', '&&', '$PRESENT_VARIABLE', '!=', '"nope"']
+        '$PRESENT_VARIABLE && $EMPTY_VARIABLE'                       | ['$PRESENT_VARIABLE', '&&', '$EMPTY_VARIABLE']
+        '$PRESENT_VARIABLE =~ /my var/ || $EMPTY_VARIABLE =~ /nope/' | ['$PRESENT_VARIABLE', '=~', '/my var/', '||', '$EMPTY_VARIABLE', '=~', '/nope/']
+        '$EMPTY_VARIABLE == "" || $PRESENT_VARIABLE'                 | ['$EMPTY_VARIABLE', '==', '""', '||', '$PRESENT_VARIABLE']
+        '$EMPTY_VARIABLE == "" || $PRESENT_VARIABLE != "nope"'       | ['$EMPTY_VARIABLE', '==', '""', '||', '$PRESENT_VARIABLE', '!=', '"nope"']
+        '$PRESENT_VARIABLE || $EMPTY_VARIABLE'                       | ['$PRESENT_VARIABLE', '||', '$EMPTY_VARIABLE']
+        '$PRESENT_VARIABLE && null || $EMPTY_VARIABLE == ""'         | ['$PRESENT_VARIABLE', '&&', 'null', '||', '$EMPTY_VARIABLE', '==', '""']
+      end
+
+      with_them do
+        it { is_expected.to eq(tokens) }
+      end
     end
   end
 

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Profiles::NotificationsController do
@@ -18,13 +20,45 @@ describe Profiles::NotificationsController do
 
       expect(response).to render_template :show
     end
+
+    context 'with groups that do not have notification preferences' do
+      set(:group) { create(:group) }
+      set(:subgroup) { create(:group, parent: group) }
+
+      before do
+        group.add_developer(user)
+      end
+
+      it 'still shows up in the list' do
+        sign_in(user)
+
+        get :show
+
+        expect(assigns(:group_notifications).map(&:source_id)).to include(subgroup.id)
+      end
+
+      it 'has an N+1 (but should not)' do
+        sign_in(user)
+
+        control = ActiveRecord::QueryRecorder.new do
+          get :show
+        end
+
+        create_list(:group, 2, parent: group)
+
+        # We currently have an N + 1, switch to `not_to` once fixed
+        expect do
+          get :show
+        end.to exceed_query_limit(control)
+      end
+    end
   end
 
   describe 'POST update' do
     it 'updates only permitted attributes' do
       sign_in(user)
 
-      put :update, user: { notification_email: 'new@example.com', notified_of_own_activity: true, admin: true }
+      put :update, params: { user: { notification_email: 'new@example.com', notified_of_own_activity: true, admin: true } }
 
       user.reload
       expect(user.notification_email).to eq('new@example.com')
@@ -36,7 +70,7 @@ describe Profiles::NotificationsController do
     it 'shows an error message if the params are invalid' do
       sign_in(user)
 
-      put :update, user: { notification_email: '' }
+      put :update, params: { user: { notification_email: '' } }
 
       expect(user.reload.notification_email).to eq('original@example.com')
       expect(controller).to set_flash[:alert].to('Failed to save new settings')

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Gitlab::Ci::Pipeline::Chain::Validate::Abilities do
@@ -10,12 +12,38 @@ describe Gitlab::Ci::Pipeline::Chain::Validate::Abilities do
 
   let(:command) do
     Gitlab::Ci::Pipeline::Chain::Command.new(
-      project: project, current_user: user, origin_ref: ref)
+      project: project,
+      current_user: user,
+      origin_ref: origin_ref,
+      merge_request: merge_request,
+      trigger_request: trigger_request)
   end
 
   let(:step) { described_class.new(pipeline, command) }
 
   let(:ref) { 'master' }
+  let(:origin_ref) { ref }
+  let(:merge_request) { nil }
+  let(:trigger_request) { nil }
+
+  shared_context 'detached merge request pipeline' do
+    let(:merge_request) do
+      create(:merge_request,
+        source_project: project,
+        source_branch: ref,
+        target_project: project,
+        target_branch: 'feature')
+    end
+
+    let(:pipeline) do
+      build(:ci_pipeline,
+        source: :merge_request_event,
+        merge_request: merge_request,
+        project: project)
+    end
+
+    let(:origin_ref) { merge_request.ref_path }
+  end
 
   context 'when users has no ability to run a pipeline' do
     before do
@@ -48,6 +76,43 @@ describe Gitlab::Ci::Pipeline::Chain::Validate::Abilities do
     end
   end
 
+  context 'when pipeline triggered by legacy trigger' do
+    let(:user) { nil }
+    let(:trigger_request) do
+      build_stubbed(:ci_trigger_request, trigger: build_stubbed(:ci_trigger, owner: nil))
+    end
+
+    context 'when :use_legacy_pipeline_triggers feature flag is enabled' do
+      before do
+        stub_feature_flags(use_legacy_pipeline_triggers: true)
+        step.perform!
+      end
+
+      it 'allows legacy triggers to create a pipeline' do
+        expect(pipeline).to be_valid
+      end
+
+      it 'does not break the chain' do
+        expect(step.break?).to eq false
+      end
+    end
+
+    context 'when :use_legacy_pipeline_triggers feature flag is disabled' do
+      before do
+        stub_feature_flags(use_legacy_pipeline_triggers: false)
+        step.perform!
+      end
+
+      it 'prevents legacy triggers from creating a pipeline' do
+        expect(pipeline.errors.to_a).to include /Trigger token is invalid/
+      end
+
+      it 'breaks the pipeline builder chain' do
+        expect(step.break?).to eq true
+      end
+    end
+  end
+
   describe '#allowed_to_create?' do
     subject { step.allowed_to_create? }
 
@@ -58,12 +123,24 @@ describe Gitlab::Ci::Pipeline::Chain::Validate::Abilities do
 
       it { is_expected.to be_truthy }
 
+      context 'when pipeline is a detached merge request pipeline' do
+        include_context 'detached merge request pipeline'
+
+        it { is_expected.to be_truthy }
+      end
+
       context 'when the branch is protected' do
         let!(:protected_branch) do
           create(:protected_branch, project: project, name: ref)
         end
 
         it { is_expected.to be_falsey }
+
+        context 'when pipeline is a detached merge request pipeline' do
+          include_context 'detached merge request pipeline'
+
+          it { is_expected.to be_falsey }
+        end
 
         context 'when developers are allowed to merge' do
           let!(:protected_branch) do
@@ -74,6 +151,12 @@ describe Gitlab::Ci::Pipeline::Chain::Validate::Abilities do
           end
 
           it { is_expected.to be_truthy }
+
+          context 'when pipeline is a detached merge request pipeline' do
+            include_context 'detached merge request pipeline'
+
+            it { is_expected.to be_truthy }
+          end
         end
       end
 
@@ -99,9 +182,9 @@ describe Gitlab::Ci::Pipeline::Chain::Validate::Abilities do
       end
     end
 
-    context 'when user is a master' do
+    context 'when user is a maintainer' do
       before do
-        project.add_master(user)
+        project.add_maintainer(user)
       end
 
       it { is_expected.to be_truthy }
@@ -112,6 +195,12 @@ describe Gitlab::Ci::Pipeline::Chain::Validate::Abilities do
         end
 
         it { is_expected.to be_truthy }
+
+        context 'when pipeline is a detached merge request pipeline' do
+          include_context 'detached merge request pipeline'
+
+          it { is_expected.to be_truthy }
+        end
       end
 
       context 'when the tag is protected' do

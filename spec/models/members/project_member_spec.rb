@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe ProjectMember do
@@ -9,10 +11,6 @@ describe ProjectMember do
     it { is_expected.to allow_value('Project').for(:source_type) }
     it { is_expected.not_to allow_value('project').for(:source_type) }
     it { is_expected.to validate_inclusion_of(:access_level).in_array(Gitlab::Access.values) }
-  end
-
-  describe 'modules' do
-    it { is_expected.to include_module(Gitlab::ShellAdapter) }
   end
 
   describe '.access_level_roles' do
@@ -28,7 +26,7 @@ describe ProjectMember do
 
       expect(project.users).not_to include(user)
 
-      described_class.add_user(project, user, :master, current_user: project.owner)
+      described_class.add_user(project, user, :maintainer, current_user: project.owner)
 
       expect(project.users.reload).to include(user)
     end
@@ -41,9 +39,9 @@ describe ProjectMember do
   end
 
   describe "#destroy" do
-    let(:owner)   { create(:project_member, access_level: ProjectMember::MASTER) }
+    let(:owner)   { create(:project_member, access_level: ProjectMember::MAINTAINER) }
     let(:project) { owner.project }
-    let(:master)  { create(:project_member, project: project) }
+    let(:maintainer) { create(:project_member, project: project) }
 
     it "creates an expired event when left due to expiry" do
       expired = create(:project_member, project: project, expires_at: Time.now - 6.days)
@@ -52,7 +50,7 @@ describe ProjectMember do
     end
 
     it "creates a left event when left due to leave" do
-      master.destroy
+      maintainer.destroy
       expect(Event.recent.first.action).to eq(Event::LEFT)
     end
   end
@@ -95,7 +93,7 @@ describe ProjectMember do
       described_class.add_users_to_projects(
         [projects.first.id, projects.second.id],
         [users.first.id, users.second],
-        described_class::MASTER)
+        described_class::MAINTAINER)
 
       expect(projects.first.users).to include(users.first)
       expect(projects.first.users).to include(users.second)
@@ -124,4 +122,19 @@ describe ProjectMember do
   end
 
   it_behaves_like 'members notifications', :project
+
+  context 'access levels' do
+    context 'with parent group' do
+      it_behaves_like 'inherited access level as a member of entity' do
+        let(:entity) { create(:project, group: parent_entity) }
+      end
+    end
+
+    context 'with parent group and a subgroup' do
+      it_behaves_like 'inherited access level as a member of entity' do
+        let(:subgroup) { create(:group, parent: parent_entity) }
+        let(:entity) { create(:project, group: subgroup) }
+      end
+    end
+  end
 end

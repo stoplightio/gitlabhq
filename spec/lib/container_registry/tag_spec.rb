@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe ContainerRegistry::Tag do
@@ -9,7 +11,7 @@ describe ContainerRegistry::Tag do
   end
 
   let(:headers) do
-    { 'Accept' => 'application/vnd.docker.distribution.manifest.v2+json' }
+    { 'Accept' => ContainerRegistry::Client::ACCEPTED_TYPES.join(', ') }
   end
 
   let(:tag) { described_class.new(repository, 'tag') }
@@ -177,7 +179,7 @@ describe ContainerRegistry::Tag do
       end
     end
 
-    describe '#delete' do
+    describe '#unsafe_delete' do
       before do
         stub_request(:delete, 'http://registry.gitlab/v2/group/test/manifests/sha256:digest')
           .with(headers: headers)
@@ -185,7 +187,7 @@ describe ContainerRegistry::Tag do
       end
 
       it 'correctly deletes the tag' do
-        expect(tag.delete).to be_truthy
+        expect(tag.unsafe_delete).to be_truthy
       end
     end
   end

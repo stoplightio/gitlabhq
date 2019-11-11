@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module Git
     # This class behaves like a struct with fields :blob_id, :blob_size, :operation, :old_path, :new_path
@@ -9,8 +11,8 @@ module Gitlab
         if raw_change.is_a?(Gitaly::GetRawChangesResponse::RawChange)
           @blob_id = raw_change.blob_id
           @blob_size = raw_change.size
-          @old_path = raw_change.old_path.presence
-          @new_path = raw_change.new_path.presence
+          @old_path = raw_change.old_path_bytes.presence
+          @new_path = raw_change.new_path_bytes.presence
           @operation = raw_change.operation&.downcase || :unknown
         else
           parse(raw_change)

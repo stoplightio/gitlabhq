@@ -1,7 +1,7 @@
 # Configuration files Documentation
 
 Note that most configuration files (`config/*.*`) committed into
-[gitlab-ce](https://gitlab.com/gitlab-org/gitlab-ce) **will not be used** for
+[gitlab-ce](https://gitlab.com/gitlab-org/gitlab-foss) **will not be used** for
 [omnibus-gitlab](https://gitlab.com/gitlab-org/omnibus-gitlab). Configuration
 files committed into gitlab-ce are only used for development.
 
@@ -39,7 +39,7 @@ If desired, the routing URL provided by these settings can be used with:
     1. `host name` or IP for each Redis instance desired
     2. TCP port number for each Redis instance desired
     3. `database number` for each Redis instance desired
-    
+
 ## Example URL attribute formats for GitLab Redis `.yml` configuration files
 * Unix Socket, default Redis database (0)
     * `url: unix:/path/to/redis.sock`
@@ -147,4 +147,3 @@ searched):
 3. the configuration file pointed to by the
 `GITLAB_REDIS_CONFIG_FILE` environment variable
 4. the configuration file `resque.yml`
-

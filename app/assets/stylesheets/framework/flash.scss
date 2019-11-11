@@ -1,21 +1,81 @@
+$notification-box-shadow-color: rgba(0, 0, 0, 0.25);
+
 .flash-container {
-  cursor: pointer;
   margin: 0;
   margin-bottom: $gl-padding;
   font-size: 14px;
   position: relative;
   z-index: 1;
 
+  &.sticky {
+    position: sticky;
+    position: -webkit-sticky;
+    top: $flash-container-top;
+    z-index: 251;
+
+    .flash-content {
+      box-shadow: 0 2px 4px 0 $notification-box-shadow-color;
+    }
+  }
+
+  .close-icon-wrapper {
+    padding: ($gl-btn-padding + $gl-padding-4) $gl-padding $gl-btn-padding;
+    position: absolute;
+    right: 0;
+    top: 0;
+    cursor: pointer;
+
+    .close-icon {
+      width: 16px;
+      height: 16px;
+    }
+  }
+
+  .flash-notice,
+  .flash-alert,
+  .flash-success,
+  .flash-warning {
+    border-radius: $border-radius-default;
+    color: $white-light;
+    padding-right: $gl-padding * 2;
+
+    .container-fluid,
+    .container-fluid.container-limited {
+      background: transparent;
+    }
+  }
+
   .flash-notice {
     @extend .alert;
     background-color: $blue-500;
     margin: 0;
+
+    &.flash-notice-persistent {
+      background-color: $blue-100;
+      color: $gl-text-color;
+
+      a {
+        color: $blue-600;
+
+        &:hover {
+          color: $blue-800;
+          text-decoration: none;
+        }
+      }
+    }
   }
 
   .flash-warning {
     @extend .alert;
-    background-color: $orange-500;
+    background-color: $orange-100;
+    color: $orange-900;
+    cursor: default;
     margin: 0;
+  }
+
+  .flash-text,
+  .flash-action {
+    display: inline-block;
   }
 
   .flash-alert {
@@ -23,12 +83,7 @@
     background-color: $red-500;
     margin: 0;
 
-    .flash-text,
     .flash-action {
-      display: inline-block;
-    }
-
-    a.flash-action {
       margin-left: 5px;
       text-decoration: none;
       font-weight: $gl-font-weight-normal;
@@ -44,19 +99,6 @@
     @extend .alert;
     background-color: $green-500;
     margin: 0;
-  }
-
-  .flash-notice,
-  .flash-alert,
-  .flash-success,
-  .flash-warning {
-    border-radius: $border-radius-default;
-    color: $white-light;
-
-    .container-fluid,
-    .container-fluid.container-limited {
-      background: transparent;
-    }
   }
 
   &.flash-container-page {
@@ -79,5 +121,30 @@
     .flash-container.timeline-content {
       margin-left: 0;
     }
+  }
+}
+
+.gl-browser-ie .flash-container {
+  position: fixed;
+  max-width: $limited-layout-width;
+  left: 50%;
+
+  .flash-alert {
+    position: relative;
+    left: -50%;
+  }
+}
+
+.with-system-header .flash-container.sticky {
+  top: $flash-container-top + $system-header-height;
+}
+
+.with-performance-bar {
+  .flash-container.sticky {
+    top: $flash-container-top + $performance-bar-height;
+  }
+
+  &.with-system-header .flash-container.sticky {
+    top: $flash-container-top + $performance-bar-height + $system-header-height;
   }
 }

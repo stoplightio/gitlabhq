@@ -1,5 +1,6 @@
 import mutations from '~/ide/stores/mutations/file';
 import state from '~/ide/stores/state';
+import { FILE_VIEW_MODE_PREVIEW } from '~/ide/constants';
 import { file } from '../../helpers';
 
 describe('IDE store file mutations', () => {
@@ -83,6 +84,63 @@ describe('IDE store file mutations', () => {
       expect(localFile.raw).toBeNull();
       expect(localFile.baseRaw).toBeNull();
     });
+
+    it('sets extra file data to all arrays concerned', () => {
+      localState.stagedFiles = [localFile];
+      localState.changedFiles = [localFile];
+      localState.openFiles = [localFile];
+
+      const rawPath = 'foo/bar/blah.md';
+
+      mutations.SET_FILE_DATA(localState, {
+        data: {
+          raw_path: rawPath,
+        },
+        file: localFile,
+      });
+
+      expect(localState.stagedFiles[0].rawPath).toEqual(rawPath);
+      expect(localState.changedFiles[0].rawPath).toEqual(rawPath);
+      expect(localState.openFiles[0].rawPath).toEqual(rawPath);
+      expect(localFile.rawPath).toEqual(rawPath);
+    });
+
+    it('does not mutate certain props on the file', () => {
+      const path = 'New Path';
+      const name = 'New Name';
+      localFile.path = path;
+      localFile.name = name;
+
+      localState.stagedFiles = [localFile];
+      localState.changedFiles = [localFile];
+      localState.openFiles = [localFile];
+
+      mutations.SET_FILE_DATA(localState, {
+        data: {
+          path: 'Old Path',
+          name: 'Old Name',
+          raw: 'Old Raw',
+          base_raw: 'Old Base Raw',
+        },
+        file: localFile,
+      });
+
+      [
+        localState.stagedFiles[0],
+        localState.changedFiles[0],
+        localState.openFiles[0],
+        localFile,
+      ].forEach(f => {
+        expect(f).toEqual(
+          jasmine.objectContaining({
+            path,
+            name,
+            raw: null,
+            baseRaw: null,
+          }),
+        );
+      });
+    });
   });
 
   describe('SET_FILE_RAW_DATA', () => {
@@ -93,6 +151,35 @@ describe('IDE store file mutations', () => {
       });
 
       expect(localFile.raw).toBe('testing');
+    });
+
+    it('adds raw data to open pending file', () => {
+      localState.openFiles.push({
+        ...localFile,
+        pending: true,
+      });
+
+      mutations.SET_FILE_RAW_DATA(localState, {
+        file: localFile,
+        raw: 'testing',
+      });
+
+      expect(localState.openFiles[0].raw).toBe('testing');
+    });
+
+    it('does not add raw data to open pending tempFile file', () => {
+      localState.openFiles.push({
+        ...localFile,
+        pending: true,
+        tempFile: true,
+      });
+
+      mutations.SET_FILE_RAW_DATA(localState, {
+        file: localFile,
+        raw: 'testing',
+      });
+
+      expect(localState.openFiles[0].raw).not.toBe('testing');
     });
   });
 
@@ -152,12 +239,64 @@ describe('IDE store file mutations', () => {
 
       expect(localFile.mrChange.diff).toBe('ABC');
     });
+
+    it('has diffMode replaced by default', () => {
+      mutations.SET_FILE_MERGE_REQUEST_CHANGE(localState, {
+        file: localFile,
+        mrChange: {
+          diff: 'ABC',
+        },
+      });
+
+      expect(localFile.mrChange.diffMode).toBe('replaced');
+    });
+
+    it('has diffMode new', () => {
+      mutations.SET_FILE_MERGE_REQUEST_CHANGE(localState, {
+        file: localFile,
+        mrChange: {
+          diff: 'ABC',
+          new_file: true,
+        },
+      });
+
+      expect(localFile.mrChange.diffMode).toBe('new');
+    });
+
+    it('has diffMode deleted', () => {
+      mutations.SET_FILE_MERGE_REQUEST_CHANGE(localState, {
+        file: localFile,
+        mrChange: {
+          diff: 'ABC',
+          deleted_file: true,
+        },
+      });
+
+      expect(localFile.mrChange.diffMode).toBe('deleted');
+    });
+
+    it('has diffMode renamed', () => {
+      mutations.SET_FILE_MERGE_REQUEST_CHANGE(localState, {
+        file: localFile,
+        mrChange: {
+          diff: 'ABC',
+          renamed_file: true,
+        },
+      });
+
+      expect(localFile.mrChange.diffMode).toBe('renamed');
+    });
   });
 
   describe('DISCARD_FILE_CHANGES', () => {
     beforeEach(() => {
       localFile.content = 'test';
       localFile.changed = true;
+      localState.currentProjectId = 'gitlab-ce';
+      localState.currentBranchId = 'master';
+      localState.trees['gitlab-ce/master'] = {
+        tree: [],
+      };
     });
 
     it('resets content and changed', () => {
@@ -165,6 +304,36 @@ describe('IDE store file mutations', () => {
 
       expect(localFile.content).toBe('');
       expect(localFile.changed).toBeFalsy();
+    });
+
+    it('adds to root tree if deleted', () => {
+      localFile.deleted = true;
+
+      mutations.DISCARD_FILE_CHANGES(localState, localFile.path);
+
+      expect(localState.trees['gitlab-ce/master'].tree).toEqual([
+        {
+          ...localFile,
+          deleted: false,
+        },
+      ]);
+    });
+
+    it('adds to parent tree if deleted', () => {
+      localFile.deleted = true;
+      localFile.parentPath = 'parentPath';
+      localState.entries.parentPath = {
+        tree: [],
+      };
+
+      mutations.DISCARD_FILE_CHANGES(localState, localFile.path);
+
+      expect(localState.entries.parentPath.tree).toEqual([
+        {
+          ...localFile,
+          deleted: false,
+        },
+      ]);
     });
   });
 
@@ -187,16 +356,16 @@ describe('IDE store file mutations', () => {
   });
 
   describe('STAGE_CHANGE', () => {
-    it('adds file into stagedFiles array', () => {
+    beforeEach(() => {
       mutations.STAGE_CHANGE(localState, localFile.path);
+    });
 
+    it('adds file into stagedFiles array', () => {
       expect(localState.stagedFiles.length).toBe(1);
       expect(localState.stagedFiles[0]).toEqual(localFile);
     });
 
     it('updates stagedFile if it is already staged', () => {
-      mutations.STAGE_CHANGE(localState, localFile.path);
-
       localFile.raw = 'testing 123';
 
       mutations.STAGE_CHANGE(localState, localFile.path);
@@ -244,10 +413,10 @@ describe('IDE store file mutations', () => {
     it('updates file view mode', () => {
       mutations.SET_FILE_VIEWMODE(localState, {
         file: localFile,
-        viewMode: 'preview',
+        viewMode: FILE_VIEW_MODE_PREVIEW,
       });
 
-      expect(localFile.viewMode).toBe('preview');
+      expect(localFile.viewMode).toBe(FILE_VIEW_MODE_PREVIEW);
     });
   });
 

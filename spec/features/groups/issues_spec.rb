@@ -1,10 +1,14 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
-feature 'Group issues page' do
+describe 'Group issues page' do
   include FilteredSearchHelpers
+  include DragTo
 
   let(:group) { create(:group) }
   let(:project) { create(:project, :public, group: group)}
+  let(:project_with_issues_disabled) { create(:project, :issues_disabled, group: group) }
   let(:path) { issues_group_path(group) }
 
   context 'with shared examples' do
@@ -48,9 +52,10 @@ feature 'Group issues page' do
     end
   end
 
-  context 'issues list', :nested_groups do
+  context 'issues list' do
     let(:subgroup) { create(:group, parent: group) }
     let(:subgroup_project) { create(:project, :public, group: subgroup)}
+    let(:user_in_group) { create(:group_member, :maintainer, user: create(:user), group: group ).user }
     let!(:issue) { create(:issue, project: project, title: 'root group issue') }
     let!(:subgroup_issue) { create(:issue, project: subgroup_project, title: 'subgroup issue') }
 
@@ -66,13 +71,112 @@ feature 'Group issues page' do
 
     context 'when project is archived' do
       before do
-        project.archive!
+        ::Projects::UpdateService.new(project, user_in_group, archived: true).execute
       end
 
       it 'does not render issue' do
         visit path
 
         expect(page).not_to have_content issue.title[0..80]
+      end
+    end
+  end
+
+  context 'projects with issues disabled' do
+    describe 'issue dropdown' do
+      let(:user_in_group) { create(:group_member, :maintainer, user: create(:user), group: group ).user }
+
+      before do
+        [project, project_with_issues_disabled].each { |project| project.add_maintainer(user_in_group) }
+        sign_in(user_in_group)
+        visit issues_group_path(group)
+      end
+
+      it 'shows projects only with issues feature enabled', :js do
+        find('.empty-state .js-lazy-loaded')
+        find('.new-project-item-link').click
+
+        page.within('.select2-results') do
+          expect(page).to have_content(project.full_name)
+          expect(page).not_to have_content(project_with_issues_disabled.full_name)
+        end
+      end
+    end
+  end
+
+  context 'manual ordering' do
+    let(:user_in_group) { create(:group_member, :maintainer, user: create(:user), group: group ).user }
+
+    let!(:issue1) { create(:issue, project: project, title: 'Issue #1', relative_position: 1) }
+    let!(:issue2) { create(:issue, project: project, title: 'Issue #2', relative_position: 2) }
+    let!(:issue3) { create(:issue, project: project, title: 'Issue #3', relative_position: 3) }
+
+    before do
+      sign_in(user_in_group)
+    end
+
+    it 'displays all issues' do
+      visit issues_group_path(group, sort: 'relative_position')
+
+      page.within('.issues-list') do
+        expect(page).to have_selector('li.issue', count: 3)
+      end
+    end
+
+    it 'has manual-ordering css applied' do
+      visit issues_group_path(group, sort: 'relative_position')
+
+      expect(page).to have_selector('.manual-ordering')
+    end
+
+    it 'each issue item has a user-can-drag css applied' do
+      visit issues_group_path(group, sort: 'relative_position')
+
+      page.within('.manual-ordering') do
+        expect(page).to have_selector('.issue.user-can-drag', count: 3)
+      end
+    end
+
+    it 'issues should be draggable and persist order', :js do
+      visit issues_group_path(group, sort: 'relative_position')
+
+      drag_to(selector: '.manual-ordering',
+        from_index: 0,
+        to_index: 2)
+
+      wait_for_requests
+
+      check_issue_order
+
+      visit issues_group_path(group, sort: 'relative_position')
+
+      check_issue_order
+    end
+
+    it 'issues should not be draggable when user is not logged in', :js do
+      sign_out(user_in_group)
+
+      visit issues_group_path(group, sort: 'relative_position')
+
+      drag_to(selector: '.manual-ordering',
+        from_index: 0,
+        to_index: 2)
+
+      wait_for_requests
+
+      # Issue order should remain the same
+      page.within('.manual-ordering') do
+        expect(find('.issue:nth-child(1) .title')).to have_content('Issue #1')
+        expect(find('.issue:nth-child(2) .title')).to have_content('Issue #2')
+        expect(find('.issue:nth-child(3) .title')).to have_content('Issue #3')
+      end
+    end
+
+    def check_issue_order
+      page.within('.manual-ordering') do
+        expect(find('.issue:nth-child(1) .title')).to have_content('Issue #2')
+        expect(find('.issue:nth-child(2) .title')).to have_content('Issue #3')
+        expect(find('.issue:nth-child(3) .title')).to have_content('Issue #1')
       end
     end
   end

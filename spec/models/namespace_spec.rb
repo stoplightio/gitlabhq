@@ -1,7 +1,10 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Namespace do
   include ProjectForksHelper
+  include GitHelpers
 
   let!(:namespace) { create(:namespace) }
   let(:gitlab_shell) { Gitlab::Shell.new }
@@ -12,6 +15,8 @@ describe Namespace do
     it { is_expected.to have_many :project_statistics }
     it { is_expected.to belong_to :parent }
     it { is_expected.to have_many :children }
+    it { is_expected.to have_one :root_storage_statistics }
+    it { is_expected.to have_one :aggregation_schedule }
   end
 
   describe 'validations' do
@@ -60,6 +65,11 @@ describe Namespace do
     end
   end
 
+  describe 'delegate' do
+    it { is_expected.to delegate_method(:name).to(:owner).with_prefix.with_arguments(allow_nil: true) }
+    it { is_expected.to delegate_method(:avatar_url).to(:owner).with_arguments(allow_nil: true) }
+  end
+
   describe "Respond to" do
     it { is_expected.to respond_to(:human_name) }
     it { is_expected.to respond_to(:to_param) }
@@ -80,6 +90,27 @@ describe Namespace do
 
   describe '#human_name' do
     it { expect(namespace.human_name).to eq(namespace.owner_name) }
+  end
+
+  describe '#first_project_with_container_registry_tags' do
+    let(:container_repository) { create(:container_repository) }
+    let!(:project) { create(:project, namespace: namespace, container_repositories: [container_repository]) }
+
+    before do
+      stub_container_registry_config(enabled: true)
+    end
+
+    it 'returns the project' do
+      stub_container_registry_tags(repository: :any, tags: ['tag'])
+
+      expect(namespace.first_project_with_container_registry_tags).to eq(project)
+    end
+
+    it 'returns no project' do
+      stub_container_registry_tags(repository: :any, tags: nil)
+
+      expect(namespace.first_project_with_container_registry_tags).to be_nil
+    end
   end
 
   describe '.search' do
@@ -117,20 +148,22 @@ describe Namespace do
       create(:project,
              namespace: namespace,
              statistics: build(:project_statistics,
-                               storage_size:         606,
                                repository_size:      101,
+                               wiki_size:            505,
                                lfs_objects_size:     202,
-                               build_artifacts_size: 303))
+                               build_artifacts_size: 303,
+                               packages_size:        404))
     end
 
     let(:project2) do
       create(:project,
              namespace: namespace,
              statistics: build(:project_statistics,
-                               storage_size:         60,
                                repository_size:      10,
+                               wiki_size:            50,
                                lfs_objects_size:     20,
-                               build_artifacts_size: 30))
+                               build_artifacts_size: 30,
+                               packages_size:        40))
     end
 
     it "sums all project storage counters in the namespace" do
@@ -138,10 +171,12 @@ describe Namespace do
       project2
       statistics = described_class.with_statistics.find(namespace.id)
 
-      expect(statistics.storage_size).to eq 666
+      expect(statistics.storage_size).to eq 1665
       expect(statistics.repository_size).to eq 111
+      expect(statistics.wiki_size).to eq 555
       expect(statistics.lfs_objects_size).to eq 222
       expect(statistics.build_artifacts_size).to eq 333
+      expect(statistics.packages_size).to eq 444
     end
 
     it "correctly handles namespaces without projects" do
@@ -149,12 +184,24 @@ describe Namespace do
 
       expect(statistics.storage_size).to eq 0
       expect(statistics.repository_size).to eq 0
+      expect(statistics.wiki_size).to eq 0
       expect(statistics.lfs_objects_size).to eq 0
       expect(statistics.build_artifacts_size).to eq 0
+      expect(statistics.packages_size).to eq 0
     end
   end
 
-  describe '#ancestors_upto', :nested_groups do
+  describe '.find_by_pages_host' do
+    it 'finds namespace by GitLab Pages host and is case-insensitive' do
+      namespace = create(:namespace, name: 'topnamespace')
+      create(:namespace, name: 'annother_namespace')
+      host = "TopNamespace.#{Settings.pages.host.upcase}"
+
+      expect(described_class.find_by_pages_host(host)).to eq(namespace)
+    end
+  end
+
+  describe '#ancestors_upto' do
     let(:parent) { create(:group) }
     let(:child) { create(:group, parent: parent) }
     let(:child2) { create(:group, parent: child) }
@@ -184,7 +231,8 @@ describe Namespace do
         end
 
         it 'raises an error about not movable project' do
-          expect { namespace.move_dir }.to raise_error(/Namespace cannot be moved/)
+          expect { namespace.move_dir }.to raise_error(Gitlab::UpdatePathError,
+                                                       /Namespace .* cannot be moved/)
         end
       end
     end
@@ -200,12 +248,40 @@ describe Namespace do
       end
 
       it "moves dir if path changed" do
-        namespace.update_attributes(path: namespace.full_path + '_new')
+        namespace.update(path: namespace.full_path + '_new')
 
-        expect(gitlab_shell.exists?(project.repository_storage, "#{namespace.path}/#{project.path}.git")).to be_truthy
+        expect(gitlab_shell.repository_exists?(project.repository_storage, "#{namespace.path}/#{project.path}.git")).to be_truthy
       end
 
-      context 'with subgroups', :nested_groups do
+      context 'when #write_projects_repository_config raises an error' do
+        context 'in test environment' do
+          it 'raises an exception' do
+            expect(namespace).to receive(:write_projects_repository_config).and_raise('foo')
+
+            expect do
+              namespace.update(path: namespace.full_path + '_new')
+            end.to raise_error('foo')
+          end
+        end
+
+        context 'in production environment' do
+          it 'does not cancel later callbacks' do
+            expect(namespace).to receive(:write_projects_repository_config).and_raise('foo')
+            expect(namespace).to receive(:move_dir).and_wrap_original do |m, *args|
+              move_dir_result = m.call(*args)
+
+              expect(move_dir_result).to be_truthy # Must be truthy, or else later callbacks would be canceled
+
+              move_dir_result
+            end
+            expect(Gitlab::Sentry).to receive(:should_raise_for_dev?).and_return(false) # like prod
+
+            namespace.update(path: namespace.full_path + '_new')
+          end
+        end
+      end
+
+      context 'with subgroups' do
         let(:parent) { create(:group, name: 'parent', path: 'parent') }
         let(:new_parent) { create(:group, name: 'new_parent', path: 'new_parent') }
         let(:child) { create(:group, name: 'child', path: 'child', parent: parent) }
@@ -279,30 +355,46 @@ describe Namespace do
 
       it "repository directory remains unchanged if path changed" do
         before_disk_path = project.disk_path
-        namespace.update_attributes(path: namespace.full_path + '_new')
+        namespace.update(path: namespace.full_path + '_new')
 
         expect(before_disk_path).to eq(project.disk_path)
-        expect(gitlab_shell.exists?(project.repository_storage, "#{project.disk_path}.git")).to be_truthy
+        expect(gitlab_shell.repository_exists?(project.repository_storage, "#{project.disk_path}.git")).to be_truthy
       end
     end
 
-    it 'updates project full path in .git/config for each project inside namespace' do
-      parent = create(:group, name: 'mygroup', path: 'mygroup')
-      subgroup = create(:group, name: 'mysubgroup', path: 'mysubgroup', parent: parent)
-      project_in_parent_group = create(:project, :legacy_storage, :repository, namespace: parent, name: 'foo1')
-      hashed_project_in_subgroup = create(:project, :repository, namespace: subgroup, name: 'foo2')
-      legacy_project_in_subgroup = create(:project, :legacy_storage, :repository, namespace: subgroup, name: 'foo3')
+    context 'for each project inside the namespace' do
+      let!(:parent) { create(:group, name: 'mygroup', path: 'mygroup') }
+      let!(:subgroup) { create(:group, name: 'mysubgroup', path: 'mysubgroup', parent: parent) }
+      let!(:project_in_parent_group) { create(:project, :legacy_storage, :repository, namespace: parent, name: 'foo1') }
+      let!(:hashed_project_in_subgroup) { create(:project, :repository, namespace: subgroup, name: 'foo2') }
+      let!(:legacy_project_in_subgroup) { create(:project, :legacy_storage, :repository, namespace: subgroup, name: 'foo3') }
 
-      parent.update(path: 'mygroup_new')
+      it 'updates project full path in .git/config' do
+        parent.update(path: 'mygroup_new')
 
-      expect(project_rugged(project_in_parent_group).config['gitlab.fullpath']).to eq "mygroup_new/#{project_in_parent_group.path}"
-      expect(project_rugged(hashed_project_in_subgroup).config['gitlab.fullpath']).to eq "mygroup_new/mysubgroup/#{hashed_project_in_subgroup.path}"
-      expect(project_rugged(legacy_project_in_subgroup).config['gitlab.fullpath']).to eq "mygroup_new/mysubgroup/#{legacy_project_in_subgroup.path}"
-    end
+        expect(project_rugged(project_in_parent_group).config['gitlab.fullpath']).to eq "mygroup_new/#{project_in_parent_group.path}"
+        expect(project_rugged(hashed_project_in_subgroup).config['gitlab.fullpath']).to eq "mygroup_new/mysubgroup/#{hashed_project_in_subgroup.path}"
+        expect(project_rugged(legacy_project_in_subgroup).config['gitlab.fullpath']).to eq "mygroup_new/mysubgroup/#{legacy_project_in_subgroup.path}"
+      end
 
-    def project_rugged(project)
-      Gitlab::GitalyClient::StorageSettings.allow_disk_access do
-        project.repository.rugged
+      it 'updates the project storage location' do
+        repository_project_in_parent_group = create(:project_repository, project: project_in_parent_group)
+        repository_hashed_project_in_subgroup = create(:project_repository, project: hashed_project_in_subgroup)
+        repository_legacy_project_in_subgroup = create(:project_repository, project: legacy_project_in_subgroup)
+
+        parent.update(path: 'mygroup_moved')
+
+        expect(repository_project_in_parent_group.reload.disk_path).to eq "mygroup_moved/#{project_in_parent_group.path}"
+        expect(repository_hashed_project_in_subgroup.reload.disk_path).to eq hashed_project_in_subgroup.disk_path
+        expect(repository_legacy_project_in_subgroup.reload.disk_path).to eq "mygroup_moved/mysubgroup/#{legacy_project_in_subgroup.path}"
+      end
+
+      def project_rugged(project)
+        # Routes are loaded when creating the projects, so we need to manually
+        # reload them for the below code to be aware of the above UPDATE.
+        project.route.reload
+
+        rugged_repo(project.repository)
       end
     end
   end
@@ -356,12 +448,6 @@ describe Namespace do
           child.destroy
         end
       end
-
-      it 'removes the exports folder' do
-        expect(namespace).to receive(:remove_exports!)
-
-        namespace.destroy
-      end
     end
 
     context 'hashed storage' do
@@ -375,12 +461,6 @@ describe Namespace do
         namespace.destroy
 
         expect(File.exist?(deleted_path_in_dir)).to be(false)
-      end
-
-      it 'removes the exports folder' do
-        expect(namespace).to receive(:remove_exports!)
-
-        namespace.destroy
       end
     end
   end
@@ -405,7 +485,7 @@ describe Namespace do
     end
   end
 
-  describe '#self_and_hierarchy', :nested_groups do
+  describe '#self_and_hierarchy' do
     let!(:group) { create(:group, path: 'git_lab') }
     let!(:nested_group) { create(:group, parent: group) }
     let!(:deep_nested_group) { create(:group, parent: nested_group) }
@@ -420,7 +500,7 @@ describe Namespace do
     end
   end
 
-  describe '#ancestors', :nested_groups do
+  describe '#ancestors' do
     let(:group) { create(:group) }
     let(:nested_group) { create(:group, parent: group) }
     let(:deep_nested_group) { create(:group, parent: nested_group) }
@@ -434,7 +514,7 @@ describe Namespace do
     end
   end
 
-  describe '#self_and_ancestors', :nested_groups do
+  describe '#self_and_ancestors' do
     let(:group) { create(:group) }
     let(:nested_group) { create(:group, parent: group) }
     let(:deep_nested_group) { create(:group, parent: nested_group) }
@@ -448,7 +528,7 @@ describe Namespace do
     end
   end
 
-  describe '#descendants', :nested_groups do
+  describe '#descendants' do
     let!(:group) { create(:group, path: 'git_lab') }
     let!(:nested_group) { create(:group, parent: group) }
     let!(:deep_nested_group) { create(:group, parent: nested_group) }
@@ -464,7 +544,7 @@ describe Namespace do
     end
   end
 
-  describe '#self_and_descendants', :nested_groups do
+  describe '#self_and_descendants' do
     let!(:group) { create(:group, path: 'git_lab') }
     let!(:nested_group) { create(:group, parent: group) }
     let!(:deep_nested_group) { create(:group, parent: nested_group) }
@@ -480,7 +560,7 @@ describe Namespace do
     end
   end
 
-  describe '#users_with_descendants', :nested_groups do
+  describe '#users_with_descendants' do
     let(:user_a) { create(:user) }
     let(:user_b) { create(:user) }
 
@@ -491,7 +571,7 @@ describe Namespace do
     it 'returns member users on every nest level without duplication' do
       group.add_developer(user_a)
       nested_group.add_developer(user_b)
-      deep_nested_group.add_developer(user_a)
+      deep_nested_group.add_maintainer(user_a)
 
       expect(group.users_with_descendants).to contain_exactly(user_a, user_b)
       expect(nested_group.users_with_descendants).to contain_exactly(user_a, user_b)
@@ -513,9 +593,21 @@ describe Namespace do
     let!(:project2) { create(:project_empty_repo, namespace: child) }
 
     it { expect(group.all_projects.to_a).to match_array([project2, project1]) }
+    it { expect(child.all_projects.to_a).to match_array([project2]) }
   end
 
-  describe '#share_with_group_lock with subgroups', :nested_groups do
+  describe '#all_pipelines' do
+    let(:group) { create(:group) }
+    let(:child) { create(:group, parent: group) }
+    let!(:project1) { create(:project_empty_repo, namespace: group) }
+    let!(:project2) { create(:project_empty_repo, namespace: child) }
+    let!(:pipeline1) { create(:ci_empty_pipeline, project: project1) }
+    let!(:pipeline2) { create(:ci_empty_pipeline, project: project2) }
+
+    it { expect(group.all_pipelines.to_a).to match_array([pipeline1, pipeline2]) }
+  end
+
+  describe '#share_with_group_lock with subgroups' do
     context 'when creating a subgroup' do
       let(:subgroup) { create(:group, parent: root_group )}
 
@@ -655,62 +747,258 @@ describe Namespace do
     end
   end
 
-  describe '#remove_exports' do
-    let(:legacy_project) { create(:project, :with_export, :legacy_storage, namespace: namespace) }
-    let(:hashed_project) { create(:project, :with_export, namespace: namespace) }
-    let(:export_path) { Dir.mktmpdir('namespace_remove_exports_spec') }
-    let(:legacy_export) { legacy_project.export_project_path }
-    let(:hashed_export) { hashed_project.export_project_path }
+  describe '#root_ancestor' do
+    it 'returns the top most ancestor' do
+      root_group = create(:group)
+      nested_group = create(:group, parent: root_group)
+      deep_nested_group = create(:group, parent: nested_group)
+      very_deep_nested_group = create(:group, parent: deep_nested_group)
 
-    it 'removes exports for legacy and hashed projects' do
-      allow(Gitlab::ImportExport).to receive(:storage_path) { export_path }
-
-      expect(File.exist?(legacy_export)).to be_truthy
-      expect(File.exist?(hashed_export)).to be_truthy
-
-      namespace.remove_exports!
-
-      expect(File.exist?(legacy_export)).to be_falsy
-      expect(File.exist?(hashed_export)).to be_falsy
+      expect(root_group.root_ancestor).to eq(root_group)
+      expect(nested_group.root_ancestor).to eq(root_group)
+      expect(deep_nested_group.root_ancestor).to eq(root_group)
+      expect(very_deep_nested_group.root_ancestor).to eq(root_group)
     end
   end
 
-  describe '#full_path_was' do
+  describe '#full_path_before_last_save' do
     context 'when the group has no parent' do
-      it 'should return the path was' do
-        group = create(:group, parent: nil)
-        expect(group.full_path_was).to eq(group.path_was)
+      it 'returns the path before last save' do
+        group = create(:group)
+
+        group.update(parent: nil)
+
+        expect(group.full_path_before_last_save).to eq(group.path_before_last_save)
       end
     end
 
     context 'when a parent is assigned to a group with no previous parent' do
-      it 'should return the path was' do
+      it 'returns the path before last save' do
         group = create(:group, parent: nil)
-
         parent = create(:group)
-        group.parent = parent
 
-        expect(group.full_path_was).to eq("#{group.path_was}")
+        group.update(parent: parent)
+
+        expect(group.full_path_before_last_save).to eq("#{group.path_before_last_save}")
       end
     end
 
     context 'when a parent is removed from the group' do
-      it 'should return the parent full path' do
+      it 'returns the parent full path' do
         parent = create(:group)
         group = create(:group, parent: parent)
-        group.parent = nil
 
-        expect(group.full_path_was).to eq("#{parent.full_path}/#{group.path}")
+        group.update(parent: nil)
+
+        expect(group.full_path_before_last_save).to eq("#{parent.full_path}/#{group.path}")
       end
     end
 
     context 'when changing parents' do
-      it 'should return the previous parent full path' do
+      it 'returns the previous parent full path' do
         parent = create(:group)
         group = create(:group, parent: parent)
         new_parent = create(:group)
-        group.parent = new_parent
-        expect(group.full_path_was).to eq("#{parent.full_path}/#{group.path}")
+
+        group.update(parent: new_parent)
+
+        expect(group.full_path_before_last_save).to eq("#{parent.full_path}/#{group.path}")
+      end
+    end
+  end
+
+  describe '#auto_devops_enabled' do
+    context 'with users' do
+      let(:user) { create(:user) }
+
+      subject { user.namespace.auto_devops_enabled? }
+
+      before do
+        user.namespace.update!(auto_devops_enabled: auto_devops_enabled)
+      end
+
+      context 'when auto devops is explicitly enabled' do
+        let(:auto_devops_enabled) { true }
+
+        it { is_expected.to eq(true) }
+      end
+
+      context 'when auto devops is explicitly disabled' do
+        let(:auto_devops_enabled) { false }
+
+        it { is_expected.to eq(false) }
+      end
+    end
+  end
+
+  describe '#user?' do
+    subject { namespace.user? }
+
+    context 'when type is a user' do
+      let(:user) { create(:user) }
+      let(:namespace) { user.namespace }
+
+      it { is_expected.to be_truthy }
+    end
+
+    context 'when type is a group' do
+      let(:namespace) { create(:group) }
+
+      it { is_expected.to be_falsy }
+    end
+  end
+
+  describe '#aggregation_scheduled?' do
+    let(:namespace) { create(:namespace) }
+
+    subject { namespace.aggregation_scheduled? }
+
+    context 'with an aggregation scheduled association' do
+      let(:namespace) { create(:namespace, :with_aggregation_schedule) }
+
+      it { is_expected.to be_truthy }
+    end
+
+    context 'without an aggregation scheduled association' do
+      it { is_expected.to be_falsy }
+    end
+  end
+
+  describe '#emails_disabled?' do
+    context 'when not a subgroup' do
+      it 'returns false' do
+        group = create(:group, emails_disabled: false)
+
+        expect(group.emails_disabled?).to be_falsey
+      end
+
+      it 'returns true' do
+        group = create(:group, emails_disabled: true)
+
+        expect(group.emails_disabled?).to be_truthy
+      end
+    end
+
+    context 'when a subgroup' do
+      let(:grandparent) { create(:group) }
+      let(:parent)      { create(:group, parent: grandparent) }
+      let(:group)       { create(:group, parent: parent) }
+
+      it 'returns false' do
+        expect(group.emails_disabled?).to be_falsey
+      end
+
+      context 'when ancestor emails are disabled' do
+        it 'returns true' do
+          grandparent.update_attribute(:emails_disabled, true)
+
+          expect(group.emails_disabled?).to be_truthy
+        end
+      end
+    end
+  end
+
+  describe '#pages_virtual_domain' do
+    let(:project) { create(:project, namespace: namespace) }
+
+    context 'when there are pages deployed for the project' do
+      context 'but pages metadata is not migrated' do
+        before do
+          generic_commit_status = create(:generic_commit_status, :success, stage: 'deploy', name: 'pages:deploy')
+          generic_commit_status.update!(project: project)
+          project.pages_metadatum.destroy!
+        end
+
+        it 'migrates pages metadata and returns the virual domain' do
+          virtual_domain = namespace.pages_virtual_domain
+
+          expect(project.reload.pages_metadatum.deployed).to eq(true)
+
+          expect(virtual_domain).to be_an_instance_of(Pages::VirtualDomain)
+          expect(virtual_domain.lookup_paths).not_to be_empty
+        end
+      end
+
+      context 'and pages metadata is migrated' do
+        before do
+          project.mark_pages_as_deployed
+        end
+
+        it 'returns the virual domain' do
+          virtual_domain = namespace.pages_virtual_domain
+
+          expect(virtual_domain).to be_an_instance_of(Pages::VirtualDomain)
+          expect(virtual_domain.lookup_paths).not_to be_empty
+        end
+      end
+    end
+  end
+
+  describe '#has_parent?' do
+    it 'returns true when the group has a parent' do
+      group = create(:group, :nested)
+
+      expect(group.has_parent?).to be_truthy
+    end
+
+    it 'returns true when the group has an unsaved parent' do
+      parent = build(:group)
+      group = build(:group, parent: parent)
+
+      expect(group.has_parent?).to be_truthy
+    end
+
+    it 'returns false when the group has no parent' do
+      group = create(:group, parent: nil)
+
+      expect(group.has_parent?).to be_falsy
+    end
+  end
+
+  describe '#closest_setting' do
+    using RSpec::Parameterized::TableSyntax
+
+    shared_examples_for 'fetching closest setting' do
+      let!(:root_namespace) { create(:namespace) }
+      let!(:namespace) { create(:namespace, parent: root_namespace) }
+
+      let(:setting) { namespace.closest_setting(setting_name) }
+
+      before do
+        root_namespace.update_attribute(setting_name, root_setting)
+        namespace.update_attribute(setting_name, child_setting)
+      end
+
+      it 'returns closest non-nil value' do
+        expect(setting).to eq(result)
+      end
+    end
+
+    context 'when setting is of non-boolean type' do
+      where(:root_setting, :child_setting, :result) do
+        100 | 200 | 200
+        100 | nil | 100
+        nil | nil | nil
+      end
+
+      with_them do
+        let(:setting_name) { :max_artifacts_size }
+
+        it_behaves_like 'fetching closest setting'
+      end
+    end
+
+    context 'when setting is of boolean type' do
+      where(:root_setting, :child_setting, :result) do
+        true | false | false
+        true | nil   | true
+        nil  | nil   | nil
+      end
+
+      with_them do
+        let(:setting_name) { :lfs_enabled }
+
+        it_behaves_like 'fetching closest setting'
       end
     end
   end

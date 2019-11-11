@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Gitlab::Auth::OAuth::IdentityLinker do
@@ -23,7 +25,7 @@ describe Gitlab::Auth::OAuth::IdentityLinker do
   end
 
   context 'identity already linked to different user' do
-    let!(:identity) {  create(:identity, provider: provider, extern_uid: uid) }
+    let!(:identity) { create(:identity, provider: provider, extern_uid: uid) }
 
     it "#changed? returns false" do
       subject.link

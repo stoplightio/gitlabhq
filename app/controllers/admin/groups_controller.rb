@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Admin::GroupsController < Admin::ApplicationController
   include MembersPresentation
 
@@ -10,14 +12,20 @@ class Admin::GroupsController < Admin::ApplicationController
     @groups = @groups.page(params[:page])
   end
 
+  # rubocop: disable CodeReuse/ActiveRecord
   def show
-    @group = Group.with_statistics.joins(:route).group('routes.path').find_by_full_path(params[:id])
+    # Group.with_statistics doesn't behave nicely when including other relations.
+    # Group.find_by_full_path includes the routes relation to avoid a common N+1
+    # (at the expense of this action: there are two queries here to find and retrieve
+    # the Group with statistics).
+    @group = Group.with_statistics.find(group&.id)
     @members = present_members(
       @group.members.order("access_level DESC").page(params[:members_page]))
     @requesters = present_members(
       AccessRequestsFinder.new(@group).execute(current_user))
     @projects = @group.projects.with_statistics.page(params[:projects_page])
   end
+  # rubocop: enable CodeReuse/ActiveRecord
 
   def new
     @group = Group.new
@@ -32,15 +40,15 @@ class Admin::GroupsController < Admin::ApplicationController
 
     if @group.save
       @group.add_owner(current_user)
-      redirect_to [:admin, @group], notice: "Group '#{@group.name}' was successfully created."
+      redirect_to [:admin, @group], notice: _('Group %{group_name} was successfully created.') % { group_name: @group.name }
     else
       render "new"
     end
   end
 
   def update
-    if @group.update_attributes(group_params)
-      redirect_to [:admin, @group], notice: 'Group was successfully updated.'
+    if @group.update(group_params)
+      redirect_to [:admin, @group], notice: _('Group was successfully updated.')
     else
       render "edit"
     end
@@ -51,7 +59,7 @@ class Admin::GroupsController < Admin::ApplicationController
     result = Members::CreateService.new(current_user, member_params.merge(limit: -1)).execute(@group)
 
     if result[:status] == :success
-      redirect_to [:admin, @group], notice: 'Users were successfully added.'
+      redirect_to [:admin, @group], notice: _('Users were successfully added.')
     else
       redirect_to [:admin, @group], alert: result[:message]
     end
@@ -62,7 +70,7 @@ class Admin::GroupsController < Admin::ApplicationController
 
     redirect_to admin_groups_path,
                 status: 302,
-                alert: "Group '#{@group.name}' was scheduled for deletion."
+                alert: _('Group %{group_name} was scheduled for deletion.') % { group_name: @group.name }
   end
 
   private
@@ -72,10 +80,10 @@ class Admin::GroupsController < Admin::ApplicationController
   end
 
   def group_params
-    params.require(:group).permit(group_params_ce)
+    params.require(:group).permit(allowed_group_params)
   end
 
-  def group_params_ce
+  def allowed_group_params
     [
       :avatar,
       :description,
@@ -85,7 +93,11 @@ class Admin::GroupsController < Admin::ApplicationController
       :request_access_enabled,
       :visibility_level,
       :require_two_factor_authentication,
-      :two_factor_grace_period
+      :two_factor_grace_period,
+      :project_creation_level,
+      :subgroup_creation_level
     ]
   end
 end
+
+Admin::GroupsController.prepend_if_ee('EE::Admin::GroupsController')

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe IssuableCollections do
@@ -17,6 +19,7 @@ describe IssuableCollections do
     controller = klass.new
 
     allow(controller).to receive(:params).and_return(ActionController::Parameters.new(params))
+    allow(controller).to receive(:current_user).and_return(user)
 
     controller
   end
@@ -32,54 +35,89 @@ describe IssuableCollections do
     end
   end
 
-  describe '#filter_params' do
-    let(:params) do
-      {
-        assignee_id: '1',
-        assignee_username: 'user1',
-        author_id: '2',
-        author_username: 'user2',
-        authorized_only: 'true',
-        due_date: '2017-01-01',
-        group_id: '3',
-        iids: '4',
-        label_name: 'foo',
-        milestone_title: 'bar',
-        my_reaction_emoji: 'thumbsup',
-        non_archived: 'true',
-        project_id: '5',
-        scope: 'all',
-        search: 'baz',
-        sort: 'priority',
-        state: 'opened',
-        invalid_param: 'invalid_param'
-      }
+  describe '#finder_options' do
+    before do
+      allow(controller).to receive(:cookies).and_return({})
+      allow(controller).to receive(:current_user).and_return(nil)
     end
 
-    it 'filters params' do
-      allow(controller).to receive(:cookies).and_return({})
+    subject { controller.send(:finder_options).to_h }
 
-      filtered_params = controller.send(:filter_params)
+    context 'scalar params' do
+      let(:params) do
+        {
+          assignee_id: '1',
+          assignee_username: 'user1',
+          author_id: '2',
+          author_username: 'user2',
+          authorized_only: 'yes',
+          confidential: true,
+          due_date: '2017-01-01',
+          group_id: '3',
+          iids: '4',
+          label_name: 'foo',
+          milestone_title: 'bar',
+          my_reaction_emoji: 'thumbsup',
+          non_archived: 'true',
+          project_id: '5',
+          scope: 'all',
+          search: 'baz',
+          sort: 'priority',
+          state: 'opened',
+          invalid_param: 'invalid_param'
+        }
+      end
 
-      expect(filtered_params).to eq({
-        'assignee_id' => '1',
-        'assignee_username' => 'user1',
-        'author_id' => '2',
-        'author_username' => 'user2',
-        'authorized_only' => 'true',
-        'due_date' => '2017-01-01',
-        'group_id' => '3',
-        'iids' => '4',
-        'label_name' => 'foo',
-        'milestone_title' => 'bar',
-        'my_reaction_emoji' => 'thumbsup',
-        'non_archived' => 'true',
-        'project_id' => '5',
-        'scope' => 'all',
-        'search' => 'baz',
-        'sort' => 'priority',
-        'state' => 'opened'
-      })
+      it 'only allows whitelisted params' do
+        is_expected.to include({
+          'assignee_id' => '1',
+          'assignee_username' => 'user1',
+          'author_id' => '2',
+          'author_username' => 'user2',
+          'confidential' => true,
+          'label_name' => 'foo',
+          'milestone_title' => 'bar',
+          'my_reaction_emoji' => 'thumbsup',
+          'due_date' => '2017-01-01',
+          'scope' => 'all',
+          'search' => 'baz',
+          'sort' => 'priority',
+          'state' => 'opened'
+        })
+
+        is_expected.not_to include('invalid_param')
+      end
+    end
+
+    context 'array params' do
+      let(:params) do
+        {
+          assignee_username: %w[user1 user2],
+          label_name: %w[label1 label2],
+          invalid_param: 'invalid_param',
+          invalid_array: ['param']
+        }
+      end
+
+      it 'only allows whitelisted params' do
+        is_expected.to include({
+          'label_name' => %w[label1 label2],
+          'assignee_username' => %w[user1 user2]
+        })
+
+        is_expected.not_to include('invalid_param', 'invalid_array')
+      end
+    end
+
+    context 'search using an issue iid' do
+      let(:params) { { search: "#5" } }
+
+      it 'mutates the search into a filter by iid' do
+        is_expected.to include({
+            'iids' => '5',
+            'search' => nil
+        })
+      end
     end
   end
 end

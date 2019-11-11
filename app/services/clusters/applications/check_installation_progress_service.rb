@@ -1,22 +1,13 @@
+# frozen_string_literal: true
+
 module Clusters
   module Applications
-    class CheckInstallationProgressService < BaseHelmService
-      def execute
-        return unless app.installing?
-
-        case installation_phase
-        when Gitlab::Kubernetes::Pod::SUCCEEDED
-          on_success
-        when Gitlab::Kubernetes::Pod::FAILED
-          on_failed
-        else
-          check_timeout
-        end
-      rescue Kubeclient::HttpError => ke
-        app.make_errored!("Kubernetes error: #{ke.message}") unless app.errored?
-      end
-
+    class CheckInstallationProgressService < CheckProgressService
       private
+
+      def operation_in_progress?
+        app.installing? || app.updating?
+      end
 
       def on_success
         app.make_installed!
@@ -24,18 +15,10 @@ module Clusters
         remove_installation_pod
       end
 
-      def on_failed
-        app.make_errored!(installation_errors || 'Installation silently failed')
-      ensure
-        remove_installation_pod
-      end
-
       def check_timeout
-        if timeouted?
+        if timed_out?
           begin
-            app.make_errored!('Installation timeouted')
-          ensure
-            remove_installation_pod
+            app.make_errored!("Operation timed out. Check pod logs for #{pod_name} for more details.")
           end
         else
           ClusterWaitForAppInstallationWorker.perform_in(
@@ -43,22 +26,16 @@ module Clusters
         end
       end
 
-      def timeouted?
-        Time.now.utc - app.updated_at.to_time.utc > ClusterWaitForAppInstallationWorker::TIMEOUT
+      def pod_name
+        install_command.pod_name
+      end
+
+      def timed_out?
+        Time.now.utc - app.updated_at.utc > ClusterWaitForAppInstallationWorker::TIMEOUT
       end
 
       def remove_installation_pod
-        helm_api.delete_installation_pod!(install_command.pod_name)
-      rescue
-        # no-op
-      end
-
-      def installation_phase
-        helm_api.installation_status(install_command.pod_name)
-      end
-
-      def installation_errors
-        helm_api.installation_log(install_command.pod_name)
+        helm_api.delete_pod!(pod_name)
       end
     end
   end

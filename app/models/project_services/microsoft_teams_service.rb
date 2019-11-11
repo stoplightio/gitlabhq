@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class MicrosoftTeamsService < ChatNotificationService
   def title
     'Microsoft Teams Notification'
@@ -15,7 +17,7 @@ class MicrosoftTeamsService < ChatNotificationService
     'This service sends notifications about projects events to Microsoft Teams channels.<br />
     To set up this service:
     <ol>
-      <li><a href="https://msdn.microsoft.com/en-us/microsoft-teams/connectors">Getting started with 365 Office Connectors For Microsoft Teams</a>.</li>
+      <li><a href="https://docs.microsoft.com/en-us/microsoftteams/platform/concepts/connectors/connectors-using#setting-up-a-custom-incoming-webhook">Setup a custom Incoming Webhook using Office 365 Connectors For Microsoft Teams</a>.</li>
       <li>Paste the <strong>Webhook URL</strong> into the field below.</li>
       <li>Select events below to enable notifications.</li>
     </ol>'
@@ -31,11 +33,16 @@ class MicrosoftTeamsService < ChatNotificationService
   def default_channel_placeholder
   end
 
+  def self.supported_events
+    %w[push issue confidential_issue merge_request note confidential_note tag_push
+       pipeline wiki_page]
+  end
+
   def default_fields
     [
       { type: 'text', name: 'webhook', placeholder: "e.g. #{webhook_placeholder}" },
       { type: 'checkbox', name: 'notify_only_broken_pipelines' },
-      { type: 'checkbox', name: 'notify_only_default_branch' }
+      { type: 'select', name: 'branches_to_be_notified', choices: BRANCH_CHOICES }
     ]
   end
 
@@ -44,13 +51,13 @@ class MicrosoftTeamsService < ChatNotificationService
   def notify(message, opts)
     MicrosoftTeams::Notifier.new(webhook).ping(
       title: message.project_name,
-      pretext: message.pretext,
+      summary: message.summary,
       activity: message.activity,
       attachments: message.attachments
     )
   end
 
   def custom_data(data)
-    super(data).merge(markdown: true)
+    super(data).merge(markdown: true, commit_message_html: true)
   end
 end

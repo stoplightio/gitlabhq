@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'gon'
 require 'fogbugz'
 
@@ -6,31 +8,52 @@ class ApplicationController < ActionController::Base
   include GitlabRoutingHelper
   include PageLayoutHelper
   include SafeParamsHelper
-  include SentryHelper
   include WorkhorseHelper
   include EnforcesTwoFactorAuthentication
   include WithPerformanceBar
+  include SessionlessAuthentication
+  include ConfirmEmailWarning
+  include Gitlab::Tracking::ControllerConcern
+  include Gitlab::Experimentation::ControllerConcern
 
-  before_action :authenticate_sessionless_user!
-  before_action :authenticate_user!
+  before_action :authenticate_user!, except: [:route_not_found]
   before_action :enforce_terms!, if: :should_enforce_terms?
   before_action :validate_user_service_ticket!
   before_action :check_password_expiration
   before_action :ldap_security_check
   before_action :sentry_context
   before_action :default_headers
-  before_action :add_gon_variables, unless: :peek_request?
+  before_action :add_gon_variables, unless: [:peek_request?, :json_request?]
   before_action :configure_permitted_parameters, if: :devise_controller?
   before_action :require_email, unless: :devise_controller?
+  before_action :active_user_check, unless: :devise_controller?
+  before_action :set_usage_stats_consent_flag
+  before_action :check_impersonation_availability
+  before_action :require_role
 
   around_action :set_locale
+  around_action :set_session_storage
 
-  after_action :set_page_title_header, if: -> { request.format == :json }
+  after_action :set_page_title_header, if: :json_request?
+  after_action :limit_unauthenticated_session_times
 
-  protect_from_forgery with: :exception
+  protect_from_forgery with: :exception, prepend: true
 
   helper_method :can?
-  helper_method :import_sources_enabled?, :github_import_enabled?, :gitea_import_enabled?, :github_import_configured?, :gitlab_import_enabled?, :gitlab_import_configured?, :bitbucket_import_enabled?, :bitbucket_import_configured?, :google_code_import_enabled?, :fogbugz_import_enabled?, :git_import_enabled?, :gitlab_project_import_enabled?
+  helper_method :current_user_mode
+  helper_method :import_sources_enabled?, :github_import_enabled?,
+    :gitea_import_enabled?, :github_import_configured?,
+    :gitlab_import_enabled?, :gitlab_import_configured?,
+    :bitbucket_import_enabled?, :bitbucket_import_configured?,
+    :bitbucket_server_import_enabled?,
+    :google_code_import_enabled?, :fogbugz_import_enabled?,
+    :git_import_enabled?, :gitlab_project_import_enabled?,
+    :manifest_import_enabled?, :phabricator_import_enabled?
+
+  # Adds `no-store` to the DEFAULT_CACHE_CONTROL, to prevent security
+  # concerns due to caching private data.
+  DEFAULT_GITLAB_CACHE_CONTROL = "#{ActionDispatch::Http::Cache::Response::DEFAULT_CACHE_CONTROL}, no-store"
+  DEFAULT_GITLAB_CONTROL_NO_CACHE = "#{DEFAULT_GITLAB_CACHE_CONTROL}, no-cache"
 
   rescue_from Encoding::CompatibilityError do |exception|
     log_exception(exception)
@@ -54,8 +77,7 @@ class ApplicationController < ActionController::Base
     head :forbidden, retry_after: Gitlab::Auth::UniqueIpsLimiter.config.unique_ips_limit_time_window
   end
 
-  rescue_from Gitlab::Git::Storage::Inaccessible, GRPC::Unavailable, Gitlab::Git::CommandError do |exception|
-    Raven.capture_exception(exception) if sentry_enabled?
+  rescue_from GRPC::Unavailable, Gitlab::Git::CommandError do |exception|
     log_exception(exception)
 
     headers['Retry-After'] = exception.retry_after if exception.respond_to?(:retry_after)
@@ -64,7 +86,7 @@ class ApplicationController < ActionController::Base
   end
 
   def redirect_back_or_default(default: root_path, options: {})
-    redirect_to request.referer.present? ? :back : default, options
+    redirect_back(fallback_location: default, **options)
   end
 
   def not_found
@@ -75,15 +97,51 @@ class ApplicationController < ActionController::Base
     if current_user
       not_found
     else
-      authenticate_user!
+      store_location_for(:user, request.fullpath) unless request.xhr?
+
+      redirect_to new_user_session_path, alert: I18n.t('devise.failure.unauthenticated')
+    end
+  end
+
+  # By default, all sessions are given the same expiration time configured in
+  # the session store (e.g. 1 week). However, unauthenticated users can
+  # generate a lot of sessions, primarily for CSRF verification. It makes
+  # sense to reduce the TTL for unauthenticated to something much lower than
+  # the default (e.g. 1 hour) to limit Redis memory. In addition, Rails
+  # creates a new session after login, so the short TTL doesn't even need to
+  # be extended.
+  def limit_unauthenticated_session_times
+    return if current_user
+
+    # Rack sets this header, but not all tests may have it: https://github.com/rack/rack/blob/fdcd03a3c5a1c51d1f96fc97f9dfa1a9deac0c77/lib/rack/session/abstract/id.rb#L251-L259
+    return unless request.env['rack.session.options']
+
+    # This works because Rack uses these options every time a request is handled:
+    # https://github.com/rack/rack/blob/fdcd03a3c5a1c51d1f96fc97f9dfa1a9deac0c77/lib/rack/session/abstract/id.rb#L342
+    request.env['rack.session.options'][:expire_after] = Settings.gitlab['unauthenticated_session_expire_delay']
+  end
+
+  def render(*args)
+    super.tap do
+      # Set a header for custom error pages to prevent them from being intercepted by gitlab-workhorse
+      if (400..599).cover?(response.status) && workhorse_excluded_content_types.include?(response.content_type)
+        response.headers['X-GitLab-Custom-Error'] = '1'
+      end
     end
   end
 
   protected
 
+  def workhorse_excluded_content_types
+    @workhorse_excluded_content_types ||= %w(text/html application/json)
+  end
+
   def append_info_to_payload(payload)
     super
+
+    payload[:ua] = request.env["HTTP_USER_AGENT"]
     payload[:remote_ip] = request.remote_ip
+    payload[Labkit::Correlation::CorrelationId::LOG_KEY] = Labkit::Correlation::CorrelationId.current_id
 
     logged_user = auth_user
 
@@ -92,30 +150,29 @@ class ApplicationController < ActionController::Base
       payload[:username] = logged_user.try(:username)
     end
 
-    if response.status == 422 && response.body.present? && response.content_type == 'application/json'.freeze
+    if response.status == 422 && response.body.present? && response.content_type == 'application/json'
       payload[:response] = response.body
+    end
+
+    payload[:queue_duration] = request.env[::Gitlab::Middleware::RailsQueueDuration::GITLAB_RAILS_QUEUE_DURATION_KEY]
+  end
+
+  ##
+  # Controllers such as GitHttpController may use alternative methods
+  # (e.g. tokens) to authenticate the user, whereas Devise sets current_user.
+  #
+  def auth_user
+    if user_signed_in?
+      current_user
+    else
+      try(:authenticated_user)
     end
   end
 
-  # Controllers such as GitHttpController may use alternative methods
-  # (e.g. tokens) to authenticate the user, whereas Devise sets current_user
-  def auth_user
-    return current_user if current_user.present?
-
-    return try(:authenticated_user)
-  end
-
-  # This filter handles personal access tokens, and atom requests with rss tokens
-  def authenticate_sessionless_user!
-    user = Gitlab::Auth::RequestAuthenticator.new(request).find_sessionless_user
-
-    sessionless_sign_in(user) if user
-  end
-
   def log_exception(exception)
-    Raven.capture_exception(exception) if sentry_enabled?
+    Gitlab::Sentry.track_acceptable_exception(exception)
 
-    backtrace_cleaner = Gitlab.rails5? ? env["action_dispatch.backtrace_cleaner"] : env
+    backtrace_cleaner = request.env["action_dispatch.backtrace_cleaner"]
     application_trace = ActionDispatch::ExceptionWrapper.new(backtrace_cleaner, exception).application_trace
     application_trace.map! { |t| "  #{t}\n" }
     logger.error "\n#{exception.class.name} (#{exception.message}):\n#{application_trace.join}"
@@ -133,16 +190,22 @@ class ApplicationController < ActionController::Base
     Ability.allowed?(object, action, subject)
   end
 
-  def access_denied!(message = nil)
+  def access_denied!(message = nil, status = nil)
     # If we display a custom access denied message to the user, we don't want to
     # hide existence of the resource, rather tell them they cannot access it using
     # the provided message
-    status = message.present? ? :forbidden : :not_found
+    status ||= message.present? ? :forbidden : :not_found
+    template =
+      if status == :not_found
+        "errors/not_found"
+      else
+        "errors/access_denied"
+      end
 
     respond_to do |format|
       format.any { head status }
       format.html do
-        render "errors/access_denied",
+        render template,
                layout: "errors",
                status: status,
                locals: { message: message }
@@ -188,9 +251,9 @@ class ApplicationController < ActionController::Base
   end
 
   def no_cache_headers
-    response.headers["Cache-Control"] = "no-cache, no-store, max-age=0, must-revalidate"
-    response.headers["Pragma"] = "no-cache"
-    response.headers["Expires"] = "Fri, 01 Jan 1990 00:00:00 GMT"
+    headers['Cache-Control'] = DEFAULT_GITLAB_CONTROL_NO_CACHE
+    headers['Pragma'] = 'no-cache' # HTTP 1.0 compatibility
+    headers['Expires'] = 'Fri, 01 Jan 1990 00:00:00 GMT'
   end
 
   def default_headers
@@ -198,6 +261,19 @@ class ApplicationController < ActionController::Base
     headers['X-XSS-Protection'] = '1; mode=block'
     headers['X-UA-Compatible'] = 'IE=edge'
     headers['X-Content-Type-Options'] = 'nosniff'
+
+    if current_user
+      headers['Cache-Control'] = default_cache_control
+      headers['Pragma'] = 'no-cache' # HTTP 1.0 compatibility
+    end
+  end
+
+  def default_cache_control
+    if request.xhr?
+      ActionDispatch::Http::Cache::Response::DEFAULT_CACHE_CONTROL
+    else
+      DEFAULT_GITLAB_CACHE_CONTROL
+    end
   end
 
   def validate_user_service_ticket!
@@ -217,11 +293,17 @@ class ApplicationController < ActionController::Base
   def check_password_expiration
     return if session[:impersonator_id] || !current_user&.allow_password_authentication?
 
-    password_expires_at = current_user&.password_expires_at
-
-    if password_expires_at && password_expires_at < Time.now
+    if current_user&.password_expired?
       return redirect_to new_profile_password_path
     end
+  end
+
+  def active_user_check
+    return unless current_user && current_user.deactivated?
+
+    sign_out current_user
+    flash[:alert] = _("Your account has been deactivated by your administrator. Please log back in to reactivate your account.")
+    redirect_to new_user_session_path
   end
 
   def ldap_security_check
@@ -230,16 +312,17 @@ class ApplicationController < ActionController::Base
 
       unless Gitlab::Auth::LDAP::Access.allowed?(current_user)
         sign_out current_user
-        flash[:alert] = "Access denied for your LDAP account."
+        flash[:alert] = _("Access denied for your LDAP account.")
         redirect_to new_user_session_path
       end
     end
   end
 
   def event_filter
-    # Split using comma to maintain backward compatibility Ex/ "filter1,filter2"
-    filters = cookies['event_filter'].split(',')[0] if cookies['event_filter'].present?
-    @event_filter ||= EventFilter.new(filters)
+    @event_filter ||=
+      EventFilter.new(params[:event_filter].presence || cookies[:event_filter]).tap do |new_event_filter|
+        cookies[:event_filter] = new_event_filter.filter
+      end
   end
 
   # JSON for infinite scroll via Pager object
@@ -276,7 +359,7 @@ class ApplicationController < ActionController::Base
 
   def require_email
     if current_user && current_user.temp_oauth_email? && session[:impersonator_id].nil?
-      return redirect_to profile_path, notice: 'Please complete your profile with email address'
+      return redirect_to profile_path, notice: _('Please complete your profile with email address')
     end
   end
 
@@ -305,6 +388,10 @@ class ApplicationController < ActionController::Base
 
   def import_sources_enabled?
     !Gitlab::CurrentSettings.import_sources.empty?
+  end
+
+  def bitbucket_server_import_enabled?
+    Gitlab::CurrentSettings.import_sources.include?('bitbucket_server')
   end
 
   def github_import_enabled?
@@ -351,6 +438,14 @@ class ApplicationController < ActionController::Base
     Gitlab::CurrentSettings.import_sources.include?('gitlab_project')
   end
 
+  def manifest_import_enabled?
+    Gitlab::CurrentSettings.import_sources.include?('manifest')
+  end
+
+  def phabricator_import_enabled?
+    Gitlab::PhabricatorImport.available?
+  end
+
   # U2F (universal 2nd factor) devices need a unique identifier for the application
   # to perform authentication.
   # https://developers.yubico.com/U2F/App_ID.html
@@ -362,14 +457,10 @@ class ApplicationController < ActionController::Base
     Gitlab::I18n.with_user_locale(current_user, &block)
   end
 
-  def sessionless_sign_in(user)
-    if user && can?(user, :log_in)
-      # Notice we are passing store false, so the user is not
-      # actually stored in the session and a token is needed
-      # for every request. If you want the token to work as a
-      # sign in token, you can simply remove store: false.
-      sign_in user, store: false
-    end
+  def set_session_storage(&block)
+    return yield if sessionless_user?
+
+    Gitlab::Session.with_session(session, &block)
   end
 
   def set_page_title_header
@@ -377,12 +468,12 @@ class ApplicationController < ActionController::Base
     response.headers['Page-Title'] = URI.escape(page_title('GitLab'))
   end
 
-  def sessionless_user?
-    current_user && !session.keys.include?('warden.user.user.key')
-  end
-
   def peek_request?
     request.path.start_with?('/-/peek')
+  end
+
+  def json_request?
+    request.format.json?
   end
 
   def should_enforce_terms?
@@ -390,4 +481,85 @@ class ApplicationController < ActionController::Base
 
     !(peek_request? || devise_controller?)
   end
+
+  def set_usage_stats_consent_flag
+    return unless current_user
+    return if sessionless_user?
+    return if session.has_key?(:ask_for_usage_stats_consent)
+
+    session[:ask_for_usage_stats_consent] = current_user.requires_usage_stats_consent?
+
+    if session[:ask_for_usage_stats_consent]
+      disable_usage_stats
+    end
+  end
+
+  def disable_usage_stats
+    application_setting_params = {
+      usage_ping_enabled: false,
+      version_check_enabled: false,
+      skip_usage_stats_user: true
+    }
+    settings = Gitlab::CurrentSettings.current_application_settings
+
+    ApplicationSettings::UpdateService
+      .new(settings, current_user, application_setting_params)
+      .execute
+  end
+
+  def check_impersonation_availability
+    return unless session[:impersonator_id]
+
+    unless Gitlab.config.gitlab.impersonation_enabled
+      stop_impersonation
+      access_denied! _('Impersonation has been disabled')
+    end
+  end
+
+  def stop_impersonation
+    log_impersonation_event
+
+    warden.set_user(impersonator, scope: :user)
+    session[:impersonator_id] = nil
+
+    impersonated_user
+  end
+
+  def impersonated_user
+    current_user
+  end
+
+  def log_impersonation_event
+    Gitlab::AppLogger.info("User #{impersonator.username} has stopped impersonating #{impersonated_user.username}")
+  end
+
+  def impersonator
+    @impersonator ||= User.find(session[:impersonator_id]) if session[:impersonator_id]
+  end
+
+  def sentry_context
+    Gitlab::Sentry.context(current_user)
+  end
+
+  def allow_gitaly_ref_name_caching
+    ::Gitlab::GitalyClient.allow_ref_name_caching do
+      yield
+    end
+  end
+
+  def current_user_mode
+    @current_user_mode ||= Gitlab::Auth::CurrentUserMode.new(current_user)
+  end
+
+  # A user requires a role when they are part of the experimental signup flow (executed by the Growth team). Users
+  # are redirected to the welcome page when their role is required and the experiment is enabled for the current user.
+  def require_role
+    return unless current_user && current_user.role_required? && experiment_enabled?(:signup_flow)
+
+    store_location_for :user, request.fullpath
+
+    redirect_to users_sign_up_welcome_path
+  end
 end
+
+ApplicationController.prepend_if_ee('EE::ApplicationController')

@@ -10,15 +10,15 @@ module Gitlab
       include ::Gitlab::Utils::StrongMemoize
 
       FIND_BATCH_SIZE = 500
-      RELATIVE_UPLOAD_DIR = "uploads".freeze
+      RELATIVE_UPLOAD_DIR = "uploads"
       ABSOLUTE_UPLOAD_DIR = File.join(
         Gitlab.config.uploads.storage_path,
         RELATIVE_UPLOAD_DIR
       )
-      FOLLOW_UP_MIGRATION = 'PopulateUntrackedUploads'.freeze
-      START_WITH_ROOT_REGEX = %r{\A#{Gitlab.config.uploads.storage_path}/}
-      EXCLUDED_HASHED_UPLOADS_PATH = "#{ABSOLUTE_UPLOAD_DIR}/@hashed/*".freeze
-      EXCLUDED_TMP_UPLOADS_PATH = "#{ABSOLUTE_UPLOAD_DIR}/tmp/*".freeze
+      FOLLOW_UP_MIGRATION = 'PopulateUntrackedUploads'
+      START_WITH_ROOT_REGEX = %r{\A#{Gitlab.config.uploads.storage_path}/}.freeze
+      EXCLUDED_HASHED_UPLOADS_PATH = "#{ABSOLUTE_UPLOAD_DIR}/@hashed/*"
+      EXCLUDED_TMP_UPLOADS_PATH = "#{ABSOLUTE_UPLOAD_DIR}/tmp/*"
 
       # This class is used to iterate over batches of
       # `untracked_files_for_uploads` rows.
@@ -54,7 +54,8 @@ module Gitlab
 
       def ensure_temporary_tracking_table_exists
         table_name = :untracked_files_for_uploads
-        unless UntrackedFile.connection.table_exists?(table_name)
+
+        unless ActiveRecord::Base.connection.table_exists?(table_name)
           UntrackedFile.connection.create_table table_name do |t|
             t.string :path, limit: 600, null: false
             t.index :path, unique: true
@@ -110,7 +111,7 @@ module Gitlab
         cmd = %W[#{ionice} -c Idle] + cmd if ionice
 
         log_msg = "PrepareUntrackedUploads find command: \"#{cmd.join(' ')}\""
-        Rails.logger.info log_msg
+        Rails.logger.info log_msg # rubocop:disable Gitlab/RailsLogger
 
         cmd
       end
@@ -132,27 +133,18 @@ module Gitlab
       def insert_sql(file_paths)
         if postgresql_pre_9_5?
           "INSERT INTO #{table_columns_and_values_for_insert(file_paths)};"
-        elsif postgresql?
+        else
           "INSERT INTO #{table_columns_and_values_for_insert(file_paths)}"\
             " ON CONFLICT DO NOTHING;"
-        else # MySQL
-          "INSERT IGNORE INTO"\
-            " #{table_columns_and_values_for_insert(file_paths)};"
         end
       end
 
       def table_columns_and_values_for_insert(file_paths)
         values = file_paths.map do |file_path|
-          ActiveRecord::Base.send(:sanitize_sql_array, ['(?)', file_path]) # rubocop:disable GitlabSecurity/PublicSend, Metrics/LineLength
+          ActiveRecord::Base.send(:sanitize_sql_array, ['(?)', file_path]) # rubocop:disable GitlabSecurity/PublicSend
         end.join(', ')
 
         "#{UntrackedFile.table_name} (path) VALUES #{values}"
-      end
-
-      def postgresql?
-        strong_memoize(:postgresql) do
-          Gitlab::Database.postgresql?
-        end
       end
 
       def can_bulk_insert_and_ignore_duplicates?
@@ -161,7 +153,7 @@ module Gitlab
 
       def postgresql_pre_9_5?
         strong_memoize(:postgresql_pre_9_5) do
-          postgresql? && Gitlab::Database.version.to_f < 9.5
+          Gitlab::Database.version.to_f < 9.5
         end
       end
 

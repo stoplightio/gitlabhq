@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module Auth
     module OAuth
@@ -29,12 +31,17 @@ module Gitlab
 
         def self.enabled?(name)
           return true if name == 'database'
+          return true if self.ldap_provider?(name) && providers.include?(name.to_sym)
 
-          providers.include?(name.to_sym)
+          Gitlab::Auth.omniauth_enabled? && providers.include?(name.to_sym)
         end
 
         def self.ldap_provider?(name)
           name.to_s.start_with?('ldap')
+        end
+
+        def self.ultraauth_provider?(name)
+          name.to_s.eql?('ultraauth')
         end
 
         def self.sync_profile_from_provider?(provider)

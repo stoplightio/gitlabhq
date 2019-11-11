@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Projects::NotesController do
@@ -27,7 +29,7 @@ describe Projects::NotesController do
       }
     end
 
-    let(:parsed_response) { JSON.parse(response.body).with_indifferent_access }
+    let(:parsed_response) { json_response.with_indifferent_access }
     let(:note_json) { parsed_response[:notes].first }
 
     before do
@@ -41,20 +43,51 @@ describe Projects::NotesController do
       request.headers['X-Last-Fetched-At'] = last_fetched_at
 
       expect(NotesFinder).to receive(:new)
-        .with(anything, anything, hash_including(last_fetched_at: last_fetched_at))
+        .with(anything, hash_including(last_fetched_at: last_fetched_at))
         .and_call_original
 
-      get :index, request_params
+      get :index, params: request_params
+    end
+
+    context 'when user notes_filter is present' do
+      let(:notes_json) { parsed_response[:notes] }
+      let!(:comment) { create(:note, noteable: issue, project: project) }
+      let!(:system_note) { create(:note, noteable: issue, project: project, system: true) }
+
+      it 'filters system notes by comments' do
+        user.set_notes_filter(UserPreference::NOTES_FILTERS[:only_comments], issue)
+
+        get :index, params: request_params
+
+        expect(notes_json.count).to eq(1)
+        expect(notes_json.first[:id].to_i).to eq(comment.id)
+      end
+
+      it 'returns all notes' do
+        user.set_notes_filter(UserPreference::NOTES_FILTERS[:all_notes], issue)
+
+        get :index, params: request_params
+
+        expect(notes_json.map { |note| note[:id].to_i }).to contain_exactly(comment.id, system_note.id)
+      end
+
+      it 'does not merge label event notes' do
+        user.set_notes_filter(UserPreference::NOTES_FILTERS[:only_comments], issue)
+
+        expect(ResourceEvents::MergeIntoNotesService).not_to receive(:new)
+
+        get :index, params: request_params
+      end
     end
 
     context 'for a discussion note' do
       let(:project) { create(:project, :repository) }
       let!(:note) { create(:discussion_note_on_merge_request, project: project) }
 
-      let(:params) { request_params.merge(target_type: 'merge_request', target_id: note.noteable_id) }
+      let(:params) { request_params.merge(target_type: 'merge_request', target_id: note.noteable_id, html: true) }
 
       it 'responds with the expected attributes' do
-        get :index, params
+        get :index, params: params
 
         expect(note_json[:id]).to eq(note.id)
         expect(note_json[:discussion_html]).not_to be_nil
@@ -67,10 +100,10 @@ describe Projects::NotesController do
       let(:project) { create(:project, :repository) }
       let!(:note) { create(:diff_note_on_merge_request, project: project) }
 
-      let(:params) { request_params.merge(target_type: 'merge_request', target_id: note.noteable_id) }
+      let(:params) { request_params.merge(target_type: 'merge_request', target_id: note.noteable_id, html: true) }
 
       it 'responds with the expected attributes' do
-        get :index, params
+        get :index, params: params
 
         expect(note_json[:id]).to eq(note.id)
         expect(note_json[:discussion_html]).not_to be_nil
@@ -86,10 +119,10 @@ describe Projects::NotesController do
       context 'when displayed on a merge request' do
         let(:merge_request) { create(:merge_request, source_project: project) }
 
-        let(:params) { request_params.merge(target_type: 'merge_request', target_id: merge_request.id) }
+        let(:params) { request_params.merge(target_type: 'merge_request', target_id: merge_request.id, html: true) }
 
         it 'responds with the expected attributes' do
-          get :index, params
+          get :index, params: params
 
           expect(note_json[:id]).to eq(note.id)
           expect(note_json[:discussion_html]).not_to be_nil
@@ -99,10 +132,10 @@ describe Projects::NotesController do
       end
 
       context 'when displayed on the commit' do
-        let(:params) { request_params.merge(target_type: 'commit', target_id: note.commit_id) }
+        let(:params) { request_params.merge(target_type: 'commit', target_id: note.commit_id, html: true) }
 
         it 'responds with the expected attributes' do
-          get :index, params
+          get :index, params: params
 
           expect(note_json[:id]).to eq(note.id)
           expect(note_json[:discussion_html]).to be_nil
@@ -117,7 +150,7 @@ describe Projects::NotesController do
           end
 
           it 'renders 404' do
-            get :index, params
+            get :index, params: params
 
             expect(response).to have_gitlab_http_status(404)
           end
@@ -128,10 +161,10 @@ describe Projects::NotesController do
     context 'for a regular note' do
       let!(:note) { create(:note_on_merge_request, project: project) }
 
-      let(:params) { request_params.merge(target_type: 'merge_request', target_id: note.noteable_id) }
+      let(:params) { request_params.merge(target_type: 'merge_request', target_id: note.noteable_id, html: true) }
 
       it 'responds with the expected attributes' do
-        get :index, params
+        get :index, params: params
 
         expect(note_json[:id]).to eq(note.id)
         expect(note_json[:html]).not_to be_nil
@@ -151,27 +184,27 @@ describe Projects::NotesController do
       end
 
       it 'filters notes that the user should not see' do
-        get :index, request_params
+        get :index, params: request_params
 
         expect(parsed_response[:notes].count).to eq(1)
-        expect(note_json[:id]).to eq(note.id)
+        expect(note_json[:id]).to eq(note.id.to_s)
       end
 
       it 'does not result in N+1 queries' do
         # Instantiate the controller variables to ensure QueryRecorder has an accurate base count
-        get :index, request_params
+        get :index, params: request_params
 
         RequestStore.clear!
 
         control_count = ActiveRecord::QueryRecorder.new do
-          get :index, request_params
+          get :index, params: request_params
         end.count
 
         RequestStore.clear!
 
         create_list(:discussion_note_on_issue, 2, :system, noteable: issue, project: issue.project, note: cross_reference)
 
-        expect { get :index, request_params }.not_to exceed_query_limit(control_count)
+        expect { get :index, params: request_params }.not_to exceed_query_limit(control_count)
       end
     end
   end
@@ -179,56 +212,272 @@ describe Projects::NotesController do
   describe 'POST create' do
     let(:merge_request) { create(:merge_request) }
     let(:project) { merge_request.source_project }
+    let(:note_text) { 'some note' }
     let(:request_params) do
       {
-        note: { note: 'some note', noteable_id: merge_request.id, noteable_type: 'MergeRequest' },
+        note: { note: note_text, noteable_id: merge_request.id, noteable_type: 'MergeRequest' },
         namespace_id: project.namespace,
         project_id: project,
         merge_request_diff_head_sha: 'sha',
         target_type: 'merge_request',
         target_id: merge_request.id
-      }
+      }.merge(extra_request_params)
+    end
+    let(:extra_request_params) { {} }
+
+    let(:project_visibility) { Gitlab::VisibilityLevel::PUBLIC }
+    let(:merge_requests_access_level) { ProjectFeature::ENABLED }
+
+    def create!
+      post :create, params: request_params
     end
 
     before do
+      project.update_attribute(:visibility_level, project_visibility)
+      project.project_feature.update(merge_requests_access_level: merge_requests_access_level)
       sign_in(user)
-      project.add_developer(user)
     end
 
-    it "returns status 302 for html" do
-      post :create, request_params
+    describe 'making the creation request' do
+      before do
+        create!
+      end
 
-      expect(response).to have_gitlab_http_status(302)
+      context 'the project is publically available' do
+        context 'for HTML' do
+          it "returns status 302" do
+            expect(response).to have_gitlab_http_status(302)
+          end
+        end
+
+        context 'for JSON' do
+          let(:extra_request_params) { { format: :json } }
+
+          it "returns status 200 for json" do
+            expect(response).to have_gitlab_http_status(200)
+          end
+        end
+      end
+
+      context 'the project is a private project' do
+        let(:project_visibility) { Gitlab::VisibilityLevel::PRIVATE }
+
+        [{}, { format: :json }].each do |extra|
+          context "format is #{extra[:format]}" do
+            let(:extra_request_params) { extra }
+
+            it "returns status 404" do
+              expect(response).to have_gitlab_http_status(404)
+            end
+          end
+        end
+      end
     end
 
-    it "returns status 200 for json" do
-      post :create, request_params.merge(format: :json)
+    context 'the user is a developer on a private project' do
+      let(:project_visibility) { Gitlab::VisibilityLevel::PRIVATE }
 
-      expect(response).to have_gitlab_http_status(200)
+      before do
+        project.add_developer(user)
+      end
+
+      context 'HTML requests' do
+        it "returns status 302 (redirect)" do
+          create!
+
+          expect(response).to have_gitlab_http_status(302)
+        end
+      end
+
+      context 'JSON requests' do
+        let(:extra_request_params) { { format: :json } }
+
+        it "returns status 200" do
+          create!
+
+          expect(response).to have_gitlab_http_status(200)
+        end
+      end
+
+      context 'the return_discussion param is set' do
+        let(:extra_request_params) { { format: :json, return_discussion: 'true' } }
+
+        it 'returns discussion JSON when the return_discussion param is set' do
+          create!
+
+          expect(response).to have_gitlab_http_status(200)
+          expect(json_response).to have_key 'discussion'
+          expect(json_response.dig('discussion', 'notes', 0, 'note')).to eq(request_params[:note][:note])
+        end
+      end
+
+      context 'when creating a note with quick actions' do
+        context 'with commands that return changes' do
+          let(:note_text) { "/award :thumbsup:\n/estimate 1d\n/spend 3h" }
+          let(:extra_request_params) { { format: :json } }
+
+          it 'includes changes in commands_changes ' do
+            create!
+
+            expect(response).to have_gitlab_http_status(200)
+            expect(json_response['commands_changes']).to include('emoji_award', 'time_estimate', 'spend_time')
+            expect(json_response['commands_changes']).not_to include('target_project', 'title')
+          end
+        end
+
+        context 'with commands that do not return changes' do
+          let(:issue) { create(:issue, project: project) }
+          let(:other_project) { create(:project) }
+          let(:note_text) { "/move #{other_project.full_path}\n/title AAA" }
+          let(:extra_request_params) { { format: :json, target_id: issue.id, target_type: 'issue' } }
+
+          before do
+            other_project.add_developer(user)
+          end
+
+          it 'does not include changes in commands_changes' do
+            create!
+
+            expect(response).to have_gitlab_http_status(200)
+            expect(json_response['commands_changes']).not_to include('target_project', 'title')
+          end
+        end
+      end
+    end
+
+    context 'when the internal project prohibits non-members from accessing merge requests' do
+      let(:project_visibility) { Gitlab::VisibilityLevel::INTERNAL }
+      let(:merge_requests_access_level) { ProjectFeature::PRIVATE }
+
+      it "prevents a non-member user from creating a note on one of the project's merge requests" do
+        create!
+
+        expect(response).to have_gitlab_http_status(404)
+      end
+
+      context 'when the user is a team member' do
+        before do
+          project.add_developer(user)
+        end
+
+        it 'can add comments' do
+          expect { create! }.to change { project.notes.count }.by(1)
+        end
+      end
+
+      # Illustration of the attack vector for posting comments to discussions that should
+      # be inaccessible.
+      #
+      # This relies on posting a note to a commit that is not necessarily even in the
+      # merge request, with a value of :in_reply_to_discussion_id that points to a
+      # discussion on a merge_request that should not be accessible.
+      context 'when the request includes a :in_reply_to_discussion_id designed to fool us' do
+        let(:commit) { create(:commit, project: project) }
+
+        let(:existing_comment) do
+          create(:note_on_commit,
+                 note: 'first',
+                 project: project,
+                 commit_id: merge_request.commit_shas.first)
+        end
+
+        let(:discussion) { existing_comment.discussion }
+
+        # see !60465 for details of the structure of this request
+        let(:request_params) do
+          { "utf8" => "✓",
+            "authenticity_token" => "1",
+            "view" => "inline",
+            "line_type" => "",
+            "merge_request_diff_head_sha" => "",
+            "in_reply_to_discussion_id" => discussion.id,
+            "note_project_id" => project.id,
+            "project_id" => project.id,
+            "namespace_id" => project.namespace,
+            "target_type" => "commit",
+            "target_id" => commit.id,
+            "note" => {
+              "noteable_type" => "",
+              "noteable_id" => "",
+              "commit_id" => "",
+              "type" => "",
+              "line_code" => "",
+              "position" => "",
+              "note" => "ThisReplyWillGoToMergeRequest"
+            } }
+        end
+
+        it 'prevents the request from adding notes to the spoofed discussion' do
+          expect { create! }.not_to change { discussion.notes.count }
+        end
+
+        it 'returns an error to the user' do
+          create!
+          expect(response).to have_gitlab_http_status(404)
+        end
+      end
+    end
+
+    context 'when the public project prohibits non-members from accessing merge requests' do
+      let(:project_visibility) { Gitlab::VisibilityLevel::PUBLIC }
+      let(:merge_requests_access_level) { ProjectFeature::PRIVATE }
+
+      it "prevents a non-member user from creating a note on one of the project's merge requests" do
+        create!
+
+        expect(response).to have_gitlab_http_status(404)
+      end
+
+      context 'when the user is a team member' do
+        before do
+          project.add_developer(user)
+          create!
+        end
+
+        it 'can add comments' do
+          expect(response).to be_redirect
+        end
+      end
     end
 
     context 'when merge_request_diff_head_sha present' do
       before do
-        service_params = {
+        service_params = ActionController::Parameters.new({
           note: 'some note',
-          noteable_id: merge_request.id.to_s,
+          noteable_id: merge_request.id,
           noteable_type: 'MergeRequest',
-          merge_request_diff_head_sha: 'sha',
-          in_reply_to_discussion_id: nil
-        }
+          commit_id: nil,
+          merge_request_diff_head_sha: 'sha'
+        }).permit!
 
         expect(Notes::CreateService).to receive(:new).with(project, user, service_params).and_return(double(execute: true))
       end
 
       it "returns status 302 for html" do
-        post :create, request_params
+        create!
 
         expect(response).to have_gitlab_http_status(302)
       end
     end
 
+    context 'when creating a comment on a commit with SHA1 starting with a large number' do
+      let(:commit) { create(:commit, project: project, id: '842616594688d2351480dfebd67b3d8d15571e6d') }
+
+      it 'creates a note successfully' do
+        expect do
+          post :create, params: {
+            note: { note: 'some note', commit_id: commit.id },
+            namespace_id: project.namespace,
+            project_id: project,
+            target_type: 'commit',
+            target_id: commit.id
+          }
+        end.to change { Note.count }.by(1)
+      end
+    end
+
     context 'when creating a commit comment from an MR fork' do
-      let(:project) { create(:project, :repository) }
+      let(:project) { create(:project, :repository, :public) }
 
       let(:forked_project) do
         fork_project(project, nil, repository: true)
@@ -242,130 +491,187 @@ describe Projects::NotesController do
         create(:note_on_commit, note: 'a note', project: forked_project, commit_id: merge_request.commit_shas.first)
       end
 
-      def post_create(extra_params = {})
-        post :create, {
-               note: { note: 'some other note' },
-               namespace_id: project.namespace,
-               project_id: project,
-               target_type: 'merge_request',
-               target_id: merge_request.id,
-               note_project_id: forked_project.id,
-               in_reply_to_discussion_id: existing_comment.discussion_id
-             }.merge(extra_params)
+      let(:note_project_id) do
+        forked_project.id
+      end
+
+      let(:request_params) do
+        {
+          note: { note: 'some other note', noteable_id: merge_request.id },
+          namespace_id: project.namespace,
+          project_id: project,
+          target_type: 'merge_request',
+          target_id: merge_request.id,
+          note_project_id: note_project_id,
+          in_reply_to_discussion_id: existing_comment.discussion_id
+        }
+      end
+
+      let(:fork_visibility) { Gitlab::VisibilityLevel::PUBLIC }
+
+      before do
+        forked_project.update_attribute(:visibility_level, fork_visibility)
       end
 
       context 'when the note_project_id is not correct' do
-        it 'returns a 404' do
-          post_create(note_project_id: Project.maximum(:id).succ)
+        let(:note_project_id) do
+          project.id && Project.maximum(:id).succ
+        end
 
+        it 'returns a 404' do
+          create!
           expect(response).to have_gitlab_http_status(404)
         end
       end
 
       context 'when the user has no access to the fork' do
-        it 'returns a 404' do
-          post_create
+        let(:fork_visibility) { Gitlab::VisibilityLevel::PRIVATE }
 
+        it 'returns a 404' do
+          create!
           expect(response).to have_gitlab_http_status(404)
         end
       end
 
       context 'when the user has access to the fork' do
-        let(:discussion) { forked_project.notes.find_discussion(existing_comment.discussion_id) }
+        let!(:discussion) { forked_project.notes.find_discussion(existing_comment.discussion_id) }
+        let(:fork_visibility) { Gitlab::VisibilityLevel::PUBLIC }
 
-        before do
-          forked_project.add_developer(user)
-
-          existing_comment
+        it 'is successful' do
+          create!
+          expect(response).to have_gitlab_http_status(302)
         end
 
         it 'creates the note' do
-          expect { post_create }.to change { forked_project.notes.count }.by(1)
+          expect { create! }.to change { forked_project.notes.count }.by(1)
         end
+      end
+    end
+
+    context 'when target_id and noteable_id do not match' do
+      let(:locked_issue) { create(:issue, :locked, project: project) }
+      let(:issue) {create(:issue, project: project)}
+
+      it 'uses target_id and ignores noteable_id' do
+        request_params = {
+          note: { note: 'some note', noteable_type: 'Issue', noteable_id: locked_issue.id },
+          target_type: 'issue',
+          target_id: issue.id,
+          project_id: project,
+          namespace_id: project.namespace
+        }
+
+        expect { post :create, params: request_params }.to change { issue.notes.count }.by(1)
+          .and change { locked_issue.notes.count }.by(0)
+        expect(response).to have_gitlab_http_status(302)
       end
     end
 
     context 'when the merge request discussion is locked' do
       before do
-        project.update_attribute(:visibility_level, Gitlab::VisibilityLevel::PUBLIC)
         merge_request.update_attribute(:discussion_locked, true)
       end
 
       context 'when a noteable is not found' do
         it 'returns 404 status' do
-          request_params[:note][:noteable_id] = 9999
-          post :create, request_params.merge(format: :json)
+          request_params[:target_id] = 9999
+          post :create, params: request_params.merge(format: :json)
 
           expect(response).to have_gitlab_http_status(404)
         end
       end
 
       context 'when a user is a team member' do
+        before do
+          project.add_developer(user)
+        end
+
         it 'returns 302 status for html' do
-          post :create, request_params
+          post :create, params: request_params
 
           expect(response).to have_gitlab_http_status(302)
         end
 
         it 'returns 200 status for json' do
-          post :create, request_params.merge(format: :json)
+          post :create, params: request_params.merge(format: :json)
 
           expect(response).to have_gitlab_http_status(200)
         end
 
         it 'creates a new note' do
-          expect { post :create, request_params }.to change { Note.count }.by(1)
+          expect { post :create, params: request_params }.to change { Note.count }.by(1)
         end
       end
 
       context 'when a user is not a team member' do
-        before do
-          project.project_member(user).destroy
-        end
-
         it 'returns 404 status' do
-          post :create, request_params
+          post :create, params: request_params
 
           expect(response).to have_gitlab_http_status(404)
         end
 
         it 'does not create a new note' do
-          expect { post :create, request_params }.not_to change { Note.count }
+          expect { post :create, params: request_params }.not_to change { Note.count }
         end
       end
     end
   end
 
   describe 'PUT update' do
-    let(:request_params) do
-      {
-        namespace_id: project.namespace,
-        project_id: project,
-        id: note,
-        format: :json,
-        note: {
-          note: "New comment"
+    context "should update the note with a valid issue" do
+      let(:request_params) do
+        {
+          namespace_id: project.namespace,
+          project_id: project,
+          id: note,
+          format: :json,
+          note: {
+            note: "New comment"
+          }
         }
-      }
-    end
+      end
 
-    before do
-      sign_in(note.author)
-      project.add_developer(note.author)
-    end
+      before do
+        sign_in(note.author)
+        project.add_developer(note.author)
+      end
 
-    it "updates the note" do
-      expect { put :update, request_params }.to change { note.reload.note }
+      it "updates the note" do
+        expect { put :update, params: request_params }.to change { note.reload.note }
+      end
+    end
+    context "doesnt update the note" do
+      let(:issue)   { create(:issue, :confidential, project: project) }
+      let(:note)    { create(:note, noteable: issue, project: project) }
+
+      before do
+        sign_in(user)
+        project.add_guest(user)
+      end
+
+      it "disallows edits when the issue is confidential and the user has guest permissions" do
+        request_params = {
+          namespace_id: project.namespace,
+          project_id: project,
+          id: note,
+          format: :json,
+          note: {
+            note: "New comment"
+          }
+        }
+        expect { put :update, params: request_params }.not_to change { note.reload.note }
+        expect(response).to have_gitlab_http_status(404)
+      end
     end
   end
 
   describe 'DELETE destroy' do
     let(:request_params) do
       {
-        namespace_id: project.namespace,
-        project_id: project,
-        id: note,
-        format: :js
+          namespace_id: project.namespace,
+          project_id: project,
+          id: note,
+          format: :js
       }
     end
 
@@ -376,13 +682,13 @@ describe Projects::NotesController do
       end
 
       it "returns status 200 for html" do
-        delete :destroy, request_params
+        delete :destroy, params: request_params
 
         expect(response).to have_gitlab_http_status(200)
       end
 
       it "deletes the note" do
-        expect { delete :destroy, request_params }.to change { Note.count }.from(1).to(0)
+        expect { delete :destroy, params: request_params }.to change { Note.count }.from(1).to(0)
       end
     end
 
@@ -393,7 +699,7 @@ describe Projects::NotesController do
       end
 
       it "returns status 404" do
-        delete :destroy, request_params
+        delete :destroy, params: request_params
 
         expect(response).to have_gitlab_http_status(404)
       end
@@ -406,22 +712,32 @@ describe Projects::NotesController do
       project.add_developer(user)
     end
 
+    subject { post(:toggle_award_emoji, params: request_params.merge(name: emoji_name)) }
+
+    let(:emoji_name) { 'thumbsup' }
+
     it "toggles the award emoji" do
       expect do
-        post(:toggle_award_emoji, request_params.merge(name: "thumbsup"))
+        subject
       end.to change { note.award_emoji.count }.by(1)
 
       expect(response).to have_gitlab_http_status(200)
     end
 
     it "removes the already awarded emoji" do
-      post(:toggle_award_emoji, request_params.merge(name: "thumbsup"))
+      create(:award_emoji, awardable: note, name: emoji_name, user: user)
 
-      expect do
-        post(:toggle_award_emoji, request_params.merge(name: "thumbsup"))
-      end.to change { AwardEmoji.count }.by(-1)
+      expect { subject }.to change { AwardEmoji.count }.by(-1)
 
       expect(response).to have_gitlab_http_status(200)
+    end
+
+    it 'marks Todos on the Noteable as done' do
+      todo = create(:todo, target: note.noteable, project: project, user: user)
+
+      subject
+
+      expect(todo.reload).to be_done
     end
   end
 
@@ -437,7 +753,7 @@ describe Projects::NotesController do
 
       context "when the user is not authorized to resolve the note" do
         it "returns status 404" do
-          post :resolve, request_params
+          post :resolve, params: request_params
 
           expect(response).to have_gitlab_http_status(404)
         end
@@ -454,7 +770,7 @@ describe Projects::NotesController do
           end
 
           it "returns status 404" do
-            post :resolve, request_params
+            post :resolve, params: request_params
 
             expect(response).to have_gitlab_http_status(404)
           end
@@ -462,7 +778,7 @@ describe Projects::NotesController do
 
         context "when the note is resolvable" do
           it "resolves the note" do
-            post :resolve, request_params
+            post :resolve, params: request_params
 
             expect(note.reload.resolved?).to be true
             expect(note.reload.resolved_by).to eq(user)
@@ -471,17 +787,17 @@ describe Projects::NotesController do
           it "sends notifications if all discussions are resolved" do
             expect_any_instance_of(MergeRequests::ResolvedDiscussionNotificationService).to receive(:execute).with(merge_request)
 
-            post :resolve, request_params
+            post :resolve, params: request_params
           end
 
           it "returns the name of the resolving user" do
-            post :resolve, request_params
+            post :resolve, params: request_params.merge(html: true)
 
-            expect(JSON.parse(response.body)["resolved_by"]).to eq(user.name)
+            expect(json_response["resolved_by"]).to eq(user.name)
           end
 
           it "returns status 200" do
-            post :resolve, request_params
+            post :resolve, params: request_params
 
             expect(response).to have_gitlab_http_status(200)
           end
@@ -498,7 +814,7 @@ describe Projects::NotesController do
 
       context "when the user is not authorized to resolve the note" do
         it "returns status 404" do
-          delete :unresolve, request_params
+          delete :unresolve, params: request_params
 
           expect(response).to have_gitlab_http_status(404)
         end
@@ -515,7 +831,7 @@ describe Projects::NotesController do
           end
 
           it "returns status 404" do
-            delete :unresolve, request_params
+            delete :unresolve, params: request_params
 
             expect(response).to have_gitlab_http_status(404)
           end
@@ -523,13 +839,13 @@ describe Projects::NotesController do
 
         context "when the note is resolvable" do
           it "unresolves the note" do
-            delete :unresolve, request_params
+            delete :unresolve, params: request_params
 
             expect(note.reload.resolved?).to be false
           end
 
           it "returns status 200" do
-            delete :unresolve, request_params
+            delete :unresolve, params: request_params
 
             expect(response).to have_gitlab_http_status(200)
           end

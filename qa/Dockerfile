@@ -1,12 +1,22 @@
-FROM ruby:2.4-stretch
+FROM ruby:2.6-stretch
 LABEL maintainer "Grzegorz Bizon <grzegorz@gitlab.com>"
 ENV DEBIAN_FRONTEND noninteractive
+
+##
+# Add support for stretch-backports
+#
+RUN echo "deb http://ftp.debian.org/debian stretch-backports main" >> /etc/apt/sources.list
 
 ##
 # Update APT sources and install some dependencies
 #
 RUN sed -i "s/httpredir.debian.org/ftp.us.debian.org/" /etc/apt/sources.list
-RUN apt-get update && apt-get install -y wget git unzip xvfb
+RUN apt-get update && apt-get install -y wget unzip xvfb
+
+##
+# Install some packages from backports
+#
+RUN apt-get -y -t stretch-backports install git git-lfs
 
 ##
 # Install Docker
@@ -37,9 +47,16 @@ RUN export CLOUD_SDK_REPO="cloud-sdk-$(lsb_release -c -s)" && \
     curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add - && \
     apt-get update -y && apt-get install google-cloud-sdk kubectl -y
 
-WORKDIR /home/qa
-COPY ./Gemfile* ./
-RUN bundle install
-COPY ./ ./
+WORKDIR /home/gitlab/qa
+COPY ./qa/Gemfile* /home/gitlab/qa/
+COPY ./config/initializers/0_inject_enterprise_edition_module.rb /home/gitlab/config/initializers/
+# Copy VERSION to ensure the COPY succeeds to copy at least one file since ee/app/models/license.rb isn't present in FOSS
+# The [b] part makes ./ee/app/models/license.r[b] a pattern that is allowed to return no files (which is the case in FOSS)
+COPY VERSION ./ee/app/models/license.r[b] /home/gitlab/ee/app/models/
+COPY ./lib/gitlab.rb /home/gitlab/lib/
+COPY ./lib/gitlab/utils.rb /home/gitlab/lib/gitlab/
+COPY ./INSTALLATION_TYPE ./VERSION /home/gitlab/
+RUN cd /home/gitlab/qa/ && bundle install --jobs=$(nproc) --retry=3 --quiet
+COPY ./qa /home/gitlab/qa
 
 ENTRYPOINT ["bin/test"]

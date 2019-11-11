@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe GitlabSchema.types['Query'] do
@@ -5,7 +7,17 @@ describe GitlabSchema.types['Query'] do
     expect(described_class.graphql_name).to eq('Query')
   end
 
-  it { is_expected.to have_graphql_fields(:project, :merge_request, :echo) }
+  it { is_expected.to have_graphql_fields(:project, :namespace, :group, :echo, :metadata, :current_user) }
+
+  describe 'namespace field' do
+    subject { described_class.fields['namespace'] }
+
+    it 'finds namespaces by full path' do
+      is_expected.to have_graphql_arguments(:full_path)
+      is_expected.to have_graphql_type(Types::NamespaceType)
+      is_expected.to have_graphql_resolver(Resolvers::NamespaceResolver)
+    end
+  end
 
   describe 'project field' do
     subject { described_class.fields['project'] }
@@ -15,23 +27,14 @@ describe GitlabSchema.types['Query'] do
       is_expected.to have_graphql_type(Types::ProjectType)
       is_expected.to have_graphql_resolver(Resolvers::ProjectResolver)
     end
-
-    it 'authorizes with read_project' do
-      is_expected.to require_graphql_authorizations(:read_project)
-    end
   end
 
-  describe 'merge_request field' do
-    subject { described_class.fields['mergeRequest'] }
+  describe 'metadata field' do
+    subject { described_class.fields['metadata'] }
 
-    it 'finds MRs by project and IID' do
-      is_expected.to have_graphql_arguments(:full_path, :iid)
-      is_expected.to have_graphql_type(Types::MergeRequestType)
-      is_expected.to have_graphql_resolver(Resolvers::MergeRequestResolver)
-    end
-
-    it 'authorizes with read_merge_request' do
-      is_expected.to require_graphql_authorizations(:read_merge_request)
+    it 'returns metadata' do
+      is_expected.to have_graphql_type(Types::MetadataType)
+      is_expected.to have_graphql_resolver(Resolvers::MetadataResolver)
     end
   end
 end

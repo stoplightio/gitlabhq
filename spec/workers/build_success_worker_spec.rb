@@ -1,27 +1,22 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe BuildSuccessWorker do
   describe '#perform' do
+    subject { described_class.new.perform(build.id) }
+
     context 'when build exists' do
-      context 'when build belogs to the environment' do
-        let!(:build) { create(:ci_build, environment: 'production') }
+      context 'when the build will stop an environment' do
+        let!(:build) { create(:ci_build, :stop_review_app, environment: environment.name, project: environment.project) }
+        let(:environment) { create(:environment, state: :available) }
 
-        it 'executes deployment service' do
-          expect_any_instance_of(CreateDeploymentService)
-            .to receive(:execute)
+        it 'stops the environment' do
+          expect(environment).to be_available
 
-          described_class.new.perform(build.id)
-        end
-      end
+          subject
 
-      context 'when build is not associated with project' do
-        let!(:build) { create(:ci_build, project: nil) }
-
-        it 'does not create deployment' do
-          expect_any_instance_of(CreateDeploymentService)
-            .not_to receive(:execute)
-
-          described_class.new.perform(build.id)
+          expect(environment.reload).to be_stopped
         end
       end
     end

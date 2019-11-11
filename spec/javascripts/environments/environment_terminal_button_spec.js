@@ -2,18 +2,18 @@ import Vue from 'vue';
 import terminalComp from '~/environments/components/environment_terminal_button.vue';
 
 describe('Stop Component', () => {
-  let TerminalComponent;
   let component;
   const terminalPath = '/path';
 
-  beforeEach(() => {
-    TerminalComponent = Vue.extend(terminalComp);
-
+  const mountWithProps = props => {
+    const TerminalComponent = Vue.extend(terminalComp);
     component = new TerminalComponent({
-      propsData: {
-        terminalPath,
-      },
+      propsData: props,
     }).$mount();
+  };
+
+  beforeEach(() => {
+    mountWithProps({ terminalPath });
   });
 
   describe('computed', () => {
@@ -27,5 +27,9 @@ describe('Stop Component', () => {
     expect(component.$el.getAttribute('data-original-title')).toEqual('Terminal');
     expect(component.$el.getAttribute('aria-label')).toEqual('Terminal');
     expect(component.$el.getAttribute('href')).toEqual(terminalPath);
+  });
+
+  it('should render a non-disabled button', () => {
+    expect(component.$el.classList).not.toContain('disabled');
   });
 });

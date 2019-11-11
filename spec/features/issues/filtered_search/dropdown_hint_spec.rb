@@ -1,4 +1,6 @@
-require 'rails_helper'
+# frozen_string_literal: true
+
+require 'spec_helper'
 
 describe 'Dropdown hint', :js do
   include FilteredSearchHelpers
@@ -13,8 +15,9 @@ describe 'Dropdown hint', :js do
   end
 
   before do
-    project.add_master(user)
+    project.add_maintainer(user)
     create(:issue, project: project)
+    create(:merge_request, source_project: project, target_project: project)
   end
 
   context 'when user not logged in' do
@@ -65,7 +68,7 @@ describe 'Dropdown hint', :js do
       it 'filters with text' do
         filtered_search.set('a')
 
-        expect(find(js_dropdown_hint)).to have_selector('.filter-dropdown .filter-dropdown-item', count: 4)
+        expect(find(js_dropdown_hint)).to have_selector('.filter-dropdown .filter-dropdown-item', count: 5)
       end
     end
 
@@ -79,7 +82,7 @@ describe 'Dropdown hint', :js do
 
         expect(page).to have_css(js_dropdown_hint, visible: false)
         expect(page).to have_css('#js-dropdown-author', visible: true)
-        expect_tokens([{ name: 'author' }])
+        expect_tokens([{ name: 'Author' }])
         expect_filtered_search_input_empty
       end
 
@@ -88,7 +91,7 @@ describe 'Dropdown hint', :js do
 
         expect(page).to have_css(js_dropdown_hint, visible: false)
         expect(page).to have_css('#js-dropdown-assignee', visible: true)
-        expect_tokens([{ name: 'assignee' }])
+        expect_tokens([{ name: 'Assignee' }])
         expect_filtered_search_input_empty
       end
 
@@ -97,7 +100,7 @@ describe 'Dropdown hint', :js do
 
         expect(page).to have_css(js_dropdown_hint, visible: false)
         expect(page).to have_css('#js-dropdown-milestone', visible: true)
-        expect_tokens([{ name: 'milestone' }])
+        expect_tokens([{ name: 'Milestone' }])
         expect_filtered_search_input_empty
       end
 
@@ -106,7 +109,7 @@ describe 'Dropdown hint', :js do
 
         expect(page).to have_css(js_dropdown_hint, visible: false)
         expect(page).to have_css('#js-dropdown-label', visible: true)
-        expect_tokens([{ name: 'label' }])
+        expect_tokens([{ name: 'Label' }])
         expect_filtered_search_input_empty
       end
 
@@ -115,7 +118,16 @@ describe 'Dropdown hint', :js do
 
         expect(page).to have_css(js_dropdown_hint, visible: false)
         expect(page).to have_css('#js-dropdown-my-reaction', visible: true)
-        expect_tokens([{ name: 'my-reaction' }])
+        expect_tokens([{ name: 'My-reaction' }])
+        expect_filtered_search_input_empty
+      end
+
+      it 'opens the yes-no dropdown when you click on confidential' do
+        click_hint('confidential')
+
+        expect(page).to have_css(js_dropdown_hint, visible: false)
+        expect(page).to have_css('#js-dropdown-confidential', visible: true)
+        expect_tokens([{ name: 'Confidential' }])
         expect_filtered_search_input_empty
       end
     end
@@ -127,7 +139,7 @@ describe 'Dropdown hint', :js do
 
         expect(page).to have_css(js_dropdown_hint, visible: false)
         expect(page).to have_css('#js-dropdown-author', visible: true)
-        expect_tokens([{ name: 'author' }])
+        expect_tokens([{ name: 'Author' }])
         expect_filtered_search_input_empty
       end
 
@@ -137,7 +149,7 @@ describe 'Dropdown hint', :js do
 
         expect(page).to have_css(js_dropdown_hint, visible: false)
         expect(page).to have_css('#js-dropdown-assignee', visible: true)
-        expect_tokens([{ name: 'assignee' }])
+        expect_tokens([{ name: 'Assignee' }])
         expect_filtered_search_input_empty
       end
 
@@ -147,7 +159,7 @@ describe 'Dropdown hint', :js do
 
         expect(page).to have_css(js_dropdown_hint, visible: false)
         expect(page).to have_css('#js-dropdown-milestone', visible: true)
-        expect_tokens([{ name: 'milestone' }])
+        expect_tokens([{ name: 'Milestone' }])
         expect_filtered_search_input_empty
       end
 
@@ -157,7 +169,7 @@ describe 'Dropdown hint', :js do
 
         expect(page).to have_css(js_dropdown_hint, visible: false)
         expect(page).to have_css('#js-dropdown-label', visible: true)
-        expect_tokens([{ name: 'label' }])
+        expect_tokens([{ name: 'Label' }])
         expect_filtered_search_input_empty
       end
 
@@ -167,7 +179,7 @@ describe 'Dropdown hint', :js do
 
         expect(page).to have_css(js_dropdown_hint, visible: false)
         expect(page).to have_css('#js-dropdown-my-reaction', visible: true)
-        expect_tokens([{ name: 'my-reaction' }])
+        expect_tokens([{ name: 'My-reaction' }])
         expect_filtered_search_input_empty
       end
     end
@@ -179,7 +191,7 @@ describe 'Dropdown hint', :js do
         filtered_search.send_keys(:backspace)
         click_hint('author')
 
-        expect_tokens([{ name: 'author' }])
+        expect_tokens([{ name: 'Author' }])
         expect_filtered_search_input_empty
       end
 
@@ -189,7 +201,7 @@ describe 'Dropdown hint', :js do
         filtered_search.send_keys(:backspace)
         click_hint('assignee')
 
-        expect_tokens([{ name: 'assignee' }])
+        expect_tokens([{ name: 'Assignee' }])
         expect_filtered_search_input_empty
       end
 
@@ -199,7 +211,7 @@ describe 'Dropdown hint', :js do
         filtered_search.send_keys(:backspace)
         click_hint('milestone')
 
-        expect_tokens([{ name: 'milestone' }])
+        expect_tokens([{ name: 'Milestone' }])
         expect_filtered_search_input_empty
       end
 
@@ -209,7 +221,7 @@ describe 'Dropdown hint', :js do
         filtered_search.send_keys(:backspace)
         click_hint('label')
 
-        expect_tokens([{ name: 'label' }])
+        expect_tokens([{ name: 'Label' }])
         expect_filtered_search_input_empty
       end
 
@@ -219,9 +231,26 @@ describe 'Dropdown hint', :js do
         filtered_search.send_keys(:backspace)
         click_hint('my-reaction')
 
-        expect_tokens([{ name: 'my-reaction' }])
+        expect_tokens([{ name: 'My-reaction' }])
         expect_filtered_search_input_empty
       end
+    end
+  end
+
+  context 'merge request page' do
+    before do
+      sign_in(user)
+      visit project_merge_requests_path(project)
+      filtered_search.click
+    end
+
+    it 'shows the WIP menu item and opens the WIP options dropdown' do
+      click_hint('wip')
+
+      expect(page).to have_css(js_dropdown_hint, visible: false)
+      expect(page).to have_css('#js-dropdown-wip', visible: true)
+      expect_tokens([{ name: 'WIP' }])
+      expect_filtered_search_input_empty
     end
   end
 end

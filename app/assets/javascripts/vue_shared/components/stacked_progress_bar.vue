@@ -1,4 +1,5 @@
 <script>
+import { roundOffFloat } from '~/lib/utils/common_utils';
 import tooltip from '~/vue_shared/directives/tooltip';
 
 export default {
@@ -70,9 +71,15 @@ export default {
   },
   methods: {
     getPercent(count) {
-      return Math.ceil((count / this.totalCount) * 100);
+      const percent = roundOffFloat((count / this.totalCount) * 100, 1);
+      if (percent > 0 && percent < 1) {
+        return '< 1';
+      }
+      return percent;
     },
     barStyle(percent) {
+      // False positive i18n lint: https://gitlab.com/gitlab-org/frontend/eslint-plugin-i18n/issues/26
+      // eslint-disable-next-line @gitlab/i18n/no-non-i18n-strings
       return `width: ${percent}%;`;
     },
     getTooltip(label, count) {
@@ -83,43 +90,35 @@ export default {
 </script>
 
 <template>
-  <div
-    class="stacked-progress-bar"
-    :class="cssClass"
-  >
+  <div :class="cssClass" class="stacked-progress-bar">
+    <span v-if="!totalCount" class="status-unavailable"> {{ __('Not available') }} </span>
     <span
-      v-if="!totalCount"
-      class="status-unavailable"
-    >
-      {{ __("Not available") }}
-    </span>
-    <span
-      v-tooltip
       v-if="successPercent"
-      class="status-green"
-      data-placement="bottom"
+      v-tooltip
       :title="successTooltip"
       :style="successBarStyle"
+      class="status-green"
+      data-placement="bottom"
     >
       {{ successPercent }}%
     </span>
     <span
-      v-tooltip
       v-if="neutralPercent"
-      class="status-neutral"
-      data-placement="bottom"
+      v-tooltip
       :title="neutralTooltip"
       :style="neutralBarStyle"
+      class="status-neutral"
+      data-placement="bottom"
     >
       {{ neutralPercent }}%
     </span>
     <span
-      v-tooltip
       v-if="failurePercent"
-      class="status-red"
-      data-placement="bottom"
+      v-tooltip
       :title="failureTooltip"
       :style="failureBarStyle"
+      class="status-red"
+      data-placement="bottom"
     >
       {{ failurePercent }}%
     </span>

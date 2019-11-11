@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Groups::UpdateService do
@@ -12,13 +14,23 @@ describe Groups::UpdateService do
         let!(:service) { described_class.new(public_group, user, visibility_level: Gitlab::VisibilityLevel::INTERNAL) }
 
         before do
-          public_group.add_user(user, Gitlab::Access::MASTER)
+          public_group.add_user(user, Gitlab::Access::OWNER)
           create(:project, :public, group: public_group)
+
+          expect(TodosDestroyer::GroupPrivateWorker).not_to receive(:perform_in)
         end
 
         it "does not change permission level" do
           service.execute
           expect(public_group.errors.count).to eq(1)
+
+          expect(TodosDestroyer::GroupPrivateWorker).not_to receive(:perform_in)
+        end
+
+        it "returns false if save failed" do
+          allow(public_group).to receive(:save).and_return(false)
+
+          expect(service.execute).to be_falsey
         end
       end
 
@@ -26,13 +38,33 @@ describe Groups::UpdateService do
         let!(:service) { described_class.new(internal_group, user, visibility_level: Gitlab::VisibilityLevel::PRIVATE) }
 
         before do
-          internal_group.add_user(user, Gitlab::Access::MASTER)
+          internal_group.add_user(user, Gitlab::Access::OWNER)
           create(:project, :internal, group: internal_group)
+
+          expect(TodosDestroyer::GroupPrivateWorker).not_to receive(:perform_in)
         end
 
         it "does not change permission level" do
           service.execute
           expect(internal_group.errors.count).to eq(1)
+        end
+      end
+
+      context "internal group with private project" do
+        let!(:service) { described_class.new(internal_group, user, visibility_level: Gitlab::VisibilityLevel::PRIVATE) }
+
+        before do
+          internal_group.add_user(user, Gitlab::Access::OWNER)
+          create(:project, :private, group: internal_group)
+
+          expect(TodosDestroyer::GroupPrivateWorker).to receive(:perform_in)
+            .with(Todo::WAIT_FOR_DELETE, internal_group.id)
+        end
+
+        it "changes permission level to private" do
+          service.execute
+          expect(internal_group.visibility_level)
+            .to eq(Gitlab::VisibilityLevel::PRIVATE)
         end
       end
     end
@@ -54,8 +86,9 @@ describe Groups::UpdateService do
 
   context "unauthorized visibility_level validation" do
     let!(:service) { described_class.new(internal_group, user, visibility_level: 99) }
+
     before do
-      internal_group.add_user(user, Gitlab::Access::MASTER)
+      internal_group.add_user(user, Gitlab::Access::MAINTAINER)
     end
 
     it "does not change permission level" do
@@ -64,11 +97,25 @@ describe Groups::UpdateService do
     end
   end
 
+  context 'when updating #emails_disabled' do
+    let(:service) { described_class.new(internal_group, user, emails_disabled: true) }
+
+    it 'updates the attribute' do
+      internal_group.add_user(user, Gitlab::Access::OWNER)
+
+      expect { service.execute }.to change { internal_group.emails_disabled }.to(true)
+    end
+
+    it 'does not update when not group owner' do
+      expect { service.execute }.not_to change { internal_group.emails_disabled }
+    end
+  end
+
   context 'rename group' do
     let!(:service) { described_class.new(internal_group, user, path: SecureRandom.hex) }
 
     before do
-      internal_group.add_user(user, Gitlab::Access::MASTER)
+      internal_group.add_user(user, Gitlab::Access::MAINTAINER)
       create(:project, :internal, group: internal_group)
     end
 
@@ -101,7 +148,31 @@ describe Groups::UpdateService do
     end
   end
 
-  context 'for a subgroup', :nested_groups do
+  context 'projects in group have container images' do
+    let(:service) { described_class.new(public_group, user, path: SecureRandom.hex) }
+    let(:project) { create(:project, :internal, group: public_group) }
+
+    before do
+      stub_container_registry_tags(repository: /image/, tags: %w[rc1])
+      create(:container_repository, project: project, name: :image)
+    end
+
+    it 'does not allow path to be changed' do
+      result = described_class.new(public_group, user, path: 'new-path').execute
+
+      expect(result).to eq false
+      expect(public_group.errors[:base].first).to match(/Docker images in their Container Registry/)
+    end
+
+    it 'allows other settings to be changed' do
+      result = described_class.new(public_group, user, name: 'new-name').execute
+
+      expect(result).to eq true
+      expect(public_group.reload.name).to eq('new-name')
+    end
+  end
+
+  context 'for a subgroup' do
     let(:subgroup) { create(:group, :private, parent: private_group) }
 
     context 'when the parent group share_with_group_lock is enabled' do

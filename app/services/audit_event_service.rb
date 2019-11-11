@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class AuditEventService
   def initialize(author, entity, details = {})
     @author, @entity, @details = author, entity, details
@@ -15,11 +17,35 @@ class AuditEventService
   end
 
   def security_event
-    SecurityEvent.create(
+    log_security_event_to_file
+    log_security_event_to_database
+  end
+
+  def log_security_event_to_file
+    file_logger.info(base_payload.merge(formatted_details))
+  end
+
+  private
+
+  def base_payload
+    {
       author_id: @author.id,
       entity_id: @entity.id,
-      entity_type: @entity.class.name,
-      details: @details
-    )
+      entity_type: @entity.class.name
+    }
+  end
+
+  def file_logger
+    @file_logger ||= Gitlab::AuditJsonLogger.build
+  end
+
+  def formatted_details
+    @details.merge(@details.slice(:from, :to).transform_values(&:to_s))
+  end
+
+  def log_security_event_to_database
+    SecurityEvent.create(base_payload.merge(details: @details))
   end
 end
+
+AuditEventService.prepend_if_ee('EE::AuditEventService')

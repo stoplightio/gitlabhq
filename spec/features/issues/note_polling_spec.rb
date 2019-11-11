@@ -1,6 +1,8 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
-feature 'Issue notes polling', :js do
+describe 'Issue notes polling', :js do
   include NoteInteractionHelpers
 
   let(:project) { create(:project, :public) }

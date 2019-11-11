@@ -3,19 +3,41 @@
   svg {
     fill: $green-500;
   }
+
+  &.add-border {
+    @include borderless-status-icon($green-500);
+  }
 }
 
 .ci-status-icon-failed {
   svg {
-    fill: $gl-danger;
+    fill: $red-500;
+  }
+
+  &.add-border {
+    @include borderless-status-icon($red-500);
   }
 }
 
 .ci-status-icon-pending,
-.ci-status-icon-failed_with_warnings,
-.ci-status-icon-success_with_warnings {
+.ci-status-icon-failed-with-warnings,
+.ci-status-icon-success-with-warnings {
   svg {
     fill: $orange-500;
+  }
+
+  &.add-border {
+    @include borderless-status-icon($orange-500);
+  }
+}
+
+.ci-status-icon-preparing {
+  svg {
+    fill: $gray-500;
+  }
+
+  &.add-border {
+    @include borderless-status-icon($gray-500);
   }
 }
 
@@ -23,12 +45,20 @@
   svg {
     fill: $blue-400;
   }
+
+  &.add-border {
+    @include borderless-status-icon($blue-400);
+  }
 }
 
 .ci-status-icon-canceled,
 .ci-status-icon-disabled {
   svg {
     fill: $gl-text-color;
+  }
+
+  &.add-border {
+    @include borderless-status-icon($gl-text-color);
   }
 }
 
@@ -38,8 +68,13 @@
   svg {
     fill: $gray-darkest;
   }
+
+  &.add-border {
+    @include borderless-status-icon($gray-darkest);
+  }
 }
 
+.ci-status-icon-scheduled,
 .ci-status-icon-manual {
   svg {
     fill: $gl-text-color;
@@ -54,4 +89,13 @@
 
 .user-avatar-link {
   text-decoration: none;
+}
+
+.circle-icon-container {
+  $border-size: 1px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: $gray-700;
 }

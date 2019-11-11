@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Projects::BoardsController do
@@ -5,7 +7,7 @@ describe Projects::BoardsController do
   let(:user)    { create(:user) }
 
   before do
-    project.add_master(user)
+    project.add_maintainer(user)
     sign_in(user)
   end
 
@@ -41,18 +43,34 @@ describe Projects::BoardsController do
           expect(response.content_type).to eq 'text/html'
         end
       end
+
+      context 'when user is signed out' do
+        let(:project) { create(:project, :public) }
+
+        it 'renders template' do
+          sign_out(user)
+
+          board = create(:board, project: project)
+          create(:board_project_recent_visit, project: board.project, board: board, user: user)
+
+          list_boards
+
+          expect(response).to render_template :index
+          expect(response.content_type).to eq 'text/html'
+        end
+      end
     end
 
     context 'when format is JSON' do
       it 'returns a list of project boards' do
         create_list(:board, 2, project: project)
 
+        expect(Boards::VisitsFinder).not_to receive(:new)
+
         list_boards format: :json
 
-        parsed_response = JSON.parse(response.body)
-
         expect(response).to match_response_schema('boards')
-        expect(parsed_response.length).to eq 2
+        expect(json_response.length).to eq 2
       end
 
       context 'with unauthorized user' do
@@ -80,9 +98,15 @@ describe Projects::BoardsController do
       end
     end
 
+    it_behaves_like 'unauthorized when external service denies access' do
+      subject { list_boards }
+    end
+
     def list_boards(format: :html)
-      get :index, namespace_id: project.namespace,
-                  project_id: project,
+      get :index, params: {
+                    namespace_id: project.namespace,
+                    project_id: project
+                  },
                   format: format
     end
   end
@@ -98,7 +122,7 @@ describe Projects::BoardsController do
 
     context 'when format is HTML' do
       it 'renders template' do
-        read_board board: board
+        expect { read_board board: board }.to change(BoardProjectRecentVisit, :count).by(1)
 
         expect(response).to render_template :show
         expect(response.content_type).to eq 'text/html'
@@ -117,10 +141,25 @@ describe Projects::BoardsController do
           expect(response.content_type).to eq 'text/html'
         end
       end
+
+      context 'when user is signed out' do
+        let(:project) { create(:project, :public) }
+
+        it 'does not save visit' do
+          sign_out(user)
+
+          expect { read_board board: board }.to change(BoardProjectRecentVisit, :count).by(0)
+
+          expect(response).to render_template :show
+          expect(response.content_type).to eq 'text/html'
+        end
+      end
     end
 
     context 'when format is JSON' do
       it 'returns project board' do
+        expect(Boards::Visits::CreateService).not_to receive(:new)
+
         read_board board: board, format: :json
 
         expect(response).to match_response_schema('board')
@@ -152,9 +191,11 @@ describe Projects::BoardsController do
     end
 
     def read_board(board:, format: :html)
-      get :show, namespace_id: project.namespace,
-                 project_id: project,
-                 id: board.to_param,
+      get :show, params: {
+                   namespace_id: project.namespace,
+                   project_id: project,
+                   id: board.to_param
+                 },
                  format: format
     end
   end

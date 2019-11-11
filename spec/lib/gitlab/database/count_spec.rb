@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Gitlab::Database::Count do
@@ -8,63 +10,40 @@ describe Gitlab::Database::Count do
 
   let(:models) { [Project, Identity] }
 
-  describe '.approximate_counts' do
-    context 'with MySQL' do
-      context 'when reltuples have not been updated' do
-        it 'counts all models the normal way' do
-          expect(Gitlab::Database).to receive(:postgresql?).and_return(false)
+  context '.approximate_counts' do
+    context 'fallbacks' do
+      subject { described_class.approximate_counts(models, strategies: strategies) }
 
-          expect(Project).to receive(:count).and_call_original
-          expect(Identity).to receive(:count).and_call_original
-
-          expect(described_class.approximate_counts(models)).to eq({ Project => 3, Identity => 1 })
-        end
-      end
-    end
-
-    context 'with PostgreSQL', :postgresql do
-      describe 'when reltuples have not been updated' do
-        it 'counts all models the normal way' do
-          expect(described_class).to receive(:reltuples_from_recently_updated).with(%w(projects identities)).and_return({})
-
-          expect(Project).to receive(:count).and_call_original
-          expect(Identity).to receive(:count).and_call_original
-          expect(described_class.approximate_counts(models)).to eq({ Project => 3, Identity => 1 })
-        end
+      let(:strategies) do
+        [
+          double('s1', new: first_strategy),
+          double('s2', new: second_strategy)
+        ]
       end
 
-      describe 'no permission' do
-        it 'falls back to standard query' do
-          allow(described_class).to receive(:postgresql_estimate_query).and_raise(PG::InsufficientPrivilege)
+      let(:first_strategy) { double('first strategy', count: {}) }
+      let(:second_strategy) { double('second strategy', count: {}) }
 
-          expect(Project).to receive(:count).and_call_original
-          expect(Identity).to receive(:count).and_call_original
-          expect(described_class.approximate_counts(models)).to eq({ Project => 3, Identity => 1 })
-        end
+      it 'gets results from first strategy' do
+        expect(strategies[0]).to receive(:new).with(models).and_return(first_strategy)
+        expect(first_strategy).to receive(:count)
+
+        subject
       end
 
-      describe 'when some reltuples have been updated' do
-        it 'counts projects in the fast way' do
-          expect(described_class).to receive(:reltuples_from_recently_updated).with(%w(projects identities)).and_return({ 'projects' => 3 })
+      it 'gets more results from second strategy if some counts are missing' do
+        expect(first_strategy).to receive(:count).and_return({ Project => 3 })
+        expect(strategies[1]).to receive(:new).with([Identity]).and_return(second_strategy)
+        expect(second_strategy).to receive(:count).and_return({ Identity => 1 })
 
-          expect(Project).not_to receive(:count).and_call_original
-          expect(Identity).to receive(:count).and_call_original
-          expect(described_class.approximate_counts(models)).to eq({ Project => 3, Identity => 1 })
-        end
+        expect(subject).to eq({ Project => 3, Identity => 1 })
       end
 
-      describe 'when all reltuples have been updated' do
-        before do
-          ActiveRecord::Base.connection.execute('ANALYZE projects')
-          ActiveRecord::Base.connection.execute('ANALYZE identities')
-        end
+      it 'does not get more results as soon as all counts are present' do
+        expect(first_strategy).to receive(:count).and_return({ Project => 3, Identity => 1 })
+        expect(strategies[1]).not_to receive(:new)
 
-        it 'counts models with the standard way' do
-          expect(Project).not_to receive(:count)
-          expect(Identity).not_to receive(:count)
-
-          expect(described_class.approximate_counts(models)).to eq({ Project => 3, Identity => 1 })
-        end
+        subject
       end
     end
   end

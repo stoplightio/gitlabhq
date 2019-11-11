@@ -14,9 +14,10 @@
     "release": {
       "oneOf": [
         { "type": "null" },
-        { "$ref": "release.json" }
+        { "$ref": "release/tag_release.json" }
       ]
-    }
+    },
+    "protected": { "type": "boolean" }
   },
   "additionalProperties": false
 }

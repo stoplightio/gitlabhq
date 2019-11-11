@@ -5,6 +5,50 @@ easy to maintain, and performant for the end-user.
 
 ## Rules
 
+### Utility Classes
+
+As part of the effort for [cleaning up our CSS and moving our components into GitLab-UI](https://gitlab.com/groups/gitlab-org/-/epics/950)
+led by the [GitLab UI WG](https://gitlab.com/gitlab-com/www-gitlab-com/merge_requests/20623) we prefer the use of utility classes over adding new CSS. However, complex CSS can be addressed by adding component classes.
+
+#### Where are utility classes defined?
+
+- [Bootstrap's Utility Classes](https://getbootstrap.com/docs/4.3/utilities/)
+- [`common.scss`](https://gitlab.com/gitlab-org/gitlab/blob/master/app/assets/stylesheets/framework/common.scss) (old)
+- [`utilities.scss`](https://gitlab.com/gitlab-org/gitlab/blob/master/app/assets/stylesheets/utilities.scss) (new)
+
+#### Where should I put new utility classes?
+
+New utility classes should be added to [`utilities.scss`](https://gitlab.com/gitlab-org/gitlab/blob/master/app/assets/stylesheets/utilities.scss). Existing classes include:
+
+| Name | Pattern | Example |
+|------|---------|---------|
+| Background color | `.bg-{variant}-{shade}` | `.bg-warning-400` |
+| Text color | `.text-{variant}-{shade}` | `.text-success-500` |
+| Font size | `.text-{size}` | `.text-2` |
+
+- `{variant}` is one of 'primary', 'secondary', 'success', 'warning', 'error'
+- `{shade}` is on of the shades listed on [colors](https://design.gitlab.com/product-foundations/colors/)
+- `{size}` is a number from 1-6 from our [Type scale](https://design.gitlab.com/product-foundations/typography)
+
+#### When should I create component classes?
+
+We recommend a "utility-first" approach.
+
+1. Start with utility classes.
+1. If composing utility classes into a component class removes code duplication and encapsulates a clear responsibility, do it.
+
+This encourages an organic growth of component classes and prevents the creation of one-off unreusable classes. Also, the kind of classes that emerge from "utility-first" tend to be design-centered (e.g. `.button`, `.alert`, `.card`) rather than domain-centered (e.g. `.security-report-widget`, `.commit-header-icon`).
+
+Examples of component classes that were created using "utility-first" include:
+
+- [`.circle-icon-container`](https://gitlab.com/gitlab-org/gitlab/blob/579fa8b8ec7eb38d40c96521f517c9dab8c3b97a/app/assets/stylesheets/framework/icons.scss#L85)
+- [`.d-flex-center`](https://gitlab.com/gitlab-org/gitlab/blob/900083d89cd6af391d26ab7922b3f64fa2839bef/app/assets/stylesheets/framework/common.scss#L425)
+
+Inspiration:
+
+- <https://tailwindcss.com/docs/utility-first/>
+- <https://tailwindcss.com/docs/extracting-components/>
+
 ### Naming
 
 Filenames should use `snake_case`.
@@ -168,6 +212,7 @@ selectors are intended for use only with JavaScript to allow for removal or
 renaming without breaking styling.
 
 ### IDs
+
 Don't use ID selectors in CSS.
 
 ```scss
@@ -183,13 +228,15 @@ Don't use ID selectors in CSS.
 ```
 
 ### Variables
+
 Before adding a new variable for a color or a size, guarantee:
-1. There isn't already one
-2. There isn't a similar one we can use instead.
+
+- There isn't already one
+- There isn't a similar one we can use instead.
 
 ## Linting
 
-We use [SCSS Lint][scss-lint] to check for style guide conformity. It uses the
+We use [SCSS Lint](https://github.com/sds/scss-lint) to check for style guide conformity. It uses the
 ruleset in `.scss-lint.yml`, which is located in the home directory of the
 project.
 
@@ -198,7 +245,7 @@ scss_lint` in the GitLab directory. SCSS Lint will also run in GitLab CI to
 catch any warnings.
 
 If the Rake task is throwing warnings you don't understand, SCSS Lint's
-documentation includes [a full list of their linters][scss-lint-documentation].
+documentation includes [a full list of their linters][scss-lint-documentation](https://github.com/sds/scss-lint/blob/master/lib/scss_lint/linter/README.md).
 
 ### Fixing issues
 
@@ -213,7 +260,7 @@ Note that this won't fix every problem, but it should fix a majority.
 ### Ignoring issues
 
 If you want a line or set of lines to be ignored by the linter, you can use
-`// scss-lint:disable RuleName` ([more info][disabling-linters]):
+`// scss-lint:disable RuleName` ([more info](https://github.com/sds/scss-lint#disabling-linters-via-source)):
 
 ```scss
 // This lint rule is disabled because it is supported only in Chrome/Safari
@@ -232,6 +279,3 @@ guide is ignored in this instance.
 [csscomb]: https://github.com/csscomb/csscomb.js
 [node]: https://github.com/nodejs/node
 [npm]: https://www.npmjs.com/
-[scss-lint]: https://github.com/brigade/scss-lint
-[scss-lint-documentation]: https://github.com/brigade/scss-lint/blob/master/lib/scss_lint/linter/README.md
-[disabling-linters]: https://github.com/brigade/scss-lint#disabling-linters-via-source

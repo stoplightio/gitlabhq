@@ -1,15 +1,17 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Projects::ServicesController do
   let(:project) { create(:project, :repository) }
   let(:user)    { create(:user) }
-  let(:service) { create(:hipchat_service, project: project) }
-  let(:hipchat_client) { { '#room' => double(send: true) } }
-  let(:service_params) { { token: 'hipchat_token_p', room: '#room' } }
+  let(:service) { create(:jira_service, project: project) }
+  let(:service_params) { { username: 'username', password: 'password', url: 'http://example.com' } }
 
   before do
     sign_in(user)
-    project.add_master(user)
+    project.add_maintainer(user)
+    allow(Gitlab::UrlBlocker).to receive(:validate!).and_return([URI.parse('http://example.com'), nil])
   end
 
   describe '#test' do
@@ -17,21 +19,21 @@ describe Projects::ServicesController do
       it 'renders 404' do
         allow_any_instance_of(Service).to receive(:can_test?).and_return(false)
 
-        put :test, namespace_id: project.namespace, project_id: project, id: service.to_param
+        put :test, params: project_params
 
-        expect(response).to have_gitlab_http_status(404)
+        expect(response).to have_gitlab_http_status(:not_found)
       end
     end
 
     context 'when validations fail' do
-      let(:service_params) { { active: 'true', token: '' } }
+      let(:service_params) { { active: 'true', url: '' } }
 
       it 'returns error messages in JSON response' do
-        put :test, namespace_id: project.namespace, project_id: project, id: :hipchat, service: service_params
+        put :test, params: project_params(service: service_params)
 
-        expect(json_response['message']).to eq "Validations failed."
-        expect(json_response['service_response']).to eq "Token can't be blank"
-        expect(response).to have_gitlab_http_status(200)
+        expect(json_response['message']).to eq 'Validations failed.'
+        expect(json_response['service_response']).to include "Url can't be blank"
+        expect(response).to be_successful
       end
     end
 
@@ -45,30 +47,45 @@ describe Projects::ServicesController do
           it 'returns success' do
             allow_any_instance_of(MicrosoftTeams::Notifier).to receive(:ping).and_return(true)
 
-            put :test, namespace_id: project.namespace, project_id: project, id: service.to_param
+            put :test, params: project_params
 
-            expect(response.status).to eq(200)
+            expect(response).to be_successful
           end
         end
 
         it 'returns success' do
-          expect(HipChat::Client).to receive(:new).with('hipchat_token_p', anything).and_return(hipchat_client)
+          stub_request(:get, 'http://example.com/rest/api/2/serverInfo')
+            .to_return(status: 200, body: '{}')
 
-          put :test, namespace_id: project.namespace, project_id: project, id: service.to_param, service: service_params
+          expect(Gitlab::HTTP).to receive(:get).with('/rest/api/2/serverInfo', any_args).and_call_original
 
-          expect(response.status).to eq(200)
+          put :test, params: project_params(service: service_params)
+
+          expect(response).to be_successful
         end
       end
 
       it 'returns success' do
-        expect(HipChat::Client).to receive(:new).with('hipchat_token_p', anything).and_return(hipchat_client)
+        stub_request(:get, 'http://example.com/rest/api/2/serverInfo')
+          .to_return(status: 200, body: '{}')
 
-        put :test, namespace_id: project.namespace, project_id: project, id: service.to_param, service: service_params
+        expect(Gitlab::HTTP).to receive(:get).with('/rest/api/2/serverInfo', any_args).and_call_original
 
-        expect(response.status).to eq(200)
+        put :test, params: project_params(service: service_params)
+
+        expect(response).to be_successful
       end
 
       context 'when service is configured for the first time' do
+        let(:service_params) do
+          {
+            'active' => '1',
+            'push_events' => '1',
+            'token' => 'token',
+            'project_url' => 'http://test.com'
+          }
+        end
+
         before do
           allow_any_instance_of(ServiceHook).to receive(:execute).and_return(true)
         end
@@ -76,91 +93,125 @@ describe Projects::ServicesController do
         it 'persist the object' do
           do_put
 
+          expect(response).to be_successful
+          expect(json_response).to be_empty
           expect(BuildkiteService.first).to be_present
         end
 
         it 'creates the ServiceHook object' do
           do_put
 
+          expect(response).to be_successful
+          expect(json_response).to be_empty
           expect(BuildkiteService.first.service_hook).to be_present
         end
 
         def do_put
-          put :test, namespace_id: project.namespace,
-                     project_id: project,
-                     id: 'buildkite',
-                     service: { 'active' => '1', 'push_events' => '1', token: 'token', 'project_url' => 'http://test.com' }
+          put :test, params: project_params(id: 'buildkite',
+                                            service: service_params)
         end
       end
     end
 
     context 'failure' do
       it 'returns success status code and the error message' do
-        expect(HipChat::Client).to receive(:new).with('hipchat_token_p', anything).and_raise('Bad test')
+        stub_request(:get, 'http://example.com/rest/api/2/serverInfo')
+          .to_return(status: 404)
 
-        put :test, namespace_id: project.namespace, project_id: project, id: service.to_param, service: service_params
+        put :test, params: project_params(service: service_params)
 
-        expect(response.status).to eq(200)
-        expect(JSON.parse(response.body))
-          .to eq('error' => true, 'message' => 'Test failed.', 'service_response' => 'Bad test', 'test_failed' => true)
+        expect(response).to be_successful
+        expect(json_response).to eq(
+          'error' => true,
+          'message' => 'Test failed.',
+          'service_response' => '',
+          'test_failed' => true
+        )
       end
     end
   end
 
   describe 'PUT #update' do
-    context 'when param `active` is set to true' do
-      it 'activates the service and redirects to integrations paths' do
-        put :update,
-          namespace_id: project.namespace, project_id: project, id: service.to_param, service: { active: true }
-
-        expect(response).to redirect_to(project_settings_integrations_path(project))
-        expect(flash[:notice]).to eq 'HipChat activated.'
-      end
-    end
-
-    context 'when param `active` is set to false' do
-      it 'does not  activate the service but saves the settings' do
-        put :update,
-          namespace_id: project.namespace, project_id: project, id: service.to_param, service: { active: false }
-
-        expect(flash[:notice]).to eq 'HipChat settings saved, but not activated.'
-      end
-    end
-
-    context 'with a deprecated service' do
-      let(:service) { create(:kubernetes_service, project: project) }
+    describe 'as HTML' do
+      let(:service_params) { { active: true } }
 
       before do
-        put :update,
-          namespace_id: project.namespace, project_id: project, id: service.to_param, service: { namespace: 'updated_namespace' }
+        put :update, params: project_params(service: service_params)
       end
 
-      it 'should not update the service' do
-        service.reload
-        expect(service.namespace).not_to eq('updated_namespace')
+      context 'when param `active` is set to true' do
+        it 'activates the service and redirects to integrations paths' do
+          expect(response).to redirect_to(project_settings_integrations_path(project))
+          expect(flash[:notice]).to eq 'Jira activated.'
+        end
+      end
+
+      context 'when param `active` is set to false' do
+        let(:service_params) { { active: false } }
+
+        it 'does not activate the service but saves the settings' do
+          expect(flash[:notice]).to eq 'Jira settings saved, but not activated.'
+        end
+      end
+
+      context 'when activating Jira service from a template' do
+        let(:service) do
+          create(:jira_service, project: project, template: true)
+        end
+
+        it 'activate Jira service from template' do
+          expect(flash[:notice]).to eq 'Jira activated.'
+        end
+      end
+    end
+
+    describe 'as JSON' do
+      before do
+        put :update, params: project_params(service: service_params, format: :json)
+      end
+
+      context 'when update succeeds' do
+        let(:service_params) { { url: 'http://example.com' } }
+
+        it 'returns JSON response with no errors' do
+          expect(response).to be_successful
+          expect(json_response).to include('active' => true, 'errors' => {})
+        end
+      end
+
+      context 'when update fails' do
+        let(:service_params) { { url: '' } }
+
+        it 'returns JSON response with errors' do
+          expect(response).to have_gitlab_http_status(:unprocessable_entity)
+          expect(json_response).to include(
+            'active' => true,
+            'errors' => { 'url' => ['must be a valid URL', %{can't be blank}] }
+          )
+        end
       end
     end
   end
 
-  describe "GET #edit" do
+  describe 'GET #edit' do
     before do
-      get :edit, namespace_id: project.namespace, project_id: project, id: service_id
+      get :edit, params: project_params(id: 'jira')
     end
 
     context 'with approved services' do
-      let(:service_id) { 'jira' }
-
-      it 'should render edit page' do
-        expect(response).to be_success
+      it 'renders edit page' do
+        expect(response).to be_successful
       end
     end
+  end
 
-    context 'with a deprecated service' do
-      let(:service_id) { 'kubernetes' }
+  private
 
-      it 'should render edit page' do
-        expect(response).to be_success
-      end
-    end
+  def project_params(opts = {})
+    opts.reverse_merge(
+      namespace_id: project.namespace,
+      project_id: project,
+      id: service.to_param
+    )
   end
 end

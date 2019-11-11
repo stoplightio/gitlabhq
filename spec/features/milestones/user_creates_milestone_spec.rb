@@ -1,4 +1,6 @@
-require "rails_helper"
+# frozen_string_literal: true
+
+require 'spec_helper'
 
 describe "User creates milestone", :js do
   set(:user) { create(:user) }
@@ -24,6 +26,6 @@ describe "User creates milestone", :js do
 
     visit(activity_project_path(project))
 
-    expect(page).to have_content("#{user.name} opened milestone")
+    expect(page).to have_content("#{user.name} #{user.to_reference} opened milestone")
   end
 end

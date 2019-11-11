@@ -4,54 +4,50 @@ comments: false
 
 # Git Log
 
-----------
-
 Git log lists commit history. It allows searching and filtering.
 
-* Initiate log
-```
-git log
-```
+- Initiate log:
 
-* Retrieve set number of records:
-```
-git log -n 2
-```
+  ```sh
+  git log
+  ```
 
-* Search commits by author. Allows user name or a regular expression.
-```
-git log --author="user_name"
-```
+- Retrieve set number of records:
 
-----------
+  ```sh
+  git log -n 2
+  ```
 
-* Search by comment message.
-```
-git log --grep="<pattern>"
-```
+- Search commits by author. Allows user name or a regular expression.
 
-* Search by date
-```
-git log --since=1.month.ago --until=3.weeks.ago
-```
+  ```sh
+  git log --author="user_name"
+  ```
 
+- Search by comment message:
 
-----------
+  ```sh
+  git log --grep="<pattern>"
+  ```
+
+- Search by date:
+
+  ```sh
+  git log --since=1.month.ago --until=3.weeks.ago
+  ```
 
 ## Git Log Workflow
 
 1. Change to workspace directory
-2. Clone the multi runner projects
-3. Change to project dir
-4. Search by author
-5. Search by date
-6. Combine
-
-----------
+1. Clone the multi runner projects
+1. Change to project dir
+1. Search by author
+1. Search by date
+1. Combine
 
 ## Commands
 
-```
+```sh
 cd ~/workspace
 git clone git@gitlab.com:gitlab-org/gitlab-runner.git
 cd gitlab-runner

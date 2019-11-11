@@ -1,18 +1,20 @@
+# frozen_string_literal: true
+
 module JiraServiceHelper
   JIRA_URL = "http://jira.example.net".freeze
   JIRA_API = JIRA_URL + "/rest/api/2"
 
   def jira_service_settings
-    properties = {
-      title: "JIRA tracker",
-      url: JIRA_URL,
-      username: 'jira-user',
-      password: 'my-secret-password',
-      project_key: "JIRA",
-      jira_issue_transition_id: '1'
-    }
+    title = "Jira tracker"
+    url = JIRA_URL
+    username = 'jira-user'
+    password = 'my-secret-password'
+    jira_issue_transition_id = '1'
 
-    jira_tracker.update_attributes(properties: properties, active: true)
+    jira_tracker.update(
+      title: title, url: url, username: username, password: password,
+      jira_issue_transition_id: jira_issue_transition_id, active: true
+    )
   end
 
   def jira_issue_comments
@@ -25,7 +27,7 @@ module JiraServiceHelper
       \"32x32\":\"http://0.0.0.0:4567/secure/useravatar?size=medium&avatarId=10122\",
       \"48x48\":\"http://0.0.0.0:4567/secure/useravatar?avatarId=10122\"},
       \"displayName\":\"GitLab\",\"active\":true},
-      \"body\":\"[Administrator|http://localhost:3000/u/root] mentioned JIRA-1 in Merge request of [gitlab-org/gitlab-test|http://localhost:3000/gitlab-org/gitlab-test/merge_requests/2].\",
+      \"body\":\"[Administrator|http://localhost:3000/root] mentioned JIRA-1 in Merge request of [gitlab-org/gitlab-test|http://localhost:3000/gitlab-org/gitlab-test/merge_requests/2].\",
       \"updateAuthor\":{\"self\":\"http://0.0.0.0:4567/rest/api/2/user?username=gitlab\",\"name\":\"gitlab\",\"emailAddress\":\"gitlab@example.com\",
       \"avatarUrls\":{\"16x16\":\"http://0.0.0.0:4567/secure/useravatar?size=xsmall&avatarId=10122\",
       \"24x24\":\"http://0.0.0.0:4567/secure/useravatar?size=small&avatarId=10122\",
@@ -40,7 +42,7 @@ module JiraServiceHelper
         \"24x24\":\"http://0.0.0.0:4567/secure/useravatar?size=small&avatarId=10122\",
         \"32x32\":\"http://0.0.0.0:4567/secure/useravatar?size=medium&avatarId=10122\",
         \"48x48\":\"http://0.0.0.0:4567/secure/useravatar?avatarId=10122\"},\"displayName\":\"GitLab\",\"active\":true},
-        \"body\":\"[Administrator|http://localhost:3000/u/root] mentioned this issue in [a commit of h5bp/html5-boilerplate|http://localhost:3000/h5bp/html5-boilerplate/commit/2439f77897122fbeee3bfd9bb692d3608848433e].\",
+        \"body\":\"[Administrator|http://localhost:3000/root] mentioned this issue in [a commit of h5bp/html5-boilerplate|http://localhost:3000/h5bp/html5-boilerplate/commit/2439f77897122fbeee3bfd9bb692d3608848433e].\",
         \"updateAuthor\":{\"self\":\"http://0.0.0.0:4567/rest/api/2/user?username=gitlab\",\"name\":\"gitlab\",\"emailAddress\":\"gitlab@example.com\",
         \"avatarUrls\":{\"16x16\":\"http://0.0.0.0:4567/secure/useravatar?size=xsmall&avatarId=10122\",
         \"24x24\":\"http://0.0.0.0:4567/secure/useravatar?size=small&avatarId=10122\",

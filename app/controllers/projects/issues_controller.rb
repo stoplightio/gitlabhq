@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Projects::IssuesController < Projects::ApplicationController
   include RendersNotes
   include ToggleSubscriptionAction
@@ -6,24 +8,47 @@ class Projects::IssuesController < Projects::ApplicationController
   include IssuableCollections
   include IssuesCalendar
   include SpammableActions
+  include RecordUserLastActivity
 
+  def issue_except_actions
+    %i[index calendar new create bulk_update import_csv]
+  end
+
+  def set_issuables_index_only_actions
+    %i[index calendar]
+  end
+
+  prepend_before_action(only: [:index]) { authenticate_sessionless_user!(:rss) }
+  prepend_before_action(only: [:calendar]) { authenticate_sessionless_user!(:ics) }
   prepend_before_action :authenticate_user!, only: [:new]
+  # designs is only applicable to EE, but defining a prepend_before_action in EE code would overwrite this
+  prepend_before_action :store_uri, only: [:new, :show, :designs]
 
   before_action :whitelist_query_limiting, only: [:create, :create_merge_request, :move, :bulk_update]
   before_action :check_issues_available!
-  before_action :issue, except: [:index, :calendar, :new, :create, :bulk_update]
-  before_action :set_issuables_index, only: [:index, :calendar]
+  before_action :issue, unless: ->(c) { c.issue_except_actions.include?(c.action_name.to_sym) }
+
+  before_action :set_issuables_index, if: ->(c) { c.set_issuables_index_only_actions.include?(c.action_name.to_sym) }
 
   # Allow write(create) issue
   before_action :authorize_create_issue!, only: [:new, :create]
 
   # Allow modify issue
-  before_action :authorize_update_issuable!, only: [:edit, :update, :move]
+  before_action :authorize_update_issuable!, only: [:edit, :update, :move, :reorder]
 
   # Allow create a new branch and empty WIP merge request from current issue
   before_action :authorize_create_merge_request_from!, only: [:create_merge_request]
 
+  before_action :authorize_import_issues!, only: [:import_csv]
+  before_action :authorize_download_code!, only: [:related_branches]
+
+  before_action do
+    push_frontend_feature_flag(:vue_issuable_sidebar, project.group)
+  end
+
   respond_to :html
+
+  alias_method :designs, :show
 
   def index
     @issues = @issuables
@@ -76,9 +101,9 @@ class Projects::IssuesController < Projects::ApplicationController
 
     if service.discussions_to_resolve.count(&:resolved?) > 0
       flash[:notice] = if service.discussion_to_resolve_id
-                         "Resolved 1 discussion."
+                         _("Resolved 1 discussion.")
                        else
-                         "Resolved all discussions."
+                         _("Resolved all discussions.")
                        end
     end
 
@@ -112,20 +137,18 @@ class Projects::IssuesController < Projects::ApplicationController
     render_conflict_response
   end
 
-  def referenced_merge_requests
-    @merge_requests, @closed_by_merge_requests = ::Issues::FetchReferencedMergeRequestsService.new(project, current_user).execute(issue)
+  def reorder
+    service = Issues::ReorderService.new(project, current_user, reorder_params)
 
-    respond_to do |format|
-      format.json do
-        render json: {
-          html: view_to_html_string('projects/issues/_merge_requests')
-        }
-      end
+    if service.execute(issue)
+      head :ok
+    else
+      head :unprocessable_entity
     end
   end
 
   def related_branches
-    @related_branches = @issue.related_branches(current_user)
+    @related_branches = Issues::RelatedBranchesService.new(project, current_user).execute(issue)
 
     respond_to do |format|
       format.json do
@@ -150,6 +173,7 @@ class Projects::IssuesController < Projects::ApplicationController
 
   def create_merge_request
     create_params = params.slice(:branch_name, :ref).merge(issue_iid: issue.iid)
+    create_params[:target_project_id] = params[:target_project_id] if helpers.create_confidential_merge_request_enabled?
     result = ::MergeRequests::CreateFromIssueService.new(project, current_user, create_params).execute
 
     if result[:status] == :success
@@ -159,19 +183,37 @@ class Projects::IssuesController < Projects::ApplicationController
     end
   end
 
+  def import_csv
+    if uploader = UploadService.new(project, params[:file]).execute
+      ImportIssuesCsvWorker.perform_async(current_user.id, project.id, uploader.upload.id)
+
+      flash[:notice] = _("Your issues are being imported. Once finished, you'll get a confirmation email.")
+    else
+      flash[:alert] = _("File upload error.")
+    end
+
+    redirect_to project_issues_path(project)
+  end
+
   protected
 
+  def sorting_field
+    Issue::SORTING_PREFERENCE_FIELD
+  end
+
+  # rubocop: disable CodeReuse/ActiveRecord
   def issue
     return @issue if defined?(@issue)
 
     # The Sortable default scope causes performance issues when used with find_by
-    @issuable = @noteable = @issue ||= @project.issues.where(iid: params[:id]).reorder(nil).take!
+    @issuable = @noteable = @issue ||= @project.issues.includes(author: :status).where(iid: params[:id]).reorder(nil).take!
     @note = @project.notes.new(noteable: @issuable)
 
     return render_404 unless can?(current_user, :read_issue, @issue)
 
     @issue
   end
+  # rubocop: enable CodeReuse/ActiveRecord
   alias_method :subscribable_resource, :issue
   alias_method :issuable, :issue
   alias_method :awardable, :issue
@@ -210,19 +252,17 @@ class Projects::IssuesController < Projects::ApplicationController
       task_num
       lock_version
       discussion_locked
-    ] + [{ label_ids: [], assignee_ids: [] }]
+    ] + [{ label_ids: [], assignee_ids: [], update_task: [:index, :checked, :line_number, :line_source] }]
   end
 
-  def authenticate_user!
-    return if current_user
+  def reorder_params
+    params.permit(:move_before_id, :move_after_id, :group_full_path)
+  end
 
-    notice = "Please sign in to create the new issue."
-
+  def store_uri
     if request.get? && !request.xhr?
       store_location_for :user, request.fullpath
     end
-
-    redirect_to new_user_session_path, notice: notice
   end
 
   def serializer
@@ -241,9 +281,11 @@ class Projects::IssuesController < Projects::ApplicationController
   def whitelist_query_limiting
     # Also see the following issues:
     #
-    # 1. https://gitlab.com/gitlab-org/gitlab-ce/issues/42423
-    # 2. https://gitlab.com/gitlab-org/gitlab-ce/issues/42424
-    # 3. https://gitlab.com/gitlab-org/gitlab-ce/issues/42426
-    Gitlab::QueryLimiting.whitelist('https://gitlab.com/gitlab-org/gitlab-ce/issues/42422')
+    # 1. https://gitlab.com/gitlab-org/gitlab-foss/issues/42423
+    # 2. https://gitlab.com/gitlab-org/gitlab-foss/issues/42424
+    # 3. https://gitlab.com/gitlab-org/gitlab-foss/issues/42426
+    Gitlab::QueryLimiting.whitelist('https://gitlab.com/gitlab-org/gitlab-foss/issues/42422')
   end
 end
+
+Projects::IssuesController.prepend_if_ee('EE::Projects::IssuesController')

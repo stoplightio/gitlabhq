@@ -1,4 +1,4 @@
-class CreateMissingNamespaceForInternalUsers < ActiveRecord::Migration
+class CreateMissingNamespaceForInternalUsers < ActiveRecord::Migration[4.2]
   DOWNTIME = false
 
   def up
@@ -6,7 +6,7 @@ class CreateMissingNamespaceForInternalUsers < ActiveRecord::Migration
       create_namespace(id, username)
       # When testing locally I've noticed that these internal users are missing
       # the notification email, for more details visit the below link:
-      # https://gitlab.com/gitlab-org/gitlab-ce/merge_requests/18357#note_68327560
+      # https://gitlab.com/gitlab-org/gitlab-foss/merge_requests/18357#note_68327560
       set_notification_email(id)
     end
   end
@@ -45,8 +45,8 @@ class CreateMissingNamespaceForInternalUsers < ActiveRecord::Migration
       connection.exec_query(query).present?
     end
 
-    insert_query = "INSERT INTO namespaces(owner_id, path, name) VALUES(#{user_id}, '#{path}', '#{path}')"
-    namespace_id = connection.insert_sql(insert_query)
+    insert_query = "INSERT INTO namespaces(owner_id, path, name, created_at, updated_at) VALUES(#{user_id}, '#{path}', '#{path}', NOW(), NOW())"
+    namespace_id = connection.insert(insert_query)
 
     create_route(namespace_id)
   end
@@ -57,7 +57,7 @@ class CreateMissingNamespaceForInternalUsers < ActiveRecord::Migration
     row = connection.exec_query("SELECT id, path FROM namespaces WHERE id=#{namespace_id}").first
     id, path = row.values_at('id', 'path')
 
-    execute("INSERT INTO routes(source_id, source_type, path, name) VALUES(#{id}, 'Namespace', '#{path}', '#{path}')")
+    execute("INSERT INTO routes(source_id, source_type, path, name, created_at, updated_at) VALUES(#{id}, 'Namespace', '#{path}', '#{path}', NOW(), NOW())")
   end
 
   def set_notification_email(user_id)

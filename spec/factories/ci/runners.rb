@@ -1,26 +1,25 @@
+# frozen_string_literal: true
+
 FactoryBot.define do
   factory :ci_runner, class: Ci::Runner do
     sequence(:description) { |n| "My runner#{n}" }
 
-    platform  "darwin"
-    active    true
-    access_level :not_protected
+    platform { "darwin" }
+    active { true }
+    access_level { :not_protected }
 
-    is_shared true
-    runner_type :instance_type
+    runner_type { :instance_type }
 
     trait :online do
-      contacted_at Time.now
+      contacted_at { Time.now }
     end
 
     trait :instance do
-      is_shared true
-      runner_type :instance_type
+      runner_type { :instance_type }
     end
 
     trait :group do
-      is_shared false
-      runner_type :group_type
+      runner_type { :group_type }
 
       after(:build) do |runner, evaluator|
         runner.groups << build(:group) if runner.groups.empty?
@@ -28,8 +27,7 @@ FactoryBot.define do
     end
 
     trait :project do
-      is_shared false
-      runner_type :project_type
+      runner_type { :project_type }
 
       after(:build) do |runner, evaluator|
         runner.projects << build(:project) if runner.projects.empty?
@@ -45,11 +43,21 @@ FactoryBot.define do
     end
 
     trait :inactive do
-      active false
+      active { false }
     end
 
     trait :ref_protected do
-      access_level :ref_protected
+      access_level { :ref_protected }
+    end
+
+    trait :tagged_only do
+      run_untagged { false }
+
+      tag_list { %w(tag1 tag2) }
+    end
+
+    trait :locked do
+      locked { true }
     end
   end
 end

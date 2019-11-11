@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module UploadsActions
   include Gitlab::Utils::StrongMemoize
   include SendFileUpload
@@ -5,16 +7,16 @@ module UploadsActions
   UPLOAD_MOUNTS = %w(avatar attachment file logo header_logo favicon).freeze
 
   def create
-    link_to_file = UploadService.new(model, params[:file], uploader_class).execute
+    uploader = UploadService.new(model, params[:file], uploader_class).execute
 
     respond_to do |format|
-      if link_to_file
+      if uploader
         format.json do
-          render json: { link: link_to_file }
+          render json: { link: uploader.to_h }
         end
       else
         format.json do
-          render json: 'Invalid file.', status: :unprocessable_entity
+          render json: _('Invalid file.'), status: :unprocessable_entity
         end
       end
     end
@@ -27,16 +29,37 @@ module UploadsActions
   def show
     return render_404 unless uploader&.exists?
 
-    expires_in 0.seconds, must_revalidate: true, private: true
+    # We need to reset caching from the applications controller to get rid of the no-store value
+    headers['Cache-Control'] = ''
+    headers['Pragma'] = ''
 
-    disposition = uploader.image_or_video? ? 'inline' : 'attachment'
+    ttl, directives = *cache_settings
+    ttl ||= 0
+    directives ||= { private: true, must_revalidate: true }
+
+    expires_in ttl, directives
+
+    disposition = uploader.embeddable? ? 'inline' : 'attachment'
 
     uploaders = [uploader, *uploader.versions.values]
     uploader = uploaders.find { |version| version.filename == params[:filename] }
 
     return render_404 unless uploader
 
+    workhorse_set_content_type!
     send_upload(uploader, attachment: uploader.filename, disposition: disposition)
+  end
+
+  def authorize
+    set_workhorse_internal_api_content_type
+
+    authorized = uploader_class.workhorse_authorize(
+      has_length: false,
+      maximum_size: Gitlab::CurrentSettings.max_attachment_size.megabytes.to_i)
+
+    render json: authorized
+  rescue SocketError
+    render json: _("Error uploading file"), status: :internal_server_error
   end
 
   private
@@ -64,13 +87,15 @@ module UploadsActions
     end
   end
 
+  # rubocop: disable CodeReuse/ActiveRecord
   def build_uploader_from_upload
     return unless uploader = build_uploader
 
     upload_paths = uploader.upload_paths(params[:filename])
-    upload = Upload.find_by(uploader: uploader_class.to_s, path: upload_paths)
-    upload&.build_uploader
+    upload = Upload.find_by(model: model, uploader: uploader_class.to_s, path: upload_paths)
+    upload&.retrieve_uploader
   end
+  # rubocop: enable CodeReuse/ActiveRecord
 
   def build_uploader_from_params
     return unless uploader = build_uploader
@@ -89,15 +114,23 @@ module UploadsActions
     uploader
   end
 
-  def image_or_video?
-    uploader && uploader.exists? && uploader.image_or_video?
+  def embeddable?
+    uploader && uploader.exists? && uploader.embeddable?
   end
 
   def find_model
     nil
   end
 
+  def cache_settings
+    []
+  end
+
   def model
     strong_memoize(:model) { find_model }
+  end
+
+  def workhorse_authorize_request?
+    action_name == 'authorize'
   end
 end

@@ -1,3 +1,7 @@
+# frozen_string_literal: true
+
+require_dependency 'gitlab/utils'
+
 module Gitlab
   module Utils
     module StrongMemoize
@@ -20,11 +24,15 @@ module Gitlab
       #     end
       #
       def strong_memoize(name)
-        if instance_variable_defined?(ivar(name))
+        if strong_memoized?(name)
           instance_variable_get(ivar(name))
         else
           instance_variable_set(ivar(name), yield)
         end
+      end
+
+      def strong_memoized?(name)
+        instance_variable_defined?(ivar(name))
       end
 
       def clear_memoization(name)

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 FactoryBot.define do
   factory :environment, class: Environment do
     sequence(:name) { |n| "environment#{n}" }
@@ -7,7 +9,7 @@ FactoryBot.define do
 
     trait :with_review_app do |environment|
       transient do
-        ref 'master'
+        ref { 'master' }
       end
 
       # At this point `review app` is an ephemeral concept related to
@@ -22,6 +24,7 @@ FactoryBot.define do
                                        pipeline: pipeline)
 
         deployment = create(:deployment,
+                            :success,
                             environment: environment,
                             project: environment.project,
                             deployable: deployable,
@@ -38,8 +41,8 @@ FactoryBot.define do
     end
 
     trait :non_playable do
-      status 'created'
-      self.when 'manual'
+      status { 'created' }
+      self.when { 'manual' }
     end
   end
 end

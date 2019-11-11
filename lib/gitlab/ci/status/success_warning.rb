@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module Ci
     module Status
@@ -19,7 +21,7 @@ module Gitlab
         end
 
         def group
-          'success_with_warnings'
+          'success-with-warnings'
         end
 
         def self.matches?(subject, user)

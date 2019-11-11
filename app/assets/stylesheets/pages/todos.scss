@@ -4,16 +4,14 @@
  */
 
 .todos-list > .todo {
-  // workaround because we cannot use border-colapse
+  // workaround because we cannot use border-collapse
   border-top: 1px solid transparent;
-  display: -webkit-flex;
   display: flex;
-  -webkit-flex-direction: row;
   flex-direction: row;
 
   &:hover {
-    background-color: $row-hover;
-    border-color: $row-hover-border;
+    background-color: $blue-50;
+    border-color: $blue-200;
     cursor: pointer;
   }
 
@@ -22,30 +20,25 @@
     border-bottom: 1px solid transparent;
 
     &:hover {
-      border-color: $row-hover-border;
+      border-color: $blue-200;
     }
   }
 
   .todo-avatar,
   .todo-actions {
     @include transition(opacity);
-    -webkit-flex: 0 0 auto;
     flex: 0 0 auto;
   }
 
   .todo-actions {
-    display: -webkit-flex;
     display: flex;
-    -webkit-justify-content: center;
     justify-content: center;
-    -webkit-flex-direction: column;
     flex-direction: column;
     margin-left: 10px;
     min-width: 55px;
   }
 
   .todo-item {
-    -webkit-flex: 0 1 100%;
     flex: 0 1 100%;
     min-width: 0;
   }
@@ -60,13 +53,13 @@
 
       .todo-avatar,
       .todo-item {
-        opacity: .6;
+        opacity: 0.6;
       }
     }
 
     .todo-avatar,
     .todo-item {
-      opacity: .2;
+      opacity: 0.2;
     }
 
     .btn {
@@ -79,13 +72,7 @@
   @include transition(opacity);
 
   .todo-title {
-    display: flex;
-
     > .title-item {
-      -webkit-flex: 0 0 auto;
-      flex: 0 0 auto;
-      margin: 0 2px;
-
       &:first-child {
         margin-left: 0;
       }
@@ -96,7 +83,6 @@
     }
 
     .todo-label {
-      -webkit-flex: 0 1 auto;
       flex: 0 1 auto;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -114,50 +100,47 @@
     font-size: 14px;
   }
 
-  .action-name {
-    font-weight: $gl-font-weight-normal;
+  .todo-label,
+  .todo-project {
+    a {
+      color: $blue-600;
+      font-weight: $gl-font-weight-normal;
+    }
   }
 
   .todo-body {
-    .todo-note {
-      word-wrap: break-word;
+    .badge.badge-pill,
+    p {
+      color: $gl-text-color;
+    }
 
-      .md {
-        color: $gl-grayish-blue;
-        font-size: $gl-font-size;
+    .md {
+      color: $gl-grayish-blue;
+      font-size: $gl-font-size;
+    }
 
-        .badge.badge-pill {
-          color: $gl-text-color;
-        }
+    code {
+      white-space: pre-wrap;
+    }
 
-        p {
-          color: $gl-text-color;
-        }
-      }
+    pre {
+      border: 0;
+      background: $gray-light;
+      border-radius: 0;
+      color: $gl-gray-500;
+      margin: 0 20px;
+      overflow: hidden;
+    }
 
-      code {
-        white-space: pre-wrap;
-      }
+    .note-image-attach {
+      margin-top: 4px;
+      margin-left: 0;
+      max-width: 200px;
+      float: none;
+    }
 
-      pre {
-        border: 0;
-        background: $gray-light;
-        border-radius: 0;
-        color: $todo-body-pre-color;
-        margin: 0 20px;
-        overflow: hidden;
-      }
-
-      .note-image-attach {
-        margin-top: 4px;
-        margin-left: 0;
-        max-width: 200px;
-        float: none;
-      }
-
-      p:last-child {
-        margin-bottom: 0;
-      }
+    p:last-child {
+      margin-bottom: 0;
     }
   }
 }
@@ -174,7 +157,19 @@
   }
 }
 
-@include media-breakpoint-down(xs) {
+@include media-breakpoint-down(lg) {
+  .todos-filters {
+    .filter-categories {
+      width: 75%;
+
+      .filter-item {
+        margin-bottom: 10px;
+      }
+    }
+  }
+}
+
+@include media-breakpoint-down(sm) {
   .todo {
     .avatar {
       display: none;
@@ -183,7 +178,6 @@
 
   .todo-item {
     .todo-title {
-      flex-flow: row wrap;
       margin-bottom: 10px;
 
       .todo-label {
@@ -193,12 +187,16 @@
 
     .todo-body {
       margin: 0;
-      border-left: 2px solid $todo-body-border;
+      border-left: 2px solid $gl-gray-100;
       padding-left: 10px;
     }
   }
 
   .todos-filters {
+    .filter-categories {
+      width: auto;
+    }
+
     .dropdown-menu-toggle {
       width: 100%;
     }
@@ -206,23 +204,19 @@
 }
 
 .todos-empty {
-  display: -webkit-flex;
   display: flex;
-  -webkit-flex-direction: column;
   flex-direction: column;
   max-width: 900px;
   margin-left: auto;
   margin-right: auto;
 
   @include media-breakpoint-up(sm) {
-    -webkit-flex-direction: row;
     flex-direction: row;
     padding-top: 80px;
   }
 }
 
 .todos-empty-content {
-  -webkit-align-self: center;
   align-self: center;
   max-width: 480px;
   margin-right: 20px;
@@ -236,7 +230,6 @@
   @include media-breakpoint-up(sm) {
     width: 300px;
     margin-right: 0;
-    -webkit-order: 2;
     order: 2;
   }
 }

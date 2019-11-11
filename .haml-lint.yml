@@ -1,9 +1,13 @@
+inherits_from:
+  - .haml-lint_todo.yml
 # Whether to ignore frontmatter at the beginning of HAML documents for
 # frameworks such as Jekyll/Middleman
 skip_frontmatter: false
 exclude:
   - 'vendor/**/*'
   - 'spec/**/*'
+require:
+  - './haml_lint/linter/no_plain_nodes.rb'
 
 linters:
   AltText:
@@ -70,14 +74,15 @@ linters:
     enabled: false
 
   RuboCop:
-    enabled: false
+    enabled: true
     # These cops are incredibly noisy when it comes to HAML templates, so we
     # ignore them.
     ignored_cops:
-      - Lint/BlockAlignment
-      - Lint/EndAlignment
+      - Layout/BlockAlignment
+      - Layout/EndAlignment
       - Lint/Void
       - Metrics/LineLength
+      - Naming/FileName
       - Style/AlignParameters
       - Style/BlockNesting
       - Style/ElseAlignment
@@ -91,6 +96,54 @@ linters:
       - Style/TrailingWhitespace
       - Style/WhileUntilModifier
 
+      # These cops should eventually get enabled
+      - Cop/LineBreakAfterGuardClauses
+      - Cop/LineBreakAroundConditionalBlock
+      - Cop/ProjectPathHelper
+      - GitlabSecurity/PublicSend
+      - Layout/EmptyLineAfterGuardClause
+      - Layout/LeadingCommentSpace
+      - Layout/SpaceAfterColon
+      - Layout/SpaceAfterComma
+      - Layout/SpaceAroundOperators
+      - Layout/SpaceBeforeBlockBraces
+      - Layout/SpaceBeforeComma
+      - Layout/SpaceBeforeFirstArg
+      - Layout/SpaceInsideArrayLiteralBrackets
+      - Layout/SpaceInsideHashLiteralBraces
+      - Layout/SpaceInsideStringInterpolation
+      - Layout/TrailingBlankLines
+      - Lint/BooleanSymbol
+      - Lint/LiteralInInterpolation
+      - Lint/ParenthesesAsGroupedExpression
+      - Lint/RedundantWithIndex
+      - Lint/SafeNavigationConsistency
+      - Metrics/BlockNesting
+      - Naming/VariableName
+      - Performance/RedundantMatch
+      - Performance/StringReplacement
+      - Rails/LinkToBlank
+      - Rails/Presence
+      - Rails/RequestReferer
+      - Style/AndOr
+      - Style/ColonMethodCall
+      - Style/ConditionalAssignment
+      - Style/HashSyntax
+      - Style/IdenticalConditionalBranches
+      - Style/NegatedIf
+      - Style/NestedTernaryOperator
+      - Style/Not
+      - Style/ParenthesesAroundCondition
+      - Style/RedundantParentheses
+      - Style/SelfAssignment
+      - Style/Semicolon
+      - Style/TernaryParentheses
+      - Style/TrailingCommaInHashLiteral
+      - Style/UnlessElse
+      - Style/UnneededCondition
+      - Style/WordArray
+      - Style/ZeroLengthPredicate
+
   RubyComments:
     enabled: true
 
@@ -101,9 +154,12 @@ linters:
     enabled: true
     style: space
 
+  Syntax:
+    enabled: true
+
   Indentation:
     enabled: true
-    character: space # or tab
+    character: space  # or tab
 
   TagName:
     enabled: true

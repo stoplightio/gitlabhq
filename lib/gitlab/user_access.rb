@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   class UserAccess
     extend Gitlab::Cache::RequestCache
@@ -43,7 +45,7 @@ module Gitlab
       if protected?(ProtectedTag, project, ref)
         protected_tag_accessible_to?(ref, action: :create)
       else
-        user.can?(:push_code, project)
+        user.can?(:admin_tag, project)
       end
     end
 
@@ -116,8 +118,8 @@ module Gitlab
         protected_refs: project.protected_tags)
     end
 
-    request_cache def protected?(kind, project, ref)
-      kind.protected?(project, ref)
+    request_cache def protected?(kind, project, refs)
+      kind.protected?(project, refs)
     end
   end
 end

@@ -1,11 +1,13 @@
+# frozen_string_literal: true
+
 module Notes
-  class CreateService < ::BaseService
+  class CreateService < ::Notes::BaseService
     def execute
       merge_request_diff_head_sha = params.delete(:merge_request_diff_head_sha)
 
       note = Notes::BuildService.new(project, current_user, params).execute
 
-      # n+1: https://gitlab.com/gitlab-org/gitlab-ce/issues/37440
+      # n+1: https://gitlab.com/gitlab-org/gitlab-foss/issues/37440
       note_valid = Gitlab::GitalyClient.allow_n_plus_1_calls do
         note.valid?
       end
@@ -19,7 +21,7 @@ module Notes
 
       if quick_actions_service.supported?(note)
         options = { merge_request_diff_head_sha: merge_request_diff_head_sha }
-        content, command_params = quick_actions_service.extract_commands(note, options)
+        content, update_params, message = quick_actions_service.execute(note, options)
 
         only_commands = content.empty?
 
@@ -32,19 +34,27 @@ module Notes
       end
 
       if !only_commands && note.save
+        if note.part_of_discussion? && note.discussion.can_convert_to_discussion?
+          note.discussion.convert_to_discussion!(save: true)
+        end
+
         todo_service.new_note(note, current_user)
+        clear_noteable_diffs_cache(note)
+        Suggestions::CreateService.new(note).execute
+        increment_usage_counter(note)
       end
 
-      if command_params.present?
-        quick_actions_service.execute(command_params, note)
+      if quick_actions_service.commands_executed_count.to_i > 0
+        if update_params.present?
+          quick_actions_service.apply_updates(update_params, note)
+          note.commands_changes = update_params
+        end
 
         # We must add the error after we call #save because errors are reset
         # when #save is called
         if only_commands
-          note.errors.add(:commands_only, 'Commands applied')
+          note.errors.add(:commands_only, message.presence || _('Failed to apply commands.'))
         end
-
-        note.commands_changes = command_params
       end
 
       note

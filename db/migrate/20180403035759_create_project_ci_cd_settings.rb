@@ -1,4 +1,4 @@
-class CreateProjectCiCdSettings < ActiveRecord::Migration
+class CreateProjectCiCdSettings < ActiveRecord::Migration[4.2]
   include Gitlab::Database::MigrationHelpers
 
   DOWNTIME = false
@@ -13,16 +13,16 @@ class CreateProjectCiCdSettings < ActiveRecord::Migration
       end
     end
 
-    disable_statement_timeout
+    disable_statement_timeout do
+      # This particular INSERT will take between 10 and 20 seconds.
+      execute 'INSERT INTO project_ci_cd_settings (project_id) SELECT id FROM projects'
 
-    # This particular INSERT will take between 10 and 20 seconds.
-    execute 'INSERT INTO project_ci_cd_settings (project_id) SELECT id FROM projects'
+      # We add the index and foreign key separately so the above INSERT statement
+      # takes as little time as possible.
+      add_concurrent_index(:project_ci_cd_settings, :project_id, unique: true)
 
-    # We add the index and foreign key separately so the above INSERT statement
-    # takes as little time as possible.
-    add_concurrent_index(:project_ci_cd_settings, :project_id, unique: true)
-
-    add_foreign_key_with_retry
+      add_foreign_key_with_retry
+    end
   end
 
   def down
@@ -30,12 +30,6 @@ class CreateProjectCiCdSettings < ActiveRecord::Migration
   end
 
   def add_foreign_key_with_retry
-    if Gitlab::Database.mysql?
-      # When using MySQL we don't support online upgrades, thus projects can't
-      # be deleted while we are running this migration.
-      return add_project_id_foreign_key
-    end
-
     # Between the initial INSERT and the addition of the foreign key some
     # projects may have been removed, leaving orphaned rows in our new settings
     # table.

@@ -1,4 +1,5 @@
 import $ from 'jquery';
+import { __ } from '~/locale';
 
 export default class TransferDropdown {
   constructor() {
@@ -13,7 +14,7 @@ export default class TransferDropdown {
   }
 
   buildDropdown() {
-    const extraOptions = [{ id: '', text: 'No parent group' }, 'divider'];
+    const extraOptions = [{ id: '-1', text: __('No parent group') }, { type: 'divider' }];
 
     this.groupDropdown.glDropdown({
       selectable: true,
@@ -22,7 +23,7 @@ export default class TransferDropdown {
       search: { fields: ['text'] },
       data: extraOptions.concat(this.data),
       text: item => item.text,
-      clicked: (options) => {
+      clicked: options => {
         const { e } = options;
         e.preventDefault();
         this.assignSelected(options.selectedObj);
@@ -32,5 +33,6 @@ export default class TransferDropdown {
 
   assignSelected(selected) {
     this.parentInput.val(selected.id);
+    this.parentInput.change();
   }
 }

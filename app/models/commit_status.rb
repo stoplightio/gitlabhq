@@ -1,8 +1,13 @@
-class CommitStatus < ActiveRecord::Base
+# frozen_string_literal: true
+
+class CommitStatus < ApplicationRecord
   include HasStatus
   include Importable
   include AfterCommitQueue
   include Presentable
+  include EnumWithNil
+
+  prepend_if_ee('::EE::CommitStatus') # rubocop: disable Cop/InjectEnterpriseEditionModule
 
   self.table_name = 'ci_builds'
 
@@ -37,16 +42,31 @@ class CommitStatus < ActiveRecord::Base
   scope :ordered, -> { order(:name) }
   scope :latest_ordered, -> { latest.ordered.includes(project: :namespace) }
   scope :retried_ordered, -> { retried.ordered.includes(project: :namespace) }
+  scope :before_stage, -> (index) { where('stage_idx < ?', index) }
+  scope :for_stage, -> (index) { where(stage_idx: index) }
   scope :after_stage, -> (index) { where('stage_idx > ?', index) }
+  scope :processables, -> { where(type: %w[Ci::Build Ci::Bridge]) }
+  scope :for_ids, -> (ids) { where(id: ids) }
 
-  enum failure_reason: {
-    unknown_failure: nil,
-    script_failure: 1,
-    api_failure: 2,
-    stuck_or_timeout_failure: 3,
-    runner_system_failure: 4,
-    missing_dependency_failure: 5
-  }
+  scope :with_preloads, -> do
+    preload(:project, :user)
+  end
+
+  scope :with_needs, -> (names = nil) do
+    needs = Ci::BuildNeed.scoped_build.select(1)
+    needs = needs.where(name: names) if names
+    where('EXISTS (?)', needs).preload(:needs)
+  end
+
+  scope :without_needs, -> (names = nil) do
+    needs = Ci::BuildNeed.scoped_build.select(1)
+    needs = needs.where(name: names) if names
+    where('NOT EXISTS (?)', needs)
+  end
+
+  # We use `CommitStatusEnums.failure_reasons` here so that EE can more easily
+  # extend this `Hash` with new values.
+  enum_with_nil failure_reason: ::CommitStatusEnums.failure_reasons
 
   ##
   # We still create some CommitStatuses outside of CreatePipelineService.
@@ -54,9 +74,11 @@ class CommitStatus < ActiveRecord::Base
   # These are pages deployments and external statuses.
   #
   before_create unless: :importing? do
+    # rubocop: disable CodeReuse/ServiceClass
     Ci::EnsureStageService.new(project, user).execute(self) do |stage|
       self.run_after_commit { StageUpdateWorker.perform_async(stage.id) }
     end
+    # rubocop: enable CodeReuse/ServiceClass
   end
 
   state_machine :status do
@@ -65,7 +87,10 @@ class CommitStatus < ActiveRecord::Base
     end
 
     event :enqueue do
-      transition [:created, :skipped, :manual] => :pending
+      # A CommitStatus will never have prerequisites, but this event
+      # is shared by Ci::Build, which cannot progress unless prerequisites
+      # are satisfied.
+      transition [:created, :preparing, :skipped, :manual, :scheduled] => :pending, unless: :any_unmet_prerequisites?
     end
 
     event :run do
@@ -73,26 +98,26 @@ class CommitStatus < ActiveRecord::Base
     end
 
     event :skip do
-      transition [:created, :pending] => :skipped
+      transition [:created, :preparing, :pending] => :skipped
     end
 
     event :drop do
-      transition [:created, :pending, :running] => :failed
+      transition [:created, :preparing, :pending, :running, :scheduled] => :failed
     end
 
     event :success do
-      transition [:created, :pending, :running] => :success
+      transition [:created, :preparing, :pending, :running] => :success
     end
 
     event :cancel do
-      transition [:created, :pending, :running, :manual] => :canceled
+      transition [:created, :preparing, :pending, :running, :manual, :scheduled] => :canceled
     end
 
-    before_transition [:created, :skipped, :manual] => :pending do |commit_status|
+    before_transition [:created, :preparing, :skipped, :manual, :scheduled] => :pending do |commit_status|
       commit_status.queued_at = Time.now
     end
 
-    before_transition [:created, :pending] => :running do |commit_status|
+    before_transition [:created, :preparing, :pending] => :running do |commit_status|
       commit_status.started_at = Time.now
     end
 
@@ -102,7 +127,7 @@ class CommitStatus < ActiveRecord::Base
 
     before_transition any => :failed do |commit_status, transition|
       failure_reason = transition.args.first
-      commit_status.failure_reason = failure_reason
+      commit_status.failure_reason = CommitStatus.failure_reasons[failure_reason]
     end
 
     after_transition do |commit_status, transition|
@@ -112,7 +137,7 @@ class CommitStatus < ActiveRecord::Base
       commit_status.run_after_commit do
         if pipeline_id
           if complete? || manual?
-            PipelineProcessWorker.perform_async(pipeline_id)
+            PipelineProcessWorker.perform_async(pipeline_id, [id])
           else
             PipelineUpdateWorker.perform_async(pipeline_id)
           end
@@ -126,15 +151,29 @@ class CommitStatus < ActiveRecord::Base
     after_transition any => :failed do |commit_status|
       next unless commit_status.project
 
+      # rubocop: disable CodeReuse/ServiceClass
       commit_status.run_after_commit do
         MergeRequests::AddTodoWhenBuildFailsService
           .new(project, nil).execute(self)
       end
+      # rubocop: enable CodeReuse/ServiceClass
     end
   end
 
+  def self.names
+    select(:name)
+  end
+
+  def self.status_for_prior_stages(index)
+    before_stage(index).latest.slow_composite_status || 'success'
+  end
+
+  def self.status_for_names(names)
+    where(name: names).latest.slow_composite_status || 'success'
+  end
+
   def locking_enabled?
-    status_changed?
+    will_save_change_to_status?
   end
 
   def before_sha
@@ -157,13 +196,15 @@ class CommitStatus < ActiveRecord::Base
     false
   end
 
-  # To be overriden when inherrited from
   def retryable?
     false
   end
 
-  # To be overriden when inherrited from
   def cancelable?
+    false
+  end
+
+  def archived?
     false
   end
 
@@ -172,6 +213,10 @@ class CommitStatus < ActiveRecord::Base
   end
 
   def has_trace?
+    false
+  end
+
+  def any_unmet_prerequisites?
     false
   end
 
@@ -189,12 +234,5 @@ class CommitStatus < ActiveRecord::Base
     name.to_s.split(/(\d+)/).map do |v|
       v =~ /\d+/ ? v.to_i : v
     end
-  end
-
-  # Rails 5.0 autogenerated question mark enum methods return wrong result if enum value is nil.
-  # They always return `false`.
-  # This method overwrites the autogenerated one to return correct result.
-  def unknown_failure?
-    Gitlab.rails5? ? failure_reason.nil? : super
   end
 end

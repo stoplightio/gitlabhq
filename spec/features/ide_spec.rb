@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe 'IDE', :js do
@@ -8,7 +10,7 @@ describe 'IDE', :js do
     let(:subgroup_project) { create(:project, :repository, namespace: subgroup) }
 
     before do
-      subgroup_project.add_master(user)
+      subgroup_project.add_maintainer(user)
       sign_in(user)
 
       visit project_path(subgroup_project)

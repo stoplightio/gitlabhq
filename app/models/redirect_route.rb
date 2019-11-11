@@ -1,4 +1,6 @@
-class RedirectRoute < ActiveRecord::Base
+# frozen_string_literal: true
+
+class RedirectRoute < ApplicationRecord
   belongs_to :source, polymorphic: true # rubocop:disable Cop/PolymorphicAssociations
 
   validates :source, presence: true
@@ -9,11 +11,7 @@ class RedirectRoute < ActiveRecord::Base
     uniqueness: { case_sensitive: false }
 
   scope :matching_path_and_descendants, -> (path) do
-    wheres = if Gitlab::Database.postgresql?
-               'LOWER(redirect_routes.path) = LOWER(?) OR LOWER(redirect_routes.path) LIKE LOWER(?)'
-             else
-               'redirect_routes.path = ? OR redirect_routes.path LIKE ?'
-             end
+    wheres = 'LOWER(redirect_routes.path) = LOWER(?) OR LOWER(redirect_routes.path) LIKE LOWER(?)'
 
     where(wheres, path, "#{sanitize_sql_like(path)}/%")
   end

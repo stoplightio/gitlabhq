@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Gitlab::Ci::Config::Entry::Environment do
@@ -100,6 +102,26 @@ describe Gitlab::Ci::Config::Entry::Environment do
     end
   end
 
+  context 'when wrong action type is used' do
+    let(:config) do
+      { name: 'production',
+        action: ['stop'] }
+    end
+
+    describe '#valid?' do
+      it 'is not valid' do
+        expect(entry).not_to be_valid
+      end
+    end
+
+    describe '#errors' do
+      it 'contains error about wrong action type' do
+        expect(entry.errors)
+          .to include 'environment action should be a string'
+      end
+    end
+  end
+
   context 'when invalid action is used' do
     let(:config) do
       { name: 'production',
@@ -147,6 +169,26 @@ describe Gitlab::Ci::Config::Entry::Environment do
       it 'contains error about invalid action' do
         expect(entry.errors)
           .to include 'environment on stop should be a string'
+      end
+    end
+  end
+
+  context 'when wrong url type is used' do
+    let(:config) do
+      { name: 'production',
+        url: ['https://meow.meow'] }
+    end
+
+    describe '#valid?' do
+      it 'is not valid' do
+        expect(entry).not_to be_valid
+      end
+    end
+
+    describe '#errors' do
+      it 'contains error about wrong url type' do
+        expect(entry.errors)
+          .to include 'environment url should be a string'
       end
     end
   end

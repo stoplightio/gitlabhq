@@ -1,38 +1,12 @@
-module AvatarsHelper
-  def project_icon(project_id, options = {})
-    project =
-      if project_id.respond_to?(:avatar_url)
-        project_id
-      else
-        Project.find_by_full_path(project_id)
-      end
+# frozen_string_literal: true
 
-    if project.avatar_url
-      image_tag project.avatar_url, options
-    else # generated icon
-      project_identicon(project, options)
-    end
+module AvatarsHelper
+  def project_icon(project, options = {})
+    source_icon(project, options)
   end
 
-  def project_identicon(project, options = {})
-    allowed_colors = {
-      red: 'FFEBEE',
-      purple: 'F3E5F5',
-      indigo: 'E8EAF6',
-      blue: 'E3F2FD',
-      teal: 'E0F2F1',
-      orange: 'FBE9E7',
-      gray: 'EEEEEE'
-    }
-
-    options[:class] ||= ''
-    options[:class] << ' identicon'
-    bg_key = project.id % 7
-    style = "background-color: ##{allowed_colors.values[bg_key]}; color: #555"
-
-    content_tag(:div, class: options[:class], style: style) do
-      project.name[0, 1].upcase
-    end
+  def group_icon(group, options = {})
+    source_icon(group, options)
   end
 
   # Takes both user and email and returns the avatar_icon by
@@ -48,7 +22,7 @@ module AvatarsHelper
   end
 
   def avatar_icon_for_email(email = nil, size = nil, scale = 2, only_path: true)
-    user = User.find_by_any_email(email.try(:downcase))
+    user = User.find_by_any_email(email)
     if user
       avatar_icon_for_user(user, size, scale, only_path: only_path)
     else
@@ -78,18 +52,8 @@ module AvatarsHelper
       user: commit_or_event.author,
       user_name: commit_or_event.author_name,
       user_email: commit_or_event.author_email,
-      css_class: 'd-none d-sm-inline'
+      css_class: 'd-none d-sm-inline-block'
     }))
-  end
-
-  def user_avatar_url_for(options = {})
-    if options[:url]
-      options[:url]
-    elsif options[:user]
-      avatar_icon_for_user(options[:user], options[:size])
-    else
-      avatar_icon_for_email(options[:user_email], options[:size])
-    end
   end
 
   def user_avatar_without_link(options = {})
@@ -101,6 +65,7 @@ module AvatarsHelper
     has_tooltip = options[:has_tooltip].nil? ? true : options[:has_tooltip]
     data_attributes = options[:data] || {}
     css_class = %W[avatar s#{avatar_size}].push(*options[:css_class])
+    alt_text = user_name ? "#{user_name}'s avatar" : "default avatar"
 
     if has_tooltip
       css_class.push('has-tooltip')
@@ -114,7 +79,7 @@ module AvatarsHelper
     end
 
     image_options = {
-      alt:   "#{user_name}'s avatar",
+      alt:   alt_text,
       src:   avatar_url,
       data:  data_attributes,
       class: css_class,
@@ -131,6 +96,42 @@ module AvatarsHelper
       link_to(avatar, user_path(options[:user]))
     elsif options[:user_email]
       mail_to(options[:user_email], avatar)
+    end
+  end
+
+  private
+
+  def user_avatar_url_for(only_path: true, **options)
+    return options[:url] if options[:url]
+
+    email = options[:user_email]
+    user = options.key?(:user) ? options[:user] : User.find_by_any_email(email)
+
+    if user
+      avatar_icon_for_user(user, options[:size], only_path: only_path)
+    else
+      gravatar_icon(email, options[:size])
+    end
+  end
+
+  def source_icon(source, options = {})
+    avatar_url = source.try(:avatar_url)
+
+    if avatar_url
+      image_tag avatar_url, options
+    else
+      source_identicon(source, options)
+    end
+  end
+
+  def source_identicon(source, options = {})
+    bg_key = (source.id % 7) + 1
+
+    options[:class] =
+      [*options[:class], "identicon bg#{bg_key}"].join(' ')
+
+    content_tag(:div, class: options[:class].strip) do
+      source.name[0, 1].upcase
     end
   end
 end

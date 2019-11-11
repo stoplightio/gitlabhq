@@ -1,8 +1,10 @@
+# frozen_string_literal: true
+
 FactoryBot.define do
   factory :todo do
     project
-    author { project.creator }
-    user { project.creator }
+    author { project&.creator || user }
+    user { project&.creator || user }
     target factory: :issue
     action { Todo::ASSIGNED }
 
@@ -36,11 +38,11 @@ FactoryBot.define do
     end
 
     trait :pending do
-      state :pending
+      state { :pending }
     end
 
     trait :done do
-      state :done
+      state { :done }
     end
   end
 
@@ -49,7 +51,7 @@ FactoryBot.define do
     author
     user
     action { Todo::ASSIGNED }
-    commit_id RepoHelpers.sample_commit.id
-    target_type "Commit"
+    commit_id { RepoHelpers.sample_commit.id }
+    target_type { "Commit" }
   end
 end

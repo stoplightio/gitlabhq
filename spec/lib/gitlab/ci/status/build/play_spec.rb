@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Gitlab::Ci::Status::Build::Play do
@@ -46,7 +48,7 @@ describe Gitlab::Ci::Status::Build::Play do
       context 'when user can not push to the branch' do
         before do
           build.project.add_developer(user)
-          create(:protected_branch, :masters_can_push,
+          create(:protected_branch, :maintainers_can_push,
                  name: build.ref, project: project)
         end
 

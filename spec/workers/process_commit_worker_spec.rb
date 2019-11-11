@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe ProcessCommitWorker do
@@ -30,18 +32,6 @@ describe ProcessCommitWorker do
       expect(worker).to receive(:update_issue_metrics).and_call_original
 
       worker.perform(project.id, user.id, commit.to_hash)
-    end
-
-    context 'when commit already exists in upstream project' do
-      let(:forked) { create(:project, :public, :repository) }
-
-      it 'does not process commit message' do
-        create(:forked_project_link, forked_to_project: forked, forked_from_project: project)
-
-        expect(worker).not_to receive(:process_commit_message)
-
-        worker.perform(forked.id, user.id, forked.commit.to_hash)
-      end
     end
   end
 

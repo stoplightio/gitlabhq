@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module MergeRequests
   class CreateService < MergeRequests::BaseService
     def execute
@@ -7,7 +9,6 @@ module MergeRequests
       merge_request.target_project = @project
       merge_request.source_project = @source_project
       merge_request.source_branch = params[:source_branch]
-      merge_request.merge_params['force_remove_source_branch'] = params.delete(:force_remove_source_branch)
 
       create(merge_request)
     end
@@ -23,7 +24,9 @@ module MergeRequests
     def after_create(issuable)
       todo_service.new_merge_request(issuable, current_user)
       issuable.cache_merge_request_closes_issues!(current_user)
-      update_merge_requests_head_pipeline(issuable)
+      create_pipeline_for(issuable, current_user)
+      issuable.update_head_pipeline
+      Gitlab::UsageDataCounters::MergeRequestCounter.count(:create)
 
       super
     end
@@ -41,22 +44,6 @@ module MergeRequests
     end
 
     private
-
-    def update_merge_requests_head_pipeline(merge_request)
-      pipeline = head_pipeline_for(merge_request)
-      merge_request.update(head_pipeline_id: pipeline.id) if pipeline
-    end
-
-    def head_pipeline_for(merge_request)
-      return unless merge_request.source_project
-
-      sha = merge_request.source_branch_sha
-      return unless sha
-
-      pipelines = merge_request.source_project.pipelines.where(ref: merge_request.source_branch, sha: sha)
-
-      pipelines.order(id: :desc).first
-    end
 
     def set_projects!
       # @project is used to determine whether the user can set the merge request's
@@ -79,3 +66,5 @@ module MergeRequests
     end
   end
 end
+
+MergeRequests::CreateService.include_if_ee('EE::MergeRequests::CreateService')

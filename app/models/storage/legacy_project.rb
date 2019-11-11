@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Storage
   class LegacyProject
     attr_accessor :project
@@ -21,24 +23,19 @@ module Storage
       project.full_path
     end
 
-    def ensure_storage_path_exists
-      return unless namespace
+    def rename_repo(old_full_path: nil, new_full_path: nil)
+      old_full_path ||= project.full_path_before_last_save
+      new_full_path ||= project.build_full_path
 
-      gitlab_shell.add_namespace(repository_storage, base_dir)
-    end
-
-    def rename_repo
-      new_full_path = project.build_full_path
-
-      if gitlab_shell.mv_repository(repository_storage, project.full_path_was, new_full_path)
+      if gitlab_shell.mv_repository(repository_storage, old_full_path, new_full_path)
         # If repository moved successfully we need to send update instructions to users.
         # However we cannot allow rollback since we moved repository
         # So we basically we mute exceptions in next actions
         begin
-          gitlab_shell.mv_repository(repository_storage, "#{project.full_path_was}.wiki", "#{new_full_path}.wiki")
+          gitlab_shell.mv_repository(repository_storage, "#{old_full_path}.wiki", "#{new_full_path}.wiki")
           return true
         rescue => e
-          Rails.logger.error "Exception renaming #{project.full_path_was} -> #{new_full_path}: #{e}"
+          Rails.logger.error "Exception renaming #{old_full_path} -> #{new_full_path}: #{e}" # rubocop:disable Gitlab/RailsLogger
           # Returning false does not rollback after_* transaction but gives
           # us information about failing some of tasks
           return false

@@ -1,9 +1,12 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Noteable do
   let!(:active_diff_note1) { create(:diff_note_on_merge_request) }
   let(:project) { active_diff_note1.project }
   subject { active_diff_note1.noteable }
+
   let!(:active_diff_note2) { create(:diff_note_on_merge_request, project: project, noteable: subject, in_reply_to: active_diff_note1) }
   let!(:active_diff_note3) { create(:diff_note_on_merge_request, project: project, noteable: subject, position: active_position2) }
   let!(:outdated_diff_note1) { create(:diff_note_on_merge_request, project: project, noteable: subject, position: outdated_position) }
@@ -255,6 +258,36 @@ describe Noteable do
         it 'allows a user to resolve the discussions' do
           expect(subject.discussions_can_be_resolved_by?(user)).to be(false)
         end
+      end
+    end
+  end
+
+  describe '.replyable_types' do
+    it 'exposes the replyable types' do
+      expect(described_class.replyable_types).to include('Issue', 'MergeRequest')
+    end
+  end
+
+  describe '.resolvable_types' do
+    it 'exposes the replyable types' do
+      expect(described_class.resolvable_types).to include('MergeRequest')
+    end
+  end
+
+  describe '#capped_notes_count' do
+    context 'notes number < 10' do
+      it 'the number of notes is returned' do
+        expect(subject.capped_notes_count(10)).to eq(9)
+      end
+    end
+
+    context 'notes number > 10' do
+      before do
+        create_list(:note, 2, project: project, noteable: subject)
+      end
+
+      it '10 is returned' do
+        expect(subject.capped_notes_count(10)).to eq(10)
       end
     end
   end

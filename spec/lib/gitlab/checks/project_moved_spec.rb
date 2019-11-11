@@ -1,4 +1,6 @@
-require 'rails_helper'
+# frozen_string_literal: true
+
+require 'spec_helper'
 
 describe Gitlab::Checks::ProjectMoved, :clean_gitlab_redis_shared_state do
   let(:user) { create(:user) }

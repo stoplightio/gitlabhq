@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Profiles::EmailsController < Profiles::ApplicationController
   before_action :find_email, only: [:destroy, :resend_confirmation_instructions]
 
@@ -19,16 +21,16 @@ class Profiles::EmailsController < Profiles::ApplicationController
     Emails::DestroyService.new(current_user, user: current_user).execute(@email)
 
     respond_to do |format|
-      format.html { redirect_to profile_emails_url, status: 302 }
+      format.html { redirect_to profile_emails_url, status: :found }
       format.js { head :ok }
     end
   end
 
   def resend_confirmation_instructions
     if Emails::ConfirmService.new(current_user, user: current_user).execute(@email)
-      flash[:notice] = "Confirmation email sent to #{@email.email}"
+      flash[:notice] = _("Confirmation email sent to %{email}") % { email: @email.email }
     else
-      flash[:alert] = "There was a problem sending the confirmation email"
+      flash[:alert] = _("There was a problem sending the confirmation email")
     end
 
     redirect_to profile_emails_url

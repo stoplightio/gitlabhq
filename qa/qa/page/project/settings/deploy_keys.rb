@@ -1,21 +1,28 @@
+# frozen_string_literal: true
+
 module QA
   module Page
     module Project
       module Settings
         class DeployKeys < Page::Base
           view 'app/views/projects/deploy_keys/_form.html.haml' do
-            element :deploy_key_title, 'text_field :title'
-            element :deploy_key_key, 'text_area :key'
+            element :deploy_key_title, 'text_field :title' # rubocop:disable QA/ElementWithPattern
+            element :deploy_key_key, 'text_area :key' # rubocop:disable QA/ElementWithPattern
           end
 
           view 'app/assets/javascripts/deploy_keys/components/app.vue' do
-            element :deploy_keys_section, /class=".*deploy\-keys.*"/
-            element :project_deploy_keys, 'class="qa-project-deploy-keys"'
+            element :deploy_keys_section, /class=".*deploy\-keys.*"/ # rubocop:disable QA/ElementWithPattern
+            element :project_deploy_keys, 'class="qa-project-deploy-keys"' # rubocop:disable QA/ElementWithPattern
           end
 
           view 'app/assets/javascripts/deploy_keys/components/key.vue' do
-            element :key_title, /class=".*qa-key-title.*"/
-            element :key_fingerprint, /class=".*qa-key-fingerprint.*"/
+            element :key
+            element :key_title
+            element :key_fingerprint
+          end
+
+          def add_key
+            click_on 'Add key'
           end
 
           def fill_key_title(title)
@@ -26,8 +33,18 @@ module QA
             fill_in 'deploy_key_key', with: key
           end
 
-          def add_key
-            click_on 'Add key'
+          def find_fingerprint(title)
+            within_project_deploy_keys do
+              find_element(:key, text: title)
+                .find(element_selector_css(:key_fingerprint)).text
+            end
+          end
+
+          def has_key?(title, fingerprint)
+            within_project_deploy_keys do
+              find_element(:key, text: title)
+                .has_css?(element_selector_css(:key_fingerprint), text: fingerprint)
+            end
           end
 
           def key_title
@@ -42,21 +59,13 @@ module QA
             end
           end
 
-          def key_titles
-            within_project_deploy_keys do
-              all_elements(:key_title)
-            end
-          end
-
-          def key_fingerprints
-            within_project_deploy_keys do
-              all_elements(:key_fingerprint)
-            end
-          end
-
           private
 
           def within_project_deploy_keys
+            wait(reload: false) do
+              has_element?(:project_deploy_keys)
+            end
+
             within_element(:project_deploy_keys) do
               yield
             end

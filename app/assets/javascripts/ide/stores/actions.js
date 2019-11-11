@@ -1,11 +1,17 @@
 import $ from 'jquery';
 import Vue from 'vue';
+import { __, sprintf } from '~/locale';
 import { visitUrl } from '~/lib/utils/url_utility';
 import flash from '~/flash';
+import _ from 'underscore';
 import * as types from './mutation_types';
-import FilesDecoratorWorker from './workers/files_decorator_worker';
+import { decorateFiles } from '../lib/files';
+import { stageKeys } from '../constants';
+import service from '../services';
+import router from '../ide_router';
+import eventHub from '../eventhub';
 
-export const redirectToUrl = (_, url) => visitUrl(url);
+export const redirectToUrl = (self, url) => visitUrl(url);
 
 export const setInitialData = ({ commit }, data) => commit(types.SET_INITIAL_DATA, data);
 
@@ -52,13 +58,12 @@ export const setResizingStatus = ({ commit }, resizing) => {
 
 export const createTempEntry = (
   { state, commit, dispatch },
-  { branchId, name, type, content = '', base64 = false },
+  { name, type, content = '', base64 = false, binary = false, rawPath = '' },
 ) =>
   new Promise(resolve => {
-    const worker = new FilesDecoratorWorker();
     const fullName = name.slice(-1) !== '/' && type === 'tree' ? `${name}/` : name;
 
-    if (state.entries[name]) {
+    if (state.entries[name] && !state.entries[name].deleted) {
       flash(
         `The name "${name.split('/').pop()}" is already taken in this directory.`,
         'alert',
@@ -73,39 +78,37 @@ export const createTempEntry = (
       return null;
     }
 
-    worker.addEventListener('message', ({ data }) => {
-      const { file, parentPath } = data;
-
-      worker.terminate();
-
-      commit(types.CREATE_TMP_ENTRY, {
-        data,
-        projectId: state.currentProjectId,
-        branchId,
-      });
-
-      if (type === 'blob') {
-        commit(types.TOGGLE_FILE_OPEN, file.path);
-        commit(types.ADD_FILE_TO_CHANGED, file.path);
-        dispatch('setFileActive', file.path);
-      }
-
-      if (parentPath && !state.entries[parentPath].opened) {
-        commit(types.TOGGLE_TREE_OPEN, parentPath);
-      }
-
-      resolve(file);
-    });
-
-    worker.postMessage({
+    const data = decorateFiles({
       data: [fullName],
       projectId: state.currentProjectId,
-      branchId,
+      branchId: state.currentBranchId,
       type,
       tempFile: true,
-      base64,
       content,
+      base64,
+      binary,
+      rawPath,
     });
+    const { file, parentPath } = data;
+
+    commit(types.CREATE_TMP_ENTRY, {
+      data,
+      projectId: state.currentProjectId,
+      branchId: state.currentBranchId,
+    });
+
+    if (type === 'blob') {
+      commit(types.TOGGLE_FILE_OPEN, file.path);
+      commit(types.ADD_FILE_TO_CHANGED, file.path);
+      dispatch('setFileActive', file.path);
+      dispatch('triggerFilesChange');
+    }
+
+    if (parentPath && !state.entries[parentPath].opened) {
+      commit(types.TOGGLE_TREE_OPEN, parentPath);
+    }
+
+    resolve(file);
 
     return null;
   });
@@ -122,14 +125,28 @@ export const scrollToTab = () => {
   });
 };
 
-export const stageAllChanges = ({ state, commit }) => {
+export const stageAllChanges = ({ state, commit, dispatch }) => {
+  const openFile = state.openFiles[0];
+
   commit(types.SET_LAST_COMMIT_MSG, '');
 
   state.changedFiles.forEach(file => commit(types.STAGE_CHANGE, file.path));
+
+  dispatch('openPendingTab', {
+    file: state.stagedFiles.find(f => f.path === openFile.path),
+    keyPrefix: stageKeys.staged,
+  });
 };
 
-export const unstageAllChanges = ({ state, commit }) => {
+export const unstageAllChanges = ({ state, commit, dispatch }) => {
+  const openFile = state.openFiles[0];
+
   state.stagedFiles.forEach(file => commit(types.UNSTAGE_CHANGE, file.path));
+
+  dispatch('openPendingTab', {
+    file: state.changedFiles.find(f => f.path === openFile.path),
+    keyPrefix: stageKeys.unstaged,
+  });
 };
 
 export const updateViewer = ({ commit }, viewer) => {
@@ -155,8 +172,10 @@ export const setCurrentBranchId = ({ commit }, currentBranchId) => {
 export const updateTempFlagForEntry = ({ commit, dispatch, state }, { file, tempFile }) => {
   commit(types.UPDATE_TEMP_FLAG, { path: file.path, tempFile });
 
-  if (file.parentPath) {
-    dispatch('updateTempFlagForEntry', { file: state.entries[file.parentPath], tempFile });
+  const parent = file.parentPath && state.entries[file.parentPath];
+
+  if (parent) {
+    dispatch('updateTempFlagForEntry', { file: parent, tempFile });
   }
 };
 
@@ -169,11 +188,137 @@ export const burstUnusedSeal = ({ state, commit }) => {
   }
 };
 
-export const setRightPane = ({ commit }, view) => {
-  commit(types.SET_RIGHT_PANE, view);
+export const setLinks = ({ commit }, links) => commit(types.SET_LINKS, links);
+
+export const setErrorMessage = ({ commit }, errorMessage) =>
+  commit(types.SET_ERROR_MESSAGE, errorMessage);
+
+export const openNewEntryModal = ({ commit }, { type, path = '' }) => {
+  commit(types.OPEN_NEW_ENTRY_MODAL, { type, path });
+
+  // open the modal manually so we don't mess around with dropdown/rows
+  $('#ide-new-entry').modal('show');
 };
 
-export const setLinks = ({ commit }, links) => commit(types.SET_LINKS, links);
+export const deleteEntry = ({ commit, dispatch, state }, path) => {
+  const entry = state.entries[path];
+  const { prevPath, prevName, prevParentPath } = entry;
+  const isTree = entry.type === 'tree';
+
+  if (prevPath) {
+    dispatch('renameEntry', {
+      path,
+      name: prevName,
+      parentPath: prevParentPath,
+    });
+    dispatch('deleteEntry', prevPath);
+    return;
+  }
+  if (state.unusedSeal) dispatch('burstUnusedSeal');
+  if (entry.opened) dispatch('closeFile', entry);
+
+  if (isTree) {
+    entry.tree.forEach(f => dispatch('deleteEntry', f.path));
+  }
+
+  commit(types.DELETE_ENTRY, path);
+
+  // Only stage if we're not a directory or a new file
+  if (!isTree && !entry.tempFile) {
+    dispatch('stageChange', path);
+  }
+
+  dispatch('triggerFilesChange');
+};
+
+export const resetOpenFiles = ({ commit }) => commit(types.RESET_OPEN_FILES);
+
+export const renameEntry = ({ dispatch, commit, state }, { path, name, parentPath }) => {
+  const entry = state.entries[path];
+  const newPath = parentPath ? `${parentPath}/${name}` : name;
+
+  commit(types.RENAME_ENTRY, { path, name, parentPath });
+
+  if (entry.type === 'tree') {
+    state.entries[newPath].tree.forEach(f => {
+      dispatch('renameEntry', {
+        path: f.path,
+        name: f.name,
+        parentPath: newPath,
+      });
+    });
+  } else {
+    const newEntry = state.entries[newPath];
+    const isRevert = newPath === entry.prevPath;
+    const isReset = isRevert && !newEntry.changed && !newEntry.tempFile;
+    const isInChanges = state.changedFiles
+      .concat(state.stagedFiles)
+      .some(({ key }) => key === newEntry.key);
+
+    if (isReset) {
+      commit(types.REMOVE_FILE_FROM_STAGED_AND_CHANGED, newEntry);
+    } else if (!isInChanges) {
+      commit(types.ADD_FILE_TO_CHANGED, newPath);
+    }
+
+    if (!newEntry.tempFile) {
+      eventHub.$emit(`editor.update.model.dispose.${entry.key}`);
+    }
+
+    if (newEntry.opened) {
+      router.push(`/project${newEntry.url}`);
+    }
+  }
+
+  dispatch('triggerFilesChange');
+};
+
+export const getBranchData = ({ commit, state }, { projectId, branchId, force = false } = {}) =>
+  new Promise((resolve, reject) => {
+    const currentProject = state.projects[projectId];
+    if (!currentProject || !currentProject.branches[branchId] || force) {
+      service
+        .getBranchData(projectId, branchId)
+        .then(({ data }) => {
+          const { id } = data.commit;
+          commit(types.SET_BRANCH, {
+            projectPath: projectId,
+            branchName: branchId,
+            branch: data,
+          });
+          commit(types.SET_BRANCH_WORKING_REFERENCE, { projectId, branchId, reference: id });
+          resolve(data);
+        })
+        .catch(e => {
+          if (e.response.status === 404) {
+            reject(e);
+          } else {
+            flash(
+              __('Error loading branch data. Please try again.'),
+              'alert',
+              document,
+              null,
+              false,
+              true,
+            );
+
+            reject(
+              new Error(
+                sprintf(
+                  __('Branch not loaded - %{branchId}'),
+                  {
+                    branchId: `<strong>${_.escape(projectId)}/${_.escape(branchId)}</strong>`,
+                  },
+                  false,
+                ),
+              ),
+            );
+          }
+        });
+    } else {
+      resolve(currentProject.branches[branchId]);
+    }
+  });
 
 export * from './actions/tree';
 export * from './actions/file';

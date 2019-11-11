@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Gitlab::Diff::InlineDiffMarker do
@@ -16,7 +18,7 @@ describe Gitlab::Diff::InlineDiffMarker do
       end
     end
 
-    context "when the text text is not html safe" do
+    context "when the text is not html safe" do
       let(:rich) { "abc 'def' differs" }
 
       it 'marks the range' do

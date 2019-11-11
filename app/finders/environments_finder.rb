@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class EnvironmentsFinder
   attr_reader :project, :current_user, :params
 
@@ -5,6 +7,7 @@ class EnvironmentsFinder
     @project, @current_user, @params = project, current_user, params
   end
 
+  # rubocop: disable CodeReuse/ActiveRecord
   def execute
     deployments = project.deployments
     deployments =
@@ -42,6 +45,20 @@ class EnvironmentsFinder
 
     environments
   end
+  # rubocop: enable CodeReuse/ActiveRecord
+
+  # This method will eventually take the place of `#execute` as an
+  # efficient way to get relevant environment entries.
+  # Currently, `#execute` method has a serious technical debt and
+  # we will likely rework on it in the future.
+  # See more https://gitlab.com/gitlab-org/gitlab-foss/issues/63381
+  def find
+    environments = project.environments
+    environments = by_name(environments)
+    environments = by_search(environments)
+
+    environments
+  end
 
   private
 
@@ -51,5 +68,21 @@ class EnvironmentsFinder
 
   def commit
     params[:commit]
+  end
+
+  def by_name(environments)
+    if params[:name].present?
+      environments.for_name(params[:name])
+    else
+      environments
+    end
+  end
+
+  def by_search(environments)
+    if params[:search].present?
+      environments.for_name_like(params[:search], limit: nil)
+    else
+      environments
+    end
   end
 end

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Gitlab::Database::RenameReservedPathsMigration::V1::RenameNamespaces, :delete do
@@ -165,7 +167,7 @@ describe Gitlab::Database::RenameReservedPathsMigration::V1::RenameNamespaces, :
   end
 
   describe '#rename_namespace_dependencies' do
-    it "moves the the repository for a project in the namespace" do
+    it "moves the repository for a project in the namespace" do
       create(:project, :repository, :legacy_storage, namespace: namespace, path: "the-path-project")
       expected_repo = File.join(TestEnv.repos_path, "the-path0", "the-path-project.git")
 
@@ -281,7 +283,7 @@ describe Gitlab::Database::RenameReservedPathsMigration::V1::RenameNamespaces, :
 
     it "doesn't break when the namespace was renamed" do
       subject.rename_namespace(namespace)
-      namespace.update_attributes!(path: 'renamed-afterwards')
+      namespace.update!(path: 'renamed-afterwards')
 
       expect { subject.revert_renames }.not_to raise_error
     end

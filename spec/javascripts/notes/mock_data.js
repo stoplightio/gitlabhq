@@ -1,12 +1,14 @@
+// Copied to ee/spec/frontend/notes/mock_data.js
+
 export const notesDataMock = {
-  discussionsPath: '/gitlab-org/gitlab-ce/issues/26/discussions.json',
+  discussionsPath: '/gitlab-org/gitlab-foss/issues/26/discussions.json',
   lastFetchedAt: 1501862675,
   markdownDocsPath: '/help/user/markdown',
   newSessionPath: '/users/sign_in?redirect_to_referer=yes',
-  notesPath: '/gitlab-org/gitlab-ce/noteable/issue/98/notes',
+  notesPath: '/gitlab-org/gitlab-foss/noteable/issue/98/notes',
   quickActionsDocsPath: '/help/user/project/quick_actions',
   registerPath: '/users/sign_in?redirect_to_referer=yes#register-pane',
-  totalNotes: 1,
+  prerenderedNotesCount: 1,
   closePath: '/twitter/flight/issues/9.json?issue%5Bstate_event%5D=close',
   reopenPath: '/twitter/flight/issues/9.json?issue%5Bstate_event%5D=reopen',
   canAwardEmoji: true,
@@ -26,7 +28,7 @@ export const noteableDataMock = {
   author_id: 1,
   branch_name: null,
   confidential: false,
-  create_note_path: '/gitlab-org/gitlab-ce/notes?target_id=98&target_type=issue',
+  create_note_path: '/gitlab-org/gitlab-foss/notes?target_id=98&target_type=issue',
   created_at: '2017-02-07T10:11:18.395Z',
   current_user: {
     can_create_note: true,
@@ -44,16 +46,16 @@ export const noteableDataMock = {
   milestone: null,
   milestone_id: null,
   moved_to_id: null,
-  preview_note_path:
-    '/gitlab-org/gitlab-ce/preview_markdown?quick_actions_target_id=98&quick_actions_target_type=Issue',
+  preview_note_path: '/gitlab-org/gitlab-foss/preview_markdown?target_id=98&target_type=Issue',
   project_id: 2,
   state: 'opened',
   time_estimate: 0,
   title: '14',
   total_time_spent: 0,
+  noteable_note_url: '/group/project/merge_requests/1#note_1',
   updated_at: '2017-08-04T09:53:01.226Z',
   updated_by_id: 1,
-  web_url: '/gitlab-org/gitlab-ce/issues/26',
+  web_url: '/gitlab-org/gitlab-foss/issues/26',
   noteableType: 'issue',
 };
 
@@ -65,7 +67,7 @@ export const individualNote = {
   individual_note: true,
   notes: [
     {
-      id: 1390,
+      id: '1390',
       attachment: {
         url: null,
         filename: null,
@@ -98,17 +100,19 @@ export const individualNote = {
         { name: 'baseball', user: { id: 1, name: 'Root', username: 'root' } },
         { name: 'art', user: { id: 1, name: 'Root', username: 'root' } },
       ],
-      toggle_award_path: '/gitlab-org/gitlab-ce/notes/1390/toggle_award_emoji',
+      toggle_award_path: '/gitlab-org/gitlab-foss/notes/1390/toggle_award_emoji',
+      noteable_note_url: '/group/project/merge_requests/1#note_1',
+      note_url: '/group/project/merge_requests/1#note_1',
       report_abuse_path:
         '/abuse_reports/new?ref_url=http%3A%2F%2Flocalhost%3A3000%2Fgitlab-org%2Fgitlab-ce%2Fissues%2F26%23note_1390&user_id=1',
-      path: '/gitlab-org/gitlab-ce/notes/1390',
+      path: '/gitlab-org/gitlab-foss/notes/1390',
     },
   ],
   reply_id: '0fb4e0e3f9276e55ff32eb4195add694aece4edd',
 };
 
 export const note = {
-  id: 546,
+  id: '546',
   attachment: {
     url: null,
     filename: null,
@@ -156,10 +160,12 @@ export const note = {
       },
     },
   ],
-  toggle_award_path: '/gitlab-org/gitlab-ce/notes/546/toggle_award_emoji',
+  toggle_award_path: '/gitlab-org/gitlab-foss/notes/546/toggle_award_emoji',
+  note_url: '/group/project/merge_requests/1#note_1',
+  noteable_note_url: '/group/project/merge_requests/1#note_1',
   report_abuse_path:
     '/abuse_reports/new?ref_url=http%3A%2F%2Flocalhost%3A3000%2Fgitlab-org%2Fgitlab-ce%2Fissues%2F7%23note_546&user_id=1',
-  path: '/gitlab-org/gitlab-ce/notes/546',
+  path: '/gitlab-org/gitlab-foss/notes/546',
 };
 
 export const discussionMock = {
@@ -168,7 +174,7 @@ export const discussionMock = {
   expanded: true,
   notes: [
     {
-      id: 1395,
+      id: '1395',
       attachment: {
         url: null,
         filename: null,
@@ -194,17 +200,19 @@ export const discussionMock = {
       current_user: {
         can_edit: true,
         can_award_emoji: true,
+        can_resolve: true,
       },
       discussion_id: '9e3bd2f71a01de45fd166e6719eb380ad9f270b1',
       emoji_awardable: true,
       award_emoji: [],
-      toggle_award_path: '/gitlab-org/gitlab-ce/notes/1395/toggle_award_emoji',
+      noteable_note_url: '/group/project/merge_requests/1#note_1',
+      toggle_award_path: '/gitlab-org/gitlab-foss/notes/1395/toggle_award_emoji',
       report_abuse_path:
         '/abuse_reports/new?ref_url=http%3A%2F%2Flocalhost%3A3000%2Fgitlab-org%2Fgitlab-ce%2Fissues%2F26%23note_1395&user_id=1',
-      path: '/gitlab-org/gitlab-ce/notes/1395',
+      path: '/gitlab-org/gitlab-foss/notes/1395',
     },
     {
-      id: 1396,
+      id: '1396',
       attachment: {
         url: null,
         filename: null,
@@ -239,17 +247,19 @@ export const discussionMock = {
       current_user: {
         can_edit: true,
         can_award_emoji: true,
+        can_resolve: true,
       },
       discussion_id: '9e3bd2f71a01de45fd166e6719eb380ad9f270b1',
       emoji_awardable: true,
       award_emoji: [],
-      toggle_award_path: '/gitlab-org/gitlab-ce/notes/1396/toggle_award_emoji',
+      toggle_award_path: '/gitlab-org/gitlab-foss/notes/1396/toggle_award_emoji',
+      noteable_note_url: '/group/project/merge_requests/1#note_1',
       report_abuse_path:
         '/abuse_reports/new?ref_url=http%3A%2F%2Flocalhost%3A3000%2Fgitlab-org%2Fgitlab-ce%2Fissues%2F26%23note_1396&user_id=1',
-      path: '/gitlab-org/gitlab-ce/notes/1396',
+      path: '/gitlab-org/gitlab-foss/notes/1396',
     },
     {
-      id: 1437,
+      id: '1437',
       attachment: {
         url: null,
         filename: null,
@@ -284,21 +294,25 @@ export const discussionMock = {
       current_user: {
         can_edit: true,
         can_award_emoji: true,
+        can_resolve: true,
       },
       discussion_id: '9e3bd2f71a01de45fd166e6719eb380ad9f270b1',
       emoji_awardable: true,
       award_emoji: [],
-      toggle_award_path: '/gitlab-org/gitlab-ce/notes/1437/toggle_award_emoji',
+      noteable_note_url: '/group/project/merge_requests/1#note_1',
+      toggle_award_path: '/gitlab-org/gitlab-foss/notes/1437/toggle_award_emoji',
       report_abuse_path:
         '/abuse_reports/new?ref_url=http%3A%2F%2Flocalhost%3A3000%2Fgitlab-org%2Fgitlab-ce%2Fissues%2F26%23note_1437&user_id=1',
-      path: '/gitlab-org/gitlab-ce/notes/1437',
+      path: '/gitlab-org/gitlab-foss/notes/1437',
     },
   ],
   individual_note: false,
+  resolvable: true,
+  active: true,
 };
 
 export const loggedOutnoteableData = {
-  id: 98,
+  id: '98',
   iid: 26,
   author_id: 1,
   description: '',
@@ -330,14 +344,14 @@ export const loggedOutnoteableData = {
   due_date: null,
   moved_to_id: null,
   project_id: 2,
-  web_url: '/gitlab-org/gitlab-ce/issues/26',
+  web_url: '/gitlab-org/gitlab-foss/issues/26',
   current_user: {
     can_create_note: false,
     can_update: false,
   },
-  create_note_path: '/gitlab-org/gitlab-ce/notes?target_id=98&target_type=issue',
-  preview_note_path:
-    '/gitlab-org/gitlab-ce/preview_markdown?quick_actions_target_id=98&quick_actions_target_type=Issue',
+  noteable_note_url: '/group/project/merge_requests/1#note_1',
+  create_note_path: '/gitlab-org/gitlab-foss/notes?target_id=98&target_type=issue',
+  preview_note_path: '/gitlab-org/gitlab-foss/preview_markdown?target_id=98&target_type=Issue',
 };
 
 export const collapseNotesMock = [
@@ -347,7 +361,7 @@ export const collapseNotesMock = [
     individual_note: true,
     notes: [
       {
-        id: 1390,
+        id: '1390',
         attachment: null,
         author: {
           id: 1,
@@ -382,7 +396,7 @@ export const collapseNotesMock = [
     individual_note: true,
     notes: [
       {
-        id: 1391,
+        id: '1391',
         attachment: null,
         author: {
           id: 1,
@@ -415,14 +429,14 @@ export const collapseNotesMock = [
 
 export const INDIVIDUAL_NOTE_RESPONSE_MAP = {
   GET: {
-    '/gitlab-org/gitlab-ce/issues/26/discussions.json': [
+    '/gitlab-org/gitlab-foss/issues/26/discussions.json': [
       {
         id: '0fb4e0e3f9276e55ff32eb4195add694aece4edd',
         reply_id: '0fb4e0e3f9276e55ff32eb4195add694aece4edd',
         expanded: true,
         notes: [
           {
-            id: 1390,
+            id: '1390',
             attachment: {
               url: null,
               filename: null,
@@ -469,10 +483,11 @@ export const INDIVIDUAL_NOTE_RESPONSE_MAP = {
                 },
               },
             ],
-            toggle_award_path: '/gitlab-org/gitlab-ce/notes/1390/toggle_award_emoji',
+            noteable_note_url: '/group/project/merge_requests/1#note_1',
+            toggle_award_path: '/gitlab-org/gitlab-foss/notes/1390/toggle_award_emoji',
             report_abuse_path:
               '/abuse_reports/new?ref_url=http%3A%2F%2Flocalhost%3A3000%2Fgitlab-org%2Fgitlab-ce%2Fissues%2F26%23note_1390\u0026user_id=1',
-            path: '/gitlab-org/gitlab-ce/notes/1390',
+            path: '/gitlab-org/gitlab-foss/notes/1390',
           },
         ],
         individual_note: true,
@@ -483,7 +498,7 @@ export const INDIVIDUAL_NOTE_RESPONSE_MAP = {
         expanded: true,
         notes: [
           {
-            id: 1391,
+            id: '1391',
             attachment: {
               url: null,
               filename: null,
@@ -513,25 +528,26 @@ export const INDIVIDUAL_NOTE_RESPONSE_MAP = {
             discussion_id: '70d5c92a4039a36c70100c6691c18c27e4b0a790',
             emoji_awardable: true,
             award_emoji: [],
-            toggle_award_path: '/gitlab-org/gitlab-ce/notes/1391/toggle_award_emoji',
+            noteable_note_url: '/group/project/merge_requests/1#note_1',
+            toggle_award_path: '/gitlab-org/gitlab-foss/notes/1391/toggle_award_emoji',
             report_abuse_path:
               '/abuse_reports/new?ref_url=http%3A%2F%2Flocalhost%3A3000%2Fgitlab-org%2Fgitlab-ce%2Fissues%2F26%23note_1391\u0026user_id=1',
-            path: '/gitlab-org/gitlab-ce/notes/1391',
+            path: '/gitlab-org/gitlab-foss/notes/1391',
           },
         ],
         individual_note: true,
       },
     ],
-    '/gitlab-org/gitlab-ce/noteable/issue/98/notes': {
+    '/gitlab-org/gitlab-foss/noteable/issue/98/notes': {
       last_fetched_at: 1512900838,
       notes: [],
     },
   },
   PUT: {
-    '/gitlab-org/gitlab-ce/notes/1471': {
+    '/gitlab-org/gitlab-foss/notes/1471': {
       commands_changes: null,
       valid: true,
-      id: 1471,
+      id: '1471',
       attachment: null,
       author: {
         id: 1,
@@ -567,10 +583,11 @@ export const INDIVIDUAL_NOTE_RESPONSE_MAP = {
       discussion_id: 'a3ed36e29b1957efb3b68c53e2d7a2b24b1df052',
       emoji_awardable: true,
       award_emoji: [],
-      toggle_award_path: '/gitlab-org/gitlab-ce/notes/1471/toggle_award_emoji',
+      noteable_note_url: '/group/project/merge_requests/1#note_1',
+      toggle_award_path: '/gitlab-org/gitlab-foss/notes/1471/toggle_award_emoji',
       report_abuse_path:
         '/abuse_reports/new?ref_url=http%3A%2F%2Flocalhost%3A3000%2Fgitlab-org%2Fgitlab-ce%2Fissues%2F29%23note_1471\u0026user_id=1',
-      path: '/gitlab-org/gitlab-ce/notes/1471',
+      path: '/gitlab-org/gitlab-foss/notes/1471',
     },
   },
 };
@@ -579,14 +596,14 @@ export const DISCUSSION_NOTE_RESPONSE_MAP = {
   ...INDIVIDUAL_NOTE_RESPONSE_MAP,
   GET: {
     ...INDIVIDUAL_NOTE_RESPONSE_MAP.GET,
-    '/gitlab-org/gitlab-ce/issues/26/discussions.json': [
+    '/gitlab-org/gitlab-foss/issues/26/discussions.json': [
       {
         id: 'a3ed36e29b1957efb3b68c53e2d7a2b24b1df052',
         reply_id: 'a3ed36e29b1957efb3b68c53e2d7a2b24b1df052',
         expanded: true,
         notes: [
           {
-            id: 1471,
+            id: '1471',
             attachment: {
               url: null,
               filename: null,
@@ -617,10 +634,11 @@ export const DISCUSSION_NOTE_RESPONSE_MAP = {
             discussion_id: 'a3ed36e29b1957efb3b68c53e2d7a2b24b1df052',
             emoji_awardable: true,
             award_emoji: [],
-            toggle_award_path: '/gitlab-org/gitlab-ce/notes/1471/toggle_award_emoji',
+            toggle_award_path: '/gitlab-org/gitlab-foss/notes/1471/toggle_award_emoji',
+            noteable_note_url: '/group/project/merge_requests/1#note_1',
             report_abuse_path:
               '/abuse_reports/new?ref_url=http%3A%2F%2Flocalhost%3A3000%2Fgitlab-org%2Fgitlab-ce%2Fissues%2F29%23note_1471\u0026user_id=1',
-            path: '/gitlab-org/gitlab-ce/notes/1471',
+            path: '/gitlab-org/gitlab-foss/notes/1471',
           },
         ],
         individual_note: false,
@@ -629,24 +647,12 @@ export const DISCUSSION_NOTE_RESPONSE_MAP = {
   },
 };
 
-export function individualNoteInterceptor(request, next) {
-  const body = INDIVIDUAL_NOTE_RESPONSE_MAP[request.method.toUpperCase()][request.url];
-
-  next(
-    request.respondWith(JSON.stringify(body), {
-      status: 200,
-    }),
-  );
+export function getIndividualNoteResponse(config) {
+  return [200, INDIVIDUAL_NOTE_RESPONSE_MAP[config.method.toUpperCase()][config.url]];
 }
 
-export function discussionNoteInterceptor(request, next) {
-  const body = DISCUSSION_NOTE_RESPONSE_MAP[request.method.toUpperCase()][request.url];
-
-  next(
-    request.respondWith(JSON.stringify(body), {
-      status: 200,
-    }),
-  );
+export function getDiscussionNoteResponse(config) {
+  return [200, DISCUSSION_NOTE_RESPONSE_MAP[config.method.toUpperCase()][config.url]];
 }
 
 export const notesWithDescriptionChanges = [
@@ -656,7 +662,7 @@ export const notesWithDescriptionChanges = [
     expanded: true,
     notes: [
       {
-        id: 901,
+        id: '901',
         type: null,
         attachment: null,
         author: {
@@ -703,7 +709,7 @@ export const notesWithDescriptionChanges = [
     expanded: true,
     notes: [
       {
-        id: 902,
+        id: '902',
         type: null,
         attachment: null,
         author: {
@@ -750,7 +756,7 @@ export const notesWithDescriptionChanges = [
     expanded: true,
     notes: [
       {
-        id: 903,
+        id: '903',
         type: null,
         attachment: null,
         author: {
@@ -794,7 +800,7 @@ export const notesWithDescriptionChanges = [
     expanded: true,
     notes: [
       {
-        id: 904,
+        id: '904',
         type: null,
         attachment: null,
         author: {
@@ -839,7 +845,7 @@ export const notesWithDescriptionChanges = [
     expanded: true,
     notes: [
       {
-        id: 905,
+        id: '905',
         type: null,
         attachment: null,
         author: {
@@ -883,7 +889,7 @@ export const notesWithDescriptionChanges = [
     expanded: true,
     notes: [
       {
-        id: 906,
+        id: '906',
         type: null,
         attachment: null,
         author: {
@@ -930,7 +936,7 @@ export const collapsedSystemNotes = [
     expanded: true,
     notes: [
       {
-        id: 901,
+        id: '901',
         type: null,
         attachment: null,
         author: {
@@ -977,7 +983,7 @@ export const collapsedSystemNotes = [
     expanded: true,
     notes: [
       {
-        id: 902,
+        id: '902',
         type: null,
         attachment: null,
         author: {
@@ -1024,7 +1030,7 @@ export const collapsedSystemNotes = [
     expanded: true,
     notes: [
       {
-        id: 904,
+        id: '904',
         type: null,
         attachment: null,
         author: {
@@ -1069,7 +1075,7 @@ export const collapsedSystemNotes = [
     expanded: true,
     notes: [
       {
-        id: 905,
+        id: '905',
         type: null,
         attachment: null,
         author: {
@@ -1089,7 +1095,7 @@ export const collapsedSystemNotes = [
         resolvable: false,
         noteable_iid: 12,
         note: 'changed the description',
-        note_html: '\n  <p dir="auto">changed the description 2 times within 1 minute </p>',
+        note_html: ' <p dir="auto">changed the description 2 times within 1 minute </p>',
         current_user: { can_edit: false, can_award_emoji: true },
         resolved: false,
         resolved_by: null,
@@ -1114,7 +1120,7 @@ export const collapsedSystemNotes = [
     expanded: true,
     notes: [
       {
-        id: 906,
+        id: '906',
         type: null,
         attachment: null,
         author: {
@@ -1151,5 +1157,99 @@ export const collapsedSystemNotes = [
     resolvable: false,
     resolved: false,
     diff_discussion: false,
+  },
+];
+
+export const discussion1 = {
+  id: 'abc1',
+  resolvable: true,
+  resolved: false,
+  active: true,
+  diff_file: {
+    file_path: 'about.md',
+  },
+  position: {
+    new_line: 50,
+    old_line: null,
+  },
+  notes: [
+    {
+      created_at: '2018-07-04T16:25:41.749Z',
+    },
+  ],
+};
+
+export const resolvedDiscussion1 = {
+  id: 'abc1',
+  resolvable: true,
+  resolved: true,
+  diff_file: {
+    file_path: 'about.md',
+  },
+  position: {
+    new_line: 50,
+    old_line: null,
+  },
+  notes: [
+    {
+      created_at: '2018-07-04T16:25:41.749Z',
+    },
+  ],
+};
+
+export const discussion2 = {
+  id: 'abc2',
+  resolvable: true,
+  resolved: false,
+  active: true,
+  diff_file: {
+    file_path: 'README.md',
+  },
+  position: {
+    new_line: null,
+    old_line: 20,
+  },
+  notes: [
+    {
+      created_at: '2018-07-04T12:05:41.749Z',
+    },
+  ],
+};
+
+export const discussion3 = {
+  id: 'abc3',
+  resolvable: true,
+  active: true,
+  resolved: false,
+  diff_file: {
+    file_path: 'README.md',
+  },
+  position: {
+    new_line: 21,
+    old_line: null,
+  },
+  notes: [
+    {
+      created_at: '2018-07-05T17:25:41.749Z',
+    },
+  ],
+};
+
+export const unresolvableDiscussion = {
+  resolvable: false,
+};
+
+export const discussionFiltersMock = [
+  {
+    title: 'Show all activity',
+    value: 0,
+  },
+  {
+    title: 'Show comments only',
+    value: 1,
+  },
+  {
+    title: 'Show system notes only',
+    value: 2,
   },
 ];

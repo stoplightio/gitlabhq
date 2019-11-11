@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'securerandom'
 
 module Gitlab
@@ -94,3 +96,5 @@ module Gitlab
     end
   end
 end
+
+Gitlab::ExclusiveLease.prepend_if_ee('EE::Gitlab::ExclusiveLease')

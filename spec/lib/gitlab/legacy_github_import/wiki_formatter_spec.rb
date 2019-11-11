@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Gitlab::LegacyGithubImport::WikiFormatter do
@@ -10,8 +12,14 @@ describe Gitlab::LegacyGithubImport::WikiFormatter do
   subject(:wiki) { described_class.new(project) }
 
   describe '#disk_path' do
-    it 'appends .wiki to project path' do
+    it 'appends .wiki to disk path' do
       expect(wiki.disk_path).to eq project.wiki.disk_path
+    end
+  end
+
+  describe '#full_path' do
+    it 'appends .wiki to project path' do
+      expect(wiki.full_path).to eq project.wiki.full_path
     end
   end
 

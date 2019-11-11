@@ -1,4 +1,6 @@
-require 'rails_helper'
+# frozen_string_literal: true
+
+require 'spec_helper'
 
 describe BlocksJsonSerialization do
   DummyModel = Class.new do

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 shared_examples 'milestone tabs' do
   def go(path, extra_params = {})
     params =
@@ -10,7 +12,7 @@ shared_examples 'milestone tabs' do
         { namespace_id: project.namespace.to_param, project_id: project, id: milestone.iid }
       end
 
-    get path, params.merge(extra_params)
+    get path, params: params.merge(extra_params)
   end
 
   describe '#merge_requests' do

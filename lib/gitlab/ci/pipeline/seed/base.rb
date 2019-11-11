@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module Ci
     module Pipeline
@@ -8,6 +10,10 @@ module Gitlab
           end
 
           def included?
+            raise NotImplementedError
+          end
+
+          def errors
             raise NotImplementedError
           end
 

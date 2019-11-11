@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # This is a helper class used by the GitLab Markdown feature spec
 #
 # Because the feature spec only cares about the output of the Markdown, and the
@@ -9,6 +11,12 @@
 # reference to the factory-created objects.
 class MarkdownFeature
   include FactoryBot::Syntax::Methods
+
+  attr_reader :fixture_path
+
+  def initialize(fixture_path = Rails.root.join('spec/fixtures/markdown.md.erb'))
+    @fixture_path = fixture_path
+  end
 
   def user
     @user ||= create(:user)
@@ -24,7 +32,7 @@ class MarkdownFeature
 
   def project
     @project ||= create(:project, :repository, group: group).tap do |project|
-      project.add_master(user)
+      project.add_maintainer(user)
     end
   end
 
@@ -122,7 +130,7 @@ class MarkdownFeature
   end
 
   def raw_markdown
-    markdown = File.read(Rails.root.join('spec/fixtures/markdown.md.erb'))
+    markdown = File.read(fixture_path)
     ERB.new(markdown).result(binding)
   end
 end

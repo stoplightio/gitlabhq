@@ -1,44 +1,54 @@
+# frozen_string_literal: true
+
 FactoryBot.define do
   factory :commit_status, class: CommitStatus do
-    name 'default'
-    stage 'test'
-    stage_idx 0
-    status 'success'
-    description 'commit status'
+    name { 'default' }
+    stage { 'test' }
+    stage_idx { 0 }
+    status { 'success' }
+    description { 'commit status'}
     pipeline factory: :ci_pipeline_with_one_job
-    started_at 'Tue, 26 Jan 2016 08:21:42 +0100'
-    finished_at 'Tue, 26 Jan 2016 08:23:42 +0100'
+    started_at { 'Tue, 26 Jan 2016 08:21:42 +0100'}
+    finished_at { 'Tue, 26 Jan 2016 08:23:42 +0100'}
 
     trait :success do
-      status 'success'
+      status { 'success' }
     end
 
     trait :failed do
-      status 'failed'
+      status { 'failed' }
     end
 
     trait :canceled do
-      status 'canceled'
+      status { 'canceled' }
     end
 
     trait :skipped do
-      status 'skipped'
+      status { 'skipped' }
     end
 
     trait :running do
-      status 'running'
+      status { 'running' }
     end
 
     trait :pending do
-      status 'pending'
+      status { 'pending' }
+    end
+
+    trait :preparing do
+      status { 'preparing' }
     end
 
     trait :created do
-      status 'created'
+      status { 'created' }
     end
 
     trait :manual do
-      status 'manual'
+      status { 'manual' }
+    end
+
+    trait :scheduled do
+      status { 'scheduled' }
     end
 
     after(:build) do |build, evaluator|
@@ -46,8 +56,8 @@ FactoryBot.define do
     end
 
     factory :generic_commit_status, class: GenericCommitStatus do
-      name 'generic'
-      description 'external commit status'
+      name { 'generic' }
+      description { 'external commit status' }
     end
   end
 end

@@ -1,45 +1,44 @@
+# frozen_string_literal: true
+
 module Peek
   module Views
-    class Gitaly < View
+    class Gitaly < DetailedView
+      DEFAULT_THRESHOLDS = {
+        calls: 30,
+        duration: 1000,
+        individual_call: 500
+      }.freeze
+
+      THRESHOLDS = {
+        production: {
+          calls: 30,
+          duration: 1000,
+          individual_call: 500
+        }
+      }.freeze
+
+      def self.thresholds
+        @thresholds ||= THRESHOLDS.fetch(Rails.env.to_sym, DEFAULT_THRESHOLDS)
+      end
+
+      private
+
       def duration
-        ::Gitlab::GitalyClient.query_time
+        ::Gitlab::GitalyClient.query_time * 1000
       end
 
       def calls
         ::Gitlab::GitalyClient.get_request_count
       end
 
-      def results
-        {
-          duration: formatted_duration,
-          calls: calls,
-          details: details
-        }
-      end
-
-      private
-
-      def details
+      def call_details
         ::Gitlab::GitalyClient.list_call_details
-          .values
-          .sort { |a, b| b[:duration] <=> a[:duration] }
-          .map(&method(:format_call_details))
       end
 
       def format_call_details(call)
         pretty_request = call[:request]&.reject { |k, v| v.blank? }.to_h.pretty_inspect
 
-        call.merge(duration: (call[:duration] * 1000).round(3),
-                   request: pretty_request || {})
-      end
-
-      def formatted_duration
-        ms = duration * 1000
-        if ms >= 1000
-          "%.2fms" % ms
-        else
-          "%.0fms" % ms
-        end
+        super.merge(request: pretty_request || {})
       end
 
       def setup_subscribers

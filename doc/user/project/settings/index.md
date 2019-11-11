@@ -9,20 +9,36 @@ to your project's homepage and clicking **Settings**.
 
 ## General settings
 
-Under a project's general settings you can find everything concerning the
+Under a project's general settings, you can find everything concerning the
 functionality of a project.
 
 ### General project settings
 
-Adjust your project's name, description, avatar, [default branch](../repository/branches/index.md#default-branch), and tags:
+Adjust your project's name, description, avatar, [default branch](../repository/branches/index.md#default-branch), and topics:
 
 ![general project settings](img/general_settings.png)
 
+The project description also partially supports [standard markdown](../../markdown.md#standard-markdown-and-extensions-in-gitlab). You can use [emphasis](../../markdown.md#emphasis), [links](../../markdown.md#links), and [line-breaks](../../markdown.md#line-breaks) to add more context to the project description.
+
 ### Sharing and permissions
 
-Set up your project's access, [visibility](../../../public_access/public_access.md), and enable [Container Registry](../container_registry.md) for your projects:
+Set up your project's access, [visibility](../../../public_access/public_access.md), and enable [Container Registry](../../packages/container_registry/index.md) for your projects:
 
-![projects sharing permissions](img/sharing_and_permissions_settings.png)
+![projects sharing permissions](img/sharing_and_permissions_settings_v12_3.png)
+
+If Issues are disabled, or you can't access Issues because you're not a project member, then Labels and Milestones
+links will be missing from the sidebar UI.
+
+You can still access them with direct links if you can access Merge Requests. This is deliberate, if you can see
+Issues or Merge Requests, both of which use Labels and Milestones, then you shouldn't be denied access to Labels and Milestones pages.
+
+Project [Snippets](../../snippets.md) are enabled by default.
+
+#### Disabling email notifications
+
+You can disable all email notifications related to the project by selecting the
+**Disable email notifications** checkbox.  Only the project owner is allowed to change
+this setting.
 
 ### Issue settings
 
@@ -34,15 +50,15 @@ Set up your project's merge request settings:
 
 - Set up the merge request method (merge commit, [fast-forward merge](../merge_requests/fast_forward_merge.html)).
 - Merge request [description templates](../description_templates.md#description-templates).
-- Enable [merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/merge_request_approvals.html#merge-request-approvals). **[STARTER]**
+- Enable [merge request approvals](../merge_requests/merge_request_approvals.md). **(STARTER)**
 - Enable [merge only of pipeline succeeds](../merge_requests/merge_when_pipeline_succeeds.md).
-- Enable [merge only when all discussions are resolved](../../discussions/index.md#only-allow-merge-requests-to-be-merged-if-all-discussions-are-resolved).
+- Enable [merge only when all discussions are resolved](../../discussions/index.md#only-allow-merge-requests-to-be-merged-if-all-threads-are-resolved).
 
 ![project's merge request settings](img/merge_requests_settings.png)
 
-### Service Desk
+### Service Desk **(PREMIUM)**
 
-Enable [Service Desk](https://docs.gitlab.com/ee/user/project/service_desk.html) for your project to offer customer support. Service Desk is available in [GitLab Premium](https://about.gitlab.com/products/).
+Enable [Service Desk](../service_desk.md) for your project to offer customer support.
 
 ### Export project
 
@@ -98,11 +114,11 @@ Only project Owners and Admin users have the [permissions] to transfer a project
 
 You can transfer an existing project into a [group](../../group/index.md) if:
 
-1. you have at least **Maintainer** [permissions] to that group
-1. you are an **Owner** of the project.
-
-Similarly, if you are an owner of a group, you can transfer any of its projects
-under your own user.
+1. You have at least **Maintainer** [permissions] to that group.
+1. The project is in a subgroup you own.
+1. You are at least a **Maintainer** of the project under your personal namespace.
+   Similarly, if you are an owner of a group, you can transfer any of its projects
+   under your own user.
 
 To transfer a project:
 
@@ -119,4 +135,14 @@ NOTE: **Note:**
 GitLab administrators can use the admin interface to move any project to any
 namespace if needed.
 
-[permissions]: ../../permissions.md##project-members-permissions
+[permissions]: ../../permissions.md#project-members-permissions
+
+## Operations settings
+
+### Error Tracking
+
+Configure Error Tracking to discover and view [Sentry errors within GitLab](../operations/error_tracking.md).
+
+### Jaeger tracing **(ULTIMATE)**
+
+Add the URL of a Jaeger server to allow your users to [easily access the Jaeger UI from within GitLab](../operations/tracing.md).

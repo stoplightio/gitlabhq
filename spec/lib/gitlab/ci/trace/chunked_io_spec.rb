@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Gitlab::Ci::Trace::ChunkedIO, :clean_gitlab_redis_cache do
@@ -116,6 +118,19 @@ describe Gitlab::Ci::Trace::ChunkedIO, :clean_gitlab_redis_cache do
         chunked_io.each_line { |line| }
       end
     end
+
+    context 'when buffer consist of many empty lines' do
+      let(:sample_trace_raw) { Array.new(10, "   ").join("\n") }
+
+      before do
+        build.trace.set(sample_trace_raw)
+      end
+
+      it 'yields lines' do
+        expect { |b| chunked_io.each_line(&b) }
+          .to yield_successive_args(*string_io.each_line.to_a)
+      end
+    end
   end
 
   context "#read" do
@@ -140,6 +155,22 @@ describe Gitlab::Ci::Trace::ChunkedIO, :clean_gitlab_redis_cache do
         end
 
         it { is_expected.to eq(sample_trace_raw) }
+      end
+    end
+
+    context 'when chunk is missing data' do
+      let(:length) { nil }
+
+      before do
+        stub_buffer_size(1024)
+        build.trace.set(sample_trace_raw)
+
+        # make second chunk to not have data
+        build.trace_chunks.second.append('', 0)
+      end
+
+      it 'raises an error' do
+        expect { subject }.to raise_error described_class::FailedToGetChunkError
       end
     end
 
@@ -266,6 +297,40 @@ describe Gitlab::Ci::Trace::ChunkedIO, :clean_gitlab_redis_cache do
         expect(chunked_io.readline).to eq(string_io.readline)
       end
     end
+
+    context 'when chunk is missing data' do
+      let(:length) { nil }
+
+      before do
+        build.trace.set(sample_trace_raw)
+
+        # make first chunk to have invalid data
+        build.trace_chunks.first.append('data', 0)
+      end
+
+      it 'raises an error' do
+        expect { subject }.to raise_error described_class::FailedToGetChunkError
+      end
+    end
+
+    context 'when utf-8 is being used' do
+      let(:sample_trace_raw) { sample_trace_raw_utf8.dup.force_encoding(Encoding::BINARY) }
+      let(:sample_trace_raw_utf8) { "😺\n😺\n😺\n😺" }
+
+      before do
+        stub_buffer_size(3) # the utf-8 character has 4 bytes
+
+        build.trace.set(sample_trace_raw_utf8)
+      end
+
+      it 'has known length' do
+        expect(sample_trace_raw_utf8.bytesize).to eq(4 * 4 + 3 * 1)
+        expect(sample_trace_raw.bytesize).to eq(4 * 4 + 3 * 1)
+        expect(chunked_io.size).to eq(4 * 4 + 3 * 1)
+      end
+
+      it_behaves_like 'all line matching'
+    end
   end
 
   context "#write" do
@@ -378,6 +443,16 @@ describe Gitlab::Ci::Trace::ChunkedIO, :clean_gitlab_redis_cache do
         .from(sample_trace_raw.bytesize).to(0)
 
       expect(Ci::BuildTraceChunk.where(build: build).count).to eq(0)
+    end
+
+    context 'when the job does not have archived trace' do
+      it 'leaves a message in sidekiq log' do
+        expect(Sidekiq.logger).to receive(:warn).with(
+          message: 'The job does not have archived trace but going to be destroyed.',
+          job_id: build.id).and_call_original
+
+        subject
+      end
     end
   end
 end

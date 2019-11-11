@@ -1,6 +1,7 @@
-/* eslint-disable class-methods-use-this */
+import IssuableFilteredSearchTokenKeys from 'ee_else_ce/filtered_search/issuable_filtered_search_token_keys';
 import FilteredSearchContainer from '../filtered_search/container';
 import FilteredSearchManager from '../filtered_search/filtered_search_manager';
+import boardsStore from './stores/boards_store';
 
 export default class FilteredSearchBoards extends FilteredSearchManager {
   constructor(store, updateUrl = false, cantEdit = []) {
@@ -8,6 +9,8 @@ export default class FilteredSearchBoards extends FilteredSearchManager {
       page: 'boards',
       isGroupDecendent: true,
       stateFiltersSelector: '.issues-state-filters',
+      isGroup: IS_EE,
+      filteredSearchTokenKeys: IssuableFilteredSearchTokenKeys,
     });
 
     this.store = store;
@@ -24,7 +27,7 @@ export default class FilteredSearchBoards extends FilteredSearchManager {
     this.store.path = path.substr(1);
 
     if (this.updateUrl) {
-      gl.issueBoards.BoardsStore.updateFiltersUrl();
+      boardsStore.updateFiltersUrl();
     }
   }
 
@@ -32,7 +35,7 @@ export default class FilteredSearchBoards extends FilteredSearchManager {
     const tokens = FilteredSearchContainer.container.querySelectorAll('.js-visual-token');
 
     // Remove all the tokens as they will be replaced by the search manager
-    [].forEach.call(tokens, (el) => {
+    [].forEach.call(tokens, el => {
       el.parentNode.removeChild(el);
     });
 
@@ -50,7 +53,10 @@ export default class FilteredSearchBoards extends FilteredSearchManager {
 
   canEdit(tokenName, tokenValue) {
     if (this.cantEdit.includes(tokenName)) return false;
-    return this.cantEditWithValue.findIndex(token => token.name === tokenName &&
-      token.value === tokenValue) === -1;
+    return (
+      this.cantEditWithValue.findIndex(
+        token => token.name === tokenName && token.value === tokenValue,
+      ) === -1
+    );
   }
 }

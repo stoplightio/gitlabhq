@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe ContinueParams do
@@ -14,6 +16,14 @@ describe ContinueParams do
 
   def strong_continue_params(params)
     ActionController::Parameters.new(continue: params)
+  end
+
+  it 'returns an empty hash if params are not present' do
+    allow(controller).to receive(:params) do
+      ActionController::Parameters.new
+    end
+
+    expect(controller.continue_params).to eq({})
   end
 
   it 'cleans up any params that are not allowed' do

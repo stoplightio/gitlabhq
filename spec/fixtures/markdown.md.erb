@@ -6,7 +6,7 @@ started.
 
 ## Markdown
 
-GitLab uses [Redcarpet](http://git.io/ld_NVQ) to parse all Markdown into
+GitLab uses [Commonmark](https://git.io/fhDag) to parse all Markdown into
 HTML.
 
 It has some special features. Let's try 'em out!
@@ -43,8 +43,14 @@ This text says this, ~~and this text doesn't~~.
 
 ### Superscript
 
-This is my 1^(st) time using superscript in Markdown. Now this is my
-2^(nd).
+This is my 1<sup>(st)</sup> time using superscript in Markdown. Now this is my
+2<sup>(nd)</sup>.
+
+Redcarpet supports this superscript syntax ( x^2 ).
+
+### Subscript
+
+This (C<sub>6</sub>H<sub>12</sub>O<sub>6</sub>) is an example of subscripts in Markdown.
 
 ### Next step
 
@@ -280,6 +286,10 @@ However the wrapping tags cannot be mixed as such:
 
 ![My Video](/assets/videos/gitlab-demo.mp4)
 
+### Audio
+
+![My Audio Clip](/assets/audio/gitlab-demo.wav)
+
 ### Colors
 
 `#F00`  
@@ -295,7 +305,7 @@ However the wrapping tags cannot be mixed as such:
 ### Mermaid
 
 > If this is not rendered correctly, see
-https://gitlab.com/gitlab-org/gitlab-ce/blob/master/doc/user/markdown.md#mermaid
+https://gitlab.com/gitlab-org/gitlab-foss/blob/master/doc/user/markdown.md#mermaid
 
 It is possible to generate diagrams and flowcharts from text using [Mermaid][mermaid].
 

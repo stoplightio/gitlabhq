@@ -1,7 +1,10 @@
+# frozen_string_literal: true
+
 require 'yaml'
 
 module Backup
   class Database
+    include Backup::Helper
     attr_reader :progress
     attr_reader :config, :db_file_name
 
@@ -15,16 +18,11 @@ module Backup
       FileUtils.mkdir_p(File.dirname(db_file_name))
       FileUtils.rm_f(db_file_name)
       compress_rd, compress_wr = IO.pipe
-      compress_pid = spawn(*%w(gzip -1 -c), in: compress_rd, out: [db_file_name, 'w', 0600])
+      compress_pid = spawn(gzip_cmd, in: compress_rd, out: [db_file_name, 'w', 0600])
       compress_rd.close
 
       dump_pid =
         case config["adapter"]
-        when /^mysql/ then
-          progress.print "Dumping MySQL database #{config['database']} ... "
-          # Workaround warnings from MySQL 5.6 about passwords on cmd line
-          ENV['MYSQL_PWD'] = config["password"].to_s if config["password"]
-          spawn('mysqldump', *mysql_args, config['database'], out: compress_wr)
         when "postgresql" then
           progress.print "Dumping PostgreSQL database #{config['database']} ... "
           pg_env
@@ -54,11 +52,6 @@ module Backup
 
       restore_pid =
         case config["adapter"]
-        when /^mysql/ then
-          progress.print "Restoring MySQL database #{config['database']} ... "
-          # Workaround warnings from MySQL 5.6 about passwords on cmd line
-          ENV['MYSQL_PWD'] = config["password"].to_s if config["password"]
-          spawn('mysql', *mysql_args, config['database'], in: decompress_rd)
         when "postgresql" then
           progress.print "Restoring PostgreSQL database #{config['database']} ... "
           pg_env
@@ -76,23 +69,6 @@ module Backup
     end
 
     protected
-
-    def mysql_args
-      args = {
-        'host'      => '--host',
-        'port'      => '--port',
-        'socket'    => '--socket',
-        'username'  => '--user',
-        'encoding'  => '--default-character-set',
-        # SSL
-        'sslkey'    => '--ssl-key',
-        'sslcert'   => '--ssl-cert',
-        'sslca'     => '--ssl-ca',
-        'sslcapath' => '--ssl-capath',
-        'sslcipher' => '--ssl-cipher'
-      }
-      args.map { |opt, arg| "#{arg}=#{config[opt]}" if config[opt] }.compact
-    end
 
     def pg_env
       args = {

@@ -1,6 +1,8 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
-describe "Dashboard Feed"  do
+describe "Dashboard Feed" do
   describe "GET /" do
     let!(:user) { create(:user, name: "Jonh") }
 
@@ -26,7 +28,7 @@ describe "Dashboard Feed"  do
       let(:note) { create(:note, noteable: issue, author: user, note: 'Bug confirmed', project: project) }
 
       before do
-        project.add_master(user)
+        project.add_maintainer(user)
         issue_event(issue, user)
         note_event(note, user)
         visit dashboard_projects_path(:atom, feed_token: user.feed_token)

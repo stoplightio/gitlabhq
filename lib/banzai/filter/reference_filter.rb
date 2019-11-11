@@ -1,3 +1,6 @@
+# frozen_string_literal: true
+
+# Generated HTML is transformed back to GFM by app/assets/javascripts/behaviors/markdown/nodes/reference.js
 module Banzai
   module Filter
     # Base class for GitLab Flavored Markdown reference filters.
@@ -9,6 +12,7 @@ module Banzai
     #   :only_path          - Generate path-only links.
     class ReferenceFilter < HTML::Pipeline::Filter
       include RequestStoreReferenceCache
+      include OutputSafety
 
       class << self
         attr_accessor :reference_type
@@ -40,10 +44,6 @@ module Banzai
         end.join(' ')
       end
 
-      def escape_once(html)
-        html.html_safe? ? html : ERB::Util.html_escape_once(html)
-      end
-
       def ignore_ancestor_query
         @ignore_ancestor_query ||= begin
           parents = %w(pre code a style)
@@ -65,8 +65,12 @@ module Banzai
         context[:skip_project_check]
       end
 
-      def reference_class(type)
-        "gfm gfm-#{type} has-tooltip"
+      def reference_class(type, tooltip: true)
+        gfm_klass = "gfm gfm-#{type}"
+
+        return gfm_klass unless tooltip
+
+        "#{gfm_klass} has-tooltip"
       end
 
       # Ensure that a :project key exists in context

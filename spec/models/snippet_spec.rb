@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Snippet do
@@ -131,6 +133,243 @@ describe Snippet do
     end
   end
 
+  describe 'when default snippet visibility set to internal' do
+    using RSpec::Parameterized::TableSyntax
+
+    before do
+      stub_application_setting(default_snippet_visibility: Gitlab::VisibilityLevel::INTERNAL)
+    end
+
+    where(:attribute_name, :value) do
+      :visibility | 'private'
+      :visibility_level | Gitlab::VisibilityLevel::PRIVATE
+      'visibility' | 'private'
+      'visibility_level' | Gitlab::VisibilityLevel::PRIVATE
+    end
+
+    with_them do
+      it 'sets the visibility level' do
+        snippet = described_class.new(attribute_name => value, title: 'test', file_name: 'test.rb', content: 'test data')
+
+        expect(snippet.visibility_level).to eq(Gitlab::VisibilityLevel::PRIVATE)
+        expect(snippet.title).to eq('test')
+        expect(snippet.file_name).to eq('test.rb')
+        expect(snippet.content).to eq('test data')
+      end
+    end
+  end
+
+  describe '.with_optional_visibility' do
+    context 'when a visibility level is provided' do
+      it 'returns snippets with the given visibility' do
+        create(:snippet, :private)
+
+        snippet = create(:snippet, :public)
+        snippets = described_class
+          .with_optional_visibility(Gitlab::VisibilityLevel::PUBLIC)
+
+        expect(snippets).to eq([snippet])
+      end
+    end
+
+    context 'when a visibility level is not provided' do
+      it 'returns all snippets' do
+        snippet1 = create(:snippet, :public)
+        snippet2 = create(:snippet, :private)
+        snippets = described_class.with_optional_visibility
+
+        expect(snippets).to include(snippet1, snippet2)
+      end
+    end
+  end
+
+  describe '.only_personal_snippets' do
+    it 'returns snippets not associated with any projects' do
+      create(:project_snippet)
+
+      snippet = create(:snippet)
+      snippets = described_class.only_personal_snippets
+
+      expect(snippets).to eq([snippet])
+    end
+  end
+
+  describe '.only_include_projects_visible_to' do
+    let!(:project1) { create(:project, :public) }
+    let!(:project2) { create(:project, :internal) }
+    let!(:project3) { create(:project, :private) }
+    let!(:snippet1) { create(:project_snippet, project: project1) }
+    let!(:snippet2) { create(:project_snippet, project: project2) }
+    let!(:snippet3) { create(:project_snippet, project: project3) }
+
+    context 'when a user is provided' do
+      it 'returns snippets visible to the user' do
+        user = create(:user)
+
+        snippets = described_class.only_include_projects_visible_to(user)
+
+        expect(snippets).to include(snippet1, snippet2)
+        expect(snippets).not_to include(snippet3)
+      end
+    end
+
+    context 'when a user is not provided' do
+      it 'returns snippets visible to anonymous users' do
+        snippets = described_class.only_include_projects_visible_to
+
+        expect(snippets).to include(snippet1)
+        expect(snippets).not_to include(snippet2, snippet3)
+      end
+    end
+  end
+
+  describe 'only_include_projects_with_snippets_enabled' do
+    context 'when the include_private option is enabled' do
+      it 'includes snippets for projects with snippets set to private' do
+        project = create(:project)
+
+        project.project_feature
+          .update(snippets_access_level: ProjectFeature::PRIVATE)
+
+        snippet = create(:project_snippet, project: project)
+
+        snippets = described_class
+          .only_include_projects_with_snippets_enabled(include_private: true)
+
+        expect(snippets).to eq([snippet])
+      end
+    end
+
+    context 'when the include_private option is not enabled' do
+      it 'does not include snippets for projects that have snippets set to private' do
+        project = create(:project)
+
+        project.project_feature
+          .update(snippets_access_level: ProjectFeature::PRIVATE)
+
+        create(:project_snippet, project: project)
+
+        snippets = described_class.only_include_projects_with_snippets_enabled
+
+        expect(snippets).to be_empty
+      end
+    end
+
+    it 'includes snippets for projects with snippets enabled' do
+      project = create(:project)
+
+      project.project_feature
+        .update(snippets_access_level: ProjectFeature::ENABLED)
+
+      snippet = create(:project_snippet, project: project)
+      snippets = described_class.only_include_projects_with_snippets_enabled
+
+      expect(snippets).to eq([snippet])
+    end
+  end
+
+  describe '.only_include_authorized_projects' do
+    it 'only includes snippets for projects the user is authorized to see' do
+      user = create(:user)
+      project1 = create(:project, :private)
+      project2 = create(:project, :private)
+
+      project1.team.add_developer(user)
+
+      create(:project_snippet, project: project2)
+
+      snippet = create(:project_snippet, project: project1)
+      snippets = described_class.only_include_authorized_projects(user)
+
+      expect(snippets).to eq([snippet])
+    end
+  end
+
+  describe '.for_project_with_user' do
+    context 'when a user is provided' do
+      it 'returns an empty collection if the user can not view the snippets' do
+        project = create(:project, :private)
+        user = create(:user)
+
+        project.project_feature
+          .update(snippets_access_level: ProjectFeature::ENABLED)
+
+        create(:project_snippet, :public, project: project)
+
+        expect(described_class.for_project_with_user(project, user)).to be_empty
+      end
+
+      it 'returns the snippets if the user is a member of the project' do
+        project = create(:project, :private)
+        user = create(:user)
+        snippet = create(:project_snippet, project: project)
+
+        project.team.add_developer(user)
+
+        snippets = described_class.for_project_with_user(project, user)
+
+        expect(snippets).to eq([snippet])
+      end
+
+      it 'returns public snippets for a public project the user is not a member of' do
+        project = create(:project, :public)
+
+        project.project_feature
+          .update(snippets_access_level: ProjectFeature::ENABLED)
+
+        user = create(:user)
+        snippet = create(:project_snippet, :public, project: project)
+
+        create(:project_snippet, :private, project: project)
+
+        snippets = described_class.for_project_with_user(project, user)
+
+        expect(snippets).to eq([snippet])
+      end
+    end
+
+    context 'when a user is not provided' do
+      it 'returns an empty collection for a private project' do
+        project = create(:project, :private)
+
+        project.project_feature
+          .update(snippets_access_level: ProjectFeature::ENABLED)
+
+        create(:project_snippet, :public, project: project)
+
+        expect(described_class.for_project_with_user(project)).to be_empty
+      end
+
+      it 'returns public snippets for a public project' do
+        project = create(:project, :public)
+        snippet = create(:project_snippet, :public, project: project)
+
+        project.project_feature
+          .update(snippets_access_level: ProjectFeature::PUBLIC)
+
+        create(:project_snippet, :private, project: project)
+
+        snippets = described_class.for_project_with_user(project)
+
+        expect(snippets).to eq([snippet])
+      end
+    end
+  end
+
+  describe '.visible_to_or_authored_by' do
+    it 'returns snippets visible to the user' do
+      user = create(:user)
+      snippet1 = create(:snippet, :public)
+      snippet2 = create(:snippet, :private, author: user)
+      snippet3 = create(:snippet, :private)
+
+      snippets = described_class.visible_to_or_authored_by(user)
+
+      expect(snippets).to include(snippet1, snippet2)
+      expect(snippets).not_to include(snippet3)
+    end
+  end
+
   describe '#participants' do
     let(:project) { create(:project, :public) }
     let(:snippet) { create(:snippet, content: 'foo', project: project) }
@@ -210,6 +449,43 @@ describe Snippet do
       expect(blob).to be_a(Blob)
       expect(blob.path).to eq(snippet.file_name)
       expect(blob.data).to eq(snippet.content)
+    end
+  end
+
+  describe '#embeddable?' do
+    context 'project snippet' do
+      [
+        { project: :public,   snippet: :public,   embeddable: true },
+        { project: :internal, snippet: :public,   embeddable: false },
+        { project: :private,  snippet: :public,   embeddable: false },
+        { project: :public,   snippet: :internal, embeddable: false },
+        { project: :internal, snippet: :internal, embeddable: false },
+        { project: :private,  snippet: :internal, embeddable: false },
+        { project: :public,   snippet: :private,  embeddable: false },
+        { project: :internal, snippet: :private,  embeddable: false },
+        { project: :private,  snippet: :private,  embeddable: false }
+      ].each do |combination|
+        it 'only returns true when both project and snippet are public' do
+          project = create(:project, combination[:project])
+          snippet = create(:project_snippet, combination[:snippet], project: project)
+
+          expect(snippet.embeddable?).to eq(combination[:embeddable])
+        end
+      end
+    end
+
+    context 'personal snippet' do
+      [
+        { snippet: :public,   embeddable: true },
+        { snippet: :internal, embeddable: false },
+        { snippet: :private,  embeddable: false }
+      ].each do |combination|
+        it 'only returns true when snippet is public' do
+          snippet = create(:personal_snippet, combination[:snippet])
+
+          expect(snippet.embeddable?).to eq(combination[:embeddable])
+        end
+      end
     end
   end
 end

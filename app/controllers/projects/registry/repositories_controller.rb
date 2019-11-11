@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Projects
   module Registry
     class RepositoriesController < ::Projects::Registry::ApplicationController
@@ -6,6 +8,7 @@ module Projects
 
       def index
         @images = project.container_repositories
+        track_event(:list_repositories)
 
         respond_to do |format|
           format.html
@@ -18,14 +21,11 @@ module Projects
       end
 
       def destroy
-        if image.destroy
-          respond_to do |format|
-            format.json { head :no_content }
-          end
-        else
-          respond_to do |format|
-            format.json { head :bad_request }
-          end
+        DeleteContainerRepositoryWorker.perform_async(current_user.id, image.id)
+        track_event(:delete_repository)
+
+        respond_to do |format|
+          format.json { head :no_content }
         end
       end
 
@@ -41,13 +41,15 @@ module Projects
       # Needed to maintain a backwards compatibility.
       #
       def ensure_root_container_repository!
-        ContainerRegistry::Path.new(@project.full_path).tap do |path|
+        ::ContainerRegistry::Path.new(@project.full_path).tap do |path|
           break if path.has_repository?
 
-          ContainerRepository.build_from_path(path).tap do |repository|
+          ::ContainerRepository.build_from_path(path).tap do |repository|
             repository.save! if repository.has_tags?
           end
         end
+      rescue ContainerRegistry::Path::InvalidRegistryPathError
+        @character_error = true
       end
     end
   end

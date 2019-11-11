@@ -1,4 +1,6 @@
-require 'rails_helper'
+# frozen_string_literal: true
+
+require 'spec_helper'
 
 describe 'Issue Sidebar on Mobile' do
   include MobileHelpers

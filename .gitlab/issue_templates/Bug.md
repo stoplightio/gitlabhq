@@ -2,17 +2,10 @@
 Please read this!
 
 Before opening a new issue, make sure to search for keywords in the issues
-filtered by the "regression" or "bug" label.
+filtered by the "regression" or "bug" label:
 
-For the Community Edition issue tracker:
-
-- https://gitlab.com/gitlab-org/gitlab-ce/issues?label_name%5B%5D=regression
-- https://gitlab.com/gitlab-org/gitlab-ce/issues?label_name%5B%5D=bug
-
-For the Enterprise Edition issue tracker:
-
-- https://gitlab.com/gitlab-org/gitlab-ee/issues?label_name%5B%5D=regression
-- https://gitlab.com/gitlab-org/gitlab-ee/issues?label_name%5B%5D=bug
+- https://gitlab.com/gitlab-org/gitlab/issues?label_name%5B%5D=regression
+- https://gitlab.com/gitlab-org/gitlab/issues?label_name%5B%5D=bug
 
 and verify the issue you're about to submit isn't a duplicate.
 --->
@@ -27,9 +20,9 @@ and verify the issue you're about to submit isn't a duplicate.
 
 ### Example Project
 
-(If possible, please create an example project here on GitLab.com that exhibits the problematic behaviour, and link to it here in the bug report)
+(If possible, please create an example project here on GitLab.com that exhibits the problematic behavior, and link to it here in the bug report)
 
-(If you are using an older version of GitLab, this will also determine whether the bug has been fixed in a more recent version)
+(If you are using an older version of GitLab, this will also determine whether the bug is fixed in a more recent version)
 
 ### What is the current *bug* behavior?
 
@@ -42,7 +35,7 @@ and verify the issue you're about to submit isn't a duplicate.
 ### Relevant logs and/or screenshots
 
 (Paste any relevant logs - please use code blocks (```) to format console output,
-logs, and code as it's very hard to read otherwise.)
+logs, and code as it's tough to read otherwise.)
 
 ### Output of checks
 

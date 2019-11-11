@@ -1,12 +1,19 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
-feature 'Editing file blob', :js do
+describe 'Editing file blob', :js do
   include TreeHelper
 
   let(:project) { create(:project, :public, :repository) }
   let(:merge_request) { create(:merge_request, source_project: project, source_branch: 'feature', target_branch: 'master') }
   let(:branch) { 'master' }
   let(:file_path) { project.repository.ls_files(project.repository.root_ref)[1] }
+  let(:readme_file_path) { 'README.md' }
+
+  before do
+    stub_feature_flags(web_ide_default: false)
+  end
 
   context 'as a developer' do
     let(:user) { create(:user) }
@@ -20,12 +27,17 @@ feature 'Editing file blob', :js do
     def edit_and_commit(commit_changes: true)
       wait_for_requests
       find('.js-edit-blob').click
-      find('#editor')
-      execute_script('ace.edit("editor").setValue("class NextFeature\nend\n")')
+      fill_editor(content: "class NextFeature\\nend\\n")
 
       if commit_changes
         click_button 'Commit changes'
       end
+    end
+
+    def fill_editor(content: "class NextFeature\\nend\\n")
+      wait_for_requests
+      find('#editor')
+      execute_script("ace.edit('editor').setValue('#{content}')")
     end
 
     context 'from MR diff' do
@@ -37,6 +49,15 @@ feature 'Editing file blob', :js do
       it 'returns me to the mr' do
         expect(page).to have_content(merge_request.title)
       end
+    end
+
+    it 'updates the content of file with a number as file path' do
+      project.repository.create_file(user, '1', 'test', message: 'testing', branch_name: branch)
+      visit project_blob_path(project, tree_join(branch, '1'))
+
+      edit_and_commit
+
+      expect(page).to have_content 'NextFeature'
     end
 
     context 'from blob file path' do
@@ -61,6 +82,19 @@ feature 'Editing file blob', :js do
 
         expect(old_line_count).to be > 0
         expect(new_line_count).to be > 0
+      end
+    end
+
+    context 'when rendering the preview' do
+      it 'renders content with CommonMark' do
+        visit project_edit_blob_path(project, tree_join(branch, readme_file_path))
+        fill_editor(content: "1. one\\n  - sublist\\n")
+        click_link 'Preview'
+        wait_for_requests
+
+        # the above generates two separate lists (not embedded) in CommonMark
+        expect(page).to have_content("sublist")
+        expect(page).not_to have_xpath("//ol//li//ul")
       end
     end
   end
@@ -134,11 +168,11 @@ feature 'Editing file blob', :js do
       end
     end
 
-    context 'as master' do
+    context 'as maintainer' do
       let(:user) { create(:user) }
 
       before do
-        project.add_master(user)
+        project.add_maintainer(user)
         sign_in(user)
         visit project_edit_blob_path(project, tree_join(branch, file_path))
       end

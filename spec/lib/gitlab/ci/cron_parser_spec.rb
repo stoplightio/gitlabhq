@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Gitlab::Ci::CronParser do
@@ -170,6 +172,13 @@ describe Gitlab::Ci::CronParser do
 
     context 'when cron syntax is rufus-scheduler syntax' do
       let(:cron) { 'every 3h' }
+      let(:cron_timezone) { 'UTC' }
+
+      it { expect(subject).to be_nil }
+    end
+
+    context 'when cron is scheduled to a non existent day' do
+      let(:cron) { '0 12 31 2 *' }
       let(:cron_timezone) { 'UTC' }
 
       it { expect(subject).to be_nil }

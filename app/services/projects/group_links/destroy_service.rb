@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Projects
   module GroupLinks
     class DestroyService < BaseService
@@ -9,3 +11,5 @@ module Projects
     end
   end
 end
+
+Projects::GroupLinks::DestroyService.prepend_if_ee('EE::Projects::GroupLinks::DestroyService')

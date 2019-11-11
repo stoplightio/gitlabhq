@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 RSpec::Matchers.define :match_ids do |*expected|
   match do |actual|
     actual_ids = map_ids(actual)
@@ -8,6 +10,13 @@ RSpec::Matchers.define :match_ids do |*expected|
 
   description do
     'matches elements by ids'
+  end
+
+  failure_message do
+    actual_ids = map_ids(actual)
+    expected_ids = map_ids(expected)
+
+    "expected IDs #{actual_ids} in:\n\n  #{actual.inspect}\n\nto match IDs #{expected_ids} in:\n\n  #{expected.inspect}"
   end
 
   def map_ids(elements)

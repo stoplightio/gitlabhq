@@ -1,18 +1,14 @@
 <script>
-import $ from 'jquery';
+import { glEmojiTag } from '~/emoji';
 
-import PerformanceBarService from '../services/performance_bar_service';
-import detailedMetric from './detailed_metric.vue';
-import requestSelector from './request_selector.vue';
-import simpleMetric from './simple_metric.vue';
-
-import Flash from '../../flash';
+import DetailedMetric from './detailed_metric.vue';
+import RequestSelector from './request_selector.vue';
+import { s__ } from '~/locale';
 
 export default {
   components: {
-    detailedMetric,
-    requestSelector,
-    simpleMetric,
+    DetailedMetric,
+    RequestSelector,
   },
   props: {
     store: {
@@ -31,21 +27,30 @@ export default {
       type: String,
       required: true,
     },
-    profileUrl: {
-      type: String,
-      required: true,
-    },
   },
   detailedMetrics: [
-    { metric: 'pg', header: 'SQL queries', details: 'queries', keys: ['sql'] },
+    {
+      metric: 'active-record',
+      title: 'pg',
+      header: s__('PerformanceBar|SQL queries'),
+      keys: ['sql'],
+    },
     {
       metric: 'gitaly',
-      header: 'Gitaly calls',
-      details: 'details',
+      header: s__('PerformanceBar|Gitaly calls'),
       keys: ['feature', 'request'],
     },
+    {
+      metric: 'rugged',
+      header: s__('PerformanceBar|Rugged calls'),
+      keys: ['feature', 'args'],
+    },
+    {
+      metric: 'redis',
+      header: s__('PerformanceBar|Redis calls'),
+      keys: ['cmd'],
+    },
   ],
-  simpleMetrics: ['redis', 'sidekiq'],
   data() {
     return { currentRequestId: '' };
   },
@@ -64,42 +69,20 @@ export default {
     initialRequest() {
       return this.currentRequestId === this.requestId;
     },
-    lineProfileModal() {
-      return $('#modal-peek-line-profile');
+    hasHost() {
+      return this.currentRequest && this.currentRequest.details && this.currentRequest.details.host;
+    },
+    birdEmoji() {
+      if (this.hasHost && this.currentRequest.details.host.canary) {
+        return glEmojiTag('baby_chick');
+      }
+      return '';
     },
   },
   mounted() {
-    this.interceptor = PerformanceBarService.registerInterceptor(
-      this.peekUrl,
-      this.loadRequestDetails,
-    );
-
-    this.loadRequestDetails(this.requestId, window.location.href);
     this.currentRequest = this.requestId;
-
-    if (this.lineProfileModal.length) {
-      this.lineProfileModal.modal('toggle');
-    }
-  },
-  beforeDestroy() {
-    PerformanceBarService.removeInterceptor(this.interceptor);
   },
   methods: {
-    loadRequestDetails(requestId, requestUrl) {
-      if (!this.store.canTrackRequest(requestUrl)) {
-        return;
-      }
-
-      this.store.addRequest(requestId, requestUrl);
-
-      PerformanceBarService.fetchRequestDetails(this.peekUrl, requestId)
-        .then(res => {
-          this.store.addRequestDetails(requestId, res.data.data);
-        })
-        .catch(() =>
-          Flash(`Error getting performance bar results for ${requestId}`),
-        );
-    },
     changeCurrentRequest(newRequestId) {
       this.currentRequest = newRequestId;
     },
@@ -107,22 +90,15 @@ export default {
 };
 </script>
 <template>
-  <div
-    id="js-peek"
-    :class="env"
-  >
-    <div
-      v-if="currentRequest"
-      class="container-fluid container-limited"
-    >
-      <div
-        id="peek-view-host"
-        class="view"
-      >
+  <div id="js-peek" :class="env">
+    <div v-if="currentRequest" class="d-flex container-fluid container-limited qa-performance-bar">
+      <div id="peek-view-host" class="view">
         <span
-          v-if="currentRequest.details"
+          v-if="hasHost"
           class="current-host"
+          :class="{ canary: currentRequest.details.host.canary }"
         >
+          <span v-html="birdEmoji"></span>
           {{ currentRequest.details.host.hostname }}
         </span>
       </div>
@@ -131,54 +107,22 @@ export default {
         :key="metric.metric"
         :current-request="currentRequest"
         :metric="metric.metric"
+        :title="metric.title"
         :header="metric.header"
-        :details="metric.details"
         :keys="metric.keys"
       />
       <div
-        v-if="initialRequest"
-        id="peek-view-rblineprof"
+        v-if="currentRequest.details && currentRequest.details.tracing"
+        id="peek-view-trace"
         class="view"
       >
-        <button
-          v-if="lineProfileModal.length"
-          class="btn-link btn-blank"
-          data-toggle="modal"
-          data-target="#modal-peek-line-profile"
-        >
-          profile
-        </button>
-        <a
-          v-else
-          :href="profileUrl"
-        >
-          profile
-        </a>
-      </div>
-      <simple-metric
-        v-for="metric in $options.simpleMetrics"
-        :current-request="currentRequest"
-        :key="metric"
-        :metric="metric"
-      />
-      <div
-        id="peek-view-gc"
-        class="view"
-      >
-        <span
-          v-if="currentRequest.details"
-          class="bold"
-        >
-          <span title="Invoke Time">{{ currentRequest.details.gc.gc_time }}</span>ms
-          /
-          <span title="Invoke Count">{{ currentRequest.details.gc.invokes }}</span>
-          gc
-        </span>
+        <a :href="currentRequest.details.tracing.tracing_url">{{ s__('PerformanceBar|trace') }}</a>
       </div>
       <request-selector
         v-if="currentRequest"
         :current-request="currentRequest"
         :requests="requests"
+        class="ml-auto"
         @change-current-request="changeCurrentRequest"
       />
     </div>

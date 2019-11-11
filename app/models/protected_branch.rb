@@ -1,6 +1,10 @@
-class ProtectedBranch < ActiveRecord::Base
-  include Gitlab::ShellAdapter
+# frozen_string_literal: true
+
+class ProtectedBranch < ApplicationRecord
   include ProtectedRef
+
+  scope :requiring_code_owner_approval,
+        -> { where(code_owner_approval_required: true) }
 
   protected_ref_access_levels :merge, :push
 
@@ -17,13 +21,30 @@ class ProtectedBranch < ActiveRecord::Base
   def self.protected?(project, ref_name)
     return true if project.empty_repo? && default_branch_protected?
 
-    refs = project.protected_branches.select(:name)
+    self.matching(ref_name, protected_refs: protected_refs(project)).present?
+  end
 
-    self.matching(ref_name, protected_refs: refs).present?
+  def self.any_protected?(project, ref_names)
+    protected_refs(project).any? do |protected_ref|
+      ref_names.any? do |ref_name|
+        protected_ref.matches?(ref_name)
+      end
+    end
   end
 
   def self.default_branch_protected?
     Gitlab::CurrentSettings.default_branch_protection == Gitlab::Access::PROTECTION_FULL ||
       Gitlab::CurrentSettings.default_branch_protection == Gitlab::Access::PROTECTION_DEV_CAN_MERGE
   end
+
+  def self.protected_refs(project)
+    project.protected_branches.select(:name)
+  end
+
+  def self.branch_requires_code_owner_approval?(project, branch_name)
+    # NOOP
+    #
+  end
 end
+
+ProtectedBranch.prepend_if_ee('EE::ProtectedBranch')

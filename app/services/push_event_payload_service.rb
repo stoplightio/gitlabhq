@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # Service class for creating push event payloads as stored in the
 # "push_event_payloads" table.
 #
@@ -44,7 +46,7 @@ class PushEventPayloadService
   def commit_title
     commit = @push_data.fetch(:commits).last
 
-    return nil unless commit && commit[:message]
+    return unless commit && commit[:message]
 
     raw_msg = commit[:message]
 

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 RSpec.describe 'Dashboard Archived Project' do
@@ -6,8 +8,8 @@ RSpec.describe 'Dashboard Archived Project' do
   let(:archived_project) { create(:project, :archived) }
 
   before do
-    project.add_master(user)
-    archived_project.add_master(user)
+    project.add_maintainer(user)
+    archived_project.add_maintainer(user)
 
     sign_in(user)
 
@@ -33,7 +35,7 @@ RSpec.describe 'Dashboard Archived Project' do
     expect(page).not_to have_content(project.name)
   end
 
-  it 'searchs archived projects', :js do
+  it 'searches archived projects', :js do
     click_button 'Last updated'
     click_link 'Show archived projects'
 

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe 'User manages applications' do
@@ -16,7 +18,7 @@ describe 'User manages applications' do
     click_on 'Save application'
 
     expect(page).to have_content 'Application: test'
-    expect(page).to have_content 'Application Id'
+    expect(page).to have_content 'Application ID'
     expect(page).to have_content 'Secret'
 
     click_on 'Edit'
@@ -26,7 +28,7 @@ describe 'User manages applications' do
     click_on 'Save application'
 
     expect(page).to have_content 'test_changed'
-    expect(page).to have_content 'Application Id'
+    expect(page).to have_content 'Application ID'
     expect(page).to have_content 'Secret'
 
     visit applications_profile_path

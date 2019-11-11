@@ -1,3 +1,6 @@
+# frozen_string_literal: true
+
+# Generated HTML is transformed back to GFM by app/assets/javascripts/behaviors/markdown/nodes/table_of_contents.js
 module Banzai
   module Filter
     # HTML filter that adds an anchor child element to all Headers in a
@@ -14,12 +17,12 @@ module Banzai
     #   :toc - String containing Table of Contents data as a `ul` element with
     #          `li` child elements.
     class TableOfContentsFilter < HTML::Pipeline::Filter
-      PUNCTUATION_REGEXP = /[^\p{Word}\- ]/u
+      PUNCTUATION_REGEXP = /[^\p{Word}\- ]/u.freeze
 
       def call
         return doc if context[:no_header_anchors]
 
-        result[:toc] = ""
+        result[:toc] = +""
 
         headers = Hash.new(0)
         header_root = current_header = HeaderNode.new
@@ -28,6 +31,7 @@ module Banzai
           if header_content = node.children.first
             id = node
               .text
+              .strip
               .downcase
               .gsub(PUNCTUATION_REGEXP, '') # remove punctuation
               .tr(' ', '-') # replace spaces with dash
@@ -52,7 +56,8 @@ module Banzai
       private
 
       def anchor_tag(href)
-        %Q{<a id="user-content-#{href}" class="anchor" href="##{href}" aria-hidden="true"></a>}
+        escaped_href = CGI.escape(href) # account for non-ASCII characters
+        %Q{<a id="user-content-#{href}" class="anchor" href="##{escaped_href}" aria-hidden="true"></a>}
       end
 
       def push_toc(children, root: false)
@@ -76,7 +81,7 @@ module Banzai
 
         def initialize(node: nil, href: nil, previous_header: nil)
           @node = node
-          @href = href
+          @href = CGI.escape(href) if href
           @children = []
 
           @parent = find_parent(previous_header)

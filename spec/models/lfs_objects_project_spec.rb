@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe LfsObjectsProject do
@@ -18,8 +20,8 @@ describe LfsObjectsProject do
 
     it 'validates object id' do
       is_expected.to validate_uniqueness_of(:lfs_object_id)
-        .scoped_to(:project_id)
-        .with_message("already exists in project")
+        .scoped_to(:project_id, :repository_type)
+        .with_message("already exists in repository")
     end
   end
 

@@ -1,7 +1,9 @@
 import $ from 'jquery';
+import '~/behaviors/markdown/render_gfm';
 import Flash from '../../flash';
 import { handleLocationHash } from '../../lib/utils/common_utils';
 import axios from '../../lib/utils/axios_utils';
+import { __ } from '~/locale';
 
 export default class BlobViewer {
   constructor() {
@@ -22,12 +24,13 @@ export default class BlobViewer {
     const viewer = document.querySelector('.blob-viewer[data-type="rich"]');
     if (!viewer || !viewer.dataset.richType) return;
 
-    const initViewer = promise => promise
-      .then(module => module.default(viewer))
-      .catch((error) => {
-        Flash('Error loading file viewer.');
-        throw error;
-      });
+    const initViewer = promise =>
+      promise
+        .then(module => module.default(viewer))
+        .catch(error => {
+          Flash(__('Error loading file viewer.'));
+          throw error;
+        });
 
     switch (viewer.dataset.richType) {
       case 'balsamiq':
@@ -70,7 +73,7 @@ export default class BlobViewer {
     const initialViewer = this.$fileHolder[0].querySelector('.blob-viewer:not(.hidden)');
     let initialViewerName = initialViewer.getAttribute('data-type');
 
-    if (this.switcher && location.hash.indexOf('#L') === 0) {
+    if (this.switcher && window.location.hash.indexOf('#L') === 0) {
       initialViewerName = 'simple';
     }
 
@@ -79,10 +82,9 @@ export default class BlobViewer {
 
   initBindings() {
     if (this.switcherBtns.length) {
-      Array.from(this.switcherBtns)
-        .forEach((el) => {
-          el.addEventListener('click', this.switchViewHandler.bind(this));
-        });
+      Array.from(this.switcherBtns).forEach(el => {
+        el.addEventListener('click', this.switchViewHandler.bind(this));
+      });
     }
 
     if (this.copySourceBtn) {
@@ -104,15 +106,20 @@ export default class BlobViewer {
 
   toggleCopyButtonState() {
     if (!this.copySourceBtn) return;
-
     if (this.simpleViewer.getAttribute('data-loaded')) {
-      this.copySourceBtn.setAttribute('title', 'Copy source to clipboard');
+      this.copySourceBtn.setAttribute('title', __('Copy file contents'));
       this.copySourceBtn.classList.remove('disabled');
     } else if (this.activeViewer === this.simpleViewer) {
-      this.copySourceBtn.setAttribute('title', 'Wait for the source to load to copy it to the clipboard');
+      this.copySourceBtn.setAttribute(
+        'title',
+        __('Wait for the file to load to copy its contents'),
+      );
       this.copySourceBtn.classList.add('disabled');
     } else {
-      this.copySourceBtn.setAttribute('title', 'Switch to the source to copy it to the clipboard');
+      this.copySourceBtn.setAttribute(
+        'title',
+        __('Switch to the source to copy the file contents'),
+      );
       this.copySourceBtn.classList.add('disabled');
     }
 
@@ -145,17 +152,16 @@ export default class BlobViewer {
     this.activeViewer = newViewer;
 
     this.toggleCopyButtonState();
-
     BlobViewer.loadViewer(newViewer)
-    .then((viewer) => {
-      $(viewer).renderGFM();
+      .then(viewer => {
+        $(viewer).renderGFM();
 
-      this.$fileHolder.trigger('highlight:line');
-      handleLocationHash();
+        this.$fileHolder.trigger('highlight:line');
+        handleLocationHash();
 
-      this.toggleCopyButtonState();
-    })
-    .catch(() => new Flash('Error loading viewer'));
+        this.toggleCopyButtonState();
+      })
+      .catch(() => new Flash(__('Error loading viewer')));
   }
 
   static loadViewer(viewerParam) {
@@ -168,12 +174,11 @@ export default class BlobViewer {
 
     viewer.setAttribute('data-loading', 'true');
 
-    return axios.get(url)
-      .then(({ data }) => {
-        viewer.innerHTML = data.html;
-        viewer.setAttribute('data-loaded', 'true');
+    return axios.get(url).then(({ data }) => {
+      viewer.innerHTML = data.html;
+      viewer.setAttribute('data-loaded', 'true');
 
-        return viewer;
-      });
+      return viewer;
+    });
   }
 }

@@ -1,5 +1,9 @@
+# frozen_string_literal: true
+
 module ChatMessage
   class MergeMessage < BaseMessage
+    prepend_if_ee('::EE::ChatMessage::MergeMessage') # rubocop: disable Cop/InjectEnterpriseEditionModule
+
     attr_reader :merge_request_iid
     attr_reader :source_branch
     attr_reader :target_branch
@@ -24,7 +28,7 @@ module ChatMessage
 
     def activity
       {
-        title: "Merge Request #{state} by #{user_combined_name}",
+        title: "Merge Request #{state_or_action_text} by #{user_combined_name}",
         subtitle: "in #{project_link}",
         text: merge_request_link,
         image: user_avatar
@@ -46,7 +50,7 @@ module ChatMessage
     end
 
     def merge_request_message
-      "#{user_combined_name} #{state} #{merge_request_link} in #{project_link}: #{title}"
+      "#{user_combined_name} #{state_or_action_text} #{merge_request_link} in #{project_link}"
     end
 
     def merge_request_link
@@ -59,6 +63,11 @@ module ChatMessage
 
     def merge_request_url
       "#{project_url}/merge_requests/#{merge_request_iid}"
+    end
+
+    # overridden in EE
+    def state_or_action_text
+      state
     end
   end
 end

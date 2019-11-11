@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # Base class for CI services
 # List methods you need to implement to get your CI service
 # working with GitLab Merge Requests
@@ -5,7 +7,7 @@ class CiService < Service
   default_value_for :category, 'ci'
 
   def valid_token?(token)
-    self.respond_to?(:token) && self.token.present? && ActiveSupport::SecurityUtils.variable_size_secure_compare(token, self.token)
+    self.respond_to?(:token) && self.token.present? && ActiveSupport::SecurityUtils.secure_compare(token, self.token)
   end
 
   def self.supported_events

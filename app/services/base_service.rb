@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class BaseService
   include Gitlab::Allowable
 
@@ -40,6 +42,10 @@ class BaseService
     level_name = Gitlab::VisibilityLevel.level_name(denied_visibility_level).downcase
 
     model.errors.add(:visibility_level, "#{level_name} has been restricted by your GitLab administrator")
+  end
+
+  def visibility_level
+    params[:visibility].is_a?(String) ? Gitlab::VisibilityLevel.level_value(params[:visibility]) : params[:visibility_level]
   end
 
   private

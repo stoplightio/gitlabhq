@@ -1,7 +1,7 @@
 Rails.application.configure do
   # Make sure the middleware is inserted first in middleware chain
-  config.middleware.insert_before('ActionDispatch::Static', 'Gitlab::Testing::RequestBlockerMiddleware')
-  config.middleware.insert_before('ActionDispatch::Static', 'Gitlab::Testing::RequestInspectorMiddleware')
+  config.middleware.insert_before(ActionDispatch::Static, Gitlab::Testing::RequestBlockerMiddleware)
+  config.middleware.insert_before(ActionDispatch::Static, Gitlab::Testing::RequestInspectorMiddleware)
 
   # Settings specified here will take precedence over those in config/application.rb
 
@@ -11,7 +11,7 @@ Rails.application.configure do
   # and recreated between test runs. Don't rely on the data there!
 
   # Enabling caching of classes slows start-up time because all controllers
-  # are loaded at initalization, but it reduces memory and load because files
+  # are loaded at initialization, but it reduces memory and load because files
   # are not reloaded with every request. For example, caching is not necessary
   # for loading database migrations but useful for handling Knapsack specs.
   config.cache_classes = ENV['CACHE_CLASSES'] == 'true'
@@ -19,15 +19,11 @@ Rails.application.configure do
   # Configure static asset server for tests with Cache-Control for performance
   config.assets.compile = false if ENV['CI']
 
-  if Gitlab.rails5?
-    config.public_file_server.enabled = true
-  else
-    config.serve_static_files = true
-  end
-
-  config.static_cache_control = "public, max-age=3600"
+  config.public_file_server.enabled = true
+  config.public_file_server.headers = { 'Cache-Control' => 'public, max-age=3600' }
 
   # Show full error reports and disable caching
+  config.active_record.verbose_query_logs  = true
   config.consider_all_requests_local       = true
   config.action_controller.perform_caching = false
 
@@ -45,7 +41,7 @@ Rails.application.configure do
   # Print deprecation notices to the stderr
   config.active_support.deprecation = :stderr
 
-  config.eager_load = false
+  config.eager_load = true
 
   config.cache_store = :null_store
 

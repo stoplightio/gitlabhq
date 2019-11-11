@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe 'User uses search filters', :js do
@@ -14,13 +16,13 @@ describe 'User uses search filters', :js do
     visit(search_path)
   end
 
-  context' when filtering by group' do
+  context 'when filtering by group' do
     it 'shows group projects' do
       find('.js-search-group-dropdown').click
 
       wait_for_requests
 
-      page.within('.search-holder') do
+      page.within('.search-page-form') do
         click_link(group.name)
       end
 
@@ -36,7 +38,7 @@ describe 'User uses search filters', :js do
     end
   end
 
-  context' when filtering by project' do
+  context 'when filtering by project' do
     it 'shows a project' do
       page.within('.project-filter') do
         find('.js-search-project-dropdown').click

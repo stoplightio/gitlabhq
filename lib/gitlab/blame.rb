@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   class Blame
     attr_accessor :blob, :commit
@@ -15,6 +17,7 @@ module Gitlab
       i = 0
       blame.each do |commit, line|
         commit = Commit.new(commit, project)
+        commit.lazy_author # preload author
 
         sha = commit.sha
         if prev_sha != sha
@@ -41,8 +44,7 @@ module Gitlab
 
     def highlighted_lines
       @blob.load_all_data!
-      @highlighted_lines ||=
-        Gitlab::Highlight.highlight(@blob.path, @blob.data, repository: repository).lines
+      @highlighted_lines ||= @blob.present.highlight.lines
     end
 
     def project

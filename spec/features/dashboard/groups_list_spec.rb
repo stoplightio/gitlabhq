@@ -1,6 +1,8 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
-feature 'Dashboard Groups page', :js do
+describe 'Dashboard Groups page', :js do
   let(:user) { create :user }
   let(:group) { create(:group) }
   let(:nested_group) { create(:group, :nested) }
@@ -27,7 +29,7 @@ feature 'Dashboard Groups page', :js do
     expect(page).not_to have_content(another_group.name)
   end
 
-  it 'shows subgroups the user is member of', :nested_groups do
+  it 'shows subgroups the user is member of' do
     group.add_owner(user)
     nested_group.add_owner(user)
 
@@ -40,7 +42,7 @@ feature 'Dashboard Groups page', :js do
     expect(page).to have_content(nested_group.name)
   end
 
-  context 'when filtering groups', :nested_groups do
+  context 'when filtering groups' do
     before do
       group.add_owner(user)
       nested_group.add_owner(user)
@@ -65,7 +67,11 @@ feature 'Dashboard Groups page', :js do
       fill_in 'filter', with: group.name
       wait_for_requests
 
+      expect(page).to have_content(group.name)
+      expect(page).not_to have_content(nested_group.parent.name)
+
       fill_in 'filter', with: ''
+      page.find('[name="filter"]').send_keys(:enter)
       wait_for_requests
 
       expect(page).to have_content(group.name)
@@ -75,7 +81,7 @@ feature 'Dashboard Groups page', :js do
     end
   end
 
-  context 'with subgroups', :nested_groups do
+  context 'with subgroups' do
     let!(:subgroup) { create(:group, :public, parent: group) }
 
     before do
@@ -121,7 +127,7 @@ feature 'Dashboard Groups page', :js do
     end
 
     it 'loads results for next page' do
-      expect(page).to have_selector('.gl-pagination .page', count: 2)
+      expect(page).to have_selector('.gl-pagination .page-item a.page-link', count: 3)
 
       # Check first page
       expect(page).to have_content(group2.full_name)
@@ -130,7 +136,7 @@ feature 'Dashboard Groups page', :js do
       expect(page).not_to have_selector("#group-#{group.id}")
 
       # Go to next page
-      find(".gl-pagination .page:not(.active) a").click
+      find('.gl-pagination .page-item:last-of-type a.page-link').click
 
       wait_for_requests
 

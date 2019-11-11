@@ -1,16 +1,49 @@
-require 'rails_helper'
+# frozen_string_literal: true
+
+require 'spec_helper'
 
 describe AvatarsHelper do
   include UploadHelpers
 
   let(:user) { create(:user) }
 
-  describe '#project_icon' do
-    it 'returns an url for the avatar' do
-      project = create(:project, :public, avatar: File.open(uploaded_image_temp_path))
+  describe '#project_icon & #group_icon' do
+    shared_examples 'resource with a default avatar' do |source_type|
+      it 'returns a default avatar div' do
+        expect(public_send("#{source_type}_icon", *helper_args))
+          .to match(%r{<div class="identicon bg\d+">F</div>})
+      end
+    end
 
-      expect(helper.project_icon(project.full_path).to_s)
-        .to eq "<img data-src=\"#{project.avatar.url}\" class=\" lazy\" src=\"#{LazyImageTagHelper.placeholder_image}\" />"
+    shared_examples 'resource with a custom avatar' do |source_type|
+      it 'returns a custom avatar image' do
+        expect(public_send("#{source_type}_icon", *helper_args))
+          .to eq "<img src=\"#{resource.avatar.url}\" />"
+      end
+    end
+
+    context 'when providing a project' do
+      it_behaves_like 'resource with a default avatar', 'project' do
+        let(:resource) { create(:project, name: 'foo') }
+        let(:helper_args) { [resource] }
+      end
+
+      it_behaves_like 'resource with a custom avatar', 'project' do
+        let(:resource) { create(:project, :public, avatar: File.open(uploaded_image_temp_path)) }
+        let(:helper_args) { [resource] }
+      end
+    end
+
+    context 'when providing a group' do
+      it_behaves_like 'resource with a default avatar', 'group' do
+        let(:resource) { create(:group, name: 'foo') }
+        let(:helper_args) { [resource] }
+      end
+
+      it_behaves_like 'resource with a custom avatar', 'group' do
+        let(:resource) { create(:group, avatar: File.open(uploaded_image_temp_path)) }
+        let(:helper_args) { [resource] }
+      end
     end
   end
 
@@ -291,6 +324,48 @@ describe AvatarsHelper do
           class: "avatar s16 has-tooltip",
           title: options[:user_name]
         )
+      end
+    end
+
+    context 'with only_path parameter set to false' do
+      let(:user_with_avatar) { create(:user, :with_avatar, username: 'foobar') }
+
+      context 'with user parameter' do
+        let(:options) { { user: user_with_avatar, only_path: false } }
+
+        it 'will return avatar with a full path' do
+          is_expected.to eq tag(
+            :img,
+            alt: "#{user_with_avatar.name}'s avatar",
+            src: avatar_icon_for_user(user_with_avatar, 16, only_path: false),
+            data: { container: 'body' },
+            class: "avatar s16 has-tooltip",
+            title: user_with_avatar.name
+          )
+        end
+      end
+
+      context 'with user_name and user_email' do
+        let(:options) { { user_email: user_with_avatar.email, user_name: user_with_avatar.username, only_path: false } }
+
+        it 'will return avatar with a full path' do
+          is_expected.to eq tag(
+            :img,
+            alt: "#{user_with_avatar.username}'s avatar",
+            src: avatar_icon_for_email(user_with_avatar.email, 16, only_path: false),
+            data: { container: 'body' },
+            class: "avatar s16 has-tooltip",
+            title: user_with_avatar.username
+          )
+        end
+      end
+    end
+
+    context 'with unregistered email address' do
+      let(:options) { { user_email: "unregistered_email@example.com" } }
+
+      it 'will return default alt text for avatar' do
+        expect(subject).to include("default avatar")
       end
     end
   end

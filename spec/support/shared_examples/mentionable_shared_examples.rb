@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # Specifications for behavior common to all Mentionable implementations.
 # Requires a shared context containing:
 # - subject { "the mentionable implementation" }
@@ -8,8 +10,8 @@ shared_context 'mentionable context' do
   let(:project) { subject.project }
   let(:author)  { subject.author }
 
-  let(:mentioned_issue)  { create(:issue, project: project) }
-  let!(:mentioned_mr)     { create(:merge_request, source_project: project) }
+  let(:mentioned_issue) { create(:issue, project: project) }
+  let!(:mentioned_mr) { create(:merge_request, source_project: project) }
   let(:mentioned_commit) { project.commit("HEAD~1") }
 
   let(:ext_proj)   { create(:project, :public, :repository) }
@@ -76,6 +78,30 @@ shared_examples 'a mentionable' do
     expect(refs).to include(ext_commit)
   end
 
+  context 'when there are cached markdown fields' do
+    before do
+      if subject.is_a?(CacheMarkdownField)
+        subject.refresh_markdown_cache
+      end
+    end
+
+    it 'sends in cached markdown fields when appropriate' do
+      if subject.is_a?(CacheMarkdownField)
+        expect_next_instance_of(Gitlab::ReferenceExtractor) do |ext|
+          attrs = subject.class.mentionable_attrs.collect(&:first) & subject.cached_markdown_fields.markdown_fields
+          attrs.each do |field|
+            expect(ext).to receive(:analyze).with(subject.send(field), hash_including(rendered: anything))
+          end
+        end
+
+        expect(subject).not_to receive(:refresh_markdown_cache)
+        expect(subject).to receive(:cached_markdown_fields).at_least(:once).and_call_original
+
+        subject.all_references(author)
+      end
+    end
+  end
+
   it 'creates cross-reference notes' do
     mentioned_objects = [mentioned_issue, mentioned_mr, mentioned_commit,
                          ext_issue, ext_mr, ext_commit]
@@ -96,6 +122,33 @@ shared_examples 'an editable mentionable' do
 
   let(:new_issues) do
     [create(:issue, project: project), create(:issue, project: ext_proj)]
+  end
+
+  context 'when there are cached markdown fields' do
+    before do
+      if subject.is_a?(CacheMarkdownField)
+        subject.refresh_markdown_cache
+      end
+    end
+
+    it 'refreshes markdown cache if necessary' do
+      subject.save!
+
+      set_mentionable_text.call('This is a text')
+
+      if subject.is_a?(CacheMarkdownField)
+        expect_next_instance_of(Gitlab::ReferenceExtractor) do |ext|
+          subject.cached_markdown_fields.markdown_fields.each do |field|
+            expect(ext).to receive(:analyze).with(subject.send(field), hash_including(rendered: anything))
+          end
+        end
+
+        expect(subject).to receive(:refresh_markdown_cache)
+        expect(subject).to receive(:cached_markdown_fields).at_least(:once).and_call_original
+
+        subject.all_references(author)
+      end
+    end
   end
 
   it 'creates new cross-reference notes when the mentionable text is edited' do

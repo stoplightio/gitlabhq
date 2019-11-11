@@ -1,8 +1,10 @@
+# frozen_string_literal: true
+
 class Projects::PagesDomainsController < Projects::ApplicationController
   layout 'project_settings'
 
   before_action :require_pages_enabled!
-  before_action :authorize_update_pages!, except: [:show]
+  before_action :authorize_update_pages!
   before_action :domain, except: [:new, :create]
 
   def show
@@ -63,14 +65,14 @@ class Projects::PagesDomainsController < Projects::ApplicationController
   private
 
   def create_params
-    params.require(:pages_domain).permit(:key, :certificate, :domain)
+    params.require(:pages_domain).permit(:user_provided_key, :user_provided_certificate, :domain, :auto_ssl_enabled)
   end
 
   def update_params
-    params.require(:pages_domain).permit(:key, :certificate)
+    params.require(:pages_domain).permit(:user_provided_key, :user_provided_certificate, :auto_ssl_enabled)
   end
 
   def domain
-    @domain ||= @project.pages_domains.find_by!(domain: params[:id].to_s)
+    @domain ||= @project.pages_domains.find_by_domain!(params[:id].to_s)
   end
 end

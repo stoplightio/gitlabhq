@@ -1,19 +1,24 @@
+# frozen_string_literal: true
+
 require 'uri'
 
+# Generated HTML is transformed back to GFM by:
+# - app/assets/javascripts/behaviors/markdown/marks/math.js
+# - app/assets/javascripts/behaviors/markdown/nodes/code_block.js
 module Banzai
   module Filter
     # HTML filter that adds class="code math" and removes the dollar sign in $`2+2`$.
     #
     class MathFilter < HTML::Pipeline::Filter
       # Attribute indicating inline or display math.
-      STYLE_ATTRIBUTE = 'data-math-style'.freeze
+      STYLE_ATTRIBUTE = 'data-math-style'
 
       # Class used for tagging elements that should be rendered
-      TAG_CLASS = 'js-render-math'.freeze
+      TAG_CLASS = 'js-render-math'
 
-      INLINE_CLASSES = "code math #{TAG_CLASS}".freeze
+      INLINE_CLASSES = "code math #{TAG_CLASS}"
 
-      DOLLAR_SIGN = '$'.freeze
+      DOLLAR_SIGN = '$'
 
       def call
         doc.css('code').each do |code|

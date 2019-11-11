@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Banzai::ObjectRenderer do
@@ -11,7 +13,7 @@ describe Banzai::ObjectRenderer do
     )
   end
 
-  let(:object) { Note.new(note: 'hello', note_html: '<p dir="auto">hello</p>', cached_markdown_version: CacheMarkdownField::CACHE_COMMONMARK_VERSION) }
+  let(:object) { Note.new(note: 'hello', note_html: '<p dir="auto">hello</p>', cached_markdown_version: Gitlab::MarkdownCache::CACHE_COMMONMARK_VERSION << 16) }
 
   describe '#render' do
     context 'with cache' do
@@ -22,8 +24,8 @@ describe Banzai::ObjectRenderer do
         expect(object.user_visible_reference_count).to eq 0
       end
 
-      it 'calls Banzai::Redactor to perform redaction' do
-        expect_any_instance_of(Banzai::Redactor).to receive(:redact).and_call_original
+      it 'calls Banzai::ReferenceRedactor to perform redaction' do
+        expect_any_instance_of(Banzai::ReferenceRedactor).to receive(:redact).and_call_original
 
         renderer.render([object], :note)
       end
@@ -60,24 +62,38 @@ describe Banzai::ObjectRenderer do
     end
 
     context 'without cache' do
-      let(:commit) { project.commit }
+      let(:cacheless_class) do
+        Class.new do
+          attr_accessor :title, :redacted_title_html, :project
 
-      it 'renders and redacts an Array of objects' do
-        renderer.render([commit], :title)
-
-        expect(commit.redacted_title_html).to eq("Merge branch 'branch-merged' into 'master'")
+          def banzai_render_context(field)
+            { project: project, pipeline: :single_line }
+          end
+        end
+      end
+      let(:cacheless_thing) do
+        cacheless_class.new.tap do |thing|
+          thing.title = "Merge branch 'branch-merged' into 'master'"
+          thing.project = project
+        end
       end
 
-      it 'calls Banzai::Redactor to perform redaction' do
-        expect_any_instance_of(Banzai::Redactor).to receive(:redact).and_call_original
+      it 'renders and redacts an Array of objects' do
+        renderer.render([cacheless_thing], :title)
 
-        renderer.render([commit], :title)
+        expect(cacheless_thing.redacted_title_html).to eq("Merge branch 'branch-merged' into 'master'")
+      end
+
+      it 'calls Banzai::ReferenceRedactor to perform redaction' do
+        expect_any_instance_of(Banzai::ReferenceRedactor).to receive(:redact).and_call_original
+
+        renderer.render([cacheless_thing], :title)
       end
 
       it 'retrieves field content using Banzai::Renderer.cacheless_render_field' do
-        expect(Banzai::Renderer).to receive(:cacheless_render_field).with(commit, :title, {}).and_call_original
+        expect(Banzai::Renderer).to receive(:cacheless_render_field).with(cacheless_thing, :title, {}).and_call_original
 
-        renderer.render([commit], :title)
+        renderer.render([cacheless_thing], :title)
       end
     end
   end

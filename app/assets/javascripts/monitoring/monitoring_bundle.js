@@ -1,19 +1,36 @@
 import Vue from 'vue';
-import { convertPermissionToBoolean } from '~/lib/utils/common_utils';
-import Dashboard from './components/dashboard.vue';
+import { GlToast } from '@gitlab/ui';
+import { parseBoolean } from '~/lib/utils/common_utils';
+import { getParameterValues } from '~/lib/utils/url_utility';
+import Dashboard from 'ee_else_ce/monitoring/components/dashboard.vue';
+import store from './stores';
 
-export default () => {
+Vue.use(GlToast);
+
+export default (props = {}) => {
   const el = document.getElementById('prometheus-graphs');
 
   if (el && el.dataset) {
+    if (gon.features) {
+      store.dispatch('monitoringDashboard/setFeatureFlags', {
+        prometheusEndpointEnabled: gon.features.environmentMetricsUsePrometheusEndpoint,
+        additionalPanelTypesEnabled: gon.features.environmentMetricsAdditionalPanelTypes,
+      });
+    }
+
+    const [currentDashboard] = getParameterValues('dashboard');
+
     // eslint-disable-next-line no-new
     new Vue({
       el,
+      store,
       render(createElement) {
         return createElement(Dashboard, {
           props: {
             ...el.dataset,
-            hasMetrics: convertPermissionToBoolean(el.dataset.hasMetrics),
+            currentDashboard,
+            hasMetrics: parseBoolean(el.dataset.hasMetrics),
+            ...props,
           },
         });
       },

@@ -1,0 +1,249 @@
+.assets-compile-cache:
+  cache:
+    paths:
+      - vendor/ruby/
+      - .yarn-cache/
+      - tmp/cache/assets/sprockets
+
+.gitlab:assets:compile-metadata:
+  extends:
+    - .default-tags
+    - .default-retry
+    - .default-only
+    - .default-before_script
+    - .assets-compile-cache
+    - .only-code-qa-changes
+  image: registry.gitlab.com/gitlab-org/gitlab-build-images:ruby-2.6.3-git-2.22-chrome-73.0-node-12.x-yarn-1.16-graphicsmagick-1.3.33-docker-18.06.1
+  stage: test
+  dependencies: ["setup-test-env"]
+  needs: ["setup-test-env"]
+  services:
+    - docker:19.03.0-dind
+  variables:
+    NODE_ENV: "production"
+    RAILS_ENV: "production"
+    SETUP_DB: "false"
+    SKIP_STORAGE_VALIDATION: "true"
+    WEBPACK_REPORT: "true"
+    # we override the max_old_space_size to prevent OOM errors
+    NODE_OPTIONS: --max_old_space_size=3584
+    DOCKER_DRIVER: overlay2
+    DOCKER_HOST: tcp://docker:2375
+  cache:
+    key: "assets-compile:production:vendor_ruby:.yarn-cache:tmp_cache_assets_sprockets:v6"
+  artifacts:
+    name: webpack-report
+    expire_in: 31d
+    paths:
+      - webpack-report/
+      - public/assets/
+  script:
+    - node --version
+    - retry yarn install --frozen-lockfile --production --cache-folder .yarn-cache --prefer-offline
+    - free -m
+    - retry bundle exec rake gitlab:assets:compile
+    - time scripts/build_assets_image
+    - scripts/clean-old-cached-assets
+    - rm -f /etc/apt/sources.list.d/google*.list  # We don't need to update Chrome here
+  only:
+    variables:
+      - $CI_SERVER_HOST == "gitlab.com" && $CI_PROJECT_NAMESPACE =~ /^gitlab-org($|\/)/  # Matches the gitlab-org group and its subgroups
+      - $CI_SERVER_HOST == "dev.gitlab.org"
+  tags:
+    - gitlab-org
+    - docker
+
+gitlab:assets:compile pull-push-cache:
+  extends: .gitlab:assets:compile-metadata
+  only:
+    refs:
+      - master
+  cache:
+    policy: pull-push
+
+gitlab:assets:compile pull-cache:
+  extends: .gitlab:assets:compile-metadata
+  cache:
+    policy: pull
+
+.compile-assets-metadata:
+  extends:
+    - .default-tags
+    - .default-retry
+    - .default-only
+    - .default-before_script
+    - .assets-compile-cache
+    - .only-code-qa-changes
+    - .use-pg9
+  stage: prepare
+  script:
+    - node --version
+    - retry yarn install --frozen-lockfile --cache-folder .yarn-cache --prefer-offline
+    - free -m
+    - retry bundle exec rake gitlab:assets:compile
+    - scripts/clean-old-cached-assets
+  variables:
+    # we override the max_old_space_size to prevent OOM errors
+    NODE_OPTIONS: --max_old_space_size=3584
+  cache:
+    key: "assets-compile:v7"
+  artifacts:
+    expire_in: 7d
+    paths:
+      - node_modules
+      - public/assets
+
+compile-assets pull-push-cache:
+  extends: .compile-assets-metadata
+  only:
+    refs:
+      - master
+  cache:
+    policy: pull-push
+
+compile-assets pull-push-cache foss:
+  extends: [".compile-assets-metadata", ".only-ee-as-if-foss"]
+  only:
+    refs:
+      - master
+  cache:
+    policy: pull-push
+    key: "assets-compile:v7:foss"
+
+compile-assets pull-cache:
+  extends: .compile-assets-metadata
+  cache:
+    policy: pull
+
+compile-assets pull-cache foss:
+  extends: [".compile-assets-metadata", ".only-ee-as-if-foss"]
+  cache:
+    policy: pull
+    key: "assets-compile:v7:foss"
+
+.only-code-frontend-job-base:
+  extends:
+    - .default-tags
+    - .default-retry
+    - .default-cache
+    - .default-only
+    - .default-before_script
+    - .only-code-changes
+    - .use-pg9
+  stage: test
+  needs: ["setup-test-env", "compile-assets pull-cache"]
+  dependencies: ["setup-test-env", "compile-assets pull-cache"]
+
+.karma-base:
+  extends: .only-code-frontend-job-base
+  variables:
+    # we override the max_old_space_size to prevent OOM errors
+    NODE_OPTIONS: --max_old_space_size=3584
+  script:
+    - export BABEL_ENV=coverage CHROME_LOG_FILE=chrome_debug.log
+    - date
+    - scripts/gitaly-test-spawn
+    - date
+    - bundle exec rake karma
+
+karma:
+  extends: .karma-base
+  coverage: '/^Statements *: (\d+\.\d+%)/'
+  artifacts:
+    name: coverage-javascript
+    expire_in: 31d
+    when: always
+    paths:
+      - chrome_debug.log
+      - coverage-javascript/
+      - tmp/tests/frontend/
+    reports:
+      junit: junit_karma.xml
+
+karma-foss:
+  extends:
+    - .karma-base
+    - .only-ee-as-if-foss
+
+.jest-base:
+  extends: .only-code-frontend-job-base
+  script:
+    - scripts/gitaly-test-spawn
+    - date
+    - bundle exec rake frontend:fixtures
+    - date
+    - yarn jest --ci --coverage
+  cache:
+    key: jest
+    paths:
+      - tmp/jest/jest/
+    policy: pull-push
+
+jest:
+  extends: .jest-base
+  artifacts:
+    name: coverage-frontend
+    expire_in: 31d
+    when: always
+    paths:
+      - coverage-frontend/
+      - junit_jest.xml
+      - tmp/tests/frontend/
+    reports:
+      junit: junit_jest.xml
+
+jest-foss:
+  extends:
+    - .jest-base
+    - .only-ee-as-if-foss
+  cache:
+    policy: pull
+
+.qa-frontend-node:
+  extends:
+    - .default-tags
+    - .default-retry
+    - .default-cache
+    - .default-only
+    - .only-code-changes
+  stage: test
+  dependencies: []
+  cache:
+    key: "$CI_JOB_NAME"
+    paths:
+      - .yarn-cache/
+    policy: pull-push
+  script:
+    - date
+    - yarn install --frozen-lockfile --cache-folder .yarn-cache --prefer-offline
+    - date
+    - yarn run webpack-prod
+
+qa-frontend-node:8:
+  extends: .qa-frontend-node
+  image: node:carbon
+
+qa-frontend-node:10:
+  extends: .qa-frontend-node
+  image: node:dubnium
+
+qa-frontend-node:latest:
+  extends: .qa-frontend-node
+  image: node:latest
+  allow_failure: true
+
+webpack-dev-server:
+  extends:
+    - .default-tags
+    - .default-retry
+    - .default-cache
+    - .default-only
+    - .only-code-changes
+  stage: test
+  needs: ["setup-test-env", "compile-assets pull-cache"]
+  dependencies: ["setup-test-env", "compile-assets pull-cache"]
+  variables:
+    WEBPACK_MEMORY_TEST: "true"
+  script:
+    - node --version
+    - node --expose-gc node_modules/.bin/webpack-dev-server --config config/webpack.config.js

@@ -94,8 +94,8 @@ module ActiveRecord
       end
     end
 
-    def build_arel
-      arel = super()
+    def build_arel(aliases)
+      arel = super
 
       build_with(arel) if @values[:with]
 
@@ -108,7 +108,7 @@ module ActiveRecord
         when String
           with_value
         when Hash
-          with_value.map  do |name, expression|
+          with_value.map do |name, expression|
             case expression
             when String
               select = Arel::Nodes::SqlLiteral.new "(#{expression})"

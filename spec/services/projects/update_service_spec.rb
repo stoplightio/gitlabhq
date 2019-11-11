@@ -1,6 +1,9 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Projects::UpdateService do
+  include ExternalAuthorizationServiceHelpers
   include ProjectForksHelper
 
   let(:user) { create(:user) }
@@ -15,6 +18,8 @@ describe Projects::UpdateService do
     context 'when changing visibility level' do
       context 'when visibility_level is INTERNAL' do
         it 'updates the project to internal' do
+          expect(TodosDestroyer::ProjectPrivateWorker).not_to receive(:perform_in)
+
           result = update_project(project, user, visibility_level: Gitlab::VisibilityLevel::INTERNAL)
 
           expect(result).to eq({ status: :success })
@@ -24,9 +29,28 @@ describe Projects::UpdateService do
 
       context 'when visibility_level is PUBLIC' do
         it 'updates the project to public' do
+          expect(TodosDestroyer::ProjectPrivateWorker).not_to receive(:perform_in)
+
           result = update_project(project, user, visibility_level: Gitlab::VisibilityLevel::PUBLIC)
+
           expect(result).to eq({ status: :success })
           expect(project).to be_public
+        end
+      end
+
+      context 'when visibility_level is PRIVATE' do
+        before do
+          project.update!(visibility_level: Gitlab::VisibilityLevel::PUBLIC)
+        end
+
+        it 'updates the project to private' do
+          expect(TodosDestroyer::ProjectPrivateWorker).to receive(:perform_in).with(Todo::WAIT_FOR_DELETE, project.id)
+          expect(TodosDestroyer::ConfidentialIssueWorker).to receive(:perform_in).with(Todo::WAIT_FOR_DELETE, nil, project.id)
+
+          result = update_project(project, user, visibility_level: Gitlab::VisibilityLevel::PRIVATE)
+
+          expect(result).to eq({ status: :success })
+          expect(project).to be_private
         end
       end
 
@@ -38,6 +62,7 @@ describe Projects::UpdateService do
         context 'when visibility_level is INTERNAL' do
           it 'updates the project to internal' do
             result = update_project(project, user, visibility_level: Gitlab::VisibilityLevel::INTERNAL)
+
             expect(result).to eq({ status: :success })
             expect(project).to be_internal
           end
@@ -54,6 +79,7 @@ describe Projects::UpdateService do
           context 'when updated by an admin' do
             it 'updates the project to public' do
               result = update_project(project, admin, visibility_level: Gitlab::VisibilityLevel::PUBLIC)
+
               expect(result).to eq({ status: :success })
               expect(project).to be_public
             end
@@ -160,9 +186,26 @@ describe Projects::UpdateService do
 
         expect_any_instance_of(ProjectWiki).to receive(:wiki).and_raise(ProjectWiki::CouldNotCreateWikiError)
         expect_any_instance_of(described_class).to receive(:log_error).with("Could not create wiki for #{project.full_name}")
-        expect(Gitlab::Metrics).to receive(:counter)
+
+        counter = double(:counter)
+        expect(Gitlab::Metrics).to receive(:counter).with(:wiki_can_not_be_created_total, 'Counts the times we failed to create a wiki').and_return(counter)
+        expect(counter).to receive(:increment)
 
         update_project(project, user, project_feature_attributes: { wiki_access_level: ProjectFeature::ENABLED })
+      end
+    end
+
+    context 'when changing feature visibility to private' do
+      it 'updates the visibility correctly' do
+        expect(TodosDestroyer::PrivateFeaturesWorker)
+          .to receive(:perform_in).with(Todo::WAIT_FOR_DELETE, project.id)
+
+        result = update_project(project, user, project_feature_attributes:
+                                 { issues_access_level: ProjectFeature::PRIVATE }
+                               )
+
+        expect(result).to eq({ status: :success })
+        expect(project.project_feature.issues_access_level).to be(ProjectFeature::PRIVATE)
       end
     end
 
@@ -196,7 +239,7 @@ describe Projects::UpdateService do
         let(:project) { create(:project, :legacy_storage, :repository, creator: user, namespace: user.namespace) }
 
         before do
-          gitlab_shell.create_repository(repository_storage, "#{user.namespace.full_path}/existing")
+          gitlab_shell.create_repository(repository_storage, "#{user.namespace.full_path}/existing", user.namespace.full_path)
         end
 
         after do
@@ -211,6 +254,48 @@ describe Projects::UpdateService do
           expect(project).not_to be_valid
           expect(project.errors.messages).to have_key(:base)
           expect(project.errors.messages[:base]).to include('There is already a repository with that name on disk')
+        end
+
+        it 'renames the project without upgrading it' do
+          result = update_project(project, admin, path: 'new-path')
+
+          expect(result).not_to include(status: :error)
+          expect(project).to be_valid
+          expect(project.errors).to be_empty
+          expect(project.disk_path).to include('new-path')
+          expect(project.reload.hashed_storage?(:repository)).to be_falsey
+        end
+
+        context 'when hashed storage is enabled' do
+          before do
+            stub_application_setting(hashed_storage_enabled: true)
+            stub_feature_flags(skip_hashed_storage_upgrade: false)
+          end
+
+          it 'migrates project to a hashed storage instead of renaming the repo to another legacy name' do
+            result = update_project(project, admin, path: 'new-path')
+
+            expect(result).not_to include(status: :error)
+            expect(project).to be_valid
+            expect(project.errors).to be_empty
+            expect(project.reload.hashed_storage?(:repository)).to be_truthy
+          end
+
+          context 'when skip_hashed_storage_upgrade feature flag is enabled' do
+            before do
+              stub_feature_flags(skip_hashed_storage_upgrade: true)
+            end
+
+            it 'renames the project without upgrading it' do
+              result = update_project(project, admin, path: 'new-path')
+
+              expect(result).not_to include(status: :error)
+              expect(project).to be_valid
+              expect(project.errors).to be_empty
+              expect(project.disk_path).to include('new-path')
+              expect(project.reload.hashed_storage?(:repository)).to be_falsey
+            end
+          end
         end
       end
 
@@ -262,6 +347,85 @@ describe Projects::UpdateService do
         call_service
       end
     end
+
+    context 'when updating #pages_access_level' do
+      subject(:call_service) do
+        update_project(project, admin, project_feature_attributes: { pages_access_level: ProjectFeature::ENABLED })
+      end
+
+      it 'updates the attribute' do
+        expect { call_service }
+          .to change { project.project_feature.pages_access_level }
+          .to(ProjectFeature::ENABLED)
+      end
+
+      it 'calls Projects::UpdatePagesConfigurationService' do
+        expect(Projects::UpdatePagesConfigurationService)
+          .to receive(:new)
+          .with(project)
+          .and_call_original
+
+        call_service
+      end
+    end
+
+    context 'when updating #emails_disabled' do
+      it 'updates the attribute for the project owner' do
+        expect { update_project(project, user, emails_disabled: true) }
+          .to change { project.emails_disabled }
+          .to(true)
+      end
+
+      it 'does not update when not project owner' do
+        maintainer = create(:user)
+        project.add_user(maintainer, :maintainer)
+
+        expect { update_project(project, maintainer, emails_disabled: true) }
+          .not_to change { project.emails_disabled }
+      end
+    end
+
+    context 'with external authorization enabled' do
+      before do
+        enable_external_authorization_service_check
+
+        allow(::Gitlab::ExternalAuthorization)
+          .to receive(:access_allowed?).with(user, 'default_label', project.full_path).and_call_original
+      end
+
+      it 'does not save the project with an error if the service denies access' do
+        expect(::Gitlab::ExternalAuthorization)
+          .to receive(:access_allowed?).with(user, 'new-label') { false }
+
+        result = update_project(project, user, { external_authorization_classification_label: 'new-label' })
+
+        expect(result[:message]).to be_present
+        expect(result[:status]).to eq(:error)
+      end
+
+      it 'saves the new label if the service allows access' do
+        expect(::Gitlab::ExternalAuthorization)
+          .to receive(:access_allowed?).with(user, 'new-label') { true }
+
+        result = update_project(project, user, { external_authorization_classification_label: 'new-label' })
+
+        expect(result[:status]).to eq(:success)
+        expect(project.reload.external_authorization_classification_label).to eq('new-label')
+      end
+
+      it 'checks the default label when the classification label was cleared' do
+        expect(::Gitlab::ExternalAuthorization)
+          .to receive(:access_allowed?).with(user, 'default_label') { true }
+
+        update_project(project, user, { external_authorization_classification_label: '' })
+      end
+
+      it 'does not check the label when it does not change' do
+        expect(::Gitlab::ExternalAuthorization).to receive(:access_allowed?).once
+
+        update_project(project, user, { name: 'New name' })
+      end
+    end
   end
 
   describe '#run_auto_devops_pipeline?' do
@@ -298,6 +462,8 @@ describe Projects::UpdateService do
     context 'when auto devops is set to instance setting' do
       before do
         project.create_auto_devops!(enabled: nil)
+        project.reload
+
         allow(project.auto_devops).to receive(:previous_changes).and_return('enabled' => true)
       end
 

@@ -1,4 +1,6 @@
-require 'rails_helper'
+# frozen_string_literal: true
+
+require 'spec_helper'
 
 describe 'Sub-group project issue boards', :js do
   let(:group) { create(:group) }
@@ -11,7 +13,7 @@ describe 'Sub-group project issue boards', :js do
   let!(:issue) { create(:labeled_issue, project: project, labels: [label]) }
 
   before do
-    project.add_master(user)
+    project.add_maintainer(user)
 
     sign_in(user)
 

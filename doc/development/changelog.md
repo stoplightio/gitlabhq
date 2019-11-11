@@ -27,24 +27,27 @@ valid options are: added, fixed, changed, deprecated, removed, security, perform
 Community contributors and core team members are encouraged to add their name to
 the `author` field. GitLab team members **should not**.
 
-[changelog.md]: https://gitlab.com/gitlab-org/gitlab-ce/blob/master/CHANGELOG.md
-[unreleased]: https://gitlab.com/gitlab-org/gitlab-ce/tree/master/changelogs/
+[changelog.md]: https://gitlab.com/gitlab-org/gitlab/blob/master/CHANGELOG.md
+[unreleased]: https://gitlab.com/gitlab-org/gitlab-foss/tree/master/changelogs/
 [YAML]: https://en.wikipedia.org/wiki/YAML
 
 ## What warrants a changelog entry?
 
+- Any change that introduces a database migration **must** have a changelog entry.
 - Any user-facing change **should** have a changelog entry. Example: "GitLab now
   uses system fonts for all text."
+- Performance improvements **should** have a changelog entry.
+- _Any_ contribution from a community member, no matter how small, **may** have
+  a changelog entry regardless of these guidelines if the contributor wants one.
+  Example: "Fixed a typo on the search results page."
+- Any docs-only changes **should not** have a changelog entry.
+- Any change behind a feature flag **should not** have a changelog entry. The entry should be added [in the merge request removing the feature flags](feature_flags/development.md).
 - A fix for a regression introduced and then fixed in the same release (i.e.,
   fixing a bug introduced during a monthly release candidate) **should not**
   have a changelog entry.
 - Any developer-facing change (e.g., refactoring, technical debt remediation,
   test suite changes) **should not** have a changelog entry. Example: "Reduce
   database records created during Cycle Analytics model spec."
-- _Any_ contribution from a community member, no matter how small, **may** have
-  a changelog entry regardless of these guidelines if the contributor wants one.
-  Example: "Fixed a typo on the search results page. (Jane Smith)"
-- Performance improvements **should** have a changelog entry.
 
 ## Writing good changelog entries
 
@@ -59,7 +62,7 @@ making it both concise and descriptive, err on the side of descriptive.
 The first example provides no context of where the change was made, or why, or
 how it benefits the user.
 
-- **Bad:** Copy [some text] to clipboard.
+- **Bad:** Copy (some text) to clipboard.
 - **Good:** Update the "Copy to clipboard" tooltip to indicate what's being
   copied.
 
@@ -76,7 +79,7 @@ changes.
 
 - **Bad:** Strip out `nil`s in the Array of Commit objects returned from
   `find_commits_by_message_with_elastic`
-- **Good:** Fix 500 errors caused by elasticsearch results referencing
+- **Good:** Fix 500 errors caused by Elasticsearch results referencing
   garbage-collected commits
 
 The first example focuses on _how_ we fixed something, not on _what_ it fixes.
@@ -95,7 +98,14 @@ automatically.
 Its simplest usage is to provide the value for `title`:
 
 ```text
-$ bin/changelog 'Hey DZ, I added a feature to GitLab!'
+bin/changelog 'Hey DZ, I added a feature to GitLab!'
+```
+
+If you want to generate a changelog entry for GitLab EE, you will need to pass
+the `--ee` option:
+
+```text
+bin/changelog --ee 'Hey DZ, I added a feature to GitLab!'
 ```
 
 At this point the script would ask you to select the category of the change (mapped to the `type` field in the entry):
@@ -108,7 +118,8 @@ At this point the script would ask you to select the category of the change (map
 4. New deprecation
 5. Feature removal
 6. Security fix
-7. Other
+7. Performance improvement
+8. Other
 ```
 
 The entry filename is based on the name of the current Git branch. If you run
@@ -125,30 +136,20 @@ merge_request:
 author:
 type:
 ```
-If you're working on the GitLab EE repository, the entry will be added to
-`ee/changelogs/unreleased/` instead.
 
 ### Arguments
 
-| Argument            | Shorthand | Purpose                                                                                                    |
-| -----------------   | --------- | ---------------------------------------------------------------------------------------------------------- |
-| [`--amend`]         |           | Amend the previous commit                                                                                  |
-| [`--force`]         | `-f`      | Overwrite an existing entry                                                                                |
-| [`--merge-request`] | `-m`      | Set merge request ID                                                                                       |
-| [`--dry-run`]       | `-n`      | Don't actually write anything, just print                                                                  |
-| [`--git-username`]  | `-u`      | Use Git user.name configuration as the author                                                              |
-| [`--type`]          | `-t`      | The category of the change, valid options are: added, fixed, changed, deprecated, removed, security, other |
-| [`--help`]          | `-h`      | Print help message                                                                                         |
+| Argument            | Shorthand | Purpose                                                                                                                                 |
+| -----------------   | --------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| [`--amend`](#--amend)         |           | Amend the previous commit                                                                                                               |
+| [`--force`](#--force-or--f)         | `-f`      | Overwrite an existing entry                                                                                                             |
+| [`--merge-request`](#--merge-request-or--m) | `-m`      | Set merge request ID                                                                                                                    |
+| [`--dry-run`](#--dry-run-or--n)       | `-n`      | Don't actually write anything, just print                                                                                               |
+| [`--git-username`](#--git-username-or--u)  | `-u`      | Use Git user.name configuration as the author                                                                                           |
+| [`--type`](#--type-or--t)          | `-t`      | The category of the change, valid options are: `added`, `fixed`, `changed`, `deprecated`, `removed`, `security`, `performance`, `other` |
+| `--help`          | `-h`      | Print help message                                                                                                                      |
 
-[`--amend`]: #-amend
-[`--force`]: #-force-or-f
-[`--merge-request`]: #-merge-request-or-m
-[`--dry-run`]: #-dry-run-or-n
-[`--git-username`]: #-git-username-or-u
-[`--type`]: #-type-or-t
-[`--help`]: #-help
-
-##### `--amend`
+#### `--amend`
 
 You can pass the **`--amend`** argument to automatically stage the generated
 file and amend it to the previous commit.
@@ -170,7 +171,7 @@ author:
 type:
 ```
 
-##### `--force` or `-f`
+#### `--force` or `-f`
 
 Use **`--force`** or **`-f`** to overwrite an existing changelog entry if it
 already exists.
@@ -188,7 +189,7 @@ author:
 type:
 ```
 
-##### `--merge-request` or `-m`
+#### `--merge-request` or `-m`
 
 Use the **`--merge-request`** or **`-m`** argument to provide the
 `merge_request` value:
@@ -203,7 +204,7 @@ author:
 type:
 ```
 
-##### `--dry-run` or `-n`
+#### `--dry-run` or `-n`
 
 Use the **`--dry-run`** or **`-n`** argument to prevent actually writing or
 committing anything:
@@ -220,7 +221,7 @@ type:
 $ ls changelogs/unreleased/
 ```
 
-##### `--git-username` or `-u`
+#### `--git-username` or `-u`
 
 Use the **`--git-username`** or **`-u`** argument to automatically fill in the
 `author` value with your configured Git `user.name` value:
@@ -238,7 +239,7 @@ author: Jane Doe
 type:
 ```
 
-##### `--type` or `-t`
+#### `--type` or `-t`
 
 Use the **`--type`** or **`-t`** argument to provide the `type` value:
 
@@ -282,7 +283,7 @@ and then compiling the entries into the overall `CHANGELOG.md` file during the
 
 [boring solution]: https://about.gitlab.com/handbook/values/#boring-solutions
 [release managers]: https://gitlab.com/gitlab-org/release/docs/blob/master/quickstart/release-manager.md
-[started brainstorming]: https://gitlab.com/gitlab-org/gitlab-ce/issues/17826
+[started brainstorming]: https://gitlab.com/gitlab-org/gitlab-foss/issues/17826
 [release process]: https://gitlab.com/gitlab-org/release-tools
 
 ---

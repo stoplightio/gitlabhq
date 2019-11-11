@@ -5,7 +5,7 @@
 - **Write documentation.**: Add documentation to the `doc/` directory. Describe
   the feature and include screenshots, if applicable.
 - **Submit a MR to the `www-gitlab-com` project.**: Add the new feature to the
-  [EE features list][ee-features-list].
+  [EE features list](https://about.gitlab.com/features/).
 
 ## Act as CE when unlicensed
 
@@ -19,81 +19,22 @@ CE specs should remain untouched as much as possible and extra specs
 should be added for EE. Licensed features can be stubbed using the
 spec helper `stub_licensed_features` in `EE::LicenseHelpers`.
 
-[ee-as-ce]: https://gitlab.com/gitlab-org/gitlab-ee/issues/2500
+You can force GitLab to act as CE by either deleting the `ee/` directory or by
+setting the [`FOSS_ONLY` environment variable](https://gitlab.com/gitlab-org/gitlab/blob/master/config/helpers/is_ee_env.js)
+to something that evaluates as `true`. The same works for running tests
+(for example `FOSS_ONLY=1 yarn jest`).
+
+[ee-as-ce]: https://gitlab.com/gitlab-org/gitlab/issues/2500
 
 ## Separation of EE code
 
-We want a [single code base][] eventually, but before we reach the goal,
-we still need to merge changes from GitLab CE to EE. To help us get there,
-we should make sure that we no longer edit CE files in place in order to
-implement EE features.
-
-Instead, all EE code should be put inside the `ee/` top-level directory. The
+All EE code should be put inside the `ee/` top-level directory. The
 rest of the code should be as close to the CE files as possible.
-
-[single code base]: https://gitlab.com/gitlab-org/gitlab-ee/issues/2952#note_41016454
-
-### EE-specific comments
-
-When complete separation can't be achieved with the `ee/` directory, you can wrap
-code in EE specific comments to designate the difference from CE/EE and add
-some context for someone resolving a conflict.
-
-```rb
-# EE-specific start
-stub_licensed_features(variable_environment_scope: true)
-# EE specific end
-```
-
-```haml
--# EE-specific start
-= render 'ci/variables/environment_scope', form_field: form_field, variable: variable
--# EE-specific end
-```
-
-EE-specific comments should not be backported to CE.
-
-**Note:** This is only meant as a workaround, we should follow up and
-resolve this soon.
-
-### Detection of EE-only files
-
-For each commit (except on `master`), the `ee-files-location-check` CI job tries
-to detect if there are any new files that are EE-only. If any file is detected,
-the job fails with an explanation of why and what to do to make it pass.
-
-Basically, the fix is simple: `git mv <file> ee/<file>`.
-
-#### How to name your branches?
-
-For any EE branch, the job will try to detect its CE counterpart by removing any
-`ee-` prefix or `-ee` suffix from the EE branch name, and matching the last
-branch that contains it.
-
-For instance, from the EE branch `new-shiny-feature-ee` (or
-`ee-new-shiny-feature`), the job would find the corresponding CE branches:
-
-- `new-shiny-feature`
-- `ce-new-shiny-feature`
-- `new-shiny-feature-ce`
-- `my-super-new-shiny-feature-in-ce`
-
-#### Whitelist some EE-only files that cannot be moved to `ee/`
-
-The `ee-files-location-check` CI job provides a whitelist of files or folders
-that cannot or should not be moved to `ee/`. Feel free to open an issue to
-discuss adding a new file/folder to this whitelist.
-
-For instance, it was decided that moving EE-only files from `qa/` to `ee/qa/`
-would make it difficult to build the `gitLab-{ce,ee}-qa` Docker images and it
-was [not worth the complexity].
-
-[not worth the complexity]: https://gitlab.com/gitlab-org/gitlab-ee/issues/4997#note_59764702
 
 ### EE-only features
 
 If the feature being developed is not present in any form in CE, we don't
-need to put the codes under `EE` namespace. For example, an EE model could
+need to put the code under the `EE` namespace. For example, an EE model could
 go into: `ee/app/models/awesome.rb` using `Awesome` as the class name. This
 is applied not only to models. Here's a list of other examples:
 
@@ -111,18 +52,32 @@ is applied not only to models. Here's a list of other examples:
 - `ee/app/views/foo.html.haml`
 - `ee/app/views/foo/_bar.html.haml`
 
-This works because for every path that are present in CE's eager-load/auto-load
+This works because for every path that is present in CE's eager-load/auto-load
 paths, we add the same `ee/`-prepended path in [`config/application.rb`].
 This also applies to views.
 
-[`config/application.rb`]: https://gitlab.com/gitlab-org/gitlab-ee/blob/925d3d4ebc7a2c72964ce97623ae41b8af12538d/config/application.rb#L42-52
+[`config/application.rb`]: https://gitlab.com/gitlab-org/gitlab/blob/925d3d4ebc7a2c72964ce97623ae41b8af12538d/config/application.rb#L42-52
 
 ### EE features based on CE features
 
-For features that build on existing CE features, write a module in the
-`EE` namespace and `prepend` it in the CE class. This makes conflicts
-less likely to happen during CE to EE merges because only one line is
-added to the CE class - the `prepend` line.
+For features that build on existing CE features, write a module in the `EE`
+namespace and inject it in the CE class, on the last line of the file that the
+class resides in. This makes conflicts less likely to happen during CE to EE
+merges because only one line is added to the CE class - the line that injects
+the module. For example, to prepend a module into the `User` class you would use
+the following approach:
+
+```ruby
+class User < ActiveRecord::Base
+  # ... lots of code here ...
+end
+
+User.prepend_if_ee('EE::User')
+```
+
+Do not use methods such as `prepend`, `extend`, and `include`. Instead, use
+`prepend_if_ee`, `extend_if_ee`, or `include_if_ee`. These methods take a
+_String_ containing the full module name as the argument, not the module itself.
 
 Since the module would require an `EE` namespace, the file should also be
 put in an `ee/` sub-directory. For example, we want to extend the user model
@@ -151,7 +106,7 @@ still having access the class's implementation with `super`.
 
 There are a few gotchas with it:
 
-- you should always [`extend ::Gitlab::Utils::Override`] and use `override` to
+- you should always [`extend ::Gitlab::Utils::Override`](utilities.md#override) and use `override` to
   guard the "overrider" method to ensure that if the method gets renamed in
   CE, the EE override won't be silently forgotten.
 - when the "overrider" would add a line in the middle of the CE
@@ -166,7 +121,8 @@ There are a few gotchas with it:
   to make it call the other method we want to extend, like a [template method
   pattern](https://en.wikipedia.org/wiki/Template_method_pattern).
   For example, given this base:
-  ``` ruby
+
+  ```ruby
     class Base
       def execute
         return unless enabled?
@@ -176,9 +132,11 @@ There are a few gotchas with it:
       end
     end
   ```
+
   Instead of just overriding `Base#execute`, we should update it and extract
   the behaviour into another method:
-  ``` ruby
+
+  ```ruby
     class Base
       def execute
         return unless enabled?
@@ -194,9 +152,11 @@ There are a few gotchas with it:
       end
     end
   ```
+
   Then we're free to override that `do_something` without worrying about the
   guards:
-  ``` ruby
+
+  ```ruby
     module EE::Base
       extend ::Gitlab::Utils::Override
 
@@ -206,6 +166,7 @@ There are a few gotchas with it:
       end
     end
   ```
+
   This would require updating CE first, or make sure this is back ported to CE.
 
 When prepending, place them in the `ee/` specific sub-directory, and
@@ -225,7 +186,6 @@ the existing file:
 
 ```ruby
 class ApplicationController < ActionController::Base
-  prepend EE::ApplicationController
   # ...
 
   def after_sign_out_path_for(resource)
@@ -234,6 +194,8 @@ class ApplicationController < ActionController::Base
 
   # ...
 end
+
+ApplicationController.prepend_if_ee('EE::ApplicationController')
 ```
 
 And create a new file in the `ee/` sub-directory with the altered
@@ -256,7 +218,30 @@ module EE
 end
 ```
 
-[`extend ::Gitlab::Utils::Override`]: utilities.md#override
+##### Overriding CE class methods
+
+The same applies to class methods, except we want to use
+`ActiveSupport::Concern` and put `extend ::Gitlab::Utils::Override`
+within the block of `class_methods`. Here's an example:
+
+```ruby
+module EE
+  module Groups
+    module GroupMembersController
+      extend ActiveSupport::Concern
+
+      class_methods do
+        extend ::Gitlab::Utils::Override
+
+        override :admin_not_required_endpoints
+        def admin_not_required_endpoints
+          super.concat(%i[update override])
+        end
+      end
+    end
+  end
+end
+```
 
 #### Use self-descriptive wrapper methods
 
@@ -298,8 +283,23 @@ end
 See [CE MR][ce-mr-full-private] and [EE MR][ee-mr-full-private] for
 full implementation details.
 
-[ce-mr-full-private]: https://gitlab.com/gitlab-org/gitlab-ce/merge_requests/12373
-[ee-mr-full-private]: https://gitlab.com/gitlab-org/gitlab-ee/merge_requests/2199
+[ce-mr-full-private]: https://gitlab.com/gitlab-org/gitlab-foss/merge_requests/12373
+[ee-mr-full-private]: https://gitlab.com/gitlab-org/gitlab/merge_requests/2199
+
+### Code in `config/routes`
+
+When we add `draw :admin` in `config/routes.rb`, the application will try to
+load the file located in `config/routes/admin.rb`, and also try to load the
+file located in `ee/config/routes/admin.rb`.
+
+In EE, it should at least load one file, at most two files. If it cannot find
+any files, an error will be raised. In CE, since we don't know if there will
+be an EE route, it will not raise any errors even if it cannot find anything.
+
+This means if we want to extend a particular CE route file, just add the same
+file located in `ee/config/routes`. If we want to add an EE only route, we
+could still put `draw :ee_only` in both CE and EE, and add
+`ee/config/routes/ee_only.rb` in EE, similar to `render_if_exists`.
 
 ### Code in `app/controllers/`
 
@@ -362,7 +362,7 @@ view. For instance the approval code in the project's settings page.
 **Mitigations**
 
 Blocks of code that are EE-specific should be moved to partials. This
-avoids conflicts with big chunks of HAML code that that are not fun to
+avoids conflicts with big chunks of HAML code that are not fun to
 resolve when you add the indentation to the equation.
 
 EE-specific views should be placed in `ee/app/views/`, using extra
@@ -377,14 +377,23 @@ CE and EE.
 
 The advantages of this:
 
-- Minimal code difference between CE and EE.
-- Very clear hints about where we're extending EE views while reading CE codes.
+- Very clear hints about where we're extending EE views while reading CE code.
 
 The disadvantage of this:
 
-- Slightly more work while developing EE features, because now we need to
-  port `render_if_exists` to CE.
 - If we have typos in the partial name, it would be silently ignored.
+
+##### Caveats
+
+The `render_if_exists` view path argument must be relative to `app/views/` and `ee/app/views`.
+Resolving an EE template path that is relative to the CE view path will not work.
+
+```haml
+- # app/views/projects/index.html.haml
+
+= render_if_exists 'button' # Will not render `ee/app/views/projects/_button` and will quietly fail
+= render_if_exists 'projects/button' # Will render `ee/app/views/projects/_button`
+```
 
 #### Using `render_ce`
 
@@ -432,9 +441,9 @@ EE-specific LDAP classes in `ee/lib/ee/gitlab/ldap`.
 
 ### Code in `lib/api/`
 
-It can be very tricky to extend EE features by a single line of `prepend`,
-and for each different [Grape](https://github.com/ruby-grape/grape) feature,
-we might need different strategies to extend it. To apply different strategies
+It can be very tricky to extend EE features by a single line of `prepend_if_ee`,
+and for each different [Grape](https://github.com/ruby-grape/grape) feature, we
+might need different strategies to extend it. To apply different strategies
 easily, we would use `extend ActiveSupport::Concern` in the EE module.
 
 Put the EE module files following
@@ -444,7 +453,7 @@ Put the EE module files following
 
 For EE API routes, we put them in a `prepended` block:
 
-``` ruby
+```ruby
 module EE
   module API
     module MergeRequests
@@ -454,7 +463,7 @@ module EE
         params do
           requires :id, type: String, desc: 'The ID of a project'
         end
-        resource :projects, requirements: ::API::API::PROJECT_ENDPOINT_REQUIREMENTS do
+        resource :projects, requirements: ::API::API::NAMESPACE_OR_PROJECT_REQUIREMENTS do
           # ...
         end
       end
@@ -471,44 +480,60 @@ constants.
 We can define `params` and utilize `use` in another `params` definition to
 include params defined in EE. However, we need to define the "interface" first
 in CE in order for EE to override it. We don't have to do this in other places
-due to `prepend`, but Grape is complex internally and we couldn't easily do
-that, so we'll follow regular object-oriented practices that we define the
+due to `prepend_if_ee`, but Grape is complex internally and we couldn't easily
+do that, so we'll follow regular object-oriented practices that we define the
 interface first here.
 
-For example, suppose we have a few more optional params for EE, given this CE
-API code:
+For example, suppose we have a few more optional params for EE. We can move the
+params out of the `Grape::API` class to a helper module, so we can inject it
+before it would be used in the class.
 
-``` ruby
+```ruby
 module API
-  class MergeRequests < Grape::API
-    # EE::API::MergeRequests would override the following helpers
-    helpers do
-      params :optional_params_ee do
-      end
-    end
-
-    prepend EE::API::MergeRequests
-
-    params :optional_params do
-      # CE specific params go here...
-
-      use :optional_params_ee
-    end
+  class Projects < Grape::API
+    helpers Helpers::ProjectsHelpers
   end
 end
 ```
 
-And then we could override it in EE module:
+Given this CE API `params`:
 
-``` ruby
+```ruby
+module API
+  module Helpers
+    module ProjectsHelpers
+      extend ActiveSupport::Concern
+      extend Grape::API::Helpers
+
+      params :optional_project_params_ce do
+        # CE specific params go here...
+      end
+
+      params :optional_project_params_ee do
+      end
+
+      params :optional_project_params do
+        use :optional_project_params_ce
+        use :optional_project_params_ee
+      end
+    end
+  end
+end
+
+API::Helpers::ProjectsHelpers.prepend_if_ee('EE::API::Helpers::ProjectsHelpers')
+```
+
+We could override it in EE module:
+
+```ruby
 module EE
   module API
-    module MergeRequests
-      extend ActiveSupport::Concern
+    module Helpers
+      module ProjectsHelpers
+        extend ActiveSupport::Concern
 
-      prepended do
-        helpers do
-          params :optional_params_ee do
+        prepended do
+          params :optional_project_params_ee do
             # EE specific params go here...
           end
         end
@@ -518,16 +543,13 @@ module EE
 end
 ```
 
-This way, the only difference between CE and EE for that API file would be
-`prepend EE::API::MergeRequests`.
-
 #### EE helpers
 
 To make it easy for an EE module to override the CE helpers, we need to define
 those helpers we want to extend first. Try to do that immediately after the
 class definition to make it easy and clear:
 
-``` ruby
+```ruby
 module API
   class JobArtifacts < Grape::API
     # EE::API::JobArtifacts would override the following helpers
@@ -536,15 +558,15 @@ module API
         authorize_read_builds!
       end
     end
-
-    prepend EE::API::JobArtifacts
   end
 end
+
+API::JobArtifacts.prepend_if_ee('EE::API::JobArtifacts')
 ```
 
 And then we can follow regular object-oriented practices to override it:
 
-``` ruby
+```ruby
 module EE
   module API
     module JobArtifacts
@@ -571,7 +593,7 @@ therefore can't be simply overridden. We need to extract them into a standalone
 method, or introduce some "hooks" where we could inject behavior in the CE
 route. Something like this:
 
-``` ruby
+```ruby
 module API
   class MergeRequests < Grape::API
     helpers do
@@ -579,8 +601,6 @@ module API
       def update_merge_request_ee(merge_request)
       end
     end
-
-    prepend EE::API::MergeRequests
 
     put ':id/merge_requests/:merge_request_iid/merge' do
       merge_request = find_project_merge_request(params[:merge_request_iid])
@@ -593,12 +613,14 @@ module API
     end
   end
 end
+
+API::MergeRequests.prepend_if_ee('EE::API::MergeRequests')
 ```
 
 Note that `update_merge_request_ee` doesn't do anything in CE, but
 then we could override it in EE:
 
-``` ruby
+```ruby
 module EE
   module API
     module MergeRequests
@@ -630,27 +652,37 @@ or not we really need to extend it from EE. For now we're not using it much.
 
 Sometimes we need to use different arguments for a particular API route, and we
 can't easily extend it with an EE module because Grape has different context in
-different blocks. In order to overcome this, we could use class methods from the
-API class.
+different blocks. In order to overcome this, we need to move the data to a class
+method that resides in a separate module or class. This allows us to extend that
+module or class before its data is used, without having to place a
+`prepend_if_ee` in the middle of CE code.
 
 For example, in one place we need to pass an extra argument to
 `at_least_one_of` so that the API could consider an EE-only argument as the
-least argument. This is not quite beautiful but it's working:
+least argument. We would approach this as follows:
 
-``` ruby
+```ruby
+# api/merge_requests/parameters.rb
 module API
   class MergeRequests < Grape::API
-    def self.update_params_at_least_one_of
-      %i[
-        assignee_id
-        description
-      ]
+    module Parameters
+      def self.update_params_at_least_one_of
+        %i[
+          assignee_id
+          description
+        ]
+      end
     end
+  end
+end
 
-    prepend EE::API::MergeRequests
+API::MergeRequests::Parameters.prepend_if_ee('EE::API::MergeRequests::Parameters')
 
+# api/merge_requests.rb
+module API
+  class MergeRequests < Grape::API
     params do
-      at_least_one_of(*::API::MergeRequests.update_params_at_least_one_of)
+      at_least_one_of(*Parameters.update_params_at_least_one_of)
     end
   end
 end
@@ -658,17 +690,22 @@ end
 
 And then we could easily extend that argument in the EE class method:
 
-``` ruby
+```ruby
 module EE
   module API
     module MergeRequests
-      extend ActiveSupport::Concern
+      module Parameters
+        extend ActiveSupport::Concern
 
-      class_methods do
-        def update_params_at_least_one_of
-          super.push(*%i[
-            squash
-          ])
+        class_methods do
+          extend ::Gitlab::Utils::Override
+
+          override :update_params_at_least_one_of
+          def update_params_at_least_one_of
+            super.push(*%i[
+              squash
+            ])
+          end
         end
       end
     end
@@ -679,13 +716,108 @@ end
 It could be annoying if we need this for a lot of routes, but it might be the
 simplest solution right now.
 
+This approach can also be used when models define validations that depend on
+class methods. For example:
+
+```ruby
+# app/models/identity.rb
+class Identity < ActiveRecord::Base
+  def self.uniqueness_scope
+    [:provider]
+  end
+
+  prepend_if_ee('EE::Identity')
+
+  validates :extern_uid,
+    allow_blank: true,
+    uniqueness: { scope: uniqueness_scope, case_sensitive: false }
+end
+
+# ee/app/models/ee/identity.rb
+module EE
+  module Identity
+    extend ActiveSupport::Concern
+
+    class_methods do
+      extend ::Gitlab::Utils::Override
+
+      def uniqueness_scope
+        [*super, :saml_provider_id]
+      end
+    end
+  end
+end
+```
+
+Instead of taking this approach, we would refactor our code into the following:
+
+```ruby
+# ee/app/models/ee/identity/uniqueness_scopes.rb
+module EE
+  module Identity
+    module UniquenessScopes
+      extend ActiveSupport::Concern
+
+      class_methods do
+        extend ::Gitlab::Utils::Override
+
+        def uniqueness_scope
+          [*super, :saml_provider_id]
+        end
+      end
+    end
+  end
+end
+
+# app/models/identity/uniqueness_scopes.rb
+class Identity < ActiveRecord::Base
+  module UniquenessScopes
+    def self.uniqueness_scope
+      [:provider]
+    end
+  end
+end
+
+Identity::UniquenessScopes.prepend_if_ee('EE::Identity::UniquenessScopes')
+
+# app/models/identity.rb
+class Identity < ActiveRecord::Base
+  validates :extern_uid,
+    allow_blank: true,
+    uniqueness: { scope: Identity::UniquenessScopes.scopes, case_sensitive: false }
+end
+```
+
 ### Code in `spec/`
 
 When you're testing EE-only features, avoid adding examples to the
-existing CE specs. Also do no change existing CE examples, since they
+existing CE specs. Also do not change existing CE examples, since they
 should remain working as-is when EE is running without a license.
 
 Instead place EE specs in the `ee/spec` folder.
+
+### Code in `spec/factories`
+
+Use `FactoryBot.modify` to extend factories already defined in CE.
+
+Note that you cannot define new factories (even nested ones) inside the `FactoryBot.modify` block. You can do so in a
+separate `FactoryBot.define` block as shown in the example below:
+
+```ruby
+# ee/spec/factories/notes.rb
+FactoryBot.modify do
+  factory :note do
+    trait :on_epic do
+      noteable { create(:epic) }
+      project nil
+    end
+  end
+end
+
+FactoryBot.define do
+  factory :note_on_epic, parent: :note, traits: [:on_epic]
+end
+```
 
 ## JavaScript code in `assets/javascripts/`
 
@@ -695,16 +827,106 @@ For example there can be an
 `app/assets/javascripts/protected_branches/protected_branches_bundle.js` and an
 EE counterpart
 `ee/app/assets/javascripts/protected_branches/protected_branches_bundle.js`.
+The corresponding import statement would then look like this:
 
-See the frontend guide [performance section](./fe_guide/performance.md) for
-information on managing page-specific javascript within EE.
+```javascript
+// app/assets/javascripts/protected_branches/protected_branches_bundle.js
+import bundle from '~/protected_branches/protected_branches_bundle.js';
+
+// ee/app/assets/javascripts/protected_branches/protected_branches_bundle.js
+// (only works in EE)
+import bundle from 'ee/protected_branches/protected_branches_bundle.js';
+
+// in CE: app/assets/javascripts/protected_branches/protected_branches_bundle.js
+// in EE: ee/app/assets/javascripts/protected_branches/protected_branches_bundle.js
+import bundle from 'ee_else_ce/protected_branches/protected_branches_bundle.js';
+```
+
+See the frontend guide [performance section](fe_guide/performance.md) for
+information on managing page-specific JavaScript within EE.
+
+## Vue code in `assets/javascript`
+
+### script tag
+
+#### Child Component only used in EE
+
+To separate Vue template differences we should [async import the components](https://vuejs.org/v2/guide/components-dynamic-async.html#Async-Components).
+
+Doing this allows for us to load the correct component in EE whilst in CE
+we can load a empty component that renders nothing. This code **should**
+exist in the CE repository as well as the EE repository.
+
+```html
+<script>
+export default {
+  components: {
+    EEComponent: () => import('ee_component/components/test.vue'),
+  },
+};
+</script>
+
+<template>
+  <div>
+    <ee-component />
+  </div>
+</template>
+```
+
+#### For JS code that is EE only, like props, computed properties, methods, etc, we will keep the current approach
+
+- Since we [can't async load a mixin](https://github.com/vuejs/vue-loader/issues/418#issuecomment-254032223) we will use the [`ee_else_ce`](../development/ee_features.md#javascript-code-in-assetsjavascripts) alias we already have for webpack.
+  - This means all the EE specific props, computed properties, methods, etc that are EE only should be in a mixin in the `ee/` folder and we need to create a CE counterpart of the mixin
+
+##### Example
+
+```javascript
+import mixin from 'ee_else_ce/path/mixin';
+
+{
+    mixins: [mixin]
+}
+```
+
+- Computed Properties/methods and getters only used in the child import still need a counterpart in CE
+
+- For store modules, we will need a CE counterpart too.
+- You can see an MR with an example [here](https://gitlab.com/gitlab-org/gitlab/merge_requests/9762)
+
+#### `template` tag
+
+- **EE Child components**
+  - Since we are using the async loading to check which component to load, we'd still use the component's name, check [this example](#child-component-only-used-in-ee).
+
+- **EE extra HTML**
+  - For the templates that have extra HTML in EE we should move it into a new component and use the `ee_else_ce` dynamic import
+
+### Non Vue Files
+
+For regular JS files, the approach is similar.
+
+1. We will keep using the [`ee_else_ce`](../development/ee_features.md#javascript-code-in-assetsjavascripts) helper, this means that EE only code should be inside the `ee/` folder.
+   1. An EE file should be created with the EE only code, and it should extend the CE counterpart.
+   1. For code inside functions that can't be extended, the code should be moved into a new file and we should use `ee_else_ce` helper:
+
+#### Example
+
+```javascript
+  import eeCode from 'ee_else_ce/ee_code';
+
+  function test() {
+    const test = 'a';
+
+    eeCode();
+
+    return test;
+  }
+```
 
 ## SCSS code in `assets/stylesheets`
 
-To separate EE-specific styles in SCSS files, if a component you're adding styles for
-is limited to only EE, it is better to have a separate SCSS file in appropriate directory
-within `app/assets/stylesheets`.
-See [backporting changes](#backporting-changes) for instructions on how to merge changes safely.
+If a component you're adding styles for is limited to EE, it is better to have a
+separate SCSS file in an appropriate directory within `app/assets/stylesheets`.
 
 In some cases, this is not entirely possible or creating dedicated SCSS file is an overkill,
 e.g. a text style of some component is different for EE. In such cases,
@@ -712,7 +934,8 @@ styles are usually kept in stylesheet that is common for both CE and EE, and it 
 to isolate such ruleset from rest of CE rules (along with adding comment describing the same)
 to avoid conflicts during CE to EE merge.
 
-#### Bad
+### Bad
+
 ```scss
 .section-body {
   .section-title {
@@ -727,7 +950,8 @@ to avoid conflicts during CE to EE merge.
 }
 ```
 
-#### Good
+### Good
+
 ```scss
 .section-body {
   .section-title {
@@ -744,20 +968,7 @@ to avoid conflicts during CE to EE merge.
 // EE-specific end
 ```
 
-### Backporting changes from EE to CE
-
-When working in EE-specific features, you might have to tweak a few files that are not EE-specific. Here is a workflow to make sure those changes end up backported safely into CE too.
-(This approach does not refer to changes introduced via [csslab](https://gitlab.com/gitlab-org/csslab/).)
-
-1. **Make your changes in the EE branch.** If possible, keep a separated commit (to be squashed) to help backporting and review.
-1. **Open merge request to EE project.**
-1. **Apply the changes you made to CE files in a branch of the CE project.** (Tip: Use `patch` with the diff from your commit in EE branch)
-1. **Open merge request to CE project**, referring it's a backport of EE changes and link to MR open in EE.
-1. Once EE MR is merged, the MR towards CE can be merged. **But not before**.
-
-**Note:** regarding SCSS, make sure the files living outside `/ee/` don't diverge between CE and EE projects.
-
-## gitlab-svgs
+## GitLab-svgs
 
 Conflicts in `app/assets/images/icons.json` or `app/assets/images/icons.svg` can
 be resolved simply by regenerating those assets with

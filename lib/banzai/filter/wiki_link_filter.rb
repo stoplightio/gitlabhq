@@ -1,4 +1,4 @@
-require 'uri'
+# frozen_string_literal: true
 
 module Banzai
   module Filter
@@ -8,17 +8,30 @@ module Banzai
     # Context options:
     #   :project_wiki
     class WikiLinkFilter < HTML::Pipeline::Filter
+      include Gitlab::Utils::SanitizeNodeLink
+
       def call
         return doc unless project_wiki?
 
-        doc.search('a:not(.gfm)').each do |el|
-          process_link_attr el.attribute('href')
+        doc.search('a:not(.gfm)').each { |el| process_link(el.attribute('href'), el) }
+
+        doc.search('video, audio').each { |el| process_link(el.attribute('src'), el) }
+
+        doc.search('img').each do |el|
+          attr = el.attribute('data-src') || el.attribute('src')
+
+          process_link(attr, el)
         end
 
         doc
       end
 
       protected
+
+      def process_link(link_attr, node)
+        process_link_attr(link_attr)
+        remove_unsafe_links({ node: node }, remove_invalid_links: false)
+      end
 
       def project_wiki?
         !context[:project_wiki].nil?

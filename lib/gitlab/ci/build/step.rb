@@ -1,10 +1,12 @@
+# frozen_string_literal: true
+
 module Gitlab
   module Ci
     module Build
       class Step
-        WHEN_ON_FAILURE = 'on_failure'.freeze
-        WHEN_ON_SUCCESS = 'on_success'.freeze
-        WHEN_ALWAYS = 'always'.freeze
+        WHEN_ON_FAILURE = 'on_failure'
+        WHEN_ON_SUCCESS = 'on_success'
+        WHEN_ALWAYS = 'always'
 
         attr_reader :name
         attr_accessor :script, :timeout, :when, :allow_failure
@@ -13,7 +15,6 @@ module Gitlab
           def from_commands(job)
             self.new(:script).tap do |step|
               step.script = job.options[:before_script].to_a + job.options[:script].to_a
-              step.script = job.commands.split("\n") if step.script.empty?
               step.timeout = job.metadata_timeout
               step.when = WHEN_ON_SUCCESS
             end

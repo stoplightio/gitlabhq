@@ -1,9 +1,10 @@
-/* eslint-disable comma-dangle, no-unused-vars, class-methods-use-this, quotes, consistent-return, func-names, prefer-arrow-callback, space-before-function-paren, max-len */
-
 import $ from 'jquery';
 import axios from '~/lib/utils/axios_utils';
-import { __ } from '~/locale';
 import flash from '../flash';
+import { parseBoolean } from '~/lib/utils/common_utils';
+import TimezoneDropdown, {
+  formatTimezone,
+} from '~/pages/projects/pipeline_schedules/shared/components/timezone_dropdown';
 
 export default class Profile {
   constructor({ form } = {}) {
@@ -12,6 +13,14 @@ export default class Profile {
     this.setRepoRadio();
     this.bindEvents();
     this.initAvatarGlCrop();
+
+    this.$inputEl = $('#user_timezone');
+
+    this.timezoneDropdown = new TimezoneDropdown({
+      $inputEl: this.$inputEl,
+      $dropdownEl: $('.js-timezone-dropdown'),
+      displayFormat: selectedItem => formatTimezone(selectedItem),
+    });
   }
 
   initAvatarGlCrop() {
@@ -29,11 +38,8 @@ export default class Profile {
   }
 
   bindEvents() {
-    $('.js-preferences-form').on(
-      'change.preference',
-      'input[type=radio]',
-      this.submitForm,
-    );
+    $('.js-preferences-form').on('change.preference', 'input[type=radio]', this.submitForm);
+    $('.js-group-notification-email').on('change', this.submitForm);
     $('#user_notification_email').on('change', this.submitForm);
     $('#user_notified_of_own_activity').on('change', this.submitForm);
     this.form.on('submit', this.onSubmitForm);
@@ -52,19 +58,27 @@ export default class Profile {
 
   saveForm() {
     const self = this;
-    const formData = new FormData(this.form[0]);
+    const formData = new FormData(this.form.get(0));
     const avatarBlob = this.avatarGlCrop.getBlob();
 
     if (avatarBlob != null) {
       formData.append('user[avatar]', avatarBlob, 'avatar.png');
     }
 
+    formData.delete('user[avatar]-trigger');
+
     axios({
       method: this.form.attr('method'),
       url: this.form.attr('action'),
       data: formData,
     })
-      .then(({ data }) => flash(data.message, 'notice'))
+      .then(({ data }) => {
+        if (avatarBlob != null) {
+          this.updateHeaderAvatar();
+        }
+
+        flash(data.message, 'notice');
+      })
       .then(() => {
         window.scrollTo(0, 0);
         // Enable submit button after requests ends
@@ -73,9 +87,13 @@ export default class Profile {
       .catch(error => flash(error.message));
   }
 
+  updateHeaderAvatar() {
+    $('.header-user-avatar').attr('src', this.avatarGlCrop.dataURL);
+  }
+
   setRepoRadio() {
     const multiEditRadios = $('input[name="user[multi_file]"]');
-    if (this.newRepoActivated || this.newRepoActivated === 'true') {
+    if (parseBoolean(this.newRepoActivated)) {
       multiEditRadios.filter('[value=on]').prop('checked', true);
     } else {
       multiEditRadios.filter('[value=off]').prop('checked', true);

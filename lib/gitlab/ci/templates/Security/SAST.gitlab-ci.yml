@@ -1,0 +1,221 @@
+# Read more about this feature here: https://docs.gitlab.com/ee/user/application_security/sast/
+#
+# Configure the scanning tool through the environment variables.
+# List of the variables: https://gitlab.com/gitlab-org/security-products/sast#settings
+# How to set: https://docs.gitlab.com/ee/ci/yaml/#variables
+
+variables:
+  SAST_ANALYZER_IMAGE_PREFIX: "registry.gitlab.com/gitlab-org/security-products/analyzers"
+  SAST_DEFAULT_ANALYZERS: "bandit, brakeman, gosec, spotbugs, flawfinder, phpcs-security-audit, security-code-scan, nodejs-scan, eslint, tslint, secrets, sobelow, pmd-apex"
+  SAST_MAJOR_VERSION: 2
+  SAST_DISABLE_DIND: "false"
+
+sast:
+  stage: test
+  allow_failure: true
+  artifacts:
+    reports:
+      sast: gl-sast-report.json
+  only:
+    refs:
+      - branches
+    variables:
+      - $GITLAB_FEATURES =~ /\bsast\b/
+  image: docker:stable
+  variables:
+    DOCKER_DRIVER: overlay2
+    DOCKER_TLS_CERTDIR: ""
+  services:
+    - docker:stable-dind
+  script:
+    - export SAST_VERSION=${SP_VERSION:-$(echo "$CI_SERVER_VERSION" | sed 's/^\([0-9]*\)\.\([0-9]*\).*/\1-\2-stable/')}
+    - |
+      if ! docker info &>/dev/null; then
+        if [ -z "$DOCKER_HOST" -a "$KUBERNETES_PORT" ]; then
+          export DOCKER_HOST='tcp://localhost:2375'
+        fi
+      fi
+    - | # this is required to avoid undesirable reset of Docker image ENV variables being set on build stage
+      function propagate_env_vars() {
+        CURRENT_ENV=$(printenv)
+
+        for VAR_NAME; do
+          echo $CURRENT_ENV | grep "${VAR_NAME}=" > /dev/null && echo "--env $VAR_NAME "
+        done
+      }
+    - |
+      docker run \
+        $(propagate_env_vars \
+          SAST_BANDIT_EXCLUDED_PATHS \
+          SAST_ANALYZER_IMAGES \
+          SAST_ANALYZER_IMAGE_PREFIX \
+          SAST_ANALYZER_IMAGE_TAG \
+          SAST_DEFAULT_ANALYZERS \
+          SAST_PULL_ANALYZER_IMAGES \
+          SAST_BRAKEMAN_LEVEL \
+          SAST_FLAWFINDER_LEVEL \
+          SAST_GITLEAKS_ENTROPY_LEVEL \
+          SAST_GOSEC_LEVEL \
+          SAST_EXCLUDED_PATHS \
+          SAST_DOCKER_CLIENT_NEGOTIATION_TIMEOUT \
+          SAST_PULL_ANALYZER_IMAGE_TIMEOUT \
+          SAST_RUN_ANALYZER_TIMEOUT \
+          SAST_JAVA_VERSION \
+          ANT_HOME \
+          ANT_PATH \
+          GRADLE_PATH \
+          JAVA_OPTS \
+          JAVA_PATH \
+          JAVA_8_VERSION \
+          JAVA_11_VERSION \
+          MAVEN_CLI_OPTS \
+          MAVEN_PATH \
+          MAVEN_REPO_PATH \
+          SBT_PATH \
+          FAIL_NEVER \
+        ) \
+        --volume "$PWD:/code" \
+        --volume /var/run/docker.sock:/var/run/docker.sock \
+        "registry.gitlab.com/gitlab-org/security-products/sast:$SAST_VERSION" /app/bin/run /code
+  except:
+    variables:
+      - $SAST_DISABLED
+      - $SAST_DISABLE_DIND == 'true'
+
+.analyzer:
+  extends: sast
+  services: []
+  except:
+    variables:
+      - $SAST_DISABLE_DIND == 'false'
+  script:
+    - /analyzer run
+
+bandit-sast:
+  extends: .analyzer
+  image:
+    name: "$SAST_ANALYZER_IMAGE_PREFIX/bandit:$SAST_MAJOR_VERSION"
+  only:
+    variables:
+      - $GITLAB_FEATURES =~ /\bsast\b/ &&
+          $SAST_DEFAULT_ANALYZERS =~ /bandit/&&
+          $CI_PROJECT_REPOSITORY_LANGUAGES =~ /python/
+
+brakeman-sast:
+  extends: .analyzer
+  image:
+    name: "$SAST_ANALYZER_IMAGE_PREFIX/brakeman:$SAST_MAJOR_VERSION"
+  only:
+    variables:
+      - $GITLAB_FEATURES =~ /\bsast\b/ &&
+          $SAST_DEFAULT_ANALYZERS =~ /brakeman/ &&
+          $CI_PROJECT_REPOSITORY_LANGUAGES =~ /ruby/
+
+eslint-sast:
+  extends: .analyzer
+  image:
+    name: "$SAST_ANALYZER_IMAGE_PREFIX/eslint:$SAST_MAJOR_VERSION"
+  only:
+    variables:
+      - $GITLAB_FEATURES =~ /\bsast\b/ &&
+          $SAST_DEFAULT_ANALYZERS =~ /eslint/ &&
+          $CI_PROJECT_REPOSITORY_LANGUAGES =~ /javascript/
+
+flawfinder-sast:
+  extends: .analyzer
+  image:
+    name: "$SAST_ANALYZER_IMAGE_PREFIX/flawfinder:$SAST_MAJOR_VERSION"
+  only:
+    variables:
+      - $GITLAB_FEATURES =~ /\bsast\b/ &&
+          $SAST_DEFAULT_ANALYZERS =~ /flawfinder/ &&
+          $CI_PROJECT_REPOSITORY_LANGUAGES =~ /\b(c\+\+|c)\b/
+
+gosec-sast:
+  extends: .analyzer
+  image:
+    name: "$SAST_ANALYZER_IMAGE_PREFIX/gosec:$SAST_MAJOR_VERSION"
+  only:
+    variables:
+      - $GITLAB_FEATURES =~ /\bsast\b/ &&
+          $SAST_DEFAULT_ANALYZERS =~ /gosec/ &&
+          $CI_PROJECT_REPOSITORY_LANGUAGES =~ /\bgo\b/
+
+nodejs-scan-sast:
+  extends: .analyzer
+  image:
+    name: "$SAST_ANALYZER_IMAGE_PREFIX/nodejs-scan:$SAST_MAJOR_VERSION"
+  only:
+    variables:
+      - $GITLAB_FEATURES =~ /\bsast\b/ &&
+          $SAST_DEFAULT_ANALYZERS =~ /nodejs-scan/ &&
+          $CI_PROJECT_REPOSITORY_LANGUAGES =~ /javascript/
+
+phpcs-security-audit-sast:
+  extends: .analyzer
+  image:
+    name: "$SAST_ANALYZER_IMAGE_PREFIX/phpcs-security-audit:$SAST_MAJOR_VERSION"
+  only:
+    variables:
+      - $GITLAB_FEATURES =~ /\bsast\b/ &&
+          $SAST_DEFAULT_ANALYZERS =~ /phpcs-security-audit/ &&
+          $CI_PROJECT_REPOSITORY_LANGUAGES =~ /php/
+
+pmd-apex-sast:
+  extends: .analyzer
+  image:
+    name: "$SAST_ANALYZER_IMAGE_PREFIX/pmd-apex:$SAST_MAJOR_VERSION"
+  only:
+    variables:
+      - $GITLAB_FEATURES =~ /\bsast\b/ &&
+          $SAST_DEFAULT_ANALYZERS =~ /pmd-apex/ &&
+          $CI_PROJECT_REPOSITORY_LANGUAGES =~ /apex/
+
+secrets-sast:
+  extends: .analyzer
+  image:
+    name: "$SAST_ANALYZER_IMAGE_PREFIX/secrets:$SAST_MAJOR_VERSION"
+  only:
+    variables:
+      - $GITLAB_FEATURES =~ /\bsast\b/ &&
+          $SAST_DEFAULT_ANALYZERS =~ /secrets/
+
+security-code-scan-sast:
+  extends: .analyzer
+  image:
+    name: "$SAST_ANALYZER_IMAGE_PREFIX/security-code-scan:$SAST_MAJOR_VERSION"
+  only:
+    variables:
+      - $GITLAB_FEATURES =~ /\bsast\b/ &&
+          $SAST_DEFAULT_ANALYZERS =~ /security-code-scan/ &&
+          $CI_PROJECT_REPOSITORY_LANGUAGES =~ /\b(c\#|visual basic\b)/
+
+sobelow-sast:
+  extends: .analyzer
+  image:
+    name: "$SAST_ANALYZER_IMAGE_PREFIX/sobelow:$SAST_MAJOR_VERSION"
+  only:
+    variables:
+      - $GITLAB_FEATURES =~ /\bsast\b/ &&
+          $SAST_DEFAULT_ANALYZERS =~ /sobelow/ &&
+          $CI_PROJECT_REPOSITORY_LANGUAGES =~ /elixir/
+
+spotbugs-sast:
+  extends: .analyzer
+  image:
+    name: "$SAST_ANALYZER_IMAGE_PREFIX/spotbugs:$SAST_MAJOR_VERSION"
+  only:
+    variables:
+      - $GITLAB_FEATURES =~ /\bsast\b/ &&
+          $SAST_DEFAULT_ANALYZERS =~ /spotbugs/ &&
+          $CI_PROJECT_REPOSITORY_LANGUAGES =~ /java\b/
+
+tslint-sast:
+  extends: .analyzer
+  image:
+    name: "$SAST_ANALYZER_IMAGE_PREFIX/tslint:$SAST_MAJOR_VERSION"
+  only:
+    variables:
+      - $GITLAB_FEATURES =~ /\bsast\b/ &&
+          $SAST_DEFAULT_ANALYZERS =~ /tslint/ &&
+          $CI_PROJECT_REPOSITORY_LANGUAGES =~ /typescript/

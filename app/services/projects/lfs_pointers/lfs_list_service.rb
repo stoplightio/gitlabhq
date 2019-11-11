@@ -1,8 +1,10 @@
+# frozen_string_literal: true
+
 # This service list all existent Lfs objects in a repository
 module Projects
   module LfsPointers
     class LfsListService < BaseService
-      REV = 'HEAD'.freeze
+      REV = 'HEAD'
 
       # Retrieve all lfs blob pointers and returns a hash
       # with the structure { lfs_file_oid => lfs_file_size }

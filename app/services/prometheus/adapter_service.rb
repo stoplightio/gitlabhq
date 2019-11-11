@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Prometheus
   class AdapterService
     def initialize(project, deployment_platform = nil)
@@ -25,12 +27,9 @@ module Prometheus
     end
 
     def cluster_prometheus_adapter
-      return unless deployment_platform.respond_to?(:cluster)
+      application = deployment_platform&.cluster&.application_prometheus
 
-      cluster = deployment_platform.cluster
-      return unless cluster.application_prometheus&.installed?
-
-      cluster.application_prometheus
+      application if application&.available?
     end
   end
 end

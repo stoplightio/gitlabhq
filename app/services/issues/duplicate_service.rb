@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Issues
   class DuplicateService < Issues::BaseService
     def execute(duplicate_issue, canonical_issue)
@@ -9,6 +11,7 @@ module Issues
       create_issue_canonical_note(canonical_issue, duplicate_issue)
 
       close_service.new(project, current_user, {}).execute(duplicate_issue)
+      duplicate_issue.update(duplicated_to: canonical_issue)
     end
 
     private

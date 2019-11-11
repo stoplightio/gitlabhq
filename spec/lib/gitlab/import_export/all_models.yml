@@ -7,21 +7,32 @@ issues:
 - updated_by
 - milestone
 - notes
+- resource_label_events
 - label_links
 - labels
 - last_edited_by
 - todos
 - user_agent_detail
 - moved_to
+- duplicated_to
 - events
 - merge_requests_closing_issues
 - metrics
 - timelogs
 - issue_assignees
 - closed_by
+- epic_issue
+- epic
+- designs
+- design_versions
+- description_versions
+- prometheus_alerts
+- prometheus_alert_events
+- self_managed_prometheus_alert_events
 events:
 - author
 - project
+- group
 - target
 - push_event_payload
 notes:
@@ -36,6 +47,8 @@ notes:
 - events
 - system_note_metadata
 - note_diff_file
+- suggestions
+- review
 label_links:
 - target
 - label
@@ -55,6 +68,9 @@ milestone:
 - merge_requests
 - participants
 - events
+- boards
+- milestone_releases
+- releases
 snippets:
 - author
 - project
@@ -62,7 +78,14 @@ snippets:
 - award_emoji
 - user_agent_detail
 releases:
+- author
 - project
+- links
+- milestone_releases
+- milestones
+- evidence
+links:
+- release
 project_members:
 - created_by
 - user
@@ -76,6 +99,7 @@ merge_requests:
 - updated_by
 - milestone
 - notes
+- resource_label_events
 - label_links
 - labels
 - last_edited_by
@@ -87,10 +111,31 @@ merge_requests:
 - merge_request_diff
 - events
 - merge_requests_closing_issues
+- cached_closes_issues
 - metrics
 - timelogs
 - head_pipeline
 - latest_merge_request_diff
+- pipelines_for_merge_request
+- merge_request_assignees
+- suggestions
+- assignees
+- reviews
+- approval_rules
+- approvals
+- approvers
+- approver_users
+- approver_groups
+- approved_by_users
+- draft_notes
+- merge_train
+- blocks_as_blocker
+- blocks_as_blockee
+- blocking_merge_requests
+- blocked_merge_requests
+- description_versions
+external_pull_requests:
+- project
 merge_request_diff:
 - merge_request
 - merge_request_diff_commits
@@ -99,12 +144,13 @@ merge_request_diff_commits:
 - merge_request_diff
 merge_request_diff_files:
 - merge_request_diff
-pipelines:
+ci_pipelines:
 - project
 - user
 - stages
 - statuses
 - builds
+- processables
 - trigger_requests
 - variables
 - auto_canceled_by
@@ -114,9 +160,25 @@ pipelines:
 - retryable_builds
 - cancelable_statuses
 - manual_actions
+- scheduled_actions
 - artifacts
 - pipeline_schedule
-- merge_requests
+- merge_requests_as_head_pipeline
+- merge_request
+- external_pull_request
+- deployments
+- environments
+- chat_data
+- source_pipeline
+- source_bridge
+- source_job
+- sourced_pipelines
+- triggered_by_pipeline
+- triggered_pipelines
+- downstream_bridges
+- job_artifacts
+- vulnerabilities_occurrence_pipelines
+- vulnerability_findings
 pipeline_variables:
 - pipeline
 stages:
@@ -124,6 +186,7 @@ stages:
 - pipeline
 - statuses
 - builds
+- bridges
 statuses:
 - project
 - pipeline
@@ -156,6 +219,8 @@ deploy_keys:
 services:
 - project
 - service_hook
+- jira_tracker_data
+- issue_tracker_data
 hooks:
 - project
 - web_hook_logs
@@ -163,13 +228,18 @@ protected_branches:
 - project
 - merge_access_levels
 - push_access_levels
+- unprotect_access_levels
 protected_tags:
 - project
 - create_access_levels
 merge_access_levels:
 - protected_branch
+- user
+- group
 push_access_levels:
 - protected_branch
+- user
+- group
 create_access_levels:
 - user
 - protected_tag
@@ -186,14 +256,16 @@ project:
 - cluster
 - clusters
 - cluster_project
-- cluster_ingresses
 - creator
+- cycle_analytics_stages
 - group
 - namespace
+- management_clusters
 - boards
 - last_event
 - services
 - campfire_service
+- discord_service
 - drone_ci_service
 - emails_on_push_service
 - pipelines_email_service
@@ -207,27 +279,26 @@ project:
 - flowdock_service
 - assembla_service
 - asana_service
-- gemnasium_service
 - slack_service
 - microsoft_teams_service
 - mattermost_service
+- hangouts_chat_service
 - buildkite_service
 - bamboo_service
 - teamcity_service
 - pushover_service
 - jira_service
 - redmine_service
+- youtrack_service
 - custom_issue_tracker_service
 - bugzilla_service
 - gitlab_issue_tracker_service
 - external_wiki_service
-- kubernetes_service
 - mock_ci_service
 - mock_deployment_service
 - mock_monitoring_service
-- forked_project_link
+- forked_to_members
 - forked_from_project
-- forked_project_links
 - forks
 - merge_requests
 - fork_merge_requests
@@ -241,6 +312,7 @@ project:
 - protected_branches
 - protected_tags
 - project_members
+- project_repository
 - users
 - requesters
 - deploy_keys_projects
@@ -256,7 +328,8 @@ project:
 - notification_settings
 - import_data
 - commit_statuses
-- pipelines
+- ci_pipelines
+- all_pipelines
 - stages
 - builds
 - runner_projects
@@ -277,10 +350,12 @@ project:
 - statistics
 - container_repositories
 - uploads
+- file_uploads
 - import_state
 - members_and_requesters
 - build_trace_section_names
 - build_trace_chunks
+- job_artifacts
 - root_of_fork_network
 - fork_network_member
 - fork_network
@@ -293,11 +368,67 @@ project:
 - deploy_tokens
 - settings
 - ci_cd_settings
+- import_export_upload
+- repository_languages
+- pool_repository
+- kubernetes_namespaces
+- error_tracking_setting
+- metrics_setting
+- gitlab_slack_application_service
+- github_service
+- protected_environments
+- mirror_user
+- push_rule
+- jenkins_service
+- jenkins_deprecated_service
+- index_status
+- feature_usage
+- approval_rules
+- approval_merge_request_rules
+- approvers
+- approver_users
+- pages_domains
+- audit_events
+- path_locks
+- approver_groups
+- repository_state
+- source_pipelines
+- sourced_pipelines
+- prometheus_metrics
+- vulnerabilities
+- vulnerability_findings
+- vulnerability_feedback
+- vulnerability_identifiers
+- vulnerability_scanners
+- operations_feature_flags
+- operations_feature_flags_client
+- prometheus_alerts
+- prometheus_alert_events
+- self_managed_prometheus_alert_events
+- software_license_policies
+- project_registry
+- packages
+- package_files
+- tracing_setting
+- alerting_setting
+- webide_pipelines
+- reviews
+- incident_management_setting
+- merge_trains
+- designs
+- project_aliases
+- external_pull_requests
+- pages_metadatum
+- alerts_service
+- grafana_integration
 award_emoji:
 - awardable
 - user
 priorities:
 - label
+prometheus_metrics:
+- project
+- prometheus_alerts
 timelogs:
 - issue
 - merge_request
@@ -306,6 +437,9 @@ push_event_payload:
 - event
 issue_assignees:
 - issue
+- assignee
+merge_request_assignees:
+- merge_request
 - assignee
 lfs_file_locks:
 - user
@@ -316,3 +450,82 @@ metrics:
 - latest_closed_by
 - merged_by
 - pipeline
+resource_label_events:
+- user
+- issue
+- merge_request
+- epic
+- label
+error_tracking_setting:
+- project
+suggestions:
+- note
+metrics_setting:
+- project
+protected_environments:
+- project
+- deploy_access_levels
+deploy_access_levels:
+- protected_environment
+- user
+- group
+unprotect_access_levels:
+- user
+- protected_branch
+- group
+prometheus_alerts:
+- project
+- prometheus_alert_events
+prometheus_alert_events:
+- project
+self_managed_prometheus_alert_events:
+- project
+epic_issues:
+- issue
+- epic
+tracing_setting:
+- project
+reviews:
+- project
+- merge_request
+- author
+- notes
+incident_management_setting:
+- project
+merge_trains:
+- project
+- merge_request
+boards:
+- group
+- lists
+- destroyable_lists
+- milestone
+- board_labels
+- board_assignee
+- assignee
+- labels
+lists:
+- user
+- milestone
+- board
+- label
+- list_user_preferences
+milestone_releases:
+- milestone
+- release
+evidences:
+- release
+design: &design
+- issue
+- actions
+- versions
+- notes
+designs: *design
+actions:
+- design
+- version
+versions: &version
+- issue
+- designs
+- actions
+design_versions: *version

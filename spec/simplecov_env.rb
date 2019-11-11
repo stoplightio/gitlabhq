@@ -1,5 +1,8 @@
+# frozen_string_literal: true
+
 require 'simplecov'
 require 'active_support/core_ext/numeric/time'
+require_relative '../lib/gitlab/utils'
 
 module SimpleCovEnv
   extend self
@@ -16,8 +19,9 @@ module SimpleCovEnv
   def configure_job
     SimpleCov.configure do
       if ENV['CI_JOB_NAME']
-        coverage_dir "coverage/#{ENV['CI_JOB_NAME']}"
-        command_name ENV['CI_JOB_NAME']
+        job_name = Gitlab::Utils.slugify(ENV['CI_JOB_NAME'])
+        coverage_dir "coverage/#{job_name}"
+        command_name job_name
       end
 
       if ENV['CI']

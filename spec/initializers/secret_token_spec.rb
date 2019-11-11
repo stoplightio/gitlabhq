@@ -6,8 +6,8 @@ describe 'create_tokens' do
 
   let(:secrets) { ActiveSupport::OrderedOptions.new }
 
-  HEX_KEY = /\h{128}/
-  RSA_KEY = /\A-----BEGIN RSA PRIVATE KEY-----\n.+\n-----END RSA PRIVATE KEY-----\n\Z/m
+  HEX_KEY = /\h{128}/.freeze
+  RSA_KEY = /\A-----BEGIN RSA PRIVATE KEY-----\n.+\n-----END RSA PRIVATE KEY-----\n\Z/m.freeze
 
   before do
     allow(File).to receive(:write)
@@ -123,7 +123,7 @@ describe 'create_tokens' do
           create_tokens
         end
 
-        it 'sets the the keys to the values from the environment and secrets.yml' do
+        it 'sets the keys to the values from the environment and secrets.yml' do
           create_tokens
 
           expect(secrets.secret_key_base).to eq('secret_key_base')

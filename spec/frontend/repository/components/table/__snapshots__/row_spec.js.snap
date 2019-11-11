@@ -1,0 +1,48 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Repository table row component renders table row 1`] = `
+<tr
+  class="tree-item file_1"
+>
+  <td
+    class="tree-item-file-name"
+  >
+    <i
+      aria-label="file"
+      class="fa fa-fw fa-file-text-o"
+      role="img"
+    />
+     
+    <a
+      class="str-truncated"
+      href="https://test.com"
+    >
+      
+      test
+    
+    </a>
+     
+    <!---->
+     
+    <!---->
+  </td>
+   
+  <td
+    class="d-none d-sm-table-cell tree-commit"
+  >
+    <glskeletonloading-stub
+      class="h-auto"
+      lines="1"
+    />
+  </td>
+   
+  <td
+    class="tree-time-ago text-right"
+  >
+    <glskeletonloading-stub
+      class="ml-auto h-auto w-50"
+      lines="1"
+    />
+  </td>
+</tr>
+`;

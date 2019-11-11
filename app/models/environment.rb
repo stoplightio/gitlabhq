@@ -1,19 +1,21 @@
-class Environment < ActiveRecord::Base
-  # Used to generate random suffixes for the slug
-  LETTERS = 'a'..'z'
-  NUMBERS = '0'..'9'
-  SUFFIX_CHARS = LETTERS.to_a + NUMBERS.to_a
+# frozen_string_literal: true
+
+class Environment < ApplicationRecord
+  include Gitlab::Utils::StrongMemoize
+  include ReactiveCaching
 
   belongs_to :project, required: true
 
-  has_many :deployments, dependent: :destroy # rubocop:disable Cop/ActiveRecordDependent
+  has_many :deployments, -> { visible }, dependent: :destroy # rubocop:disable Cop/ActiveRecordDependent
+  has_many :successful_deployments, -> { success }, class_name: 'Deployment'
 
-  has_one :last_deployment, -> { order('deployments.id DESC') }, class_name: 'Deployment'
+  has_one :last_deployment, -> { success.order('deployments.id DESC') }, class_name: 'Deployment'
 
   before_validation :nullify_external_url
   before_validation :generate_slug, if: ->(env) { env.slug.blank? }
 
   before_save :set_environment_type
+  after_save :clear_reactive_cache!
 
   validates :name,
             presence: true,
@@ -32,7 +34,7 @@ class Environment < ActiveRecord::Base
   validates :external_url,
             length: { maximum: 255 },
             allow_nil: true,
-            url: true
+            addressable_url: true
 
   delegate :stop_action, :manual_actions, to: :last_deployment, allow_nil: true
 
@@ -46,6 +48,18 @@ class Environment < ActiveRecord::Base
     order(Gitlab::Database.nulls_first_order("(#{max_deployment_id_sql})", 'ASC'))
   end
   scope :in_review_folder, -> { where(environment_type: "review") }
+  scope :for_name, -> (name) { where(name: name) }
+  scope :preload_cluster, -> { preload(last_deployment: :cluster) }
+
+  ##
+  # Search environments which have names like the given query.
+  # Do not set a large limit unless you've confirmed that it works on gitlab.com scale.
+  scope :for_name_like, -> (query, limit: 5) do
+    where(arel_table[:name].matches("#{sanitize_sql_like query}%")).limit(limit)
+  end
+
+  scope :for_project, -> (project) { where(project_id: project) }
+  scope :with_deployment, -> (sha) { where('EXISTS (?)', Deployment.select(1).where('deployments.environment_id = environments.id').where(sha: sha)) }
 
   state_machine :state, initial: :available do
     event :start do
@@ -62,6 +76,14 @@ class Environment < ActiveRecord::Base
     after_transition do |environment|
       environment.expire_etag_cache
     end
+  end
+
+  def self.pluck_names
+    pluck(:name)
+  end
+
+  def self.find_or_create_by_name(name)
+    find_or_create_by(name: name)
   end
 
   def predefined_variables
@@ -101,7 +123,7 @@ class Environment < ActiveRecord::Base
   def first_deployment_for(commit_sha)
     ref = project.repository.ref_name_for_sha(ref_path, commit_sha)
 
-    return nil unless ref
+    return unless ref
 
     deployment_iid = ref.split('/').last
     deployments.find_by(iid: deployment_iid)
@@ -112,12 +134,12 @@ class Environment < ActiveRecord::Base
   end
 
   def formatted_external_url
-    return nil unless external_url
+    return unless external_url
 
     external_url.gsub(%r{\A.*?://}, '')
   end
 
-  def stop_action?
+  def stop_action_available?
     available? && stop_action.present?
   end
 
@@ -137,65 +159,49 @@ class Environment < ActiveRecord::Base
   end
 
   def has_terminals?
-    project.deployment_platform.present? && available? && last_deployment.present?
+    available? && deployment_platform.present? && last_deployment.present?
   end
 
   def terminals
-    project.deployment_platform.terminals(self) if has_terminals?
+    with_reactive_cache do |data|
+      deployment_platform.terminals(self, data)
+    end
+  end
+
+  def calculate_reactive_cache
+    return unless has_terminals? && !project.pending_delete?
+
+    deployment_platform.calculate_reactive_cache_for(self)
+  end
+
+  def deployment_namespace
+    strong_memoize(:kubernetes_namespace) do
+      deployment_platform.cluster.kubernetes_namespace_for(self) if deployment_platform
+    end
   end
 
   def has_metrics?
-    prometheus_adapter&.can_query? && available? && last_deployment.present?
+    available? && prometheus_adapter&.can_query?
   end
 
   def metrics
     prometheus_adapter.query(:environment, self) if has_metrics?
   end
 
-  def additional_metrics
-    prometheus_adapter.query(:additional_metrics_environment, self) if has_metrics?
+  def additional_metrics(*args)
+    return unless has_metrics?
+
+    prometheus_adapter.query(:additional_metrics_environment, self, *args.map(&:to_f))
   end
 
+  # rubocop: disable CodeReuse/ServiceClass
   def prometheus_adapter
     @prometheus_adapter ||= Prometheus::AdapterService.new(project, deployment_platform).prometheus_adapter
   end
+  # rubocop: enable CodeReuse/ServiceClass
 
   def slug
     super.presence || generate_slug
-  end
-
-  # An environment name is not necessarily suitable for use in URLs, DNS
-  # or other third-party contexts, so provide a slugified version. A slug has
-  # the following properties:
-  #   * contains only lowercase letters (a-z), numbers (0-9), and '-'
-  #   * begins with a letter
-  #   * has a maximum length of 24 bytes (OpenShift limitation)
-  #   * cannot end with `-`
-  def generate_slug
-    # Lowercase letters and numbers only
-    slugified = name.to_s.downcase.gsub(/[^a-z0-9]/, '-')
-
-    # Must start with a letter
-    slugified = 'env-' + slugified unless LETTERS.cover?(slugified[0])
-
-    # Repeated dashes are invalid (OpenShift limitation)
-    slugified.gsub!(/\-+/, '-')
-
-    # Maximum length: 24 characters (OpenShift limitation)
-    slugified = slugified[0..23]
-
-    # Cannot end with a dash (Kubernetes label limitation)
-    slugified.chop! if slugified.end_with?('-')
-
-    # Add a random suffix, shortening the current string if necessary, if it
-    # has been slugified. This ensures uniqueness.
-    if slugified != name
-      slugified = slugified[0..16]
-      slugified << '-' unless slugified.end_with?('-')
-      slugified << random_suffix
-    end
-
-    self.slug = slugified
   end
 
   def external_url_for(path, commit_sha)
@@ -204,7 +210,7 @@ class Environment < ActiveRecord::Base
     public_path = project.public_path_for_source_path(path, commit_sha)
     return unless public_path
 
-    [external_url, public_path].join('/')
+    [external_url.delete_suffix('/'), public_path.delete_prefix('/')].join('/')
   end
 
   def expire_etag_cache
@@ -223,17 +229,27 @@ class Environment < ActiveRecord::Base
     self.environment_type || self.name
   end
 
+  def name_without_type
+    @name_without_type ||= name.delete_prefix("#{environment_type}/")
+  end
+
   def deployment_platform
-    project.deployment_platform(environment: self.name)
+    strong_memoize(:deployment_platform) do
+      project.deployment_platform(environment: self.name)
+    end
+  end
+
+  def knative_services_finder
+    if last_deployment&.cluster
+      Clusters::KnativeServicesFinder.new(last_deployment.cluster, self)
+    end
   end
 
   private
 
-  # Slugifying a name may remove the uniqueness guarantee afforded by it being
-  # based on name (which must be unique). To compensate, we add a random
-  # 6-byte suffix in those circumstances. This is not *guaranteed* uniqueness,
-  # but the chance of collisions is vanishingly small
-  def random_suffix
-    (0..5).map { SUFFIX_CHARS.sample }.join
+  def generate_slug
+    self.slug = Gitlab::Slug::Environment.new(name).generate
   end
 end
+
+Environment.prepend_if_ee('EE::Environment')

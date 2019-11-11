@@ -3,10 +3,17 @@ require 'spec_helper'
 describe API::Notes do
   let(:user) { create(:user) }
   let!(:project) { create(:project, :public, namespace: user.namespace) }
-  let(:private_user)    { create(:user) }
+  let(:private_user) { create(:user) }
 
   before do
     project.add_reporter(user)
+  end
+
+  context 'when there are cross-reference system notes' do
+    let(:url) { "/projects/#{project.id}/merge_requests/#{merge_request.iid}/notes" }
+    let(:notes_in_response) { json_response }
+
+    it_behaves_like 'with cross-reference system notes'
   end
 
   context "when noteable is an Issue" do
@@ -28,7 +35,7 @@ describe API::Notes do
       #
       before do
         post api("/projects/#{private_issue.project.id}/issues/#{private_issue.iid}/notes", user),
-             body: 'Hi!'
+             params: { body: 'Hi!' }
       end
 
       it 'responds with resource not found error' do
@@ -44,9 +51,9 @@ describe API::Notes do
       # For testing the cross-reference of a private issue in a public project
       let(:private_project) do
         create(:project, namespace: private_user.namespace)
-        .tap { |p| p.add_master(private_user) }
+        .tap { |p| p.add_maintainer(private_user) }
       end
-      let(:private_issue)    { create(:issue, project: private_project) }
+      let(:private_issue) { create(:issue, project: private_project) }
 
       let(:ext_proj)  { create(:project, :public) }
       let(:ext_issue) { create(:issue, project: ext_proj) }
@@ -71,7 +78,7 @@ describe API::Notes do
 
           context "issue is confidential" do
             before do
-              ext_issue.update_attributes(confidential: true)
+              ext_issue.update(confidential: true)
             end
 
             it "returns 404" do
@@ -104,7 +111,7 @@ describe API::Notes do
 
           context "when issue is confidential" do
             before do
-              issue.update_attributes(confidential: true)
+              issue.update(confidential: true)
             end
 
             it "returns 404" do
@@ -154,7 +161,7 @@ describe API::Notes do
       end
 
       context 'when a user is a team member' do
-        subject { post api("/projects/#{project.id}/merge_requests/#{merge_request.iid}/notes", user), body: 'Hi!' }
+        subject { post api("/projects/#{project.id}/merge_requests/#{merge_request.iid}/notes", user), params: { body: 'Hi!' } }
 
         it 'returns 200 status' do
           subject
@@ -168,7 +175,7 @@ describe API::Notes do
       end
 
       context 'when a user is not a team member' do
-        subject { post api("/projects/#{project.id}/merge_requests/#{merge_request.iid}/notes", private_user), body: 'Hi!' }
+        subject { post api("/projects/#{project.id}/merge_requests/#{merge_request.iid}/notes", private_user), params: { body: 'Hi!' } }
 
         it 'returns 403 status' do
           subject

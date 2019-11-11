@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe AnalyticsIssueEntity do
@@ -9,12 +11,14 @@ describe AnalyticsIssueEntity do
       iid: "1",
       id: "1",
       created_at: "2016-11-12 15:04:02.948604",
-      author: user
+      author: user,
+      project_path: project.path,
+      namespace_path: project.namespace.route.path
     }
   end
 
-  let(:project) { create(:project) }
-  let(:request) { EntityRequest.new(project: project, entity: :merge_request) }
+  let(:project) { create(:project, name: 'my project') }
+  let(:request) { EntityRequest.new(entity: :merge_request) }
 
   let(:entity) do
     described_class.new(entity_hash, request: request, project: project)

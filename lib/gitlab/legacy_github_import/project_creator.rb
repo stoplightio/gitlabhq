@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module LegacyGithubImport
     class ProjectCreator
@@ -35,7 +37,7 @@ module Gitlab
       end
 
       def visibility_level
-        visibility_level = repo.private ? Gitlab::VisibilityLevel::PRIVATE : Gitlab::VisibilityLevel::PUBLIC
+        visibility_level = repo.private ? Gitlab::VisibilityLevel::PRIVATE : @namespace.visibility_level
         visibility_level = Gitlab::CurrentSettings.default_project_visibility if Gitlab::CurrentSettings.restricted_visibility_levels.include?(visibility_level)
 
         visibility_level

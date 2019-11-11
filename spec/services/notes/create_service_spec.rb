@@ -1,16 +1,18 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Notes::CreateService do
-  let(:project) { create(:project) }
-  let(:issue) { create(:issue, project: project) }
-  let(:user) { create(:user) }
+  set(:project) { create(:project, :repository) }
+  set(:issue) { create(:issue, project: project) }
+  set(:user) { create(:user) }
   let(:opts) do
     { note: 'Awesome comment', noteable_type: 'Issue', noteable_id: issue.id }
   end
 
   describe '#execute' do
     before do
-      project.add_master(user)
+      project.add_maintainer(user)
     end
 
     context "valid params" do
@@ -57,6 +59,57 @@ describe Notes::CreateService do
       end
     end
 
+    context 'noteable highlight cache clearing' do
+      let(:project_with_repo) { create(:project, :repository) }
+      let(:merge_request) do
+        create(:merge_request, source_project: project_with_repo,
+                               target_project: project_with_repo)
+      end
+
+      let(:position) do
+        Gitlab::Diff::Position.new(old_path: "files/ruby/popen.rb",
+                                   new_path: "files/ruby/popen.rb",
+                                   old_line: nil,
+                                   new_line: 14,
+                                   diff_refs: merge_request.diff_refs)
+      end
+
+      let(:new_opts) do
+        opts.merge(in_reply_to_discussion_id: nil,
+                   type: 'DiffNote',
+                   noteable_type: 'MergeRequest',
+                   noteable_id: merge_request.id,
+                   position: position.to_h)
+      end
+
+      before do
+        allow_any_instance_of(Gitlab::Diff::Position)
+          .to receive(:unfolded_diff?) { true }
+      end
+
+      it 'clears noteable diff cache when it was unfolded for the note position' do
+        expect_any_instance_of(Gitlab::Diff::HighlightCache).to receive(:clear)
+
+        described_class.new(project_with_repo, user, new_opts).execute
+      end
+
+      it 'does not clear cache when note is not the first of the discussion' do
+        prev_note =
+          create(:diff_note_on_merge_request, noteable: merge_request,
+                                              project: project_with_repo)
+        reply_opts =
+          opts.merge(in_reply_to_discussion_id: prev_note.discussion_id,
+                     type: 'DiffNote',
+                     noteable_type: 'MergeRequest',
+                     noteable_id: merge_request.id,
+                     position: position.to_h)
+
+        expect(merge_request).not_to receive(:diffs)
+
+        described_class.new(project_with_repo, user, reply_opts).execute
+      end
+    end
+
     context 'note diff file' do
       let(:project_with_repo) { create(:project, :repository) }
       let(:merge_request) do
@@ -74,6 +127,10 @@ describe Notes::CreateService do
       end
       let(:previous_note) do
         create(:diff_note_on_merge_request, noteable: merge_request, project: project_with_repo)
+      end
+
+      before do
+        project_with_repo.add_maintainer(user)
       end
 
       context 'when eligible to have a note diff file' do
@@ -140,49 +197,113 @@ describe Notes::CreateService do
     end
 
     context 'note with commands' do
-      context 'as a user who can update the target' do
-        context '/close, /label, /assign & /milestone' do
-          let(:note_text) { %(HELLO\n/close\n/assign @#{user.username}\nWORLD) }
+      context 'all quick actions' do
+        set(:milestone) { create(:milestone, project: project, title: "sprint") }
+        set(:bug_label) { create(:label, project: project, title: 'bug') }
+        set(:to_be_copied_label) { create(:label, project: project, title: 'to be copied') }
+        set(:feature_label) { create(:label, project: project, title: 'feature') }
+        set(:issue) { create(:issue, project: project, labels: [bug_label], due_date: '2019-01-01') }
+        set(:issue_2) { create(:issue, project: project, labels: [bug_label, to_be_copied_label]) }
 
-          it 'saves the note and does not alter the note text' do
-            expect_any_instance_of(Issues::UpdateService).to receive(:execute).and_call_original
+        context 'for issues' do
+          let(:issuable) { issue }
+          let(:note_params) { opts }
+          let(:issue_quick_actions) do
+            [
+              QuickAction.new(
+                action_text: '/confidential',
+                expectation: ->(noteable, can_use_quick_action) {
+                  if can_use_quick_action
+                    expect(noteable).to be_confidential
+                  else
+                    expect(noteable).not_to be_confidential
+                  end
+                }
+              ),
+              QuickAction.new(
+                action_text: '/due 2016-08-28',
+                expectation: ->(noteable, can_use_quick_action) {
+                  expect(noteable.due_date == Date.new(2016, 8, 28)).to eq(can_use_quick_action)
+                }
+              ),
+              QuickAction.new(
+                action_text: '/remove_due_date',
+                expectation: ->(noteable, can_use_quick_action) {
+                  if can_use_quick_action
+                    expect(noteable.due_date).to be_nil
+                  else
+                    expect(noteable.due_date).not_to be_nil
+                  end
+                }
+              ),
+              QuickAction.new(
+                action_text: "/duplicate #{issue_2.to_reference}",
+                before_action: -> {
+                  issuable.reopen
+                },
+                expectation: ->(noteable, can_use_quick_action) {
+                  expect(noteable.closed?).to eq(can_use_quick_action)
+                }
+              )
+            ]
+          end
 
-            note = described_class.new(project, user, opts.merge(note: note_text)).execute
-
-            expect(note.note).to eq "HELLO\nWORLD"
+          it_behaves_like 'issuable quick actions' do
+            let(:quick_actions) { issuable_quick_actions + issue_quick_actions }
           end
         end
 
-        context '/merge with sha option' do
-          let(:note_text) { %(HELLO\n/merge\nWORLD) }
-          let(:params) { opts.merge(note: note_text, merge_request_diff_head_sha: 'sha') }
+        context 'for merge requests' do
+          set(:merge_request) { create(:merge_request, source_project: project, labels: [bug_label]) }
+          let(:issuable) { merge_request }
+          let(:note_params) { opts.merge(noteable_type: 'MergeRequest', noteable_id: merge_request.id) }
+          let(:merge_request_quick_actions) do
+            [
+              QuickAction.new(
+                action_text: "/target_branch fix",
+                expectation: ->(noteable, can_use_quick_action) {
+                  expect(noteable.target_branch == "fix").to eq(can_use_quick_action)
+                }
+              ),
+              # Set WIP status
+              QuickAction.new(
+                action_text: "/wip",
+                before_action: -> {
+                  issuable.reload.update(title: "title")
+                },
+                expectation: ->(issuable, can_use_quick_action) {
+                  expect(issuable.work_in_progress?).to eq(can_use_quick_action)
+                }
+              ),
+              # Remove WIP status
+              QuickAction.new(
+                action_text: "/wip",
+                before_action: -> {
+                  issuable.reload.update(title: "WIP: title")
+                },
+                expectation: ->(noteable, can_use_quick_action) {
+                  expect(noteable.work_in_progress?).not_to eq(can_use_quick_action)
+                }
+              )
+            ]
+          end
 
-          it 'saves the note and exectues merge command' do
-            note = described_class.new(project, user, params).execute
-
-            expect(note.note).to eq "HELLO\nWORLD"
+          it_behaves_like 'issuable quick actions' do
+            let(:quick_actions) { issuable_quick_actions + merge_request_quick_actions }
           end
         end
       end
 
-      context 'as a user who cannot update the target' do
-        let(:note_text) { "HELLO\n/todo\n/assign #{user.to_reference}\nWORLD" }
-        let(:note) { described_class.new(project, user, opts.merge(note: note_text)).execute }
+      context 'when note only have commands' do
+        it 'adds commands applied message to note errors' do
+          note_text = %(/close)
+          service = double(:service)
+          allow(Issues::UpdateService).to receive(:new).and_return(service)
+          expect(service).to receive(:execute)
 
-        before do
-          project.team.find_member(user.id).update!(access_level: Gitlab::Access::GUEST)
-        end
+          note = described_class.new(project, user, opts.merge(note: note_text)).execute
 
-        it 'applies commands the user can execute' do
-          expect { note }.to change { user.todos_pending_count }.from(0).to(1)
-        end
-
-        it 'does not apply commands the user cannot execute' do
-          expect { note }.not_to change { issue.assignees }
-        end
-
-        it 'saves the note' do
-          expect(note.note).to eq "HELLO\nWORLD"
+          expect(note.errors[:commands_only]).to be_present
         end
       end
     end
@@ -219,6 +340,67 @@ describe Notes::CreateService do
 
         expect(note).to be_valid
         expect(note.note).to eq(':smile:')
+      end
+    end
+
+    context 'reply to individual note' do
+      let(:existing_note) { create(:note_on_issue, noteable: issue, project: project) }
+      let(:reply_opts) { opts.merge(in_reply_to_discussion_id: existing_note.discussion_id) }
+
+      subject { described_class.new(project, user, reply_opts).execute }
+
+      it 'creates a DiscussionNote in reply to existing note' do
+        expect(subject).to be_a(DiscussionNote)
+        expect(subject.discussion_id).to eq(existing_note.discussion_id)
+      end
+
+      it 'converts existing note to DiscussionNote' do
+        expect do
+          existing_note
+
+          Timecop.freeze(Time.now + 1.minute) { subject }
+
+          existing_note.reload
+        end.to change { existing_note.type }.from(nil).to('DiscussionNote')
+            .and change { existing_note.updated_at }
+      end
+    end
+
+    describe "usage counter" do
+      let(:counter) { Gitlab::UsageDataCounters::NoteCounter }
+
+      context 'snippet note' do
+        let(:snippet) { create(:project_snippet, project: project) }
+        let(:opts) { { note: 'reply', noteable_type: 'Snippet', noteable_id: snippet.id, project: project } }
+
+        it 'increments usage counter' do
+          expect do
+            note = described_class.new(project, user, opts).execute
+
+            expect(note).to be_valid
+          end.to change { counter.read(:create, opts[:noteable_type]) }.by 1
+        end
+
+        it 'does not increment usage counter when creation fails' do
+          expect do
+            note = described_class.new(project, user, { note: '' }).execute
+
+            expect(note).to be_invalid
+          end.not_to change { counter.read(:create, opts[:noteable_type]) }
+        end
+      end
+
+      context 'issue note' do
+        let(:issue) { create(:issue, project: project) }
+        let(:opts) { { note: 'reply', noteable_type: 'Issue', noteable_id: issue.id, project: project } }
+
+        it 'does not increment usage counter' do
+          expect do
+            note = described_class.new(project, user, opts).execute
+
+            expect(note).to be_valid
+          end.not_to change { counter.read(:create, opts[:noteable_type]) }
+        end
       end
     end
   end

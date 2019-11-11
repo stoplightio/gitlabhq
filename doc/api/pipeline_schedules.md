@@ -1,4 +1,4 @@
-# Pipeline schedules
+# Pipeline schedules API
 
 You can read more about [pipeline schedules](../user/project/pipelines/schedules.md).
 
@@ -88,6 +88,7 @@ curl --header "PRIVATE-TOKEN: k5ESFgWY2Qf5xEvDcFxZ" "https://gitlab.example.com/
     "variables": [
         {
             "key": "TEST_VARIABLE_1",
+            "variable_type": "env_var",
             "value": "TEST_1"
         }
     ]
@@ -107,9 +108,9 @@ POST /projects/:id/pipeline_schedules
 | `id`          | integer/string | yes      | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) owned by the authenticated user      |
 | `description` | string  | yes      | The description of pipeline schedule         |
 | `ref` | string  | yes      | The branch/tag name will be triggered         |
-| `cron ` | string  | yes      | The cron (e.g. `0 1 * * *`) ([Cron syntax](https://en.wikipedia.org/wiki/Cron))       |
-| `cron_timezone ` | string  | no      | The timezone supported by `ActiveSupport::TimeZone` (e.g. `Pacific Time (US & Canada)`) (default: `'UTC'`)     |
-| `active ` | boolean  | no      | The activation of pipeline schedule. If false is set, the pipeline schedule will deactivated initially (default: `true`) |
+| `cron` | string  | yes      | The cron (e.g. `0 1 * * *`) ([Cron syntax](https://en.wikipedia.org/wiki/Cron))       |
+| `cron_timezone` | string  | no      | The timezone supported by `ActiveSupport::TimeZone` (e.g. `Pacific Time (US & Canada)`) (default: `'UTC'`)     |
+| `active` | boolean  | no      | The activation of pipeline schedule. If false is set, the pipeline schedule will deactivated initially (default: `true`) |
 
 ```sh
 curl --request POST --header "PRIVATE-TOKEN: k5ESFgWY2Qf5xEvDcFxZ" --form description="Build packages" --form ref="master" --form cron="0 1 * * 5" --form cron_timezone="UTC" --form active="true" "https://gitlab.example.com/api/v4/projects/29/pipeline_schedules"
@@ -152,9 +153,9 @@ PUT /projects/:id/pipeline_schedules/:pipeline_schedule_id
 | `pipeline_schedule_id`  | integer | yes      | The pipeline schedule id           |
 | `description` | string  | no      | The description of pipeline schedule         |
 | `ref` | string  | no      | The branch/tag name will be triggered         |
-| `cron ` | string  | no      | The cron (e.g. `0 1 * * *`) ([Cron syntax](https://en.wikipedia.org/wiki/Cron))       |
-| `cron_timezone ` | string  | no      | The timezone supported by `ActiveSupport::TimeZone` (e.g. `Pacific Time (US & Canada)`) or `TZInfo::Timezone` (e.g. `America/Los_Angeles`)      |
-| `active ` | boolean  | no      | The activation of pipeline schedule. If false is set, the pipeline schedule will deactivated initially. |
+| `cron` | string  | no      | The cron (e.g. `0 1 * * *`) ([Cron syntax](https://en.wikipedia.org/wiki/Cron))       |
+| `cron_timezone` | string  | no      | The timezone supported by `ActiveSupport::TimeZone` (e.g. `Pacific Time (US & Canada)`) or `TZInfo::Timezone` (e.g. `America/Los_Angeles`)      |
+| `active` | boolean  | no      | The activation of pipeline schedule. If false is set, the pipeline schedule will deactivated initially. |
 
 ```sh
 curl --request PUT --header "PRIVATE-TOKEN: k5ESFgWY2Qf5xEvDcFxZ" --form cron="0 2 * * *" "https://gitlab.example.com/api/v4/projects/29/pipeline_schedules/13"
@@ -278,9 +279,9 @@ curl --request DELETE --header "PRIVATE-TOKEN: k5ESFgWY2Qf5xEvDcFxZ" "https://gi
 }
 ```
 
-## Pipeline schedule variable
+## Pipeline schedule variables
 
-> [Introduced][ce-34518] in GitLab 10.0.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/issues/34518) in GitLab 10.0.
 
 ## Create a new pipeline schedule variable
 
@@ -296,6 +297,7 @@ POST /projects/:id/pipeline_schedules/:pipeline_schedule_id/variables
 | `pipeline_schedule_id` | integer        | yes      | The pipeline schedule id |
 | `key`                  | string         | yes      | The `key` of a variable; must have no more than 255 characters; only `A-Z`, `a-z`, `0-9`, and `_` are allowed |
 | `value`                | string         | yes      | The `value` of a variable |
+| `variable_type`        | string         | no       | The type of a variable. Available types are: `env_var` (default) and `file` |
 
 ```sh
 curl --request POST --header "PRIVATE-TOKEN: k5ESFgWY2Qf5xEvDcFxZ" --form "key=NEW_VARIABLE" --form "value=new value" "https://gitlab.example.com/api/v4/projects/29/pipeline_schedules/13/variables"
@@ -304,6 +306,7 @@ curl --request POST --header "PRIVATE-TOKEN: k5ESFgWY2Qf5xEvDcFxZ" --form "key=N
 ```json
 {
     "key": "NEW_VARIABLE",
+    "variable_type": "env_var",
     "value": "new value"
 }
 ```
@@ -322,6 +325,7 @@ PUT /projects/:id/pipeline_schedules/:pipeline_schedule_id/variables/:key
 | `pipeline_schedule_id` | integer        | yes      | The pipeline schedule id |
 | `key`                  | string         | yes      | The `key` of a variable   |
 | `value`                | string         | yes      | The `value` of a variable |
+| `variable_type`        | string         | no       | The type of a variable. Available types are: `env_var` (default) and `file` |
 
 ```sh
 curl --request PUT --header "PRIVATE-TOKEN: k5ESFgWY2Qf5xEvDcFxZ" --form "value=updated value" "https://gitlab.example.com/api/v4/projects/29/pipeline_schedules/13/variables/NEW_VARIABLE"
@@ -331,6 +335,7 @@ curl --request PUT --header "PRIVATE-TOKEN: k5ESFgWY2Qf5xEvDcFxZ" --form "value=
 {
     "key": "NEW_VARIABLE",
     "value": "updated value"
+    "variable_type": "env_var",
 }
 ```
 
@@ -358,5 +363,3 @@ curl --request DELETE --header "PRIVATE-TOKEN: k5ESFgWY2Qf5xEvDcFxZ" "https://gi
     "value": "updated value"
 }
 ```
-
-[ce-34518]: https://gitlab.com/gitlab-org/gitlab-ce/issues/34518

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module HealthChecks
     class DbCheck
@@ -16,11 +18,7 @@ module Gitlab
 
         def check
           catch_timeout 10.seconds do
-            if Gitlab::Database.postgresql?
-              ActiveRecord::Base.connection.execute('SELECT 1 as ping')&.first&.[]('ping')
-            else
-              ActiveRecord::Base.connection.execute('SELECT 1 as ping')&.first&.first&.to_s
-            end
+            ActiveRecord::Base.connection.execute('SELECT 1 as ping')&.first&.[]('ping')&.to_s
           end
         end
       end

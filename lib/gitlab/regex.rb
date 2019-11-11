@@ -1,14 +1,8 @@
+# frozen_string_literal: true
+
 module Gitlab
   module Regex
     extend self
-
-    def namespace_name_regex
-      @namespace_name_regex ||= /\A[\p{Alnum}\p{Pd}_\. ]*\z/.freeze
-    end
-
-    def namespace_name_regex_message
-      "can contain only letters, digits, '_', '.', dash and space."
-    end
 
     def project_name_regex
       @project_name_regex ||= /\A[\p{Alnum}\u{00A9}-\u{1f9c0}_][\p{Alnum}\p{Pd}\u{00A9}-\u{1f9c0}_\. ]*\z/.freeze
@@ -52,6 +46,18 @@ module Gitlab
       "can contain only letters, digits, '-', '_', '/', '$', '{', '}', '.', and spaces, but it cannot start or end with '/'"
     end
 
+    def environment_scope_regex_chars
+      "#{environment_name_regex_chars}\\*"
+    end
+
+    def environment_scope_regex
+      @environment_scope_regex ||= /\A[#{environment_scope_regex_chars}]+\z/.freeze
+    end
+
+    def environment_scope_regex_message
+      "can contain only letters, digits, '-', '_', '/', '$', '{', '}', '.', '*' and spaces"
+    end
+
     def kubernetes_namespace_regex
       /\A[a-z0-9]([-a-z0-9]*[a-z0-9])?\z/
     end
@@ -73,5 +79,56 @@ module Gitlab
     def build_trace_section_regex
       @build_trace_section_regexp ||= /section_((?:start)|(?:end)):(\d+):([a-zA-Z0-9_.-]+)\r\033\[0K/.freeze
     end
+
+    def markdown_code_or_html_blocks
+      @markdown_code_or_html_blocks ||= %r{
+          (?<code>
+            # Code blocks:
+            # ```
+            # Anything, including `>>>` blocks which are ignored by this filter
+            # ```
+
+            ^```
+            .+?
+            \n```\ *$
+          )
+        |
+          (?<html>
+            # HTML block:
+            # <tag>
+            # Anything, including `>>>` blocks which are ignored by this filter
+            # </tag>
+
+            ^<[^>]+?>\ *\n
+            .+?
+            \n<\/[^>]+?>\ *$
+          )
+      }mx
+    end
+
+    # Based on Jira's project key format
+    # https://confluence.atlassian.com/adminjiraserver073/changing-the-project-key-format-861253229.html
+    def jira_issue_key_regex
+      @jira_issue_key_regex ||= /[A-Z][A-Z_0-9]+-\d+/
+    end
+
+    def jira_transition_id_regex
+      @jira_transition_id_regex ||= /\d+/
+    end
+
+    def breakline_regex
+      @breakline_regex ||= /\r\n|\r|\n/
+    end
+
+    # https://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html
+    def aws_arn_regex
+      /\Aarn:\S+\z/
+    end
+
+    def aws_arn_regex_message
+      "must be a valid Amazon Resource Name"
+    end
   end
 end
+
+Gitlab::Regex.prepend_if_ee('EE::Gitlab::Regex')

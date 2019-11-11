@@ -1,9 +1,13 @@
+# frozen_string_literal: true
+
 module Gitlab
   module ImportExport
     extend self
 
-    # For every version update, the version history in import_export.md has to be kept up to date.
-    VERSION = '0.2.3'.freeze
+    # For every version update the version history in these docs must be kept up to date:
+    # - development/import_export.md
+    # - user/project/settings/import_export.md
+    VERSION = '0.2.4'
     FILENAME_LIMIT = 50
 
     def export_path(relative_path:)
@@ -24,6 +28,18 @@ module Gitlab
 
     def project_bundle_filename
       "project.bundle"
+    end
+
+    def lfs_objects_filename
+      "lfs-objects.json"
+    end
+
+    def lfs_objects_storage
+      "lfs-objects"
+    end
+
+    def wiki_repo_bundle_filename
+      "project.wiki.bundle"
     end
 
     def config_file
@@ -49,3 +65,5 @@ module Gitlab
     end
   end
 end
+
+Gitlab::ImportExport.prepend_if_ee('EE::Gitlab::ImportExport')

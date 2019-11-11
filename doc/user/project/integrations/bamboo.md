@@ -25,9 +25,9 @@ need to be configured in a Bamboo build plan before GitLab can integrate.
    whitelist of IP addresses that are allowed to trigger Bamboo builds.
 1. Save the trigger.
 1. In the left pane, select a build stage. If you have multiple build stages
-   you want to select the last stage that contains the git checkout task.
+   you want to select the last stage that contains the Git checkout task.
 1. Select the 'Miscellaneous' tab.
-1. Under 'Pattern Match Labelling' put '${bamboo.repository.revision.number}'
+1. Under 'Pattern Match Labelling' put `${bamboo.repository.revision.number}`
    in the 'Labels' box.
 1. Save
 
@@ -40,9 +40,12 @@ service in GitLab.
 1. Navigate to the [Integrations page](project_services.md#accessing-the-project-services)
 1. Click 'Atlassian Bamboo CI'
 1. Select the 'Active' checkbox.
-1. Enter the base URL of your Bamboo server. 'https://bamboo.example.com'
-1. Enter the build key from your Bamboo build plan. Build keys are a short,
-   all capital letter, identifier that is unique. It will be something like PR-BLD
+1. Enter the base URL of your Bamboo server. `https://bamboo.example.com`
+1. Enter the build key from your Bamboo build plan. Build keys are typically made
+   up from the Project Key and Plan Key that are set on project/plan creation and
+   separated with a dash (`-`), for example  **PROJ-PLAN**. This is a short, all
+   uppercase identifier that is unique. When viewing a plan within Bamboo, the
+   build key is also shown in the browser URL, for example `https://bamboo.example.com/browse/PROJ-PLAN`.
 1. If necessary, enter username and password for a Bamboo user that has
    access to trigger the build plan. Leave these fields blank if you do not require
    authentication.
@@ -54,6 +57,5 @@ service in GitLab.
 If builds are not triggered, ensure you entered the right GitLab IP address in
 Bamboo under 'Trigger IP addresses'.
 
->**Note:**
-- Starting with GitLab 8.14.0, builds are triggered on push events.
-
+NOTE: **Note:**
+Starting with GitLab 8.14.0, builds are triggered on push events.

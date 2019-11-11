@@ -1,10 +1,11 @@
 <script>
+import { __, sprintf } from '~/locale';
 import { mapActions } from 'vuex';
 
 import FileIcon from '~/vue_shared/components/file_icon.vue';
 import Icon from '~/vue_shared/components/icon.vue';
+import ChangedFileIcon from '~/vue_shared/components/changed_file_icon.vue';
 import FileStatusIcon from './repo_file_status_icon.vue';
-import ChangedFileIcon from './changed_file_icon.vue';
 
 export default {
   components: {
@@ -27,9 +28,9 @@ export default {
   computed: {
     closeLabel() {
       if (this.fileHasChanged) {
-        return `${this.tab.name} changed`;
+        return sprintf(__(`%{tabname} changed`), { tabname: this.tab.name });
       }
-      return `Close ${this.tab.name}`;
+      return sprintf(__(`Close %{tabname}`, { tabname: this.tab.name }));
     },
     showChangedIcon() {
       if (this.tab.pending) return true;
@@ -37,13 +38,15 @@ export default {
       return this.fileHasChanged ? !this.tabMouseOver : false;
     },
     fileHasChanged() {
-      return this.tab.changed || this.tab.tempFile || this.tab.staged;
+      return this.tab.changed || this.tab.tempFile || this.tab.staged || this.tab.deleted;
     },
   },
 
   methods: {
     ...mapActions(['closeFile', 'updateDelayViewerUpdated', 'openPendingTab']),
     clickFile(tab) {
+      if (tab.active) return;
+
       this.updateDelayViewerUpdated(true);
 
       if (tab.pending) {
@@ -69,42 +72,27 @@ export default {
 <template>
   <li
     :class="{
-      active: tab.active
+      active: tab.active,
+      disabled: tab.pending,
     }"
     @click="clickFile(tab)"
     @mouseover="mouseOverTab"
     @mouseout="mouseOutTab"
   >
-    <div
-      class="multi-file-tab"
-      :title="tab.url"
-    >
-      <file-icon
-        :file-name="tab.name"
-        :size="16"
-      />
+    <div :title="tab.url" class="multi-file-tab">
+      <file-icon :file-name="tab.name" :size="16" />
       {{ tab.name }}
-      <file-status-icon
-        :file="tab"
-      />
+      <file-status-icon :file="tab" />
     </div>
     <button
+      :aria-label="closeLabel"
+      :disabled="tab.pending"
       type="button"
       class="multi-file-tab-close"
       @click.stop.prevent="closeFile(tab)"
-      :aria-label="closeLabel"
-      :disabled="tab.pending"
     >
-      <icon
-        v-if="!showChangedIcon"
-        name="close"
-        :size="12"
-      />
-      <changed-file-icon
-        v-else
-        :file="tab"
-        :force-modified-icon="true"
-      />
+      <icon v-if="!showChangedIcon" :size="12" name="close" />
+      <changed-file-icon v-else :file="tab" />
     </button>
   </li>
 </template>

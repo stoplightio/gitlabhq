@@ -1,19 +1,27 @@
+# frozen_string_literal: true
+
 module Gitlab
   class Favicon
     class << self
       def main
         image_name =
-          if appearance_favicon.exists?
-            appearance_favicon.url
+          if appearance.favicon.exists?
+            appearance.favicon_path
           elsif Gitlab::Utils.to_boolean(ENV['CANARY'])
             'favicon-yellow.png'
           elsif Rails.env.development?
-            'favicon-blue.png'
+            development_favicon
           else
             'favicon.png'
           end
 
         ActionController::Base.helpers.image_path(image_name, host: host)
+      end
+
+      def development_favicon
+        # This is a separate method so that EE can return a different favicon
+        # for development environments.
+        'favicon-blue.png'
       end
 
       def status_overlay(status_name)
@@ -47,12 +55,10 @@ module Gitlab
       end
 
       def appearance
-        RequestStore.store[:appearance] ||= (Appearance.current || Appearance.new)
-      end
-
-      def appearance_favicon
-        appearance.favicon
+        Gitlab::SafeRequestStore[:appearance] ||= (Appearance.current || Appearance.new)
       end
     end
   end
 end
+
+Gitlab::Favicon.prepend_if_ee('EE::Gitlab::Favicon')

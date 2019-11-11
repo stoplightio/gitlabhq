@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe 'Projects > Files > Template Undo Button', :js do
@@ -11,11 +13,12 @@ describe 'Projects > Files > Template Undo Button', :js do
   context 'editing a matching file and applying a template' do
     before do
       visit project_edit_blob_path(project, File.join(project.default_branch, "LICENSE"))
+      select_file_template_type('LICENSE')
       select_file_template('.js-license-selector', 'Apache License 2.0')
     end
 
     it 'reverts template application' do
-      try_template_undo('http://www.apache.org/licenses/', 'Apply a license template')
+      try_template_undo('http://www.apache.org/licenses/', 'Apply a template')
     end
   end
 
@@ -27,7 +30,7 @@ describe 'Projects > Files > Template Undo Button', :js do
     end
 
     it 'reverts template application' do
-      try_template_undo('http://www.apache.org/licenses/', 'Apply a license template')
+      try_template_undo('http://www.apache.org/licenses/', 'Apply a template')
     end
   end
 end
@@ -43,14 +46,14 @@ def check_toggle_text_set(neutral_toggle_text)
 end
 
 def check_undo_button_display
-  expect(page).to have_content('Template applied')
-  expect(page).to have_css('.template-selectors-undo-menu .btn-info')
+  expect(page).to have_content('template applied')
+  expect(page).to have_css('.toasted-container')
 end
 
 def check_content_reverted(template_content)
-  find('.template-selectors-undo-menu .btn-info').click
+  find('.toasted-container a', text: 'Undo').click
   expect(page).not_to have_content(template_content)
-  expect(find('.template-type-selector .dropdown-toggle-text')).to have_content()
+  expect(page).to have_css('.template-type-selector .dropdown-toggle-text')
 end
 
 def select_file_template(template_selector_selector, template_name)

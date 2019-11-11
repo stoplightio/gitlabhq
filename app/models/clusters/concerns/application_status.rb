@@ -1,10 +1,19 @@
+# frozen_string_literal: true
+
 module Clusters
   module Concerns
     module ApplicationStatus
       extend ActiveSupport::Concern
 
       included do
-        scope :installed, -> { where(status: self.state_machines[:status].states[:installed].value) }
+        scope :available, -> do
+          where(
+            status: [
+              self.state_machines[:status].states[:installed].value,
+              self.state_machines[:status].states[:updated].value
+            ]
+          )
+        end
 
         state_machine :status, initial: :not_installable do
           state :not_installable, value: -2
@@ -13,9 +22,21 @@ module Clusters
           state :scheduled, value: 1
           state :installing, value: 2
           state :installed, value: 3
+          state :updating, value: 4
+          state :updated, value: 5
+          state :update_errored, value: 6
+          state :uninstalling, value: 7
+          state :uninstall_errored, value: 8
+
+          # Used for applications that are pre-installed by the cluster,
+          # e.g. Knative in GCP Cloud Run enabled clusters
+          # Because we cannot upgrade or uninstall Knative in these clusters,
+          # we define only one simple state transition to enter the `pre_installed` state,
+          # and no exit transitions.
+          state :pre_installed, value: 9
 
           event :make_scheduled do
-            transition [:installable, :errored] => :scheduled
+            transition [:installable, :errored, :installed, :updated, :update_errored, :uninstall_errored] => :scheduled
           end
 
           event :make_installing do
@@ -24,21 +45,78 @@ module Clusters
 
           event :make_installed do
             transition [:installing] => :installed
+            transition [:updating] => :updated
+          end
+
+          event :make_pre_installed do
+            transition any => :pre_installed
           end
 
           event :make_errored do
-            transition any => :errored
+            transition any - [:updating, :uninstalling] => :errored
+            transition [:updating] => :update_errored
+            transition [:uninstalling] => :uninstall_errored
           end
 
-          before_transition any => [:scheduled] do |app_status, _|
-            app_status.status_reason = nil
+          event :make_updating do
+            transition [:installed, :updated, :update_errored, :scheduled] => :updating
           end
 
-          before_transition any => [:errored] do |app_status, transition|
+          event :make_update_errored do
+            transition any => :update_errored
+          end
+
+          event :make_uninstalling do
+            transition [:scheduled] => :uninstalling
+          end
+
+          before_transition any => [:scheduled] do |application, _|
+            application.status_reason = nil
+          end
+
+          before_transition any => [:errored] do |application, transition|
             status_reason = transition.args.first
-            app_status.status_reason = status_reason if status_reason
+            application.status_reason = status_reason if status_reason
+          end
+
+          before_transition any => [:updating] do |application, _|
+            application.status_reason = nil
+          end
+
+          before_transition any => [:update_errored, :uninstall_errored] do |application, transition|
+            status_reason = transition.args.first
+            application.status_reason = status_reason if status_reason
+          end
+
+          before_transition any => [:installed, :updated] do |application, _|
+            # When installing any application we are also performing an update
+            # of tiller (see Gitlab::Kubernetes::Helm::ClientCommand) so
+            # therefore we need to reflect that in the database.
+            application.cluster.application_helm.update!(version: Gitlab::Kubernetes::Helm::HELM_VERSION)
+          end
+
+          after_transition any => [:uninstalling], :use_transactions => false do |application, _|
+            application.prepare_uninstall
           end
         end
+      end
+
+      def status_states
+        self.class.state_machines[:status].states.each_with_object({}) do |state, states|
+          states[state.name] = state.value
+        end
+      end
+
+      def updateable?
+        installed? || updated? || update_errored?
+      end
+
+      def available?
+        pre_installed? || installed? || updated?
+      end
+
+      def update_in_progress?
+        updating?
       end
     end
   end

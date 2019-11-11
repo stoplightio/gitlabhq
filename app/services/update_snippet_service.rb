@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class UpdateSnippetService < BaseService
   include SpamCheckService
 
@@ -10,7 +12,7 @@ class UpdateSnippetService < BaseService
 
   def execute
     # check that user is allowed to set specified visibility_level
-    new_visibility = params[:visibility_level]
+    new_visibility = visibility_level
 
     if new_visibility && new_visibility.to_i != snippet.visibility_level
       unless Gitlab::VisibilityLevel.allowed_for?(current_user, new_visibility)
@@ -23,6 +25,8 @@ class UpdateSnippetService < BaseService
     snippet.assign_attributes(params)
     spam_check(snippet, current_user)
 
-    snippet.save
+    snippet.save.tap do |succeeded|
+      Gitlab::UsageDataCounters::SnippetCounter.count(:update) if succeeded
+    end
   end
 end

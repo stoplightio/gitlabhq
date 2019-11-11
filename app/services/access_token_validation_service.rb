@@ -1,9 +1,12 @@
+# frozen_string_literal: true
+
 class AccessTokenValidationService
   # Results:
   VALID = :valid
   EXPIRED = :expired
   REVOKED = :revoked
   INSUFFICIENT_SCOPE = :insufficient_scope
+  IMPERSONATION_DISABLED = :impersonation_disabled
 
   attr_reader :token, :request
 
@@ -22,6 +25,11 @@ class AccessTokenValidationService
     elsif !self.include_any_scope?(scopes)
       return INSUFFICIENT_SCOPE
 
+    elsif token.respond_to?(:impersonation) &&
+        token.impersonation &&
+        !Gitlab.config.gitlab.impersonation_enabled
+      return IMPERSONATION_DISABLED
+
     else
       return VALID
     end
@@ -35,7 +43,7 @@ class AccessTokenValidationService
       # We're comparing each required_scope against all token scopes, which would
       # take quadratic time. This consideration is irrelevant here because of the
       # small number of records involved.
-      # https://gitlab.com/gitlab-org/gitlab-ce/merge_requests/12300/#note_33689006
+      # https://gitlab.com/gitlab-org/gitlab-foss/merge_requests/12300/#note_33689006
       token_scopes = token.scopes.map(&:to_sym)
 
       required_scopes.any? do |scope|

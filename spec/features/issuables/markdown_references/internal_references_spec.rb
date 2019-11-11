@@ -1,4 +1,6 @@
-require "rails_helper"
+# frozen_string_literal: true
+
+require 'spec_helper'
 
 describe "Internal references", :js do
   include Spec::Support::Helpers::Features::NotesHelpers
@@ -64,11 +66,13 @@ describe "Internal references", :js do
 
           it "shows references" do
             page.within("#merge-requests .merge-requests-title") do
-              expect(page).to have_content("1 Related Merge Request")
+              expect(page).to have_content("Related merge requests")
+              expect(page).to have_css(".mr-count-badge")
             end
 
             page.within("#merge-requests ul") do
               expect(page).to have_content(private_project_merge_request.title)
+              expect(page).to have_css(".ic-issue-open-m")
             end
 
             expect(page).to have_content("mentioned in merge request #{private_project_merge_request.to_reference(public_project)}")

@@ -1,8 +1,12 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe ProtectedRefAccess do
+  include ExternalAuthorizationServiceHelpers
+
   subject(:protected_ref_access) do
-    create(:protected_branch, :masters_can_push).push_access_levels.first
+    create(:protected_branch, :maintainers_can_push).push_access_levels.first
   end
 
   let(:project) { protected_ref_access.project }
@@ -14,11 +18,11 @@ describe ProtectedRefAccess do
       expect(protected_ref_access.check_access(admin)).to be_truthy
     end
 
-    it 'is true for masters' do
-      master = create(:user)
-      project.add_master(master)
+    it 'is true for maintainers' do
+      maintainer = create(:user)
+      project.add_maintainer(maintainer)
 
-      expect(protected_ref_access.check_access(master)).to be_truthy
+      expect(protected_ref_access.check_access(maintainer)).to be_truthy
     end
 
     it 'is for developers of the project' do
@@ -26,6 +30,16 @@ describe ProtectedRefAccess do
       project.add_developer(developer)
 
       expect(protected_ref_access.check_access(developer)).to be_falsy
+    end
+
+    context 'external authorization' do
+      it 'is false if external authorization denies access' do
+        maintainer = create(:user)
+        project.add_maintainer(maintainer)
+        external_service_deny_access(maintainer, project)
+
+        expect(protected_ref_access.check_access(maintainer)).to be_falsey
+      end
     end
   end
 end

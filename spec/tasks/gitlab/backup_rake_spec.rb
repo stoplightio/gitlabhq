@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 require 'rake'
 
@@ -21,9 +23,6 @@ describe 'gitlab:app namespace rake task' do
 
     # empty task as env is already loaded
     Rake::Task.define_task :environment
-
-    # We need this directory to run `gitlab:backup:create` task
-    FileUtils.mkdir_p('public/uploads')
   end
 
   before do
@@ -38,6 +37,7 @@ describe 'gitlab:app namespace rake task' do
   end
 
   def run_rake_task(task_name)
+    FileUtils.mkdir_p('tmp/tests/public/uploads')
     Rake::Task[task_name].reenable
     Rake.application.invoke_task task_name
   end
@@ -71,9 +71,68 @@ describe 'gitlab:app namespace rake task' do
         end.to raise_error(SystemExit)
       end
 
-      it 'invokes restoration on match' do
+      context 'restore with matching gitlab version' do
+        before do
+          allow(YAML).to receive(:load_file)
+            .and_return({ gitlab_version: gitlab_version })
+          expect(Rake::Task['gitlab:db:drop_tables']).to receive(:invoke)
+          expect(Rake::Task['gitlab:backup:db:restore']).to receive(:invoke)
+          expect(Rake::Task['gitlab:backup:repo:restore']).to receive(:invoke)
+          expect(Rake::Task['gitlab:backup:builds:restore']).to receive(:invoke)
+          expect(Rake::Task['gitlab:backup:uploads:restore']).to receive(:invoke)
+          expect(Rake::Task['gitlab:backup:artifacts:restore']).to receive(:invoke)
+          expect(Rake::Task['gitlab:backup:pages:restore']).to receive(:invoke)
+          expect(Rake::Task['gitlab:backup:lfs:restore']).to receive(:invoke)
+          expect(Rake::Task['gitlab:backup:registry:restore']).to receive(:invoke)
+          expect(Rake::Task['gitlab:shell:setup']).to receive(:invoke)
+        end
+
+        it 'invokes restoration on match' do
+          expect { run_rake_task('gitlab:backup:restore') }.to output.to_stdout
+        end
+
+        it 'prints timestamps on messages' do
+          expect { run_rake_task('gitlab:backup:restore') }.to output(/.*\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}\s[-+]\d{4}\s--\s.*/).to_stdout
+        end
+      end
+    end
+
+    context 'when the restore directory is not empty' do
+      before do
+        # We only need a backup of the repositories for this test
+        stub_env('SKIP', 'db,uploads,builds,artifacts,lfs,registry')
+      end
+
+      it 'removes stale data' do
+        expect { run_rake_task('gitlab:backup:create') }.to output.to_stdout
+
+        excluded_project = create(:project, :repository, name: 'mepmep')
+
+        expect { run_rake_task('gitlab:backup:restore') }.to output.to_stdout
+
+        raw_repo = excluded_project.repository.raw
+
+        # The restore will not find the repository in the backup, but will create
+        # an empty one in its place
+        expect(raw_repo.empty?).to be(true)
+      end
+    end
+
+    context 'when the backup is restored' do
+      let!(:included_project) { create(:project, :repository) }
+
+      before do
+        expect { run_rake_task('gitlab:backup:create') }.to output.to_stdout
+
+        backup_tar = Dir.glob(File.join(Gitlab.config.backup.path, '*_gitlab_backup.tar')).last
+        allow(Dir).to receive(:glob).and_return([backup_tar])
+        allow(File).to receive(:exist?).and_return(true)
+        allow(Kernel).to receive(:system).and_return(true)
+        allow(FileUtils).to receive(:cp_r).and_return(true)
+        allow(FileUtils).to receive(:mv).and_return(true)
         allow(YAML).to receive(:load_file)
-          .and_return({ gitlab_version: gitlab_version })
+          .and_return({ gitlab_version: Gitlab::VERSION })
+
         expect(Rake::Task['gitlab:db:drop_tables']).to receive(:invoke)
         expect(Rake::Task['gitlab:backup:db:restore']).to receive(:invoke)
         expect(Rake::Task['gitlab:backup:repo:restore']).to receive(:invoke)
@@ -84,7 +143,17 @@ describe 'gitlab:app namespace rake task' do
         expect(Rake::Task['gitlab:backup:lfs:restore']).to receive(:invoke)
         expect(Rake::Task['gitlab:backup:registry:restore']).to receive(:invoke)
         expect(Rake::Task['gitlab:shell:setup']).to receive(:invoke)
+
+        # We only need a backup of the repositories for this test
+        stub_env('SKIP', 'db,uploads,builds,artifacts,lfs,registry')
+      end
+
+      it 'restores the data' do
         expect { run_rake_task('gitlab:backup:restore') }.to output.to_stdout
+
+        raw_repo = included_project.repository.raw
+
+        expect(raw_repo.empty?).to be(false)
       end
     end
   end # backup_restore task
@@ -230,7 +299,7 @@ describe 'gitlab:app namespace rake task' do
 
         allow(Gitlab.config.repositories).to receive(:storages).and_return(storages)
 
-        # Avoid asking gitaly about the root ref (which will fail beacuse of the
+        # Avoid asking gitaly about the root ref (which will fail because of the
         # mocked storages)
         allow_any_instance_of(Repository).to receive(:empty?).and_return(false)
       end

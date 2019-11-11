@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe 'Users > Terms' do
@@ -76,23 +78,26 @@ describe 'Users > Terms' do
         project.add_developer(user)
       end
 
-      it 'redirects to terms and back to where the user was going'  do
+      it 'redirects to terms and back to where the user was going' do
         visit project_path(project)
 
         enforce_terms
 
-        within('.nav-sidebar') do
-          click_link 'Issues'
+        # Application settings are cached for a minute
+        Timecop.travel 2.minutes do
+          within('.nav-sidebar') do
+            click_link 'Issues'
+          end
+
+          expect_to_be_on_terms_page
+
+          click_button('Accept terms')
+
+          expect(current_path).to eq(project_issues_path(project))
         end
-
-        expect_to_be_on_terms_page
-
-        click_button('Accept terms')
-
-        expect(current_path).to eq(project_issues_path(project))
       end
 
-      # Disabled until https://gitlab.com/gitlab-org/gitlab-ce/issues/37162 is solved properly
+      # Disabled until https://gitlab.com/gitlab-org/gitlab-foss/issues/37162 is solved properly
       xit 'redirects back to the page the user was trying to save' do
         visit new_project_issue_path(project)
 

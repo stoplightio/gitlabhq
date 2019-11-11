@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe 'User visits their profile' do
@@ -29,7 +31,7 @@ describe 'User visits their profile' do
     let!(:project) do
       create(:project, :repository, namespace: group) do |project|
         create(:closed_issue_event, project: project)
-        project.add_master(user)
+        project.add_maintainer(user)
       end
     end
 

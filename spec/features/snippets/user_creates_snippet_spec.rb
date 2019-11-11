@@ -1,6 +1,8 @@
-require 'rails_helper'
+# frozen_string_literal: true
 
-feature 'User creates snippet', :js do
+require 'spec_helper'
+
+describe 'User creates snippet', :js do
   include DropzoneHelper
 
   let(:user) { create(:user) }
@@ -18,7 +20,7 @@ feature 'User creates snippet', :js do
     end
   end
 
-  scenario 'Authenticated user creates a snippet' do
+  it 'Authenticated user creates a snippet' do
     fill_form
 
     click_button('Create snippet')
@@ -32,23 +34,25 @@ feature 'User creates snippet', :js do
     expect(page).to have_content('Hello World!')
   end
 
-  scenario 'previews a snippet with file' do
+  it 'previews a snippet with file' do
     fill_in 'personal_snippet_description', with: 'My Snippet'
     dropzone_file Rails.root.join('spec', 'fixtures', 'banana_sample.gif')
     find('.js-md-preview-button').click
 
-    page.within('#new_personal_snippet .md-preview') do
+    page.within('#new_personal_snippet .md-preview-holder') do
       expect(page).to have_content('My Snippet')
 
       link = find('a.no-attachment-icon img[alt="banana_sample"]')['src']
-      expect(link).to match(%r{/uploads/-/system/temp/\h{32}/banana_sample\.gif\z})
+      expect(link).to match(%r{/uploads/-/system/user/#{user.id}/\h{32}/banana_sample\.gif\z})
 
-      reqs = inspect_requests { visit(link) }
+      # Adds a cache buster for checking if the image exists as Selenium is now handling the cached regquests
+      # not anymore as requests when they come straight from memory cache.
+      reqs = inspect_requests { visit("#{link}?ran=#{SecureRandom.base64(20)}") }
       expect(reqs.first.status_code).to eq(200)
     end
   end
 
-  scenario 'uploads a file when dragging into textarea' do
+  it 'uploads a file when dragging into textarea' do
     fill_form
 
     dropzone_file Rails.root.join('spec', 'fixtures', 'banana_sample.gif')
@@ -61,11 +65,11 @@ feature 'User creates snippet', :js do
     link = find('a.no-attachment-icon img[alt="banana_sample"]')['src']
     expect(link).to match(%r{/uploads/-/system/personal_snippet/#{Snippet.last.id}/\h{32}/banana_sample\.gif\z})
 
-    reqs = inspect_requests { visit(link) }
+    reqs = inspect_requests { visit("#{link}?ran=#{SecureRandom.base64(20)}") }
     expect(reqs.first.status_code).to eq(200)
   end
 
-  scenario 'validation fails for the first time' do
+  it 'validation fails for the first time' do
     fill_in 'personal_snippet_title', with: 'My Snippet Title'
     click_button('Create snippet')
 
@@ -86,11 +90,11 @@ feature 'User creates snippet', :js do
     link = find('a.no-attachment-icon img[alt="banana_sample"]')['src']
     expect(link).to match(%r{/uploads/-/system/personal_snippet/#{Snippet.last.id}/\h{32}/banana_sample\.gif\z})
 
-    reqs = inspect_requests { visit(link) }
+    reqs = inspect_requests { visit("#{link}?ran=#{SecureRandom.base64(20)}") }
     expect(reqs.first.status_code).to eq(200)
   end
 
-  scenario 'Authenticated user creates a snippet with + in filename' do
+  it 'Authenticated user creates a snippet with + in filename' do
     fill_in 'personal_snippet_title', with: 'My Snippet Title'
     page.within('.file-editor') do
       find(:xpath, "//input[@id='personal_snippet_file_name']").set 'snippet+file+name'

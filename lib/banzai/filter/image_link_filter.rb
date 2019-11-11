@@ -1,3 +1,6 @@
+# frozen_string_literal: true
+
+# Generated HTML is transformed back to GFM by app/assets/javascripts/behaviors/markdown/nodes/image.js
 module Banzai
   module Filter
     # HTML filter that wraps links around inline images.
@@ -14,6 +17,9 @@ module Banzai
             target: '_blank',
             rel: 'noopener noreferrer'
           )
+
+          # make sure the original non-proxied src carries over to the link
+          link['data-canonical-src'] = img['data-canonical-src'] if img['data-canonical-src']
 
           link.children = img.clone
 

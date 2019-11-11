@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe IssuablesHelper do
@@ -5,8 +7,8 @@ describe IssuablesHelper do
   let(:label2) { build_stubbed(:label) }
 
   describe '#users_dropdown_label' do
-    let(:user)  { build_stubbed(:user) }
-    let(:user2)  { build_stubbed(:user) }
+    let(:user) { build_stubbed(:user) }
+    let(:user2) { build_stubbed(:user) }
 
     it 'returns unassigned' do
       expect(users_dropdown_label([])).to eq('Unassigned')
@@ -21,17 +23,41 @@ describe IssuablesHelper do
     end
   end
 
+  describe '#group_dropdown_label' do
+    let(:group) { create(:group) }
+    let(:default) { 'default label' }
+
+    it 'returns default group label when group_id is nil' do
+      expect(group_dropdown_label(nil, default)).to eq('default label')
+    end
+
+    it 'returns "any group" when group_id is 0' do
+      expect(group_dropdown_label('0', default)).to eq('Any group')
+    end
+
+    it 'returns group full path when a group was found for the provided id' do
+      expect(group_dropdown_label(group.id, default)).to eq(group.full_name)
+    end
+
+    it 'returns default label when a group was not found for the provided id' do
+      expect(group_dropdown_label(9999, default)).to eq('default label')
+    end
+  end
+
   describe '#issuable_labels_tooltip' do
+    let(:label_entity) { LabelEntity.represent(label).as_json }
+    let(:label2_entity) { LabelEntity.represent(label2).as_json }
+
     it 'returns label text with no labels' do
       expect(issuable_labels_tooltip([])).to eq("Labels")
     end
 
     it 'returns label text with labels within max limit' do
-      expect(issuable_labels_tooltip([label])).to eq(label.title)
+      expect(issuable_labels_tooltip([label_entity])).to eq(label[:title])
     end
 
     it 'returns label text with labels exceeding max limit' do
-      expect(issuable_labels_tooltip([label, label2], limit: 1)).to eq("#{label.title}, and 1 more")
+      expect(issuable_labels_tooltip([label_entity, label2_entity], limit: 1)).to eq("#{label[:title]}, and 1 more")
     end
   end
 
@@ -149,9 +175,10 @@ describe IssuablesHelper do
     before do
       allow(helper).to receive(:current_user).and_return(user)
       allow(helper).to receive(:can?).and_return(true)
+      stub_commonmark_sourcepos_disabled
     end
 
-    it 'returns the correct json for an issue' do
+    it 'returns the correct data for an issue' do
       issue = create(:issue, author: user, description: 'issue text')
       @project = issue.project
 
@@ -163,7 +190,7 @@ describe IssuablesHelper do
         issuableRef: "##{issue.iid}",
         markdownPreviewPath: "/#{@project.full_path}/preview_markdown",
         markdownDocsPath: '/help/user/markdown',
-        issuableTemplates: [],
+        lockVersion: issue.lock_version,
         projectPath: @project.path,
         projectNamespace: @project.namespace.path,
         initialTitleHtml: issue.title,
@@ -172,35 +199,75 @@ describe IssuablesHelper do
         initialDescriptionText: 'issue text',
         initialTaskStatus: '0 of 0 tasks completed'
       }
-      expect(helper.issuable_initial_data(issue)).to eq(expected_data)
+      expect(helper.issuable_initial_data(issue)).to match(hash_including(expected_data))
+    end
+
+    describe '#zoomMeetingUrl in issue' do
+      let(:issue) { create(:issue, author: user, description: description) }
+
+      before do
+        assign(:project, issue.project)
+      end
+
+      context 'no zoom links in the issue description' do
+        let(:description) { 'issue text' }
+
+        it 'does not set zoomMeetingUrl' do
+          expect(helper.issuable_initial_data(issue))
+              .not_to include(:zoomMeetingUrl)
+        end
+      end
+
+      context 'no zoom links in the issue description if it has link but not a zoom link' do
+        let(:description) { 'issue text https://stackoverflow.com/questions/22' }
+
+        it 'does not set zoomMeetingUrl' do
+          expect(helper.issuable_initial_data(issue))
+              .not_to include(:zoomMeetingUrl)
+        end
+      end
+
+      context 'with two zoom links in description' do
+        let(:description) do
+          <<~TEXT
+            issue text and
+            zoom call on https://zoom.us/j/123456789 this url
+            and new zoom url https://zoom.us/s/lastone and some more text
+          TEXT
+        end
+
+        it 'sets zoomMeetingUrl value to the last url' do
+          expect(helper.issuable_initial_data(issue))
+            .to include(zoomMeetingUrl: 'https://zoom.us/s/lastone')
+        end
+      end
     end
   end
 
-  describe '#selected_labels' do
-    context 'if label_name param is a string' do
-      it 'returns a new label with title' do
-        allow(helper).to receive(:params)
-          .and_return(ActionController::Parameters.new(label_name: 'test label'))
+  describe '#assignee_sidebar_data' do
+    let(:user) { create(:user) }
+    let(:merge_request) { nil }
+    subject { helper.assignee_sidebar_data(user, merge_request: merge_request) }
 
-        labels = helper.selected_labels
-
-        expect(labels).to be_an(Array)
-        expect(labels.size).to eq(1)
-        expect(labels.first.title).to eq('test label')
-      end
+    it 'returns hash of assignee data' do
+      is_expected.to eql({
+        avatar_url: user.avatar_url,
+        name: user.name,
+        username: user.username
+      })
     end
 
-    context 'if label_name param is an array' do
-      it 'returns a new label with title for each element' do
-        allow(helper).to receive(:params)
-          .and_return(ActionController::Parameters.new(label_name: ['test label 1', 'test label 2']))
+    context 'with merge_request' do
+      let(:merge_request) { build_stubbed(:merge_request) }
 
-        labels = helper.selected_labels
+      where(can_merge: [true, false])
 
-        expect(labels).to be_an(Array)
-        expect(labels.size).to eq(2)
-        expect(labels.first.title).to eq('test label 1')
-        expect(labels.second.title).to eq('test label 2')
+      with_them do
+        before do
+          allow(merge_request).to receive(:can_be_merged_by?).and_return(can_merge)
+        end
+
+        it { is_expected.to include({ can_merge: can_merge })}
       end
     end
   end

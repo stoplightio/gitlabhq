@@ -1,4 +1,6 @@
-require 'rails_helper'
+# frozen_string_literal: true
+
+require 'spec_helper'
 
 describe ConversationalDevelopmentIndex::Metric do
   let(:conv_dev_index) { create(:conversational_development_index_metric) }

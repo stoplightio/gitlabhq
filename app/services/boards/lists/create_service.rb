@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Boards
   module Lists
     class CreateService < Boards::BaseService
@@ -41,8 +43,14 @@ module Boards
       end
 
       def create_list(board, type, target, position)
-        board.lists.create(type => target, list_type: type, position: position)
+        board.lists.create(create_list_attributes(type, target, position))
+      end
+
+      def create_list_attributes(type, target, position)
+        { type => target, list_type: type, position: position }
       end
     end
   end
 end
+
+Boards::Lists::CreateService.prepend_if_ee('EE::Boards::Lists::CreateService')

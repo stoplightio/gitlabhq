@@ -1,8 +1,15 @@
+---
+type: reference
+---
+
 # Requirements
+
+This page includes useful information on the supported Operating Systems as well
+as the hardware requirements that are needed to install and use GitLab.
 
 ## Operating Systems
 
-### Supported Unix distributions
+### Supported Linux distributions
 
 - Ubuntu
 - Debian
@@ -12,9 +19,9 @@
 - Scientific Linux (please use the CentOS packages and instructions)
 - Oracle Linux (please use the CentOS packages and instructions)
 
-For the installations options please see [the installation page on the GitLab website](https://about.gitlab.com/installation/).
+For the installations options, see [the main installation page](README.md).
 
-### Unsupported Unix distributions
+### Unsupported Linux distributions and Unix-like operating systems
 
 - Arch Linux
 - Fedora
@@ -22,21 +29,21 @@ For the installations options please see [the installation page on the GitLab we
 - Gentoo
 - macOS
 
-On the above unsupported distributions is still possible to install GitLab yourself.
-Please see the [installation from source guide](installation.md) and the [installation guides](https://about.gitlab.com/installation/) for more information.
+Installation of GitLab on these operating systems is possible, but not supported.
+Please see the [installation from source guide](installation.md) and the [installation guides](https://about.gitlab.com/install/) for more information.
 
-### Non-Unix operating systems such as Windows
+### Microsoft Windows
 
-GitLab is developed for Unix operating systems. 
-It does **not** run on Windows, and we have no plans to support it in the near future. For the latest development status view this [issue](https://gitlab.com/gitlab-org/gitlab-ce/issues/46567).
+GitLab is developed for Linux-based operating systems.
+It does **not** run on Microsoft Windows, and we have no plans to support it in the near future. For the latest development status view this [issue](https://gitlab.com/gitlab-org/gitlab-foss/issues/46567).
 Please consider using a virtual machine to run GitLab.
 
 ## Ruby versions
 
-GitLab requires Ruby (MRI) 2.3. Support for Ruby versions below 2.3 (2.1, 2.2) will stop with GitLab 8.13.
+GitLab requires Ruby (MRI) 2.6. Support for Ruby versions below 2.6 (2.4, 2.5) will stop with GitLab 12.2.
 
 You will have to use the standard MRI implementation of Ruby.
-We love [JRuby](http://jruby.org/) and [Rubinius](http://rubini.us/) but GitLab
+We love [JRuby](https://www.jruby.org/) and [Rubinius](https://rubinius.com) but GitLab
 needs several Gems that have native extensions.
 
 ## Hardware requirements
@@ -51,35 +58,35 @@ Apart from a local hard drive you can also mount a volume that supports the netw
 
 If you have enough RAM memory and a recent CPU the speed of GitLab is mainly limited by hard drive seek times. Having a fast drive (7200 RPM and up) or a solid state drive (SSD) will improve the responsiveness of GitLab.
 
+NOTE: **Note:** Since file system performance may affect GitLab's overall performance, we do not recommend using EFS for storage. See the [relevant documentation](../administration/high_availability/nfs.md#avoid-using-awss-elastic-file-system-efs) for more details.
+
 ### CPU
 
+This is the recommended minimum hardware for a handful of example GitLab user base sizes. Your exact needs may be more, depending on your workload. Your workload is influenced by factors such as - but not limited to - how active your users are, how much automation you use, mirroring, and repo/change size.
+
 - 1 core supports up to 100 users but the application can be a bit slower due to having all workers and background jobs running on the same core
-- **2 cores** is the **recommended** number of cores and supports up to 500 users
-- 4 cores supports up to 2,000 users
-- 8 cores supports up to 5,000 users
-- 16 cores supports up to 10,000 users
-- 32 cores supports up to 20,000 users
-- 64 cores supports up to 40,000 users
-- More users? Run it on [multiple application servers](https://about.gitlab.com/high-availability/)
+- **2 cores** is the **recommended** minimum number of cores and supports up to 100 users
+- 4 cores supports up to 500 users
+- 8 cores supports up to 1,000 users
+- 32 cores supports up to 5,000 users
+- More users? Run it high-availability on [multiple application servers](https://about.gitlab.com/solutions/high-availability/)
 
 ### Memory
 
-You need at least 4GB of addressable memory (RAM + swap) to install and use GitLab!
+This is the recommended minimum hardware for a handful of example GitLab user base sizes. Your exact needs may be more, depending on your workload. Your workload is influenced by factors such as - but not limited to - how active your users are, how much automation you use, mirroring, and repo/change size.
+
+You need at least 8GB of addressable memory (RAM + swap) to install and use GitLab!
 The operating system and any other running applications will also be using memory
 so keep in mind that you need at least 4GB available before running GitLab. With
 less memory GitLab will give strange errors during the reconfigure run and 500
 errors during usage.
 
-- 1GB RAM + 3GB of swap is the absolute minimum but we strongly **advise against** this amount of memory. See the [unicorn worker section below](#unicorn-workers) for more advice.
-- 2GB RAM + 2GB swap supports up to 100 users but it will be very slow
-- **4GB RAM** is the **recommended** memory size for all installations and supports up to 100 users
-- 8GB RAM supports up to 1,000 users
-- 16GB RAM supports up to 2,000 users
-- 32GB RAM supports up to 4,000 users
-- 64GB RAM supports up to 8,000 users
-- 128GB RAM supports up to 16,000 users
-- 256GB RAM supports up to 32,000 users
-- More users? Run it on [multiple application servers](https://about.gitlab.com/high-availability/)
+- 4GB RAM + 4GB swap supports up to 100 users but it will be very slow
+- **8GB RAM** is the **recommended** minimum memory size for all installations and supports up to 100 users
+- 16GB RAM supports up to 500 users
+- 32GB RAM supports up to 1,000 users
+- 128GB RAM supports up to 5,000 users
+- More users? Run it high-availability on [multiple application servers](https://about.gitlab.com/solutions/high-availability/)
 
 We recommend having at least [2GB of swap on your server](https://askubuntu.com/a/505344/310789), even if you currently have
 enough available RAM. Having swap will help reduce the chance of errors occurring
@@ -87,7 +94,9 @@ if your available memory changes. We also recommend [configuring the kernel's sw
 to a low value like `10` to make the most of your RAM while still having the swap
 available when needed.
 
-Notice: The 25 workers of Sidekiq will show up as separate processes in your process overview (such as `top` or `htop`) but they share the same RAM allocation since Sidekiq is a multithreaded application. Please see the section below about Unicorn workers for information about how many you need of those.
+Our [Memory Team](https://about.gitlab.com/handbook/engineering/development/enablement/memory/) is actively working to reduce the memory requirement.
+
+NOTE: **Note:** The 25 workers of Sidekiq will show up as separate processes in your process overview (such as `top` or `htop`) but they share the same RAM allocation since Sidekiq is a multithreaded application. Please see the section below about Unicorn workers for information about how many you need of those.
 
 ## Database
 
@@ -97,28 +106,10 @@ installation (e.g. the number of users, projects, etc).
 
 We currently support the following databases:
 
-- PostgreSQL (highly recommended)
-- MySQL/MariaDB (strongly discouraged, not all GitLab features are supported, no support for [MySQL/MariaDB GTID](https://mariadb.com/kb/en/mariadb/gtid/))
+- PostgreSQL
 
-We highly recommend the use of PostgreSQL instead of MySQL/MariaDB as not all
-features of GitLab work with MySQL/MariaDB:
-
-1. MySQL support for subgroups was [dropped with GitLab 9.3][post].
-   See [issue #30472][30472] for more information.
-1. GitLab Geo does [not support MySQL](https://docs.gitlab.com/ee/gitlab-geo/database.html#mysql-replication).
-1. [Zero downtime migrations][zero] do not work with MySQL
-1. GitLab [optimizes the loading of dashboard events](https://gitlab.com/gitlab-org/gitlab-ce/issues/31806) using [PostgreSQL LATERAL JOINs](https://blog.heapanalytics.com/postgresqls-powerful-new-join-type-lateral/).
-1. In general, SQL optimized for PostgreSQL may run much slower in MySQL due to
-   differences in query planners. For example, subqueries that work well in PostgreSQL
-   may not be [performant in MySQL](https://dev.mysql.com/doc/refman/5.7/en/optimizing-subqueries.html)
-1. We expect this list to grow over time.
-
-Existing users using GitLab with MySQL/MariaDB are advised to
-[migrate to PostgreSQL](../update/mysql_to_postgresql.md) instead.
-
-[30472]: https://gitlab.com/gitlab-org/gitlab-ce/issues/30472
-[zero]: ../update/README.md#upgrading-without-downtime
-[post]: https://about.gitlab.com/2017/06/22/gitlab-9-3-released/#dropping-support-for-subgroups-in-mysql
+Support for MySQL was removed in GitLab 12.1. Existing users using GitLab with
+MySQL/MariaDB are advised to [migrate to PostgreSQL](../update/mysql_to_postgresql.md) before upgrading.
 
 ### PostgreSQL Requirements
 
@@ -139,7 +130,17 @@ On some systems you may need to install an additional package (e.g.
 
 #### Additional requirements for GitLab Geo
 
-If you are using [GitLab Geo](https://docs.gitlab.com/ee/development/geo.html), the [tracking database](https://docs.gitlab.com/ee/development/geo.html#geo-tracking-database) also requires the `postgres_fdw` extension.
+If you are using [GitLab Geo](../development/geo.md):
+
+- We strongly recommend running Omnibus-managed instances as they are actively
+  developed and tested. We aim to be compatible with most external (not managed
+  by Omnibus) databases (for example, AWS RDS) but we do not guarantee
+  compatibility.
+- The
+  [tracking database](../development/geo.md#using-the-tracking-database)
+  requires the
+  [postgres_fdw](https://www.postgresql.org/docs/9.6/postgres-fdw.html)
+  extension.
 
 ```
 CREATE EXTENSION postgres_fdw;
@@ -147,15 +148,15 @@ CREATE EXTENSION postgres_fdw;
 
 ## Unicorn Workers
 
-It's possible to increase the amount of unicorn workers and this will usually help to reduce the response time of the applications and increase the ability to handle parallel requests.
+For most instances we recommend using: (CPU cores * 1.5) + 1 = Unicorn workers.
+For example a node with 4 cores would have 7 Unicorn workers.
 
-For most instances we recommend using: CPU cores + 1 = unicorn workers.
-So for a machine with 2 cores, 3 unicorn workers is ideal.
-
-For all machines that have 2GB and up we recommend a minimum of three unicorn workers.
+For all machines that have 2GB and up we recommend a minimum of three Unicorn workers.
 If you have a 1GB machine we recommend to configure only two Unicorn workers to prevent excessive swapping.
 
-To change the Unicorn workers when you have the Omnibus package (which defaults to the recommendation above) please see [the Unicorn settings in the Omnibus GitLab documentation](https://gitlab.com/gitlab-org/omnibus-gitlab/blob/master/doc/settings/unicorn.md#unicorn-settings).
+As long as you have enough available CPU and memory capacity, it's okay to increase the number of Unicorn workers and this will usually help to reduce the response time of the applications and increase the ability to handle parallel requests.
+
+To change the Unicorn workers when you have the Omnibus package (which defaults to the recommendation above) please see [the Unicorn settings in the Omnibus GitLab documentation](https://docs.gitlab.com/omnibus/settings/unicorn.html).
 
 ## Redis and Sidekiq
 
@@ -187,19 +188,50 @@ you decide to run GitLab Runner and the GitLab Rails application on the same
 machine.
 
 It is also not safe to install everything on a single machine, because of the
-[security reasons] - especially when you plan to use shell executor with GitLab
+[security reasons](https://docs.gitlab.com/runner/security/), especially when you plan to use shell executor with GitLab
 Runner.
 
 We recommend using a separate machine for each GitLab Runner, if you plan to
 use the CI features.
+The GitLab Runner server requirements depend on:
 
-[security reasons]: https://gitlab.com/gitlab-org/gitlab-runner/blob/master/docs/security/index.md
+- The type of [executor](https://docs.gitlab.com/runner/executors/) you configured on GitLab Runner.
+- Resources required to run build jobs.
+- Job concurrency settings.
+
+Since the nature of the jobs varies for each use case, you will need to experiment by adjusting the job concurrency to get the optimum setting.
+
+For reference, GitLab.com's [auto-scaling shared runner](../user/gitlab_com/index.md#shared-runners) is configured so that a **single job** will run in a **single instance** with:
+
+- 1vCPU.
+- 3.75GB of RAM.
 
 ## Supported web browsers
 
-We support the current and the previous major release of Firefox, Chrome/Chromium, Safari and Microsoft browsers (Microsoft Edge and Internet Explorer 11).
+We support the current and the previous major release of:
+
+- Firefox
+- Chrome/Chromium
+- Safari
+- Microsoft Edge
+- Internet Explorer 11
+
+The browser vendors release regular minor version updates with important bug fixes and security updates.
+Support is only provided for the current minor version of the major version you are running.
 
 Each time a new browser version is released, we begin supporting that version and stop supporting the third most recent version.
 
-Note: We do not support running GitLab with JavaScript disabled in the browser and have no plans of supporting that
+NOTE: **Note:** We do not support running GitLab with JavaScript disabled in the browser and have no plans of supporting that
 in the future because we have features such as Issue Boards which require JavaScript extensively.
+
+<!-- ## Troubleshooting
+
+Include any troubleshooting steps that you can foresee. If you know beforehand what issues
+one might have when setting this up, or when something is changed, or on upgrading, it's
+important to describe those, too. Think of things that may go wrong and include them here.
+This is important to minimize requests for support, and to avoid doc comments with
+questions that you know someone might ask.
+
+Each scenario can be a third-level heading, e.g. `### Getting error message X`.
+If you have none to add when creating a doc, leave this section in place
+but commented out to help encourage others to add to it in the future. -->

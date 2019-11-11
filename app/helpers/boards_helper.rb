@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module BoardsHelper
   def board
     @board ||= @board || @boards.first
@@ -8,11 +10,13 @@ module BoardsHelper
       boards_endpoint: @boards_endpoint,
       lists_endpoint: board_lists_path(board),
       board_id: board.id,
-      disabled: "#{!can?(current_user, :admin_list, current_board_parent)}",
+      disabled: (!can?(current_user, :create_non_backlog_issues, board)).to_s,
       issue_link_base: build_issue_link_base,
       root_path: root_path,
       bulk_update_path: @bulk_issues_path,
-      default_avatar: image_path(default_avatar)
+      default_avatar: image_path(default_avatar),
+      time_tracking_limit_to_hours: Gitlab::CurrentSettings.time_tracking_limit_to_hours.to_s,
+      recent_boards_endpoint: recent_boards_path
     }
   end
 
@@ -57,8 +61,8 @@ module BoardsHelper
 
     {
       toggle: "dropdown",
-      list_labels_path: labels_filter_path(true, include_ancestor_groups: true),
-      labels: labels_filter_path(true, include_descendant_groups: include_descendant_groups),
+      list_labels_path: labels_filter_path_with_defaults(only_group_labels: true, include_ancestor_groups: true),
+      labels: labels_filter_path_with_defaults(only_group_labels: true, include_descendant_groups: include_descendant_groups),
       labels_endpoint: @labels_endpoint,
       namespace_path: @namespace_path,
       project_path: @project&.path,
@@ -67,7 +71,7 @@ module BoardsHelper
   end
 
   def board_sidebar_user_data
-    dropdown_options = issue_assignees_dropdown_options
+    dropdown_options = assignees_dropdown_options('issue')
 
     {
       toggle: 'dropdown',
@@ -84,6 +88,24 @@ module BoardsHelper
   end
 
   def boards_link_text
-    s_("IssueBoards|Board")
+    if current_board_parent.multiple_issue_boards_available?
+      s_("IssueBoards|Boards")
+    else
+      s_("IssueBoards|Board")
+    end
+  end
+
+  def recent_boards_path
+    recent_project_boards_path(@project) if current_board_parent.is_a?(Project)
+  end
+
+  def serializer
+    CurrentBoardSerializer.new
+  end
+
+  def current_board_json
+    serializer.represent(board).as_json
   end
 end
+
+BoardsHelper.prepend_if_ee('EE::BoardsHelper')

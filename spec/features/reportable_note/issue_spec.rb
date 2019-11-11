@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe 'Reportable note on issue', :js do
@@ -7,7 +9,7 @@ describe 'Reportable note on issue', :js do
   let!(:note) { create(:note_on_issue, noteable: issue, project: project) }
 
   before do
-    project.add_master(user)
+    project.add_maintainer(user)
     sign_in(user)
 
     visit project_issue_path(project, issue)

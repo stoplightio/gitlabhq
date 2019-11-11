@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Route do
@@ -29,12 +31,12 @@ describe Route do
     context 'after update' do
       it 'calls #create_redirect_for_old_path' do
         expect(route).to receive(:create_redirect_for_old_path)
-        route.update_attributes(path: 'foo')
+        route.update(path: 'foo')
       end
 
       it 'calls #delete_conflicting_redirects' do
         expect(route).to receive(:delete_conflicting_redirects)
-        route.update_attributes(path: 'foo')
+        route.update(path: 'foo')
       end
     end
 
@@ -70,7 +72,7 @@ describe Route do
     context 'path update' do
       context 'when route name is set' do
         before do
-          route.update_attributes(path: 'bar')
+          route.update(path: 'bar')
         end
 
         it 'updates children routes with new path' do
@@ -89,7 +91,7 @@ describe Route do
         end
 
         it "does not fail" do
-          expect(route.update_attributes(path: 'bar')).to be_truthy
+          expect(route.update(path: 'bar')).to be_truthy
         end
       end
 
@@ -100,7 +102,7 @@ describe Route do
         let!(:conflicting_redirect3) { route.create_redirect('gitlab-org') }
 
         it 'deletes the conflicting redirects' do
-          route.update_attributes(path: 'bar')
+          route.update(path: 'bar')
 
           expect(RedirectRoute.exists?(path: 'bar/test')).to be_falsey
           expect(RedirectRoute.exists?(path: 'bar/test/foo')).to be_falsey
@@ -111,7 +113,7 @@ describe Route do
 
     context 'name update' do
       it 'updates children routes with new path' do
-        route.update_attributes(name: 'bar')
+        route.update(name: 'bar')
 
         expect(described_class.exists?(name: 'bar')).to be_truthy
         expect(described_class.exists?(name: 'bar / test')).to be_truthy
@@ -123,7 +125,7 @@ describe Route do
         # Note: using `update_columns` to skip all validation and callbacks
         route.update_columns(name: nil)
 
-        expect { route.update_attributes(name: 'bar') }
+        expect { route.update(name: 'bar') }
           .to change { route.name }.from(nil).to('bar')
       end
     end

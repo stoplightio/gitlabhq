@@ -1,6 +1,9 @@
+# frozen_string_literal: true
+
 class WebHookWorker
   include ApplicationWorker
 
+  feature_category :integrations
   sidekiq_options retry: 4, dead: false
 
   def perform(hook_id, data, hook_name)

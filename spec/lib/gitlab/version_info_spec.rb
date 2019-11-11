@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe 'Gitlab::VersionInfo' do
@@ -57,6 +59,9 @@ describe 'Gitlab::VersionInfo' do
   context 'parse' do
     it { expect(Gitlab::VersionInfo.parse("1.0.0")).to eq(@v1_0_0) }
     it { expect(Gitlab::VersionInfo.parse("1.0.0.1")).to eq(@v1_0_0) }
+    it { expect(Gitlab::VersionInfo.parse("1.0.0-ee")).to eq(@v1_0_0) }
+    it { expect(Gitlab::VersionInfo.parse("1.0.0-rc1")).to eq(@v1_0_0) }
+    it { expect(Gitlab::VersionInfo.parse("1.0.0-rc1-ee")).to eq(@v1_0_0) }
     it { expect(Gitlab::VersionInfo.parse("git 1.0.0b1")).to eq(@v1_0_0) }
     it { expect(Gitlab::VersionInfo.parse("git 1.0b1")).not_to be_valid }
   end

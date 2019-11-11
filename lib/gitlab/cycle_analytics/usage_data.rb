@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module CycleAnalytics
     class UsageData
@@ -30,7 +32,7 @@ module Gitlab
 
       def medians_per_stage
         projects.each_with_object({}) do |project, hsh|
-          ::CycleAnalytics.new(project, options).all_medians_per_stage.each do |stage_name, median|
+          ::CycleAnalytics::ProjectLevel.new(project, options: options).all_medians_by_stage.each do |stage_name, median|
             hsh[stage_name] ||= []
             hsh[stage_name] << median
           end

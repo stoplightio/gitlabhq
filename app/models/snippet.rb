@@ -1,5 +1,8 @@
-class Snippet < ActiveRecord::Base
+# frozen_string_literal: true
+
+class Snippet < ApplicationRecord
   include Gitlab::VisibilityLevel
+  include Redactable
   include CacheMarkdownField
   include Noteable
   include Participable
@@ -10,13 +13,17 @@ class Snippet < ActiveRecord::Base
   include Spammable
   include Editable
   include Gitlab::SQL::Pattern
+  include FromUnion
+  extend ::Gitlab::Utils::Override
 
   cache_markdown_field :title, pipeline: :single_line
   cache_markdown_field :description
   cache_markdown_field :content
 
+  redact_field :description
+
   # Aliases to make application_helper#edited_time_ago_with_tooltip helper work properly with snippets.
-  # See https://gitlab.com/gitlab-org/gitlab-ce/merge_requests/10392/diffs#note_28719102
+  # See https://gitlab.com/gitlab-org/gitlab-foss/merge_requests/10392/diffs#note_28719102
   alias_attribute :last_edited_at, :updated_at
   alias_attribute :last_edited_by, :updated_by
 
@@ -25,8 +32,6 @@ class Snippet < ActiveRecord::Base
   def content_html_invalidated?
     default_content_html_invalidator || file_name_changed?
   end
-
-  default_value_for(:visibility_level) { Gitlab::CurrentSettings.default_snippet_visibility }
 
   belongs_to :author, class_name: 'User'
   belongs_to :project
@@ -44,17 +49,75 @@ class Snippet < ActiveRecord::Base
   validates :visibility_level, inclusion: { in: Gitlab::VisibilityLevel.values }
 
   # Scopes
-  scope :are_internal,  -> { where(visibility_level: Snippet::INTERNAL) }
+  scope :are_internal, -> { where(visibility_level: Snippet::INTERNAL) }
   scope :are_private, -> { where(visibility_level: Snippet::PRIVATE) }
   scope :are_public, -> { where(visibility_level: Snippet::PUBLIC) }
   scope :public_and_internal, -> { where(visibility_level: [Snippet::PUBLIC, Snippet::INTERNAL]) }
-  scope :fresh,   -> { order("created_at DESC") }
+  scope :fresh, -> { order("created_at DESC") }
+  scope :inc_author, -> { includes(:author) }
+  scope :inc_relations_for_view, -> { includes(author: :status) }
 
   participant :author
   participant :notes_with_associations
 
   attr_spammable :title, spam_title: true
   attr_spammable :content, spam_description: true
+
+  def self.with_optional_visibility(value = nil)
+    if value
+      where(visibility_level: value)
+    else
+      all
+    end
+  end
+
+  def self.only_personal_snippets
+    where(project_id: nil)
+  end
+
+  def self.only_include_projects_visible_to(current_user = nil)
+    levels = Gitlab::VisibilityLevel.levels_for_user(current_user)
+
+    joins(:project).where('projects.visibility_level IN (?)', levels)
+  end
+
+  def self.only_include_projects_with_snippets_enabled(include_private: false)
+    column = ProjectFeature.access_level_attribute(:snippets)
+    levels = [ProjectFeature::ENABLED, ProjectFeature::PUBLIC]
+
+    levels << ProjectFeature::PRIVATE if include_private
+
+    joins(project: :project_feature)
+      .where(project_features: { column => levels })
+  end
+
+  def self.only_include_authorized_projects(current_user)
+    where(
+      'EXISTS (?)',
+      ProjectAuthorization
+        .select(1)
+        .where('project_id = snippets.project_id')
+        .where(user_id: current_user.id)
+    )
+  end
+
+  def self.for_project_with_user(project, user = nil)
+    return none unless project.snippets_visible?(user)
+
+    if user && project.team.member?(user)
+      project.snippets
+    else
+      project.snippets.public_to_user(user)
+    end
+  end
+
+  def self.visible_to_or_authored_by(user)
+    where(
+      'snippets.visibility_level IN (?) OR snippets.author_id = ?',
+      Gitlab::VisibilityLevel.levels_for_user(user),
+      user.id
+    )
+  end
 
   def self.reference_prefix
     '$'
@@ -74,25 +137,22 @@ class Snippet < ActiveRecord::Base
     @link_reference_pattern ||= super("snippets", /(?<snippet>\d+)/)
   end
 
-  # Returns a collection of snippets that are either public or visible to the
-  # logged in user.
-  #
-  # This method does not verify the user actually has the access to the project
-  # the snippet is in, so it should be only used on a relation that's already scoped
-  # for project access
-  def self.public_or_visible_to_user(user = nil)
-    if user
-      authorized = user
-        .project_authorizations
-        .select(1)
-        .where('project_authorizations.project_id = snippets.project_id')
+  def initialize(attributes = {})
+    # We can't use default_value_for because the database has a default
+    # value of 0 for visibility_level. If someone attempts to create a
+    # private snippet, default_value_for will assume that the
+    # visibility_level hasn't changed and will use the application
+    # setting default, which could be internal or public.
+    #
+    # To fix the problem, we assign the actual snippet default if no
+    # explicit visibility has been initialized.
+    attributes ||= {}
 
-      levels = Gitlab::VisibilityLevel.levels_for_user(user)
-
-      where('EXISTS (?) OR snippets.visibility_level IN (?) or snippets.author_id = (?)', authorized, levels, user.id)
-    else
-      public_to_user
+    unless visibility_attribute_present?(attributes)
+      attributes[:visibility_level] = Gitlab::CurrentSettings.default_snippet_visibility
     end
+
+    super
   end
 
   def to_reference(from = nil, full: false)
@@ -133,6 +193,12 @@ class Snippet < ActiveRecord::Base
     :visibility_level
   end
 
+  def embeddable?
+    ability = project_id? ? :read_project_snippet : :read_personal_snippet
+
+    Ability.allowed?(nil, ability, self)
+  end
+
   def notes_with_associations
     notes.includes(:author)
   end
@@ -142,8 +208,18 @@ class Snippet < ActiveRecord::Base
       (public? && (title_changed? || content_changed?))
   end
 
+  # snippers are the biggest sources of spam
+  override :allow_possible_spam?
+  def allow_possible_spam?
+    false
+  end
+
   def spammable_entity_type
     'snippet'
+  end
+
+  def to_ability_name
+    model_name.singular
   end
 
   class << self
@@ -174,3 +250,5 @@ class Snippet < ActiveRecord::Base
     end
   end
 end
+
+Snippet.prepend_if_ee('EE::Snippet')

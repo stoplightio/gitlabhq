@@ -1,8 +1,10 @@
+# frozen_string_literal: true
+
 module API
   class PagesDomains < Grape::API
     include PaginationParams
 
-    PAGES_DOMAINS_ENDPOINT_REQUIREMENTS = API::PROJECT_ENDPOINT_REQUIREMENTS.merge(domain: API::NO_SLASH_URL_PART_REGEX)
+    PAGES_DOMAINS_ENDPOINT_REQUIREMENTS = API::NAMESPACE_OR_PROJECT_REQUIREMENTS.merge(domain: API::NO_SLASH_URL_PART_REGEX)
 
     before do
       authenticate!
@@ -13,9 +15,11 @@ module API
     end
 
     helpers do
+      # rubocop: disable CodeReuse/ActiveRecord
       def find_pages_domain!
         user_project.pages_domains.find_by(domain: params[:domain]) || not_found!('PagesDomain')
       end
+      # rubocop: enable CodeReuse/ActiveRecord
 
       def pages_domain
         @pages_domain ||= find_pages_domain!
@@ -50,7 +54,7 @@ module API
     params do
       requires :id, type: String, desc: 'The ID of a project'
     end
-    resource :projects, requirements: API::PROJECT_ENDPOINT_REQUIREMENTS do
+    resource :projects, requirements: API::NAMESPACE_OR_PROJECT_REQUIREMENTS do
       before do
         require_pages_enabled!
       end
@@ -61,11 +65,13 @@ module API
       params do
         use :pagination
       end
+      # rubocop: disable CodeReuse/ActiveRecord
       get ":id/pages/domains" do
         authorize! :read_pages, user_project
 
         present paginate(user_project.pages_domains.order(:domain)), with: Entities::PagesDomain
       end
+      # rubocop: enable CodeReuse/ActiveRecord
 
       desc 'Get a single pages domain' do
         success Entities::PagesDomain
@@ -84,14 +90,18 @@ module API
       end
       params do
         requires :domain, type: String, desc: 'The domain'
-        optional :certificate, allow_blank: false, types: [File, String], desc: 'The certificate'
-        optional :key, allow_blank: false, types: [File, String], desc: 'The key'
-        all_or_none_of :certificate, :key
+        # rubocop:disable Scalability/FileUploads
+        # TODO: remove rubocop disable - https://gitlab.com/gitlab-org/gitlab/issues/14960
+        optional :certificate, allow_blank: false, types: [File, String], desc: 'The certificate', as: :user_provided_certificate
+        optional :key, allow_blank: false, types: [File, String], desc: 'The key', as: :user_provided_key
+        # rubocop:enable Scalability/FileUploads
+        all_or_none_of :user_provided_certificate, :user_provided_key
       end
       post ":id/pages/domains" do
         authorize! :update_pages, user_project
 
         pages_domain_params = declared(params, include_parent_namespaces: false)
+
         pages_domain = user_project.pages_domains.create(pages_domain_params)
 
         if pages_domain.persisted?
@@ -104,8 +114,11 @@ module API
       desc 'Updates a pages domain'
       params do
         requires :domain, type: String, desc: 'The domain'
-        optional :certificate, allow_blank: false, types: [File, String], desc: 'The certificate'
-        optional :key, allow_blank: false, types: [File, String], desc: 'The key'
+        # rubocop:disable Scalability/FileUploads
+        # TODO: remove rubocop disable - https://gitlab.com/gitlab-org/gitlab/issues/14960
+        optional :certificate, allow_blank: false, types: [File, String], desc: 'The certificate', as: :user_provided_certificate
+        optional :key, allow_blank: false, types: [File, String], desc: 'The key', as: :user_provided_key
+        # rubocop:enable Scalability/FileUploads
       end
       put ":id/pages/domains/:domain", requirements: PAGES_DOMAINS_ENDPOINT_REQUIREMENTS do
         authorize! :update_pages, user_project
@@ -113,8 +126,8 @@ module API
         pages_domain_params = declared(params, include_parent_namespaces: false)
 
         # Remove empty private key if certificate is not empty.
-        if pages_domain_params[:certificate] && !pages_domain_params[:key]
-          pages_domain_params.delete(:key)
+        if pages_domain_params[:user_provided_certificate] && !pages_domain_params[:user_provided_key]
+          pages_domain_params.delete(:user_provided_key)
         end
 
         if pages_domain.update(pages_domain_params)

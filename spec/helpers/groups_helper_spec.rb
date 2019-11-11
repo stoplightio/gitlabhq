@@ -1,25 +1,14 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe GroupsHelper do
   include ApplicationHelper
 
-  describe 'group_icon' do
-    avatar_file_path = File.join(Rails.root, 'spec', 'fixtures', 'banana_sample.gif')
-
-    it 'returns an url for the avatar' do
-      group = create(:group)
-      group.avatar = fixture_file_upload(avatar_file_path)
-      group.save!
-
-      expect(helper.group_icon(group).to_s)
-        .to eq "<img data-src=\"#{group.avatar.url}\" class=\" lazy\" src=\"#{LazyImageTagHelper.placeholder_image}\" />"
-    end
-  end
-
   describe 'group_icon_url' do
-    avatar_file_path = File.join(Rails.root, 'spec', 'fixtures', 'banana_sample.gif')
-
     it 'returns an url for the avatar' do
+      avatar_file_path = File.join('spec', 'fixtures', 'banana_sample.gif')
+
       group = create(:group)
       group.avatar = fixture_file_upload(avatar_file_path)
       group.save!
@@ -97,7 +86,7 @@ describe GroupsHelper do
     end
   end
 
-  describe 'group_title', :nested_groups do
+  describe 'group_title' do
     let(:group) { create(:group) }
     let(:nested_group) { create(:group, parent: group) }
     let(:deep_nested_group) { create(:group, parent: nested_group) }
@@ -110,7 +99,7 @@ describe GroupsHelper do
   end
 
   # rubocop:disable Layout/SpaceBeforeComma
-  describe '#share_with_group_lock_help_text', :nested_groups do
+  describe '#share_with_group_lock_help_text' do
     let!(:root_group) { create(:group) }
     let!(:subgroup) { create(:group, parent: root_group) }
     let!(:sub_subgroup) { create(:group, parent: subgroup) }
@@ -202,12 +191,48 @@ describe GroupsHelper do
     end
   end
 
+  describe '#group_container_registry_nav' do
+    let(:group) { create(:group, :public) }
+    let(:user) { create(:user) }
+    before do
+      stub_container_registry_config(enabled: true)
+      allow(helper).to receive(:current_user) { user }
+      allow(helper).to receive(:can?).with(user, :read_container_image, group) { true }
+      helper.instance_variable_set(:@group, group)
+    end
+
+    subject { helper.group_container_registry_nav? }
+
+    context 'when container registry is enabled' do
+      it { is_expected.to be_truthy }
+
+      it 'is disabled for guest' do
+        allow(helper).to receive(:can?).with(user, :read_container_image, group) { false }
+        expect(subject).to be false
+      end
+    end
+
+    context 'when container registry is not enabled' do
+      before do
+        stub_container_registry_config(enabled: false)
+      end
+
+      it { is_expected.to be_falsy }
+
+      it 'is disabled for guests' do
+        allow(helper).to receive(:can?).with(user, :read_container_image, group) { false }
+        expect(subject).to be false
+      end
+    end
+  end
+
   describe '#group_sidebar_links' do
     let(:group) { create(:group, :public) }
     let(:user) { create(:user) }
     before do
+      group.add_owner(user)
       allow(helper).to receive(:current_user) { user }
-      allow(helper).to receive(:can?) { true }
+      allow(helper).to receive(:can?) { |*args| Ability.allowed?(*args) }
       helper.instance_variable_set(:@group, group)
     end
 
@@ -231,9 +256,85 @@ describe GroupsHelper do
       cross_project_features = [:activity, :issues, :labels, :milestones,
                                 :merge_requests]
 
-      expect(helper).to receive(:can?).with(user, :read_cross_project) { false }
+      allow(Ability).to receive(:allowed?).and_call_original
+      cross_project_features.each do |feature|
+        expect(Ability).to receive(:allowed?).with(user, "read_group_#{feature}".to_sym, group) { false }
+      end
 
       expect(helper.group_sidebar_links).not_to include(*cross_project_features)
+    end
+  end
+
+  describe 'parent_group_options' do
+    let(:current_user) { create(:user) }
+    let(:group) { create(:group, name: 'group') }
+    let(:group2) { create(:group, name: 'group2') }
+
+    before do
+      group.add_owner(current_user)
+      group2.add_owner(current_user)
+    end
+
+    it 'includes explicitly owned groups except self' do
+      expect(parent_group_options(group2)).to eq([{ id: group.id, text: group.human_name }].to_json)
+    end
+
+    it 'excludes parent group' do
+      subgroup = create(:group, parent: group2)
+
+      expect(parent_group_options(subgroup)).to eq([{ id: group.id, text: group.human_name }].to_json)
+    end
+
+    it 'includes subgroups with inherited ownership' do
+      subgroup = create(:group, parent: group)
+
+      expect(parent_group_options(group2)).to eq([{ id: group.id, text: group.human_name }, { id: subgroup.id, text: subgroup.human_name }].to_json)
+    end
+
+    it 'excludes own subgroups' do
+      create(:group, parent: group2)
+
+      expect(parent_group_options(group2)).to eq([{ id: group.id, text: group.human_name }].to_json)
+    end
+  end
+
+  describe '#can_disable_group_emails?' do
+    let(:current_user) { create(:user) }
+    let(:group) { create(:group, name: 'group') }
+    let(:subgroup) { create(:group, name: 'subgroup', parent: group) }
+
+    before do
+      allow(helper).to receive(:current_user) { current_user }
+    end
+
+    it 'returns true for the group owner' do
+      allow(helper).to receive(:can?).with(current_user, :set_emails_disabled, group) { true }
+
+      expect(helper.can_disable_group_emails?(group)).to be_truthy
+    end
+
+    it 'returns false for anyone else' do
+      allow(helper).to receive(:can?).with(current_user, :set_emails_disabled, group) { false }
+
+      expect(helper.can_disable_group_emails?(group)).to be_falsey
+    end
+
+    context 'when subgroups' do
+      before do
+        allow(helper).to receive(:can?).with(current_user, :set_emails_disabled, subgroup) { true }
+      end
+
+      it 'returns false if parent group is disabling emails' do
+        allow(group).to receive(:emails_disabled?).and_return(true)
+
+        expect(helper.can_disable_group_emails?(subgroup)).to be_falsey
+      end
+
+      it 'returns true if parent group is not disabling emails' do
+        allow(group).to receive(:emails_disabled?).and_return(false)
+
+        expect(helper.can_disable_group_emails?(subgroup)).to be_truthy
+      end
     end
   end
 end

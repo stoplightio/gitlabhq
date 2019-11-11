@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe 'Projects > Settings > For a forked project', :js do
@@ -7,8 +9,8 @@ describe 'Projects > Settings > For a forked project', :js do
   let(:forked_project) { fork_project(original_project, user) }
 
   before do
-    original_project.add_master(user)
-    forked_project.add_master(user)
+    original_project.add_maintainer(user)
+    forked_project.add_maintainer(user)
     sign_in(user)
   end
 

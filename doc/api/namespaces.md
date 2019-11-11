@@ -19,7 +19,7 @@ GET /namespaces
 Example request:
 
 ```bash
-curl --header "PRIVATE-TOKEN: 9koXpg98eAheJpvBs5tK" https://gitlab.example.com/api/v4/namespaces
+curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/namespaces
 ```
 
 Example response:
@@ -54,7 +54,21 @@ Example response:
 ]
 ```
 
-**Note**: `members_count_with_descendants` are presented only for group maintainers/owners.
+Users on GitLab.com [Bronze or higher](https://about.gitlab.com/pricing/#gitlab-com) may also see
+the `plan` parameter associated with a namespace:
+
+```json
+[
+  {
+    "id": 1,
+    "name": "user1",
+    "plan": "bronze",
+    ...
+  }
+]
+```
+
+NOTE: **Note:** Only group maintainers/owners are presented with `members_count_with_descendants`, as well as `plan` **(BRONZE ONLY)**.
 
 ## Search for namespace
 
@@ -64,14 +78,14 @@ Get all namespaces that match a string in their name or path.
 GET /namespaces?search=foobar
 ```
 
-| Attribute | Type | Required | Description |
-| --------- | ---- | -------- | ----------- |
-| `search`  | string | no | Returns a list of namespaces the user is authorized to see based on the search criteria |
+| Attribute | Type   | Required | Description |
+| --------- | ------ | -------- | ----------- |
+| `search`  | string | no       | Returns a list of namespaces the user is authorized to see based on the search criteria |
 
 Example request:
 
 ```bash
-curl --header "PRIVATE-TOKEN: 9koXpg98eAheJpvBs5tK" https://gitlab.example.com/api/v4/namespaces?search=twitter
+curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/namespaces?search=twitter
 ```
 
 Example response:
@@ -98,14 +112,14 @@ Get a namespace by ID.
 GET /namespaces/:id
 ```
 
-| Attribute | Type | Required | Description |
-| --------- | ---- | -------- | ----------- |
-| `id`      | integer/string | yes | ID or path of the namespace |
+| Attribute | Type           | Required | Description |
+| --------- | -------------- | -------- | ----------- |
+| `id`      | integer/string | yes      | ID or [URL-encoded path of the namespace](README.md#namespaced-path-encoding) |
 
 Example request:
 
 ```bash
-curl --header "PRIVATE-TOKEN: 9koXpg98eAheJpvBs5tK" https://gitlab.example.com/api/v4/namespaces/2
+curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/namespaces/2
 ```
 
 Example response:
@@ -125,7 +139,7 @@ Example response:
 Example request:
 
 ```bash
-curl --header "PRIVATE-TOKEN: 9koXpg98eAheJpvBs5tK" https://gitlab.example.com/api/v4/namespaces/group1
+curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/namespaces/group1
 ```
 
 Example response:

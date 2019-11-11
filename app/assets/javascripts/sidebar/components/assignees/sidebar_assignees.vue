@@ -2,8 +2,10 @@
 import Flash from '~/flash';
 import eventHub from '~/sidebar/event_hub';
 import Store from '~/sidebar/stores/sidebar_store';
+import { refreshUserMergeRequestCounts } from '~/commons/nav/user_merge_requests';
 import AssigneeTitle from './assignee_title.vue';
 import Assignees from './assignees.vue';
+import { __ } from '~/locale';
 
 export default {
   name: 'SidebarAssignees',
@@ -27,7 +29,7 @@ export default {
     },
     issuableType: {
       type: String,
-      require: true,
+      required: false,
       default: 'issue',
     },
   },
@@ -65,15 +67,15 @@ export default {
     saveAssignees() {
       this.loading = true;
 
-      function setLoadingFalse() {
-        this.loading = false;
-      }
-
-      this.mediator.saveAssignees(this.field)
-        .then(setLoadingFalse.bind(this))
+      this.mediator
+        .saveAssignees(this.field)
+        .then(() => {
+          this.loading = false;
+          refreshUserMergeRequestCounts();
+        })
         .catch(() => {
-          setLoadingFalse();
-          return new Flash('Error occurred when saving assignees');
+          this.loading = false;
+          return new Flash(__('Error occurred when saving assignees'));
         });
     },
   },
@@ -90,12 +92,12 @@ export default {
     />
     <assignees
       v-if="!store.isFetching.assignees"
-      class="value"
       :root-path="store.rootPath"
       :users="store.assignees"
       :editable="store.editable"
-      @assign-self="assignSelf"
       :issuable-type="issuableType"
+      class="value"
+      @assign-self="assignSelf"
     />
   </div>
 </template>

@@ -147,18 +147,110 @@ describe('IDE store getters', () => {
       const commitTitle = 'Example commit title';
       const localGetters = {
         currentProject: {
-          branches: {
-            'example-branch': {
-              commit: {
-                title: commitTitle,
-              },
-            },
+          name: 'test-project',
+        },
+        currentBranch: {
+          commit: {
+            title: commitTitle,
           },
         },
       };
       localState.currentBranchId = 'example-branch';
 
       expect(getters.lastCommit(localState, localGetters).title).toBe(commitTitle);
+    });
+  });
+
+  describe('currentBranch', () => {
+    it('returns current projects branch', () => {
+      const localGetters = {
+        currentProject: {
+          branches: {
+            master: {
+              name: 'master',
+            },
+          },
+        },
+      };
+      localState.currentBranchId = 'master';
+
+      expect(getters.currentBranch(localState, localGetters)).toEqual({
+        name: 'master',
+      });
+    });
+  });
+
+  describe('isOnDefaultBranch', () => {
+    it('returns false when no project exists', () => {
+      const localGetters = {
+        currentProject: undefined,
+      };
+
+      expect(getters.isOnDefaultBranch({}, localGetters)).toBeFalsy();
+    });
+
+    it("returns true when project's default branch matches current branch", () => {
+      const localGetters = {
+        currentProject: {
+          default_branch: 'master',
+        },
+        branchName: 'master',
+      };
+
+      expect(getters.isOnDefaultBranch({}, localGetters)).toBeTruthy();
+    });
+
+    it("returns false when project's default branch doesn't match current branch", () => {
+      const localGetters = {
+        currentProject: {
+          default_branch: 'master',
+        },
+        branchName: 'feature',
+      };
+
+      expect(getters.isOnDefaultBranch({}, localGetters)).toBeFalsy();
+    });
+  });
+
+  describe('packageJson', () => {
+    it('returns package.json entry', () => {
+      localState.entries['package.json'] = { name: 'package.json' };
+
+      expect(getters.packageJson(localState)).toEqual({
+        name: 'package.json',
+      });
+    });
+  });
+
+  describe('canPushToBranch', () => {
+    it('returns false when no currentBranch exists', () => {
+      const localGetters = {
+        currentProject: undefined,
+      };
+
+      expect(getters.canPushToBranch({}, localGetters)).toBeFalsy();
+    });
+
+    it('returns true when can_push to currentBranch', () => {
+      const localGetters = {
+        currentProject: {
+          default_branch: 'master',
+        },
+        currentBranch: { can_push: true },
+      };
+
+      expect(getters.canPushToBranch({}, localGetters)).toBeTruthy();
+    });
+
+    it('returns false when !can_push to currentBranch', () => {
+      const localGetters = {
+        currentProject: {
+          default_branch: 'master',
+        },
+        currentBranch: { can_push: false },
+      };
+
+      expect(getters.canPushToBranch({}, localGetters)).toBeFalsy();
     });
   });
 });

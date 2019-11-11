@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module Ci
     module Variables
@@ -15,6 +17,8 @@ module Gitlab
         end
 
         def concat(resources)
+          return self if resources.nil?
+
           tap { resources.each { |variable| self.append(variable) } }
         end
 

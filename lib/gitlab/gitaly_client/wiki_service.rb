@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'stringio'
 
 module Gitlab
@@ -20,7 +22,7 @@ module Gitlab
           commit_details: gitaly_commit_details(commit_details)
         )
 
-        strio = binary_stringio(content)
+        strio = binary_io(content)
 
         enum = Enumerator.new do |y|
           until strio.eof?
@@ -32,7 +34,7 @@ module Gitlab
           end
         end
 
-        response = GitalyClient.call(@repository.storage, :wiki_service, :wiki_write_page, enum)
+        response = GitalyClient.call(@repository.storage, :wiki_service, :wiki_write_page, enum, timeout: GitalyClient.medium_timeout)
         if error = response.duplicate_error.presence
           raise Gitlab::Git::Wiki::DuplicatePageError, error
         end
@@ -47,7 +49,7 @@ module Gitlab
           commit_details: gitaly_commit_details(commit_details)
         )
 
-        strio = binary_stringio(content)
+        strio = binary_io(content)
 
         enum = Enumerator.new do |y|
           until strio.eof?
@@ -59,7 +61,7 @@ module Gitlab
           end
         end
 
-        GitalyClient.call(@repository.storage, :wiki_service, :wiki_update_page, enum)
+        GitalyClient.call(@repository.storage, :wiki_service, :wiki_update_page, enum, timeout: GitalyClient.medium_timeout)
       end
 
       def delete_page(page_path, commit_details)
@@ -69,7 +71,7 @@ module Gitlab
           commit_details: gitaly_commit_details(commit_details)
         )
 
-        GitalyClient.call(@repository.storage, :wiki_service, :wiki_delete_page, request)
+        GitalyClient.call(@repository.storage, :wiki_service, :wiki_delete_page, request, timeout: GitalyClient.medium_timeout)
       end
 
       def find_page(title:, version: nil, dir: nil)
@@ -80,14 +82,40 @@ module Gitlab
           directory: encode_binary(dir)
         )
 
-        response = GitalyClient.call(@repository.storage, :wiki_service, :wiki_find_page, request)
+        response = GitalyClient.call(@repository.storage, :wiki_service, :wiki_find_page, request, timeout: GitalyClient.fast_timeout)
 
         wiki_page_from_iterator(response)
       end
 
-      def get_all_pages
-        request = Gitaly::WikiGetAllPagesRequest.new(repository: @gitaly_repo)
-        response = GitalyClient.call(@repository.storage, :wiki_service, :wiki_get_all_pages, request)
+      def list_all_pages(limit: 0, sort: nil, direction_desc: false)
+        sort_value = Gitaly::WikiListPagesRequest::SortBy.resolve(sort.to_s.upcase.to_sym)
+
+        params = { repository: @gitaly_repo, limit: limit, direction_desc: direction_desc }
+        params[:sort] = sort_value if sort_value
+
+        request = Gitaly::WikiListPagesRequest.new(params)
+        stream = GitalyClient.call(@repository.storage, :wiki_service, :wiki_list_pages, request, timeout: GitalyClient.medium_timeout)
+        stream.each_with_object([]) do |message, pages|
+          page = message.page
+
+          next unless page
+
+          wiki_page = GitalyClient::WikiPage.new(page.to_h)
+          version = new_wiki_page_version(page.version)
+
+          pages << [wiki_page, version]
+        end
+      end
+
+      def load_all_pages(limit: 0, sort: nil, direction_desc: false)
+        sort_value = Gitaly::WikiGetAllPagesRequest::SortBy.resolve(sort.to_s.upcase.to_sym)
+
+        params = { repository: @gitaly_repo, limit: limit, direction_desc: direction_desc }
+        params[:sort] = sort_value if sort_value
+
+        request = Gitaly::WikiGetAllPagesRequest.new(params)
+        response = GitalyClient.call(@repository.storage, :wiki_service, :wiki_get_all_pages, request, timeout: GitalyClient.medium_timeout)
+
         pages = []
 
         loop do
@@ -110,10 +138,10 @@ module Gitlab
           repository: @gitaly_repo,
           page_path: encode_binary(page_path),
           page: options[:page] || 1,
-          per_page: options[:per_page] || Gollum::Page.per_page
+          per_page: options[:per_page] || Gitlab::Git::Wiki::DEFAULT_PAGINATION
         )
 
-        stream = GitalyClient.call(@repository.storage, :wiki_service, :wiki_get_page_versions, request)
+        stream = GitalyClient.call(@repository.storage, :wiki_service, :wiki_get_page_versions, request, timeout: GitalyClient.medium_timeout)
 
         versions = []
         stream.each do |message|
@@ -132,14 +160,14 @@ module Gitlab
           revision: encode_binary(revision)
         )
 
-        response = GitalyClient.call(@repository.storage, :wiki_service, :wiki_find_file, request)
+        response = GitalyClient.call(@repository.storage, :wiki_service, :wiki_find_file, request, timeout: GitalyClient.fast_timeout)
         wiki_file = nil
 
         response.each do |message|
           next unless message.name.present? || wiki_file
 
           if wiki_file
-            wiki_file.raw_data << message.raw_data
+            wiki_file.raw_data = "#{wiki_file.raw_data}#{message.raw_data}"
           else
             wiki_file = GitalyClient::WikiFile.new(message.to_h)
             # All gRPC strings in a response are frozen, so we get
@@ -159,8 +187,8 @@ module Gitlab
           directory: encode_binary(dir)
         )
 
-        response = GitalyClient.call(@repository.storage, :wiki_service, :wiki_get_formatted_data, request)
-        response.reduce("") { |memo, msg| memo << msg.data }
+        response = GitalyClient.call(@repository.storage, :wiki_service, :wiki_get_formatted_data, request, timeout: GitalyClient.medium_timeout)
+        response.reduce([]) { |memo, msg| memo << msg.data }.join
       end
 
       private

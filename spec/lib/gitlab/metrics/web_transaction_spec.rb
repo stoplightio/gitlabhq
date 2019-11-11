@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Gitlab::Metrics::WebTransaction do
@@ -194,12 +196,21 @@ describe Gitlab::Metrics::WebTransaction do
         expect(transaction.action).to eq('TestController#show')
       end
 
-      context 'when the response content type is not :html' do
+      context 'when the request content type is not :html' do
         let(:request) { double(:request, format: double(:format, ref: :json)) }
 
         it 'appends the mime type to the transaction action' do
           expect(transaction.labels).to eq({ controller: 'TestController', action: 'show.json' })
           expect(transaction.action).to eq('TestController#show.json')
+        end
+      end
+
+      context 'when the request content type is not' do
+        let(:request) { double(:request, format: double(:format, ref: 'http://example.com')) }
+
+        it 'does not append the MIME type to the transaction action' do
+          expect(transaction.labels).to eq({ controller: 'TestController', action: 'show' })
+          expect(transaction.action).to eq('TestController#show')
         end
       end
     end
@@ -242,11 +253,11 @@ describe Gitlab::Metrics::WebTransaction do
     end
 
     it 'allows tracking of custom tags' do
-      transaction.add_event(:meow, animal: 'cat')
+      transaction.add_event(:bau, animal: 'dog')
 
       metric = transaction.metrics[0]
 
-      expect(metric.tags).to eq(event: :meow, animal: 'cat')
+      expect(metric.tags).to eq(event: :bau, animal: 'dog')
     end
   end
 end

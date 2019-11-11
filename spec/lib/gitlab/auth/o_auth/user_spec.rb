@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Gitlab::Auth::OAuth::User do
@@ -207,6 +209,7 @@ describe Gitlab::Auth::OAuth::User do
             before do
               allow(ldap_user).to receive(:uid) { uid }
               allow(ldap_user).to receive(:username) { uid }
+              allow(ldap_user).to receive(:name) { 'John Doe' }
               allow(ldap_user).to receive(:email) { ['johndoe@example.com', 'john2@example.com'] }
               allow(ldap_user).to receive(:dn) { dn }
             end
@@ -221,6 +224,7 @@ describe Gitlab::Auth::OAuth::User do
               it "creates a user with dual LDAP and omniauth identities" do
                 expect(gl_user).to be_valid
                 expect(gl_user.username).to eql uid
+                expect(gl_user.name).to eql 'John Doe'
                 expect(gl_user.email).to eql 'johndoe@example.com'
                 expect(gl_user.identities.length).to be 2
                 identities_as_hash = gl_user.identities.map { |id| { provider: id.provider, extern_uid: id.extern_uid } }
@@ -232,11 +236,13 @@ describe Gitlab::Auth::OAuth::User do
                 )
               end
 
-              it "has email set as synced" do
+              it "has name and email set as synced" do
+                expect(gl_user.user_synced_attributes_metadata.name_synced).to be_truthy
                 expect(gl_user.user_synced_attributes_metadata.email_synced).to be_truthy
               end
 
-              it "has email set as read-only" do
+              it "has name and email set as read-only" do
+                expect(gl_user.read_only_attribute?(:name)).to be_truthy
                 expect(gl_user.read_only_attribute?(:email)).to be_truthy
               end
 
@@ -246,7 +252,7 @@ describe Gitlab::Auth::OAuth::User do
             end
 
             context "and LDAP user has an account already" do
-              let!(:existing_user) { create(:omniauth_user, email: 'john@example.com', extern_uid: dn, provider: 'ldapmain', username: 'john') }
+              let!(:existing_user) { create(:omniauth_user, name: 'John Doe', email: 'john@example.com', extern_uid: dn, provider: 'ldapmain', username: 'john') }
               it "adds the omniauth identity to the LDAP account" do
                 allow(Gitlab::Auth::LDAP::Person).to receive(:find_by_uid).and_return(ldap_user)
 
@@ -254,6 +260,7 @@ describe Gitlab::Auth::OAuth::User do
 
                 expect(gl_user).to be_valid
                 expect(gl_user.username).to eql 'john'
+                expect(gl_user.name).to eql 'John Doe'
                 expect(gl_user.email).to eql 'john@example.com'
                 expect(gl_user.identities.length).to be 2
                 identities_as_hash = gl_user.identities.map { |id| { provider: id.provider, extern_uid: id.extern_uid } }
@@ -498,7 +505,7 @@ describe Gitlab::Auth::OAuth::User do
     end
   end
 
-  describe 'ensure backwards compatibility with with sync email from provider option' do
+  describe 'ensure backwards compatibility with sync email from provider option' do
     let!(:existing_user) { create(:omniauth_user, extern_uid: 'my-uid', provider: 'my-provider') }
 
     before do
@@ -777,6 +784,28 @@ describe Gitlab::Auth::OAuth::User do
 
         expect(oauth_user.send(:find_ldap_person, hash, adapter)).to be_nil
       end
+    end
+  end
+
+  describe "#bypass_two_factor?" do
+    it "when with allow_bypass_two_factor disabled (Default)" do
+      stub_omniauth_config(allow_bypass_two_factor: false)
+      expect(oauth_user.bypass_two_factor?).to be_falsey
+    end
+
+    it "when with allow_bypass_two_factor enabled" do
+      stub_omniauth_config(allow_bypass_two_factor: true)
+      expect(oauth_user.bypass_two_factor?).to be_truthy
+    end
+
+    it "when provider in allow_bypass_two_factor array" do
+      stub_omniauth_config(allow_bypass_two_factor: [provider])
+      expect(oauth_user.bypass_two_factor?).to be_truthy
+    end
+
+    it "when provider not in allow_bypass_two_factor array" do
+      stub_omniauth_config(allow_bypass_two_factor: ["foo"])
+      expect(oauth_user.bypass_two_factor?).to be_falsey
     end
   end
 end

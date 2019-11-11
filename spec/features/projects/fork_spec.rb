@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe 'Project fork' do
@@ -50,7 +52,19 @@ describe 'Project fork' do
       click_link('New merge request')
     end
 
-    expect(current_path).to have_content(/#{user.namespace.name}/i)
+    expect(current_path).to have_content(/#{user.namespace.path}/i)
+  end
+
+  it 'shows avatars when Gravatar is disabled' do
+    stub_application_setting(gravatar_enabled: false)
+
+    visit project_path(project)
+
+    click_link 'Fork'
+
+    page.within('.fork-thumbnail-container') do
+      expect(page).to have_css('div.identicon')
+    end
   end
 
   it 'shows the forked project on the list' do
@@ -107,7 +121,6 @@ describe 'Project fork' do
       end
 
       expect(page).not_to have_content("#{another_project_fork.namespace.human_name} / #{another_project_fork.name}")
-      expect(page).to have_content("1 private fork")
     end
   end
 
@@ -129,11 +142,11 @@ describe 'Project fork' do
     end
   end
 
-  context 'master in group' do
+  context 'maintainer in group' do
     let(:group) { create(:group) }
 
     before do
-      group.add_master(user)
+      group.add_maintainer(user)
     end
 
     it 'allows user to fork project to group or to user namespace' do

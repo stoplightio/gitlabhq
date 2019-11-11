@@ -1,13 +1,18 @@
-/* eslint-disable func-names, space-before-function-paren, wrap-iife, no-underscore-dangle, prefer-arrow-callback, max-len, one-var, one-var-declaration-per-line, no-unused-vars, object-shorthand, comma-dangle, no-else-return, no-self-compare, consistent-return, no-param-reassign, no-shadow */
+/* eslint-disable one-var, no-else-return, no-self-compare, consistent-return, no-param-reassign, no-shadow */
 /* global Issuable */
 /* global ListMilestone */
 
 import $ from 'jquery';
 import _ from 'underscore';
 import { __ } from '~/locale';
+import '~/gl_dropdown';
 import axios from './lib/utils/axios_utils';
 import { timeFor } from './lib/utils/datetime_utility';
 import ModalStore from './boards/stores/modal_store';
+import boardsStore, {
+  boardStoreIssueSet,
+  boardStoreIssueDelete,
+} from './boards/stores/boards_store';
 
 export default class MilestoneSelect {
   constructor(currentProject, els, options = {}) {
@@ -32,7 +37,6 @@ export default class MilestoneSelect {
         selectedMilestone,
         selectedMilestoneDefault;
       const $dropdown = $(dropdown);
-      const projectId = $dropdown.data('projectId');
       const milestonesUrl = $dropdown.data('milestones');
       const issueUpdateURL = $dropdown.data('issueUpdate');
       const showNo = $dropdown.data('showNo');
@@ -43,7 +47,6 @@ export default class MilestoneSelect {
       const useId = $dropdown.data('useId');
       const defaultLabel = $dropdown.data('defaultLabel');
       const defaultNo = $dropdown.data('defaultNo');
-      const issuableId = $dropdown.data('issuableId');
       const abilityName = $dropdown.data('abilityName');
       const $selectBox = $dropdown.closest('.selectbox');
       const $block = $selectBox.closest('.block');
@@ -51,17 +54,18 @@ export default class MilestoneSelect {
       const $value = $block.find('.value');
       const $loading = $block.find('.block-loading').fadeOut();
       selectedMilestoneDefault = showAny ? '' : null;
-      selectedMilestoneDefault = showNo && defaultNo ? 'No Milestone' : selectedMilestoneDefault;
+      selectedMilestoneDefault =
+        showNo && defaultNo ? __('No Milestone') : selectedMilestoneDefault;
       selectedMilestone = $dropdown.data('selected') || selectedMilestoneDefault;
 
       if (issueUpdateURL) {
         milestoneLinkTemplate = _.template(
           '<a href="<%- web_url %>" class="bold has-tooltip" data-container="body" title="<%- remaining %>"><%- title %></a>',
         );
-        milestoneLinkNoneTemplate = '<span class="no-value">None</span>';
+        milestoneLinkNoneTemplate = `<span class="no-value">${__('None')}</span>`;
       }
       return $dropdown.glDropdown({
-        showMenuAbove: showMenuAbove,
+        showMenuAbove,
         data: (term, callback) =>
           axios.get(milestonesUrl).then(({ data }) => {
             const extraOptions = [];
@@ -69,32 +73,32 @@ export default class MilestoneSelect {
               extraOptions.push({
                 id: null,
                 name: null,
-                title: 'Any Milestone',
+                title: __('Any Milestone'),
               });
             }
             if (showNo) {
               extraOptions.push({
                 id: -1,
-                name: 'No Milestone',
-                title: 'No Milestone',
+                name: __('No Milestone'),
+                title: __('No Milestone'),
               });
             }
             if (showUpcoming) {
               extraOptions.push({
                 id: -2,
                 name: '#upcoming',
-                title: 'Upcoming',
+                title: __('Upcoming'),
               });
             }
             if (showStarted) {
               extraOptions.push({
                 id: -3,
                 name: '#started',
-                title: 'Started',
+                title: __('Started'),
               });
             }
             if (extraOptions.length) {
-              extraOptions.push('divider');
+              extraOptions.push({ type: 'divider' });
             }
 
             callback(extraOptions.concat(data));
@@ -115,14 +119,14 @@ export default class MilestoneSelect {
           fields: ['title'],
         },
         selectable: true,
-        toggleLabel: (selected, el, e) => {
+        toggleLabel: (selected, el) => {
           if (selected && 'id' in selected && $(el).hasClass('is-active')) {
             return selected.title;
           } else {
             return defaultLabel;
           }
         },
-        defaultLabel: defaultLabel,
+        defaultLabel,
         fieldName: $dropdown.data('fieldName'),
         text: milestone => _.escape(milestone.title),
         id: milestone => {
@@ -147,10 +151,10 @@ export default class MilestoneSelect {
         },
         vue: $dropdown.hasClass('js-issue-board-sidebar'),
         clicked: clickEvent => {
-          const { $el, e } = clickEvent;
+          const { e } = clickEvent;
           let selected = clickEvent.selectedObj;
 
-          let data, boardsStore;
+          let data, modalStoreFilter;
           if (!selected) return;
 
           if (options.handleClick) {
@@ -174,11 +178,11 @@ export default class MilestoneSelect {
           }
 
           if ($dropdown.closest('.add-issues-modal').length) {
-            boardsStore = ModalStore.store.filter;
+            modalStoreFilter = ModalStore.store.filter;
           }
 
-          if (boardsStore) {
-            boardsStore[$dropdown.data('fieldName')] = selected.name;
+          if (modalStoreFilter) {
+            modalStoreFilter[$dropdown.data('fieldName')] = selected.name;
             e.preventDefault();
           } else if ($dropdown.hasClass('js-filter-submit') && (isIssueIndex || isMRIndex)) {
             return Issuable.filterResults($dropdown.closest('form'));
@@ -186,7 +190,7 @@ export default class MilestoneSelect {
             return $dropdown.closest('form').submit();
           } else if ($dropdown.hasClass('js-issue-board-sidebar')) {
             if (selected.id !== -1 && isSelecting) {
-              gl.issueBoards.boardStoreIssueSet(
+              boardStoreIssueSet(
                 'milestone',
                 new ListMilestone({
                   id: selected.id,
@@ -194,13 +198,13 @@ export default class MilestoneSelect {
                 }),
               );
             } else {
-              gl.issueBoards.boardStoreIssueDelete('milestone');
+              boardStoreIssueDelete('milestone');
             }
 
             $dropdown.trigger('loading.gl.dropdown');
             $loading.removeClass('hidden').fadeIn();
 
-            gl.issueBoards.BoardsStore.detail.issue
+            boardsStore.detail.issue
               .update($dropdown.attr('data-issue-update'))
               .then(() => {
                 $dropdown.trigger('loaded.gl.dropdown');
@@ -251,3 +255,5 @@ export default class MilestoneSelect {
     });
   }
 }
+
+window.MilestoneSelect = MilestoneSelect;

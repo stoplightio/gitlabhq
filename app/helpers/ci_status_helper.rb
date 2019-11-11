@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 ##
 # DEPRECATED
 #
@@ -14,10 +16,12 @@ module CiStatusHelper
     label = case status
             when 'success'
               'passed'
-            when 'success_with_warnings'
+            when 'success-with-warnings'
               'passed with warnings'
             when 'manual'
               'waiting for manual action'
+            when 'scheduled'
+              'waiting for delayed job'
             else
               status
             end
@@ -33,10 +37,12 @@ module CiStatusHelper
     case status
     when 'success'
       s_('CiStatusText|passed')
-    when 'success_with_warnings'
+    when 'success-with-warnings'
       s_('CiStatusText|passed')
     when 'manual'
       s_('CiStatusText|blocked')
+    when 'scheduled'
+      s_('CiStatusText|delayed')
     else
       # All states are already being translated inside the detailed statuses:
       # :running => Gitlab::Ci::Status::Running
@@ -56,21 +62,23 @@ module CiStatusHelper
     status.humanize
   end
 
-  def ci_icon_for_status(status)
+  def ci_icon_for_status(status, size: 16)
     if detailed_status?(status)
-      return sprite_icon(status.icon)
+      return sprite_icon(status.icon, size: size)
     end
 
     icon_name =
       case status
       when 'success'
         'status_success'
-      when 'success_with_warnings'
+      when 'success-with-warnings'
         'status_warning'
       when 'failed'
         'status_failed'
       when 'pending'
         'status_pending'
+      when 'preparing'
+        'status_preparing'
       when 'running'
         'status_running'
       when 'play'
@@ -81,66 +89,53 @@ module CiStatusHelper
         'status_skipped'
       when 'manual'
         'status_manual'
+      when 'scheduled'
+        'status_scheduled'
       else
         'status_canceled'
       end
 
-    sprite_icon(icon_name, size: 16)
+    sprite_icon(icon_name, size: size)
+  end
+
+  def ci_icon_class_for_status(status)
+    group = detailed_status?(status) ? status.group : status.dasherize
+
+    "ci-status-icon-#{group}"
   end
 
   def pipeline_status_cache_key(pipeline_status)
     "pipeline-status/#{pipeline_status.sha}-#{pipeline_status.status}"
   end
 
-  def render_project_pipeline_status(pipeline_status, tooltip_placement: 'left')
-    project = pipeline_status.project
-    path = pipelines_project_commit_path(project, pipeline_status.sha, ref: pipeline_status.ref)
-
-    render_status_with_link(
-      'commit',
-      pipeline_status.status,
-      path,
-      tooltip_placement: tooltip_placement)
-  end
-
-  def render_commit_status(commit, ref: nil, tooltip_placement: 'left')
+  def render_commit_status(commit, status, ref: nil, tooltip_placement: 'left')
     project = commit.project
     path = pipelines_project_commit_path(project, commit, ref: ref)
 
     render_status_with_link(
-      'commit',
-      commit.status(ref),
+      status,
       path,
-      tooltip_placement: tooltip_placement)
+      tooltip_placement: tooltip_placement,
+      icon_size: 24)
   end
 
-  def render_pipeline_status(pipeline, tooltip_placement: 'left')
-    project = pipeline.project
-    path = project_pipeline_path(project, pipeline)
-    render_status_with_link('pipeline', pipeline.status, path, tooltip_placement: tooltip_placement)
-  end
-
-  def no_runners_for_project?(project)
-    project.runners.blank? &&
-      Ci::Runner.shared.blank?
-  end
-
-  def render_status_with_link(type, status, path = nil, tooltip_placement: 'left', cssclass: '', container: 'body')
-    klass = "ci-status-link ci-status-icon-#{status.dasherize} #{cssclass}"
+  def render_status_with_link(status, path = nil, type: _('pipeline'), tooltip_placement: 'left', cssclass: '', container: 'body', icon_size: 16)
+    klass = "ci-status-link #{ci_icon_class_for_status(status)} d-inline-flex #{cssclass}"
     title = "#{type.titleize}: #{ci_label_for_status(status)}"
     data = { toggle: 'tooltip', placement: tooltip_placement, container: container }
 
     if path
-      link_to ci_icon_for_status(status), path,
+      link_to ci_icon_for_status(status, size: icon_size), path,
               class: klass, title: title, data: data
     else
-      content_tag :span, ci_icon_for_status(status),
+      content_tag :span, ci_icon_for_status(status, size: icon_size),
               class: klass, title: title, data: data
     end
   end
 
   def detailed_status?(status)
     status.respond_to?(:text) &&
+      status.respond_to?(:group) &&
       status.respond_to?(:label) &&
       status.respond_to?(:icon)
   end

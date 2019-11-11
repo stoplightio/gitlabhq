@@ -1,6 +1,8 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
-feature 'Contributions Calendar', :js do
+describe 'Contributions Calendar', :js do
   let(:user) { create(:user) }
   let(:contributed_project) { create(:project, :public, :repository) }
   let(:issue_note) { create(:note, project: contributed_project) }
@@ -64,7 +66,7 @@ feature 'Contributions Calendar', :js do
   end
 
   def selected_day_activities(visible: true)
-    find('.user-calendar-activities', visible: visible).text
+    find('#js-overview .user-calendar-activities', visible: visible).text
   end
 
   before do
@@ -74,15 +76,16 @@ feature 'Contributions Calendar', :js do
   describe 'calendar day selection' do
     before do
       visit user.username
+      page.find('.js-overview-tab a').click
       wait_for_requests
     end
 
     it 'displays calendar' do
-      expect(page).to have_css('.js-contrib-calendar')
+      expect(find('#js-overview')).to have_css('.js-contrib-calendar')
     end
 
     describe 'select calendar day' do
-      let(:cells) { page.all('.user-contrib-cell') }
+      let(:cells) { page.all('#js-overview .user-contrib-cell') }
 
       before do
         cells[0].click
@@ -108,6 +111,7 @@ feature 'Contributions Calendar', :js do
       describe 'deselect calendar day' do
         before do
           cells[0].click
+          page.find('.js-overview-tab a').click
           wait_for_requests
         end
 
@@ -122,6 +126,7 @@ feature 'Contributions Calendar', :js do
     shared_context 'visit user page' do
       before do
         visit user.username
+        page.find('.js-overview-tab a').click
         wait_for_requests
       end
     end
@@ -130,12 +135,12 @@ feature 'Contributions Calendar', :js do
       include_context 'visit user page'
 
       it 'displays calendar activity square color for 1 contribution' do
-        expect(page).to have_selector(get_cell_color_selector(contribution_count), count: 1)
+        expect(find('#js-overview')).to have_selector(get_cell_color_selector(contribution_count), count: 1)
       end
 
       it 'displays calendar activity square on the correct date' do
         today = Date.today.strftime(date_format)
-        expect(page).to have_selector(get_cell_date_selector(contribution_count, today), count: 1)
+        expect(find('#js-overview')).to have_selector(get_cell_date_selector(contribution_count, today), count: 1)
       end
     end
 
@@ -150,7 +155,7 @@ feature 'Contributions Calendar', :js do
         include_context 'visit user page'
 
         it 'displays calendar activity log' do
-          expect(find('.content_list .event-note')).to have_content issue_title
+          expect(find('#js-overview .overview-content-list .event-target-title')).to have_content issue_title
         end
       end
     end
@@ -182,17 +187,17 @@ feature 'Contributions Calendar', :js do
       include_context 'visit user page'
 
       it 'displays calendar activity squares for both days' do
-        expect(page).to have_selector(get_cell_color_selector(1), count: 2)
+        expect(find('#js-overview')).to have_selector(get_cell_color_selector(1), count: 2)
       end
 
       it 'displays calendar activity square for yesterday' do
         yesterday = Date.yesterday.strftime(date_format)
-        expect(page).to have_selector(get_cell_date_selector(1, yesterday), count: 1)
+        expect(find('#js-overview')).to have_selector(get_cell_date_selector(1, yesterday), count: 1)
       end
 
       it 'displays calendar activity square for today' do
         today = Date.today.strftime(date_format)
-        expect(page).to have_selector(get_cell_date_selector(1, today), count: 1)
+        expect(find('#js-overview')).to have_selector(get_cell_date_selector(1, today), count: 1)
       end
     end
   end

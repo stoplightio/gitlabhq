@@ -1,4 +1,5 @@
-# coding: utf-8
+# frozen_string_literal: true
+
 class Commit
   extend ActiveModel::Naming
   extend Gitlab::Cache::RequestCache
@@ -9,7 +10,9 @@ class Commit
   include Mentionable
   include Referable
   include StaticModel
+  include Presentable
   include ::Gitlab::Utils::StrongMemoize
+  include CacheMarkdownField
 
   attr_mentionable :safe_message, pipeline: :single_line
 
@@ -20,6 +23,7 @@ class Commit
   attr_accessor :project, :author
   attr_accessor :redacted_description_html
   attr_accessor :redacted_title_html
+  attr_accessor :redacted_full_title_html
   attr_reader :gpg_commit
 
   DIFF_SAFE_LINES = Gitlab::Git::DiffCollection::DEFAULT_LIMITS[:max_lines]
@@ -30,16 +34,13 @@ class Commit
 
   MIN_SHA_LENGTH = Gitlab::Git::Commit::MIN_SHA_LENGTH
   COMMIT_SHA_PATTERN = /\h{#{MIN_SHA_LENGTH},40}/.freeze
+  EXACT_COMMIT_SHA_PATTERN = /\A#{COMMIT_SHA_PATTERN}\z/.freeze
   # Used by GFM to match and present link extensions on node texts and hrefs.
   LINK_EXTENSION_PATTERN = /(patch)/.freeze
 
-  def banzai_render_context(field)
-    pipeline = field == :description ? :commit_description : :single_line
-    context = { pipeline: pipeline, project: self.project }
-    context[:author] = self.author if self.author
-
-    context
-  end
+  cache_markdown_field :title, pipeline: :single_line
+  cache_markdown_field :full_title, pipeline: :single_line
+  cache_markdown_field :description, pipeline: :commit_description
 
   class << self
     def decorate(commits, project)
@@ -89,11 +90,11 @@ class Commit
     end
 
     def valid_hash?(key)
-      !!(/\A#{COMMIT_SHA_PATTERN}\z/ =~ key)
+      !!(EXACT_COMMIT_SHA_PATTERN =~ key)
     end
 
     def lazy(project, oid)
-      BatchLoader.for({ project: project, oid: oid }).batch do |items, loader|
+      BatchLoader.for({ project: project, oid: oid }).batch(replace_methods: false) do |items, loader|
         items_by_project = items.group_by { |i| i[:project] }
 
         items_by_project.each do |project, commit_ids|
@@ -118,8 +119,20 @@ class Commit
 
     @raw = raw_commit
     @project = project
-    @statuses = {}
     @gpg_commit = Gitlab::Gpg::Commit.new(self) if project
+  end
+
+  delegate \
+    :pipelines,
+    :last_pipeline,
+    :latest_pipeline,
+    :latest_pipeline_for_project,
+    :set_latest_pipeline_for_ref,
+    :status,
+    to: :with_pipeline
+
+  def with_pipeline
+    @with_pipeline ||= CommitWithPipeline.new(self)
   end
 
   def id
@@ -136,6 +149,10 @@ class Commit
 
   def self.reference_prefix
     '@'
+  end
+
+  def self.reference_valid?(reference)
+    !!(reference =~ EXACT_COMMIT_SHA_PATTERN)
   end
 
   # Pattern used to extract commit references from text
@@ -174,7 +191,9 @@ class Commit
   def title
     return full_title if full_title.length < 100
 
-    full_title.truncate(81, separator: ' ', omission: '…')
+    # Use three dots instead of the ellipsis Unicode character because
+    # some clients show the raw Unicode value in the merge commit.
+    full_title.truncate(81, separator: ' ', omission: '...')
   end
 
   # Returns the full commits title
@@ -191,6 +210,7 @@ class Commit
   # otherwise returns commit message without first line
   def description
     return safe_message if full_title.length >= 100
+    return no_commit_message if safe_message.blank?
 
     safe_message.split("\n", 2)[1].try(:chomp)
   end
@@ -226,37 +246,25 @@ class Commit
 
   def lazy_author
     BatchLoader.for(author_email.downcase).batch do |emails, loader|
-      # A Hash that maps user Emails to the corresponding User objects. The
-      # Emails at this point are the _primary_ Emails of the Users.
-      users_for_emails = User
-        .by_any_email(emails)
-        .each_with_object({}) { |user, hash| hash[user.email] = user }
+      users = User.by_any_email(emails).includes(:emails)
 
-      users_for_ids = users_for_emails
-        .values
-        .each_with_object({}) { |user, hash| hash[user.id] = user }
+      emails.each do |email|
+        user = users.find { |u| u.any_email?(email) }
 
-      # Some commits may have used an alternative Email address. In this case we
-      # need to query the "emails" table to map those addresses to User objects.
-      Email
-        .where(email: emails - users_for_emails.keys)
-        .pluck(:email, :user_id)
-        .each { |(email, id)| users_for_emails[email] = users_for_ids[id] }
-
-      users_for_emails.each { |email, user| loader.call(email, user) }
+        loader.call(email, user)
+      end
     end
   end
 
   def author
-    # We use __sync so that we get the actual objects back (including an actual
-    # nil), instead of a wrapper, as returning a wrapped nil breaks a lot of
-    # code.
-    lazy_author.__sync
+    strong_memoize(:author) do
+      lazy_author&.itself
+    end
   end
   request_cache(:author) { author_email.downcase }
 
   def committer
-    @committer ||= User.find_by_any_email(committer_email.downcase)
+    @committer ||= User.find_by_any_email(committer_email)
   end
 
   def parents
@@ -304,24 +312,6 @@ class Commit
     )
   end
 
-  def pipelines
-    project.pipelines.where(sha: sha)
-  end
-
-  def last_pipeline
-    @last_pipeline ||= pipelines.last
-  end
-
-  def status(ref = nil)
-    return @statuses[ref] if @statuses.key?(ref)
-
-    @statuses[ref] = project.pipelines.latest_status_per_commit(id, ref)[id]
-  end
-
-  def set_status_for_ref(ref, status)
-    @statuses[ref] = status
-  end
-
   def signature
     return @signature if defined?(@signature)
 
@@ -339,21 +329,21 @@ class Commit
   end
 
   def cherry_pick_description(user)
-    message_body = "(cherry picked from commit #{sha})"
+    message_body = ["(cherry picked from commit #{sha})"]
 
     if merged_merge_request?(user)
       commits_in_merge_request = merged_merge_request(user).commits
 
       if commits_in_merge_request.present?
-        message_body << "\n"
+        message_body << ""
 
-        commits_in_merge_request.reverse.each do |commit_in_merge|
-          message_body << "\n#{commit_in_merge.short_id} #{commit_in_merge.title}"
+        commits_in_merge_request.reverse_each do |commit_in_merge|
+          message_body << "#{commit_in_merge.short_id} #{commit_in_merge.title}"
         end
       end
     end
 
-    message_body
+    message_body.join("\n")
   end
 
   def cherry_pick_message(user)
@@ -377,7 +367,7 @@ class Commit
   end
 
   def merge_commit?
-    parents.size > 1
+    parent_ids.size > 1
   end
 
   def merged_merge_request(current_user)
@@ -424,7 +414,7 @@ class Commit
 
     if entry[:type] == :blob
       blob = ::Blob.decorate(Gitlab::Git::Blob.new(name: entry[:name]), @project)
-      blob.image? || blob.video? ? :raw : :blob
+      blob.image? || blob.video? || blob.audio? ? :raw : :blob
     else
       entry[:type]
     end
@@ -446,6 +436,10 @@ class Commit
     true
   end
 
+  def to_ability_name
+    model_name.singular
+  end
+
   def touch
     # no-op but needs to be defined since #persisted? is defined
   end
@@ -464,6 +458,10 @@ class Commit
 
   def merged_merge_request?(user)
     !!merged_merge_request(user)
+  end
+
+  def cache_key
+    "commit:#{sha}"
   end
 
   private

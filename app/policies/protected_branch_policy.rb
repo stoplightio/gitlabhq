@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class ProtectedBranchPolicy < BasePolicy
   delegate { @subject.project }
 
@@ -7,3 +9,5 @@ class ProtectedBranchPolicy < BasePolicy
     enable :destroy_protected_branch
   end
 end
+
+ProtectedBranchPolicy.prepend_if_ee('EE::ProtectedBranchPolicy')

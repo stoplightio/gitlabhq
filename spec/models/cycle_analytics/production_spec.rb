@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe 'CycleAnalytics#production' do
@@ -6,7 +8,8 @@ describe 'CycleAnalytics#production' do
   let(:project) { create(:project, :repository) }
   let(:from_date) { 10.days.ago }
   let(:user) { create(:user, :admin) }
-  subject { CycleAnalytics.new(project, from: from_date) }
+
+  subject { CycleAnalytics::ProjectLevel.new(project, options: { from: from_date }) }
 
   generate_cycle_analytics_spec(
     phase: :production,
@@ -38,7 +41,7 @@ describe 'CycleAnalytics#production' do
       MergeRequests::MergeService.new(project, user).execute(merge_request)
       deploy_master(user, project)
 
-      expect(subject[:production].median).to be_nil
+      expect(subject[:production].project_median).to be_nil
     end
   end
 
@@ -49,7 +52,7 @@ describe 'CycleAnalytics#production' do
       MergeRequests::MergeService.new(project, user).execute(merge_request)
       deploy_master(user, project, environment: 'staging')
 
-      expect(subject[:production].median).to be_nil
+      expect(subject[:production].project_median).to be_nil
     end
   end
 end

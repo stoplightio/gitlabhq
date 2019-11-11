@@ -1,6 +1,10 @@
 import $ from 'jquery';
+import '~/gl_dropdown';
 import Flash from '~/flash';
 import Api from '~/api';
+import { __ } from '~/locale';
+import Project from '~/pages/projects/project';
+import refreshCounts from './refresh_counts';
 
 export default class Search {
   constructor() {
@@ -12,6 +16,7 @@ export default class Search {
 
     this.groupId = $groupDropdown.data('groupId');
     this.eventListeners();
+    refreshCounts();
 
     $groupDropdown.glDropdown({
       selectable: true,
@@ -22,11 +27,11 @@ export default class Search {
         fields: ['full_name'],
       },
       data(term, callback) {
-        return Api.groups(term, {}, (data) => {
+        return Api.groups(term, {}, data => {
           data.unshift({
-            full_name: 'Any',
+            full_name: __('Any'),
           });
-          data.splice(1, 0, 'divider');
+          data.splice(1, 0, { type: 'divider' });
           return callback(data);
         });
       },
@@ -35,9 +40,6 @@ export default class Search {
       },
       text(obj) {
         return obj.full_name;
-      },
-      toggleLabel(obj) {
-        return `${($groupDropdown.data('defaultLabel'))} ${obj.full_name}`;
       },
       clicked: () => Search.submitSearch(),
     });
@@ -52,16 +54,16 @@ export default class Search {
       },
       data: (term, callback) => {
         this.getProjectsData(term)
-          .then((data) => {
+          .then(data => {
             data.unshift({
-              name_with_namespace: 'Any',
+              name_with_namespace: __('Any'),
             });
-            data.splice(1, 0, 'divider');
+            data.splice(1, 0, { type: 'divider' });
 
             return data;
           })
           .then(data => callback(data))
-          .catch(() => new Flash('Error fetching projects'));
+          .catch(() => new Flash(__('Error fetching projects')));
       },
       id(obj) {
         return obj.id;
@@ -69,11 +71,10 @@ export default class Search {
       text(obj) {
         return obj.name_with_namespace;
       },
-      toggleLabel(obj) {
-        return `${($projectDropdown.data('defaultLabel'))} ${obj.name_with_namespace}`;
-      },
       clicked: () => Search.submitSearch(),
     });
+
+    Project.initRefSwitcher();
   }
 
   eventListeners() {
@@ -99,17 +100,24 @@ export default class Search {
   }
 
   clearSearchField() {
-    return $(this.searchInput).val('').trigger('keyup').focus();
+    return $(this.searchInput)
+      .val('')
+      .trigger('keyup')
+      .focus();
   }
 
   getProjectsData(term) {
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       if (this.groupId) {
-        Api.groupProjects(this.groupId, term, resolve);
+        Api.groupProjects(this.groupId, term, {}, resolve);
       } else {
-        Api.projects(term, {
-          order_by: 'id',
-        }, resolve);
+        Api.projects(
+          term,
+          {
+            order_by: 'id',
+          },
+          resolve,
+        );
       }
     });
   }

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class GroupMemberPresenter < MemberPresenter
   private
 
@@ -13,3 +15,5 @@ class GroupMemberPresenter < MemberPresenter
     :destroy_group_member
   end
 end
+
+GroupMemberPresenter.prepend_if_ee('EE::GroupMemberPresenter')

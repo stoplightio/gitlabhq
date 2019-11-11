@@ -1,6 +1,7 @@
 <script>
 import $ from 'jquery';
 import eventHub from '../../event_hub';
+import { __ } from '~/locale';
 
 export default {
   props: {
@@ -15,7 +16,7 @@ export default {
   },
   computed: {
     toggleButtonText() {
-      return this.isConfidential ? 'Turn Off' : 'Turn On';
+      return this.isConfidential ? __('Turn Off') : __('Turn On');
     },
     updateConfidentialBool() {
       return !this.isConfidential;
@@ -36,18 +37,10 @@ export default {
 
 <template>
   <div class="sidebar-item-warning-message-actions">
-    <button
-      type="button"
-      class="btn btn-default append-right-10"
-      @click="closeForm"
-    >
+    <button type="button" class="btn btn-default append-right-10" @click="closeForm">
       {{ __('Cancel') }}
     </button>
-    <button
-      type="button"
-      class="btn btn-close"
-      @click.prevent="submitForm"
-    >
+    <button type="button" class="btn btn-close" @click.prevent="submitForm">
       {{ toggleButtonText }}
     </button>
   </div>

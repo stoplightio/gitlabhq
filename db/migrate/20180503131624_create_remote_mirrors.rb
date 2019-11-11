@@ -1,10 +1,11 @@
-class CreateRemoteMirrors < ActiveRecord::Migration
+class CreateRemoteMirrors < ActiveRecord::Migration[4.2]
   include Gitlab::Database::MigrationHelpers
 
   DOWNTIME = false
 
   disable_ddl_transaction!
 
+  # rubocop:disable Migration/AddLimitToStringColumns
   def up
     return if table_exists?(:remote_mirrors)
 
@@ -23,11 +24,13 @@ class CreateRemoteMirrors < ActiveRecord::Migration
       t.string :encrypted_credentials_iv
       t.string :encrypted_credentials_salt
 
+      # rubocop:disable Migration/Timestamps
       t.timestamps null: false
     end
   end
+  # rubocop:enable Migration/AddLimitToStringColumns
 
   def down
-    drop_table(:remote_mirrors) if table_exists?(:remote_mirrors)
+    # ee/db/migrate/20160321161032_create_remote_mirrors_ee.rb will remove the table
   end
 end

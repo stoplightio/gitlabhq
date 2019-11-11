@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Projects
   module Settings
     class CiCdController < Projects::ApplicationController
@@ -11,13 +13,13 @@ module Projects
         Projects::UpdateService.new(project, current_user, update_params).tap do |service|
           result = service.execute
           if result[:status] == :success
-            flash[:notice] = "Pipelines settings for '#{@project.name}' were successfully updated."
+            flash[:notice] = _("Pipelines settings for '%{project_name}' were successfully updated.") % { project_name: @project.name }
 
             run_autodevops_pipeline(service)
 
             redirect_to project_settings_ci_cd_path(@project)
           else
-            render 'show'
+            redirect_to project_settings_ci_cd_path(@project), alert: result[:message]
           end
         end
       end
@@ -34,22 +36,36 @@ module Projects
         end
       end
 
+      def reset_registration_token
+        @project.reset_runners_token!
+
+        flash[:notice] = _('New runners registration token has been generated!')
+        redirect_to namespace_project_settings_ci_cd_path
+      end
+
       private
 
       def update_params
-        params.require(:project).permit(
+        params.require(:project).permit(*permitted_project_params)
+      end
+
+      def permitted_project_params
+        [
           :runners_token, :builds_enabled, :build_allow_git_fetch,
           :build_timeout_human_readable, :build_coverage_regex, :public_builds,
           :auto_cancel_pending_pipelines, :ci_config_path,
-          auto_devops_attributes: [:id, :domain, :enabled, :deploy_strategy]
-        )
+          auto_devops_attributes: [:id, :domain, :enabled, :deploy_strategy],
+          ci_cd_settings_attributes: [:default_git_depth]
+        ].tap do |list|
+          list << :max_artifacts_size if can?(current_user, :update_max_artifacts_size, project)
+        end
       end
 
       def run_autodevops_pipeline(service)
         return unless service.run_auto_devops_pipeline?
 
         if @project.empty_repo?
-          flash[:warning] = "This repository is currently empty. A new Auto DevOps pipeline will be created after a new file has been pushed to a branch."
+          flash[:warning] = _("This repository is currently empty. A new Auto DevOps pipeline will be created after a new file has been pushed to a branch.")
           return
         end
 
@@ -59,7 +75,7 @@ module Projects
 
       def define_variables
         define_runners_variables
-        define_secret_variables
+        define_ci_variables
         define_triggers_variables
         define_badges_variables
         define_auto_devops_variables
@@ -74,14 +90,14 @@ module Projects
           .ordered
           .page(params[:page]).per(20)
 
-        @shared_runners = ::Ci::Runner.shared.active
+        @shared_runners = ::Ci::Runner.instance_type.active
 
         @shared_runners_count = @shared_runners.count(:all)
 
         @group_runners = ::Ci::Runner.belonging_to_parent_group_of_project(@project.id)
       end
 
-      def define_secret_variables
+      def define_ci_variables
         @variable = ::Ci::Variable.new(project: project)
           .present(current_user: current_user)
         @variables = project.variables.order_key_asc
@@ -90,7 +106,9 @@ module Projects
 
       def define_triggers_variables
         @triggers = @project.triggers
+          .present(current_user: current_user)
         @trigger = ::Ci::Trigger.new
+          .present(current_user: current_user)
       end
 
       def define_badges_variables
@@ -110,3 +128,5 @@ module Projects
     end
   end
 end
+
+Projects::Settings::CiCdController.prepend_if_ee('EE::Projects::Settings::CiCdController')

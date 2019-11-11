@@ -1,4 +1,6 @@
-require 'rails_helper'
+# frozen_string_literal: true
+
+require 'spec_helper'
 
 describe Banzai::Pipeline::DescriptionPipeline do
   def parse(html)
@@ -11,6 +13,10 @@ describe Banzai::Pipeline::DescriptionPipeline do
     output.gsub!(%r{\A<p dir="auto">(.*)</p>(.*)\z}, '\1\2') if unwrap
 
     output
+  end
+
+  before do
+    stub_commonmark_sourcepos_disabled
   end
 
   it 'uses a limited whitelist' do

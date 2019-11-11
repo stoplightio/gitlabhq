@@ -1,27 +1,30 @@
-/* eslint-disable import/no-unresolved */
-
 import BalsamiqViewer from '~/blob/balsamiq/balsamiq_viewer';
-import bmprPath from '../../fixtures/blob/balsamiq/test.bmpr';
+import { FIXTURES_PATH } from 'spec/test_constants';
+
+const bmprPath = `${FIXTURES_PATH}/blob/balsamiq/test.bmpr`;
 
 describe('Balsamiq integration spec', () => {
   let container;
   let endpoint;
   let balsamiqViewer;
 
-  preloadFixtures('static/balsamiq_viewer.html.raw');
+  preloadFixtures('static/balsamiq_viewer.html');
 
   beforeEach(() => {
-    loadFixtures('static/balsamiq_viewer.html.raw');
+    loadFixtures('static/balsamiq_viewer.html');
 
     container = document.getElementById('js-balsamiq-viewer');
     balsamiqViewer = new BalsamiqViewer(container);
   });
 
   describe('successful response', () => {
-    beforeEach((done) => {
+    beforeEach(done => {
       endpoint = bmprPath;
 
-      balsamiqViewer.loadFile(endpoint).then(done).catch(done.fail);
+      balsamiqViewer
+        .loadFile(endpoint)
+        .then(done)
+        .catch(done.fail);
     });
 
     it('does not show loading icon', () => {
@@ -34,10 +37,13 @@ describe('Balsamiq integration spec', () => {
   });
 
   describe('error getting file', () => {
-    beforeEach((done) => {
+    beforeEach(done => {
       endpoint = 'invalid/path/to/file.bmpr';
 
-      balsamiqViewer.loadFile(endpoint).then(done.fail, null).catch(done);
+      balsamiqViewer
+        .loadFile(endpoint)
+        .then(done.fail, null)
+        .catch(done);
     });
 
     it('does not show loading icon', () => {

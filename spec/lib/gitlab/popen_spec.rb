@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Gitlab::Popen do
@@ -55,6 +57,19 @@ describe Gitlab::Popen do
     end
   end
 
+  context 'with a process that writes a lot of data to stderr' do
+    let(:test_string) { 'The quick brown fox jumped over the lazy dog' }
+    # The pipe buffer is typically 64K. This string is about 440K.
+    let(:spew_command) { ['bash', '-c', "for i in {1..10000}; do echo '#{test_string}' 1>&2; done"] }
+
+    it 'returns zero' do
+      output, status = @klass.new.popen(spew_command, path)
+
+      expect(output).to include(test_string)
+      expect(status).to eq(0)
+    end
+  end
+
   context 'without a directory argument' do
     before do
       @output, @status = @klass.new.popen(%w(ls))
@@ -71,5 +86,13 @@ describe Gitlab::Popen do
 
     it { expect(@status).to be_zero }
     it { expect(@output).to eq('hello') }
+  end
+
+  context 'when binary is absent' do
+    it 'raises error' do
+      expect do
+        @klass.new.popen(%w[foobar])
+      end.to raise_error
+    end
   end
 end

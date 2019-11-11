@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Members
   class BaseService < ::BaseService
     # current_user - The user that performs the action
@@ -8,7 +10,7 @@ module Members
     end
 
     def after_execute(args)
-      # overriden in EE::Members modules
+      # overridden in EE::Members modules
     end
 
     private
@@ -43,6 +45,14 @@ module Members
         override_member_permission(member)
       else
         raise "Unknown action '#{action}' on #{member}!"
+      end
+    end
+
+    def enqueue_delete_todos(member)
+      type = member.is_a?(GroupMember) ? 'Group' : 'Project'
+      # don't enqueue immediately to prevent todos removal in case of a mistake
+      member.run_after_commit_or_now do
+        TodosDestroyer::EntityLeaveWorker.perform_in(Todo::WAIT_FOR_DELETE, member.user_id, member.source_id, type)
       end
     end
   end

@@ -1,19 +1,21 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
-feature 'Admin Appearance' do
+describe 'Admin Appearance' do
   let!(:appearance) { create(:appearance) }
 
-  scenario 'Create new appearance' do
+  it 'Create new appearance' do
     sign_in(create(:admin))
     visit admin_appearances_path
 
     fill_in 'appearance_title', with: 'MyCompany'
     fill_in 'appearance_description', with: 'dev server'
     fill_in 'appearance_new_project_guidelines', with: 'Custom project guidelines'
-    click_button 'Save'
+    click_button 'Update appearance settings'
 
     expect(current_path).to eq admin_appearances_path
-    expect(page).to have_content 'Appearance settings'
+    expect(page).to have_content 'Appearance'
 
     expect(page).to have_field('appearance_title', with: 'MyCompany')
     expect(page).to have_field('appearance_description', with: 'dev server')
@@ -21,7 +23,7 @@ feature 'Admin Appearance' do
     expect(page).to have_content 'Last edit'
   end
 
-  scenario 'Preview sign-in page appearance' do
+  it 'Preview sign-in page appearance' do
     sign_in(create(:admin))
 
     visit admin_appearances_path
@@ -30,7 +32,7 @@ feature 'Admin Appearance' do
     expect_custom_sign_in_appearance(appearance)
   end
 
-  scenario 'Preview new project page appearance' do
+  it 'Preview new project page appearance' do
     sign_in(create(:admin))
 
     visit admin_appearances_path
@@ -39,49 +41,81 @@ feature 'Admin Appearance' do
     expect_custom_new_project_appearance(appearance)
   end
 
-  scenario 'Custom sign-in page' do
+  context 'Custom system header and footer' do
+    before do
+      sign_in(create(:admin))
+    end
+
+    context 'when system header and footer messages are empty' do
+      it 'shows custom system header and footer fields' do
+        visit admin_appearances_path
+
+        expect(page).to have_field('appearance_header_message', with: '')
+        expect(page).to have_field('appearance_footer_message', with: '')
+        expect(page).to have_field('appearance_message_background_color')
+        expect(page).to have_field('appearance_message_font_color')
+      end
+    end
+
+    context 'when system header and footer messages are not empty' do
+      before do
+        appearance.update(header_message: 'Foo', footer_message: 'Bar')
+      end
+
+      it 'shows custom system header and footer fields' do
+        visit admin_appearances_path
+
+        expect(page).to have_field('appearance_header_message', with: appearance.header_message)
+        expect(page).to have_field('appearance_footer_message', with: appearance.footer_message)
+        expect(page).to have_field('appearance_message_background_color')
+        expect(page).to have_field('appearance_message_font_color')
+      end
+    end
+  end
+
+  it 'Custom sign-in page' do
     visit new_user_session_path
 
     expect_custom_sign_in_appearance(appearance)
   end
 
-  scenario 'Custom new project page' do
+  it 'Custom new project page' do
     sign_in create(:user)
     visit new_project_path
 
     expect_custom_new_project_appearance(appearance)
   end
 
-  scenario 'Appearance logo' do
+  it 'Appearance logo' do
     sign_in(create(:admin))
     visit admin_appearances_path
 
     attach_file(:appearance_logo, logo_fixture)
-    click_button 'Save'
+    click_button 'Update appearance settings'
     expect(page).to have_css(logo_selector)
 
     click_link 'Remove logo'
     expect(page).not_to have_css(logo_selector)
   end
 
-  scenario 'Header logos' do
+  it 'Header logos' do
     sign_in(create(:admin))
     visit admin_appearances_path
 
     attach_file(:appearance_header_logo, logo_fixture)
-    click_button 'Save'
+    click_button 'Update appearance settings'
     expect(page).to have_css(header_logo_selector)
 
     click_link 'Remove header logo'
     expect(page).not_to have_css(header_logo_selector)
   end
 
-  scenario 'Favicon' do
+  it 'Favicon' do
     sign_in(create(:admin))
     visit admin_appearances_path
 
     attach_file(:appearance_favicon, logo_fixture)
-    click_button 'Save'
+    click_button 'Update appearance settings'
 
     expect(page).to have_css('.appearance-light-logo-preview')
 
@@ -91,7 +125,7 @@ feature 'Admin Appearance' do
 
     # allowed file types
     attach_file(:appearance_favicon, Rails.root.join('spec', 'fixtures', 'sanitized.svg'))
-    click_button 'Save'
+    click_button 'Update appearance settings'
 
     expect(page).to have_content 'Favicon You are not allowed to upload "svg" files, allowed types: png, ico'
   end

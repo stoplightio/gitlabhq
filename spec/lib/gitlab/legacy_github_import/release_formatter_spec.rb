@@ -1,9 +1,12 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Gitlab::LegacyGithubImport::ReleaseFormatter do
   let!(:project) { create(:project, namespace: create(:namespace, path: 'octocat')) }
   let(:octocat) { double(id: 123456, login: 'octocat') }
   let(:created_at) { DateTime.strptime('2011-01-26T19:01:12Z') }
+  let(:published_at) { DateTime.strptime('2011-01-26T20:00:00Z') }
 
   let(:base_data) do
     {
@@ -11,7 +14,7 @@ describe Gitlab::LegacyGithubImport::ReleaseFormatter do
       name: 'First release',
       draft: false,
       created_at: created_at,
-      published_at: created_at,
+      published_at: published_at,
       body: 'Release v1.0.0'
     }
   end
@@ -25,12 +28,22 @@ describe Gitlab::LegacyGithubImport::ReleaseFormatter do
       expected = {
         project: project,
         tag: 'v1.0.0',
+        name: 'First release',
         description: 'Release v1.0.0',
         created_at: created_at,
+        released_at: published_at,
         updated_at: created_at
       }
 
       expect(release.attributes).to eq(expected)
+    end
+
+    context 'with a nil published_at date' do
+      let(:published_at) { nil }
+
+      it 'inserts a timestamp for released_at' do
+        expect(release.attributes[:released_at]).to be_a(Time)
+      end
     end
   end
 

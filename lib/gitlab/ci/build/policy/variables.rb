@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module Ci
     module Build
@@ -8,7 +10,7 @@ module Gitlab
           end
 
           def satisfied_by?(pipeline, seed)
-            variables = seed.to_resource.scoped_variables_hash
+            variables = seed.scoped_variables_hash
 
             statements = @expressions.map do |statement|
               ::Gitlab::Ci::Pipeline::Expression::Statement

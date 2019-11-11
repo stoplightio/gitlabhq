@@ -1,4 +1,6 @@
-require "rails_helper"
+# frozen_string_literal: true
+
+require 'spec_helper'
 
 describe "Jira", :js do
   let(:user) { create(:user) }
@@ -163,7 +165,7 @@ describe "Jira", :js do
     HEREDOC
 
     page.within("#diff-notes-app") do
-      fill_in("note_note", with: markdown)
+      fill_in("note-body", with: markdown)
     end
   end
 

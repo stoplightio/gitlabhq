@@ -1,11 +1,13 @@
-# coding: utf-8
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Issues::UpdateService, :mailer do
   let(:user) { create(:user) }
   let(:user2) { create(:user) }
   let(:user3) { create(:user) }
-  let(:project) { create(:project) }
+  let(:group) { create(:group, :public) }
+  let(:project) { create(:project, :repository, group: group) }
   let(:label) { create(:label, project: project) }
   let(:label2) { create(:label) }
 
@@ -18,7 +20,7 @@ describe Issues::UpdateService, :mailer do
   end
 
   before do
-    project.add_master(user)
+    project.add_maintainer(user)
     project.add_developer(user2)
     project.add_developer(user3)
   end
@@ -55,6 +57,8 @@ describe Issues::UpdateService, :mailer do
       end
 
       it 'updates the issue with the given params' do
+        expect(TodosDestroyer::ConfidentialIssueWorker).not_to receive(:perform_in)
+
         update_issue(opts)
 
         expect(issue).to be_valid
@@ -72,6 +76,21 @@ describe Issues::UpdateService, :mailer do
 
         expect { update_issue(confidential: true) }
           .to change { project.open_issues_count }.from(1).to(0)
+      end
+
+      it 'enqueues ConfidentialIssueWorker when an issue is made confidential' do
+        expect(TodosDestroyer::ConfidentialIssueWorker).to receive(:perform_in).with(Todo::WAIT_FOR_DELETE, issue.id)
+
+        update_issue(confidential: true)
+      end
+
+      it 'does not enqueue ConfidentialIssueWorker when an issue is made non confidential' do
+        # set confidentiality to true before the actual update
+        issue.update!(confidential: true)
+
+        expect(TodosDestroyer::ConfidentialIssueWorker).not_to receive(:perform_in)
+
+        update_issue(confidential: false)
       end
 
       it 'updates open issue counter for assignees when issue is reassigned' do
@@ -97,7 +116,7 @@ describe Issues::UpdateService, :mailer do
         expect(issue.relative_position).to be_between(issue1.relative_position, issue2.relative_position)
       end
 
-      context 'when moving issue between issues from different projects', :nested_groups do
+      context 'when moving issue between issues from different projects' do
         let(:group) { create(:group) }
         let(:subgroup) { create(:group, parent: group) }
 
@@ -160,7 +179,7 @@ describe Issues::UpdateService, :mailer do
         it 'sends email to user2 about assign of new issue and email to user3 about issue unassignment' do
           deliveries = ActionMailer::Base.deliveries
           email = deliveries.last
-          recipients = deliveries.last(2).map(&:to).flatten
+          recipients = deliveries.last(2).flat_map(&:to)
           expect(recipients).to include(user2.email, user3.email)
           expect(email.subject).to include(issue.title)
         end
@@ -172,11 +191,12 @@ describe Issues::UpdateService, :mailer do
           expect(note.note).to include "assigned to #{user2.to_reference}"
         end
 
-        it 'creates system note about issue label edit' do
-          note = find_note('added ~')
+        it 'creates a resource label event' do
+          event = issue.resource_label_events.last
 
-          expect(note).not_to be_nil
-          expect(note.note).to include "added #{label.to_reference} label"
+          expect(event).not_to be_nil
+          expect(event.label_id).to eq label.id
+          expect(event.user_id).to eq user.id
         end
 
         it 'creates system note about title change' do
@@ -204,6 +224,15 @@ describe Issues::UpdateService, :mailer do
         expect(note).not_to be_nil
         expect(note.note).to eq('changed the description')
       end
+    end
+
+    it 'creates zoom_link_added system note when a zoom link is added to the description' do
+      update_issue(description: 'Changed description https://zoom.us/j/5873603787')
+
+      note = find_note('added a Zoom call')
+
+      expect(note).not_to be_nil
+      expect(note.note).to eq('added a Zoom call to this issue')
     end
 
     context 'when issue turns confidential' do
@@ -325,14 +354,58 @@ describe Issues::UpdateService, :mailer do
         end
       end
 
-      context 'when the milestone change' do
+      context 'when the milestone is removed' do
+        let!(:non_subscriber) { create(:user) }
+
+        let!(:subscriber) do
+          create(:user) do |u|
+            issue.toggle_subscription(u, project)
+            project.add_developer(u)
+          end
+        end
+
+        it_behaves_like 'system notes for milestones'
+
+        it 'sends notifications for subscribers of changed milestone' do
+          issue.milestone = create(:milestone, project: project)
+
+          issue.save
+
+          perform_enqueued_jobs do
+            update_issue(milestone_id: "")
+          end
+
+          should_email(subscriber)
+          should_not_email(non_subscriber)
+        end
+      end
+
+      context 'when the milestone is changed' do
+        let!(:non_subscriber) { create(:user) }
+
+        let!(:subscriber) do
+          create(:user) do |u|
+            issue.toggle_subscription(u, project)
+            project.add_developer(u)
+          end
+        end
+
         it 'marks todos as done' do
-          update_issue(milestone: create(:milestone))
+          update_issue(milestone: create(:milestone, project: project))
 
           expect(todo.reload.done?).to eq true
         end
 
         it_behaves_like 'system notes for milestones'
+
+        it 'sends notifications for subscribers of changed milestone' do
+          perform_enqueued_jobs do
+            update_issue(milestone: create(:milestone, project: project))
+          end
+
+          should_email(subscriber)
+          should_not_email(non_subscriber)
+        end
       end
 
       context 'when the labels change' do
@@ -356,7 +429,7 @@ describe Issues::UpdateService, :mailer do
       let!(:non_subscriber) { create(:user) }
 
       let!(:subscriber) do
-        create(:user).tap do |u|
+        create(:user) do |u|
           label.toggle_subscription(u, project)
           project.add_developer(u)
         end
@@ -409,9 +482,27 @@ describe Issues::UpdateService, :mailer do
 
       it { expect(issue.tasks?).to eq(true) }
 
+      it_behaves_like 'updating a single task'
+
       context 'when tasks are marked as completed' do
         before do
           update_issue(description: "- [x] Task 1\n- [X] Task 2")
+        end
+
+        it 'does not check for spam on task status change' do
+          params = {
+            update_task: {
+              index: 1,
+              checked: false,
+              line_source: '- [x] Task 1',
+              line_number: 1
+            }
+          }
+          service = described_class.new(project, user, params)
+
+          expect(service).not_to receive(:spam_check)
+
+          service.execute(issue)
         end
 
         it 'creates system note about task status change' do
@@ -501,7 +592,7 @@ describe Issues::UpdateService, :mailer do
         let(:params) { { label_ids: [], remove_label_ids: [label.id] } }
 
         before do
-          issue.update_attributes(labels: [label, label3])
+          issue.update(labels: [label, label3])
         end
 
         it 'ignores the label_ids parameter' do
@@ -517,7 +608,7 @@ describe Issues::UpdateService, :mailer do
         let(:params) { { add_label_ids: [label3.id], remove_label_ids: [label.id] } }
 
         before do
-          issue.update_attributes(labels: [label])
+          issue.update(labels: [label])
         end
 
         it 'adds the passed labels' do
@@ -526,6 +617,16 @@ describe Issues::UpdateService, :mailer do
 
         it 'removes the passed labels' do
           expect(result.label_ids).not_to include(label.id)
+        end
+      end
+
+      context 'when duplicate label titles are given' do
+        let(:params) do
+          { labels: [label3.title, label3.title] }
+        end
+
+        it 'assigns the label once' do
+          expect(result.labels).to contain_exactly(label3)
         end
       end
     end
@@ -567,6 +668,7 @@ describe Issues::UpdateService, :mailer do
 
     context 'updating mentions' do
       let(:mentionable) { issue }
+
       include_examples 'updating mentions', described_class
     end
 
@@ -596,7 +698,7 @@ describe Issues::UpdateService, :mailer do
 
       context 'valid project' do
         before do
-          target_project.add_master(user)
+          target_project.add_maintainer(user)
         end
 
         it 'calls the move service with the proper issue and project' do
@@ -608,6 +710,22 @@ describe Issues::UpdateService, :mailer do
 
           update_issue(target_project: target_project)
         end
+      end
+    end
+
+    context 'when moving an issue ' do
+      it 'raises an error for invalid move ids within a project' do
+        opts = { move_between_ids: [9000, 9999] }
+
+        expect { described_class.new(issue.project, user, opts).execute(issue) }
+            .to raise_error(ActiveRecord::RecordNotFound)
+      end
+
+      it 'raises an error for invalid move ids within a group' do
+        opts = { move_between_ids: [9000, 9999], board_group_id: create(:group).id }
+
+        expect { described_class.new(issue.project, user, opts).execute(issue) }
+            .to raise_error(ActiveRecord::RecordNotFound)
       end
     end
 

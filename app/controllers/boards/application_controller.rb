@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Boards
   class ApplicationController < ::ApplicationController
     respond_to :json
@@ -11,7 +13,7 @@ module Boards
     end
 
     def board_parent
-      @board_parent ||= board.parent
+      @board_parent ||= board.resource_parent
     end
 
     def record_not_found(exception)

@@ -1,4 +1,6 @@
-require 'rails_helper'
+# frozen_string_literal: true
+
+require 'spec_helper'
 
 describe LfsFileLock do
   set(:lfs_file_lock) { create(:lfs_file_lock) }
@@ -13,13 +15,13 @@ describe LfsFileLock do
 
   describe '#can_be_unlocked_by?' do
     let(:developer) { create(:user) }
-    let(:master)    { create(:user) }
+    let(:maintainer) { create(:user) }
 
     before do
       project = lfs_file_lock.project
 
       project.add_developer(developer)
-      project.add_master(master)
+      project.add_maintainer(maintainer)
     end
 
     context "when it's forced" do
@@ -29,8 +31,8 @@ describe LfsFileLock do
         expect(lfs_file_lock.can_be_unlocked_by?(user, true)).to eq(true)
       end
 
-      it 'can be unlocked by a master' do
-        expect(lfs_file_lock.can_be_unlocked_by?(master, true)).to eq(true)
+      it 'can be unlocked by a maintainer' do
+        expect(lfs_file_lock.can_be_unlocked_by?(maintainer, true)).to eq(true)
       end
 
       it "can't be unlocked by other user" do
@@ -45,8 +47,8 @@ describe LfsFileLock do
         expect(lfs_file_lock.can_be_unlocked_by?(user)).to eq(true)
       end
 
-      it "can't be unlocked by a master" do
-        expect(lfs_file_lock.can_be_unlocked_by?(master)).to eq(false)
+      it "can't be unlocked by a maintainer" do
+        expect(lfs_file_lock.can_be_unlocked_by?(maintainer)).to eq(false)
       end
 
       it "can't be unlocked by other user" do

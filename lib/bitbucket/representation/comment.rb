@@ -1,8 +1,10 @@
+# frozen_string_literal: true
+
 module Bitbucket
   module Representation
     class Comment < Representation::Base
       def author
-        user['username']
+        user['nickname']
       end
 
       def note

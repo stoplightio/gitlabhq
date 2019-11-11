@@ -4,6 +4,7 @@
  */
 .file-holder {
   border: 1px solid $border-color;
+  border-top: 0;
   border-radius: $border-radius-default;
 
   &.file-holder-no-border {
@@ -24,10 +25,6 @@
     }
   }
 
-  table {
-    @extend .table;
-  }
-
   .file-title {
     position: relative;
     background-color: $gray-light;
@@ -36,7 +33,6 @@
     text-align: left;
     padding: 10px $gl-padding;
     word-wrap: break-word;
-    border-radius: $border-radius-default $border-radius-default 0 0;
 
     &.file-title-clear {
       padding-left: 0;
@@ -52,6 +48,7 @@
       position: absolute;
       top: 5px;
       right: 15px;
+      margin-left: auto;
 
       .btn {
         padding: 0 10px;
@@ -111,18 +108,20 @@
     background: $white-light;
 
     &.image_file,
+    &.audio,
     &.video {
-      background: $file-image-bg;
+      background: $gray-darker;
       text-align: center;
       padding: 30px;
 
       img,
+      audio,
       video {
         max-width: 80%;
       }
     }
 
-    &.wiki {
+    &.md {
       padding: $gl-padding;
 
       @include media-breakpoint-up(md) {
@@ -131,7 +130,7 @@
     }
 
     &.blob-no-preview {
-      background: $blob-bg;
+      background: $gray-darker;
       text-shadow: 0 1px 2px $white-light;
       padding: 100px 0;
     }
@@ -146,7 +145,7 @@
       }
 
       tr {
-        border-bottom: 1px solid $blame-border;
+        border-bottom: 1px solid $gray-darker;
 
         &:last-child {
           border-bottom: 0;
@@ -184,7 +183,7 @@
 
         &.line-numbers {
           float: none;
-          border-left: 1px solid $blame-line-numbers-border;
+          border-left: 1px solid $gl-gray-100;
 
           i {
             float: none;
@@ -211,7 +210,7 @@
     }
 
     &.logs {
-      background: $logs-bg;
+      background: $gray-darker;
       max-height: 700px;
       overflow-y: auto;
 
@@ -233,7 +232,7 @@
           }
 
           &:hover {
-            background: $row-hover;
+            background: $blue-50;
           }
         }
       }
@@ -244,6 +243,7 @@
      */
     &.code {
       padding: 0;
+      border-radius: 0 0 $border-radius-default $border-radius-default;
     }
 
     .list-inline.previews {
@@ -286,19 +286,19 @@ span.idiff {
 
   .new-file {
     a {
-      color: $gl-text-green;
+      color: $green-600;
     }
   }
 
   .renamed-file {
     a {
-      color: $gl-text-orange;
+      color: $orange-600;
     }
   }
 
   .deleted-file {
     a {
-      color: $gl-text-red;
+      color: $red-500;
     }
   }
 
@@ -312,24 +312,33 @@ span.idiff {
     text-decoration: none;
 
     .new-file {
-      color: $notify-new-file;
+      color: $green-600;
     }
 
     .deleted-file {
-      color: $notify-deleted-file;
+      color: $red-700;
     }
   }
 }
 
 .file-title-flex-parent {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background-color: $gray-light;
-  border-bottom: 1px solid $border-color;
-  padding: 5px $gl-padding;
-  margin: 0;
-  border-radius: $border-radius-default $border-radius-default 0 0;
+  &,
+  .file-holder & {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    background-color: $gray-light;
+    border-bottom: 1px solid $border-color;
+    border-top: 1px solid $border-color;
+    padding: $gl-padding-8 $gl-padding;
+    margin: 0;
+    border-radius: $border-radius-default $border-radius-default 0 0;
+
+    &.is-stuck {
+      border-radius: 0;
+    }
+  }
 
   .file-header-content {
     white-space: nowrap;
@@ -337,6 +346,17 @@ span.idiff {
     text-overflow: ellipsis;
     padding-right: 30px;
     position: relative;
+    width: auto;
+
+    @media (max-width: map-get($grid-breakpoints, sm)-1) {
+      width: 100%;
+    }
+  }
+
+  .file-holder & {
+    .file-actions {
+      position: static;
+    }
   }
 
   .btn-clipboard {
@@ -348,20 +368,12 @@ span.idiff {
     color: $gl-text-color;
   }
 
-  small {
-    margin: 0 10px 0 0;
-  }
-
-  .file-actions {
-    white-space: nowrap;
-
-    .btn {
-      padding: 0 10px;
-      font-size: 13px;
-      line-height: 28px;
-      display: inline-block;
-      float: none;
-    }
+  .file-actions .btn {
+    padding: 0 10px;
+    font-size: 13px;
+    line-height: 28px;
+    display: inline-block;
+    float: none;
   }
 
   @include media-breakpoint-down(xs) {
@@ -399,4 +411,78 @@ span.idiff {
 .label-lfs {
   color: $common-gray-light;
   border: 1px solid $common-gray-light;
+}
+
+.preview-container {
+  overflow: auto;
+
+  .file-container {
+    background-color: $gray-darker;
+    display: flex;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+
+    text-align: center;
+
+    .file-content {
+      padding: $gl-padding;
+      max-width: 100%;
+      max-height: 100%;
+
+      img {
+        max-width: 90%;
+        max-height: 70vh;
+      }
+
+      .is-zoomable {
+        cursor: pointer;
+        cursor: zoom-in;
+
+        &.is-zoomed {
+          cursor: pointer;
+          cursor: zoom-out;
+          max-width: none;
+          max-height: none;
+          margin-right: $gl-padding;
+        }
+      }
+    }
+
+    .file-info {
+      font-size: $label-font-size;
+      color: $diff-image-info-color;
+    }
+  }
+
+  .note-container {
+    .user-avatar-link.new-comment {
+      position: absolute;
+      margin: 40px $gl-padding 0 116px;
+
+      ~ .note-edit-form form.edit-note {
+        @include media-breakpoint-up(sm) {
+          margin-left: $note-icon-gutter-width;
+        }
+      }
+    }
+  }
+
+  .diff-discussions:not(:last-child) .discussion .discussion-body {
+    padding-bottom: $gl-padding;
+
+    .discussion-reply-holder {
+      border-bottom: 1px solid $gray-100;
+      border-radius: 0;
+    }
+  }
+
+  .md-previewer {
+    padding: $gl-padding;
+  }
+}
+
+.jupyter-notebook-scrolled {
+  overflow-y: auto;
+  max-height: 20rem;
 }

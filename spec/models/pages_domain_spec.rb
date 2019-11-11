@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe PagesDomain do
@@ -51,24 +53,33 @@ describe PagesDomain do
       end
 
       let(:pages_domain) do
-        build(:pages_domain, certificate: certificate, key: key).tap do |pd|
+        build(:pages_domain, certificate: certificate, key: key,
+              auto_ssl_enabled: auto_ssl_enabled).tap do |pd|
           allow(pd).to receive(:project).and_return(project)
           pd.valid?
         end
       end
 
-      where(:pages_https_only, :certificate, :key, :errors_on) do
+      where(:pages_https_only, :certificate, :key, :auto_ssl_enabled, :errors_on) do
         attributes = attributes_for(:pages_domain)
         cert, key = attributes.fetch_values(:certificate, :key)
 
-        true  | nil  | nil | %i(certificate key)
-        true  | cert | nil | %i(key)
-        true  | nil  | key | %i(certificate key)
-        true  | cert | key | []
-        false | nil  | nil | []
-        false | cert | nil | %i(key)
-        false | nil  | key | %i(key)
-        false | cert | key | []
+        true  | nil  | nil | false | %i(certificate key)
+        true  | nil  | nil | true  | []
+        true  | cert | nil | false | %i(key)
+        true  | cert | nil | true  | %i(key)
+        true  | nil  | key | false | %i(certificate key)
+        true  | nil  | key | true  | %i(key)
+        true  | cert | key | false | []
+        true  | cert | key | true  | []
+        false | nil  | nil | false | []
+        false | nil  | nil | true  | []
+        false | cert | nil | false | %i(key)
+        false | cert | nil | true  | %i(key)
+        false | nil  | key | false | %i(key)
+        false | nil  | key | true  | %i(key)
+        false | cert | key | false | []
+        false | cert | key | true  | []
       end
 
       with_them do
@@ -76,6 +87,17 @@ describe PagesDomain do
           expect(pages_domain.errors.keys).to eq errors_on
         end
       end
+    end
+  end
+
+  describe 'when certificate is specified' do
+    let(:domain) { build(:pages_domain) }
+
+    it 'saves validity time' do
+      domain.save
+
+      expect(domain.certificate_valid_not_before).to be_like_time(Time.parse("2016-02-12 14:32:00 UTC"))
+      expect(domain.certificate_valid_not_after).to be_like_time(Time.parse("2020-04-12 14:32:00 UTC"))
     end
   end
 
@@ -104,6 +126,48 @@ describe PagesDomain do
       let(:domain) { build(:pages_domain, :with_missing_chain) }
 
       it { is_expected.not_to be_valid }
+    end
+
+    context 'when certificate is expired' do
+      let(:domain) do
+        build(:pages_domain, :with_trusted_expired_chain)
+      end
+
+      context 'when certificate is being changed' do
+        it "adds error to certificate" do
+          domain.valid?
+
+          expect(domain.errors.keys).to contain_exactly(:key, :certificate)
+        end
+      end
+
+      context 'when certificate is already saved' do
+        it "doesn't add error to certificate" do
+          domain.save(validate: false)
+
+          domain.valid?
+
+          expect(domain.errors.keys).to contain_exactly(:key)
+        end
+      end
+    end
+
+    context 'with ecdsa certificate' do
+      it "is valid" do
+        domain = build(:pages_domain, :ecdsa)
+
+        expect(domain).to be_valid
+      end
+
+      context 'when curve is set explicitly by parameters' do
+        it 'adds errors to private key' do
+          domain = build(:pages_domain, :explicit_ecdsa)
+
+          expect(domain).to be_invalid
+
+          expect(domain.errors[:key]).not_to be_empty
+        end
+      end
     end
   end
 
@@ -229,11 +293,13 @@ describe PagesDomain do
   describe "#https?" do
     context "when a certificate is present" do
       subject { build(:pages_domain) }
+
       it { is_expected.to be_https }
     end
 
     context "when no certificate is present" do
       subject { build(:pages_domain, :without_certificate) }
+
       it { is_expected.not_to be_https }
     end
   end
@@ -339,6 +405,188 @@ describe PagesDomain do
 
           domain.update!(key: nil, certificate: nil)
         end
+      end
+    end
+  end
+
+  describe '#user_provided_key' do
+    subject { domain.user_provided_key }
+
+    context 'when certificate is provided by user' do
+      let(:domain) { create(:pages_domain) }
+
+      it 'returns key' do
+        is_expected.to eq(domain.key)
+      end
+    end
+
+    context 'when certificate is provided by gitlab' do
+      let(:domain) { create(:pages_domain, :letsencrypt) }
+
+      it 'returns nil' do
+        is_expected.to be_nil
+      end
+    end
+  end
+
+  describe '#user_provided_certificate' do
+    subject { domain.user_provided_certificate }
+
+    context 'when certificate is provided by user' do
+      let(:domain) { create(:pages_domain) }
+
+      it 'returns key' do
+        is_expected.to eq(domain.certificate)
+      end
+    end
+
+    context 'when certificate is provided by gitlab' do
+      let(:domain) { create(:pages_domain, :letsencrypt) }
+
+      it 'returns nil' do
+        is_expected.to be_nil
+      end
+    end
+  end
+
+  shared_examples 'certificate setter' do |attribute, setter_name, old_certificate_source, new_certificate_source|
+    let(:domain) do
+      create(:pages_domain, certificate_source: old_certificate_source)
+    end
+
+    let(:old_value) { domain.public_send(attribute) }
+
+    subject { domain.public_send(setter_name, new_value) }
+
+    context 'when value has been changed' do
+      let(:new_value) { 'new_value' }
+
+      it "assignes new value to #{attribute}" do
+        expect do
+          subject
+        end.to change { domain.public_send(attribute) }.from(old_value).to('new_value')
+      end
+
+      it 'changes certificate source' do
+        expect do
+          subject
+        end.to change { domain.certificate_source }.from(old_certificate_source).to(new_certificate_source)
+      end
+    end
+
+    context 'when value has not been not changed' do
+      let(:new_value) { old_value }
+
+      it 'does not change certificate source' do
+        expect do
+          subject
+        end.not_to change { domain.certificate_source }.from(old_certificate_source)
+      end
+    end
+  end
+
+  describe '#user_provided_key=' do
+    include_examples('certificate setter', 'key', 'user_provided_key=',
+                     'gitlab_provided', 'user_provided')
+  end
+
+  describe '#gitlab_provided_key=' do
+    include_examples('certificate setter', 'key', 'gitlab_provided_key=',
+                     'user_provided', 'gitlab_provided')
+  end
+
+  describe '#user_provided_certificate=' do
+    include_examples('certificate setter', 'certificate', 'user_provided_certificate=',
+                     'gitlab_provided', 'user_provided')
+  end
+
+  describe '#gitlab_provided_certificate=' do
+    include_examples('certificate setter', 'certificate', 'gitlab_provided_certificate=',
+                     'user_provided', 'gitlab_provided')
+  end
+
+  describe '.for_removal' do
+    subject { described_class.for_removal }
+
+    context 'when domain is not schedule for removal' do
+      let!(:domain) { create :pages_domain }
+
+      it 'does not return domain' do
+        is_expected.to be_empty
+      end
+    end
+
+    context 'when domain is scheduled for removal yesterday' do
+      let!(:domain) { create :pages_domain, remove_at: 1.day.ago }
+
+      it 'returns domain' do
+        is_expected.to eq([domain])
+      end
+    end
+
+    context 'when domain is scheduled for removal tomorrow' do
+      let!(:domain) { create :pages_domain, remove_at: 1.day.from_now }
+
+      it 'does not return domain' do
+        is_expected.to be_empty
+      end
+    end
+  end
+
+  describe '.need_auto_ssl_renewal' do
+    subject { described_class.need_auto_ssl_renewal }
+
+    let!(:domain_with_user_provided_certificate) { create(:pages_domain) }
+    let!(:domain_with_expired_user_provided_certificate) do
+      create(:pages_domain, :with_expired_certificate)
+    end
+    let!(:domain_with_user_provided_certificate_and_auto_ssl) do
+      create(:pages_domain, auto_ssl_enabled: true)
+    end
+
+    let!(:domain_with_gitlab_provided_certificate) { create(:pages_domain, :letsencrypt) }
+    let!(:domain_with_expired_gitlab_provided_certificate) do
+      create(:pages_domain, :letsencrypt, :with_expired_certificate)
+    end
+
+    it 'contains only domains needing verification' do
+      is_expected.to(
+        contain_exactly(
+          domain_with_user_provided_certificate_and_auto_ssl,
+          domain_with_expired_gitlab_provided_certificate
+        )
+      )
+    end
+  end
+
+  describe '#pages_virtual_domain' do
+    let(:project) { create(:project) }
+    let(:pages_domain) { create(:pages_domain, project: project) }
+
+    context 'when there are no pages deployed for the project' do
+      it 'returns nil' do
+        expect(pages_domain.pages_virtual_domain).to be_nil
+      end
+    end
+
+    context 'when there are pages deployed for the project' do
+      before do
+        generic_commit_status = create(:generic_commit_status, :success, stage: 'deploy', name: 'pages:deploy')
+        generic_commit_status.update!(project: project)
+        project.pages_metadatum.destroy!
+        project.reload
+      end
+
+      it 'returns the virual domain' do
+        expect(Pages::VirtualDomain).to receive(:new).with([project], domain: pages_domain).and_call_original
+
+        expect(pages_domain.pages_virtual_domain).to be_an_instance_of(Pages::VirtualDomain)
+      end
+
+      it 'migrates project pages metadata' do
+        expect { pages_domain.pages_virtual_domain }.to change {
+          project.reload.pages_metadatum&.deployed
+        }.from(nil).to(true)
       end
     end
   end

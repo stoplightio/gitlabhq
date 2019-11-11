@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "spec_helper"
 
 describe "User browses artifacts" do
@@ -19,14 +21,20 @@ describe "User browses artifacts" do
       visit(browse_project_job_artifacts_path(project, job))
     end
 
+    it "renders a link to the job in the breadcrumbs" do
+      page.within('.js-breadcrumbs-list') do
+        expect(page).to have_link("##{job.id}", href: project_job_path(project, job))
+      end
+    end
+
     it "shows artifacts" do
       expect(page).not_to have_selector(".build-sidebar")
 
       page.within(".tree-table") do
         expect(page).to have_no_content("..")
                    .and have_content("other_artifacts_0.1.2")
-                   .and have_content("ci_artifacts.txt")
-                   .and have_content("rails_sample.jpg")
+                   .and have_content("ci_artifacts.txt 27 Bytes")
+                   .and have_content("rails_sample.jpg 34.4 KB")
       end
 
       page.within(".build-header") do
@@ -105,6 +113,25 @@ describe "User browses artifacts" do
       end
 
       it { expect(page).to have_link("doc_sample.txt").and have_no_selector(".js-artifact-tree-external-icon") }
+    end
+
+    context "when the project is private and pages access control is enabled" do
+      let!(:private_project) { create(:project, :private) }
+      let(:pipeline) { create(:ci_empty_pipeline, project: private_project) }
+      let(:job) { create(:ci_build, :artifacts, pipeline: pipeline) }
+      let(:user) { create(:user) }
+
+      before do
+        private_project.add_developer(user)
+
+        allow(Gitlab.config.pages).to receive(:access_control).and_return(true)
+
+        sign_in(user)
+
+        visit(browse_project_job_artifacts_path(private_project, job, "other_artifacts_0.1.2"))
+      end
+
+      it { expect(page).to have_link("doc_sample.txt").and have_selector(".js-artifact-tree-external-icon") }
     end
   end
 end

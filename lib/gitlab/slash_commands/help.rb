@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module SlashCommands
     class Help < BaseCommand
@@ -17,7 +19,9 @@ module Gitlab
       end
 
       def execute(commands, text)
-        Gitlab::SlashCommands::Presenters::Help.new(commands).present(trigger, text)
+        Gitlab::SlashCommands::Presenters::Help
+          .new(project, commands)
+          .present(trigger, text)
       end
 
       def trigger

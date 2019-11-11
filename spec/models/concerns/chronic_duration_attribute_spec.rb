@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 shared_examples 'ChronicDurationAttribute reader' do
@@ -43,7 +45,7 @@ shared_examples 'ChronicDurationAttribute writer' do
     end
 
     it "doesn't raise exception" do
-      expect { subject.send("#{virtual_field}=", '-10m') }.not_to raise_error(ChronicDuration::DurationParseError)
+      expect { subject.send("#{virtual_field}=", '-10m') }.not_to raise_error
     end
 
     it "doesn't change value" do
@@ -54,7 +56,8 @@ shared_examples 'ChronicDurationAttribute writer' do
       subject.send("#{virtual_field}=", '-10m')
 
       expect(subject.valid?).to be_falsey
-      expect(subject.errors&.messages).to include(virtual_field => ['is not a correct duration'])
+      expect(subject.errors&.messages)
+        .to include(base: ['Maximum job timeout has a value which could not be accepted'])
     end
   end
 
@@ -86,7 +89,7 @@ shared_examples 'ChronicDurationAttribute writer' do
     end
 
     it "doesn't raise exception" do
-      expect { subject.send("#{virtual_field}=", nil) }.not_to raise_error(NoMethodError)
+      expect { subject.send("#{virtual_field}=", nil) }.not_to raise_error
     end
   end
 end

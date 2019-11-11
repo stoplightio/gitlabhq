@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 # rubocop:disable Style/Documentation
-# rubocop:disable Metrics/LineLength
 
 module Gitlab
   module BackgroundMigration
@@ -10,7 +9,7 @@ module Gitlab
       end
 
       def perform(start_id, stop_id)
-        Rails.logger.info("Setting commits_count for merge request diffs: #{start_id} - #{stop_id}")
+        Rails.logger.info("Setting commits_count for merge request diffs: #{start_id} - #{stop_id}") # rubocop:disable Gitlab/RailsLogger
 
         update = '
           commits_count = (

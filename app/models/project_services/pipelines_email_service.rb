@@ -1,18 +1,35 @@
+# frozen_string_literal: true
+
 class PipelinesEmailService < Service
-  prop_accessor :recipients
-  boolean_accessor :notify_only_broken_pipelines
+  include NotificationBranchSelection
+
+  prop_accessor :recipients, :branches_to_be_notified
+  boolean_accessor :notify_only_broken_pipelines, :notify_only_default_branch
   validates :recipients, presence: true, if: :valid_recipients?
 
   def initialize_properties
-    self.properties ||= { notify_only_broken_pipelines: true }
+    if properties.nil?
+      self.properties = {}
+      self.notify_only_broken_pipelines = true
+      self.branches_to_be_notified = "default"
+    elsif !self.notify_only_default_branch.nil?
+      # In older versions, there was only a boolean property named
+      # `notify_only_default_branch`. Now we have a string property named
+      # `branches_to_be_notified`. Instead of doing a background migration, we
+      # opted to set a value for the new property based on the old one, if
+      # users hasn't specified one already. When users edit the service and
+      # selects a value for this new property, it will override everything.
+
+      self.branches_to_be_notified ||= notify_only_default_branch? ? "default" : "all"
+    end
   end
 
   def title
-    'Pipelines emails'
+    _('Pipelines emails')
   end
 
   def description
-    'Email the pipelines status to a list of recipients.'
+    _('Email the pipelines status to a list of recipients.')
   end
 
   def self.to_param
@@ -36,11 +53,11 @@ class PipelinesEmailService < Service
   end
 
   def can_test?
-    project.pipelines.any?
+    project.ci_pipelines.any?
   end
 
   def test_data(project, user)
-    data = Gitlab::DataBuilder::Pipeline.build(project.pipelines.last)
+    data = Gitlab::DataBuilder::Pipeline.build(project.ci_pipelines.last)
     data[:user] = user.hook_attrs
     data
   end
@@ -49,10 +66,13 @@ class PipelinesEmailService < Service
     [
       { type: 'textarea',
         name: 'recipients',
-        placeholder: 'Emails separated by comma',
+        placeholder: _('Emails separated by comma'),
         required: true },
       { type: 'checkbox',
-        name: 'notify_only_broken_pipelines' }
+        name: 'notify_only_broken_pipelines' },
+      { type: 'select',
+        name: 'branches_to_be_notified',
+        choices: BRANCH_CHOICES }
     ]
   end
 
@@ -65,6 +85,10 @@ class PipelinesEmailService < Service
   end
 
   def should_pipeline_be_notified?(data)
+    notify_for_branch?(data) && notify_for_pipeline?(data)
+  end
+
+  def notify_for_pipeline?(data)
     case data[:object_attributes][:status]
     when 'success'
       !notify_only_broken_pipelines?

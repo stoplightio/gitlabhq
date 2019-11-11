@@ -1,12 +1,14 @@
-# Health Check
+---
+type: concepts, howto
+---
 
->**Notes:**
-  - Liveness and readiness probes were [introduced][ce-10416] in GitLab 9.1.
-  - The `health_check` endpoint was [introduced][ce-3888] in GitLab 8.8 and will
-    be deprecated in GitLab 9.1. Read more in the [old behavior](#old-behavior)
-    section.
-  - [Access token](#access-token) has been deprecated in GitLab 9.4
-    in favor of [IP whitelist](#ip-whitelist)
+# Health Check **(CORE ONLY)**
+
+> - Liveness and readiness probes were [introduced][ce-10416] in GitLab 9.1.
+> - The `health_check` endpoint was [introduced][ce-3888] in GitLab 8.8 and was
+>   deprecated in GitLab 9.1.
+> - [Access token](#access-token-deprecated) has been deprecated in GitLab 9.4
+>   in favor of [IP whitelist](#ip-whitelist).
 
 GitLab provides liveness and readiness probes to indicate service health and
 reachability to required services. These probes report on the status of the
@@ -16,82 +18,121 @@ traffic until the system is ready or restart the container as needed.
 
 ## IP whitelist
 
-To access monitoring resources, the client IP needs to be included in a whitelist.
+To access monitoring resources, the requesting client IP needs to be included in a whitelist.
+For details, see [how to add IPs to a whitelist for the monitoring endpoints](../../../administration/monitoring/ip_whitelist.md).
 
-[Read how to add IPs to a whitelist for the monitoring endpoints][admin].
+## Using the endpoints locally
 
-## Using the endpoint
+With default whitelist settings, the probes can be accessed from localhost using the following URLs:
 
-With default whitelist settings, the probes can be accessed from localhost:
-
-- `http://localhost/-/readiness`
-- `http://localhost/-/liveness`
-
-which will then provide a report of system health in JSON format.
-
-Readiness example output:
-
+```text
+GET http://localhost/-/health
 ```
+
+```text
+GET http://localhost/-/readiness
+```
+
+```text
+GET http://localhost/-/liveness
+```
+
+## Health
+
+Checks whether the application server is running. It does not verify the database or other services are running.
+
+```text
+GET /-/health
+```
+
+Example request:
+
+```sh
+curl 'https://gitlab.example.com/-/health'
+```
+
+Example response:
+
+```text
+GitLab OK
+```
+
+## Readiness
+
+The readiness probe checks whether the GitLab instance is ready to use. It checks the dependent services (Database, Redis, Gitaly etc.) and gives a status for each.
+
+```text
+GET /-/readiness
+```
+
+Example request:
+
+```sh
+curl 'https://gitlab.example.com/-/readiness'
+```
+
+Example response:
+
+```json
 {
-   "queues_check" : {
-      "status" : "ok"
+   "db_check":{
+      "status":"failed",
+      "message": "unexpected Db check result: 0"
    },
-   "redis_check" : {
-      "status" : "ok"
+   "redis_check":{
+      "status":"ok"
    },
-   "shared_state_check" : {
-      "status" : "ok"
+   "cache_check":{
+      "status":"ok"
    },
-   "fs_shards_check" : {
-      "labels" : {
-         "shard" : "default"
-      },
-      "status" : "ok"
+   "queues_check":{
+      "status":"ok"
    },
-   "db_check" : {
-      "status" : "ok"
+   "shared_state_check":{
+      "status":"ok"
    },
-   "cache_check" : {
-      "status" : "ok"
+   "gitaly_check":{
+      "status":"ok",
+      "labels":{
+         "shard":"default"
+         }
+      }
    }
+```
+
+## Liveness
+
+DANGER: **Warning:**
+In Gitlab [12.4](https://about.gitlab.com/upcoming-releases/) the response body of the Liveness check will change to match the example below.
+
+The liveness probe checks whether the application server is alive. Unlike the [`health`](#health) check, this check hits the database.
+
+```text
+GET /-/liveness
+```
+
+Example request:
+
+```sh
+curl 'https://gitlab.example.com/-/liveness'
+```
+
+Example response:
+
+On success, the endpoint will return a `200` HTTP status code, and a response like below.
+
+```json
+{
+   "status": "ok"
 }
 ```
 
-Liveness example output:
-
-```
-{
-   "fs_shards_check" : {
-      "status" : "ok"
-   },
-   "cache_check" : {
-      "status" : "ok"
-   },
-   "db_check" : {
-      "status" : "ok"
-   },
-   "redis_check" : {
-      "status" : "ok"
-   },
-   "queues_check" : {
-      "status" : "ok"
-   },
-   "shared_state_check" : {
-      "status" : "ok"
-   }
-}
-```
-
-## Status
-
-On failure, the endpoint will return a `500` HTTP status code. On success, the endpoint
-will return a valid successful HTTP status code, and a `success` message.
+On failure, the endpoint will return a `500` HTTP status code.
 
 ## Access token (Deprecated)
 
->**Note:**
-Access token has been deprecated in GitLab 9.4
-in favor of [IP whitelist](#ip-whitelist)
+> NOTE: **Note:**
+> Access token has been deprecated in GitLab 9.4 in favor of [IP whitelist](#ip-whitelist).
 
 An access token needs to be provided while accessing the probe endpoints. The current
 accepted token can be found under the **Admin area ➔ Monitoring ➔ Health check**
@@ -101,14 +142,25 @@ accepted token can be found under the **Admin area ➔ Monitoring ➔ Health che
 
 The access token can be passed as a URL parameter:
 
-```
+```text
 https://gitlab.example.com/-/readiness?token=ACCESS_TOKEN
 ```
 
-[ce-10416]: https://gitlab.com/gitlab-org/gitlab-ce/merge_requests/10416
-[ce-3888]: https://gitlab.com/gitlab-org/gitlab-ce/merge_requests/3888
+<!-- ## Troubleshooting
+
+Include any troubleshooting steps that you can foresee. If you know beforehand what issues
+one might have when setting this up, or when something is changed, or on upgrading, it's
+important to describe those, too. Think of things that may go wrong and include them here.
+This is important to minimize requests for support, and to avoid doc comments with
+questions that you know someone might ask.
+
+Each scenario can be a third-level heading, e.g. `### Getting error message X`.
+If you have none to add when creating a doc, leave this section in place
+but commented out to help encourage others to add to it in the future. -->
+
+[ce-10416]: https://gitlab.com/gitlab-org/gitlab-foss/merge_requests/10416
+[ce-3888]: https://gitlab.com/gitlab-org/gitlab-foss/merge_requests/3888
 [pingdom]: https://www.pingdom.com
 [nagios-health]: https://nagios-plugins.org/doc/man/check_http.html
 [newrelic-health]: https://docs.newrelic.com/docs/alerts/alert-policies/downtime-alerts/availability-monitoring
 [kubernetes]: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-probes/
-[admin]: ../../../administration/monitoring/ip_whitelist.md

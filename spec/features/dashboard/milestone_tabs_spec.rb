@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe 'Dashboard milestone tabs', :js do
@@ -14,7 +16,7 @@ describe 'Dashboard milestone tabs', :js do
   let!(:merge_request) { create(:labeled_merge_request, source_project: project, target_project: project, milestone: project_milestone, labels: [label]) }
 
   before do
-    project.add_master(user)
+    project.add_maintainer(user)
     sign_in(user)
 
     visit dashboard_milestone_path(milestone.safe_title, title: milestone.title)

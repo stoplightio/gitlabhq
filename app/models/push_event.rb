@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class PushEvent < Event
   # This validation exists so we can't accidentally use PushEvent with a
   # different "action" value.
@@ -23,6 +25,8 @@ class PushEvent < Event
 
   delegate :commit_count, to: :push_event_payload
   alias_method :commits_count, :commit_count
+
+  delegate :ref_count, to: :push_event_payload
 
   # Returns events of pushes that either pushed to an existing ref or created a
   # new one.
@@ -50,7 +54,7 @@ class PushEvent < Event
       .select(1)
       .where('merge_requests.source_project_id = events.project_id')
       .where('merge_requests.source_branch = push_event_payloads.ref')
-      .where(state: :opened)
+      .with_state(:opened)
 
     # For reasons unknown the use of #eager_load will result in the
     # "push_event_payload" association not being set. Because of this we're
@@ -67,7 +71,7 @@ class PushEvent < Event
     PUSHED
   end
 
-  def push?
+  def push_action?
     true
   end
 

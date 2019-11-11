@@ -1,20 +1,28 @@
 <script>
+import { __ } from '~/locale';
 import $ from 'jquery';
 import _ from 'underscore';
+import Icon from '~/vue_shared/components/icon.vue';
+import { GlLoadingIcon } from '@gitlab/ui';
 import eventHub from '../eventhub';
-import loadingIcon from '../../vue_shared/components/loading_icon.vue';
 import Api from '../../api';
+import { featureAccessLevel } from '~/pages/projects/shared/permissions/constants';
 
 export default {
   name: 'BoardProjectSelect',
   components: {
-    loadingIcon,
+    Icon,
+    GlLoadingIcon,
   },
   props: {
     groupId: {
       type: Number,
       required: true,
       default: 0,
+    },
+    list: {
+      type: Object,
+      required: true,
     },
   },
   data() {
@@ -25,7 +33,7 @@ export default {
   },
   computed: {
     selectedProjectName() {
-      return this.selectedProject.name || 'Select a project';
+      return this.selectedProject.name || __('Select a project');
     },
   },
   mounted() {
@@ -46,21 +54,41 @@ export default {
       selectable: true,
       data: (term, callback) => {
         this.loading = true;
-        return Api.groupProjects(this.groupId, term, projects => {
-          this.loading = false;
-          callback(projects);
-        });
+        const additionalAttrs = {};
+
+        if (this.list.type && this.list.type !== 'backlog') {
+          additionalAttrs.min_access_level = featureAccessLevel.EVERYONE;
+        }
+
+        return Api.groupProjects(
+          this.groupId,
+          term,
+          {
+            with_issues_enabled: true,
+            with_shared: false,
+            include_subgroups: true,
+            ...additionalAttrs,
+          },
+          projects => {
+            this.loading = false;
+            callback(projects);
+          },
+        );
       },
       renderRow(project) {
         return `
             <li>
-              <a href='#' class='dropdown-menu-link' data-project-id="${project.id}" data-project-name="${project.name}">
-                ${_.escape(project.name)}
+              <a href='#' class='dropdown-menu-link' data-project-id="${
+                project.id
+              }" data-project-name="${project.name}" data-project-name-with-namespace="${
+          project.name_with_namespace
+        }">
+                ${_.escape(project.name_with_namespace)}
               </a>
             </li>
           `;
       },
-      text: project => project.name,
+      text: project => project.name_with_namespace,
     });
   },
 };
@@ -68,59 +96,24 @@ export default {
 
 <template>
   <div>
-    <label class="label-light prepend-top-10">
-      Project
-    </label>
-    <div
-      ref="projectsDropdown"
-      class="dropdown"
-    >
+    <label class="label-bold prepend-top-10">{{ __('Project') }}</label>
+    <div ref="projectsDropdown" class="dropdown dropdown-projects">
       <button
         class="dropdown-menu-toggle wide"
         type="button"
         data-toggle="dropdown"
         aria-expanded="false"
       >
-        {{ selectedProjectName }}
-        <i
-          class="fa fa-chevron-down"
-          aria-hidden="true"
-        >
-        </i>
+        {{ selectedProjectName }} <icon name="chevron-down" />
       </button>
       <div class="dropdown-menu dropdown-menu-selectable dropdown-menu-full-width">
-        <div class="dropdown-title">
-          <span>Projects</span>
-          <button
-            aria-label="Close"
-            type="button"
-            class="dropdown-title-button dropdown-menu-close"
-          >
-            <i
-              aria-hidden="true"
-              data-hidden="true"
-              class="fa fa-times dropdown-menu-close-icon"
-            >
-            </i>
-          </button>
-        </div>
+        <div class="dropdown-title">{{ __('Projects') }}</div>
         <div class="dropdown-input">
-          <input
-            class="dropdown-input-field"
-            type="search"
-            placeholder="Search projects"
-          />
-          <i
-            aria-hidden="true"
-            data-hidden="true"
-            class="fa fa-search dropdown-input-search"
-          >
-          </i>
+          <input class="dropdown-input-field" type="search" :placeholder="__('Search projects')" />
+          <icon name="search" class="dropdown-input-search" data-hidden="true" />
         </div>
         <div class="dropdown-content"></div>
-        <div class="dropdown-loading">
-          <loading-icon />
-        </div>
+        <div class="dropdown-loading"><gl-loading-icon /></div>
       </div>
     </div>
   </div>

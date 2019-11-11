@@ -1,4 +1,6 @@
-require 'rails_helper'
+# frozen_string_literal: true
+
+require 'spec_helper'
 
 describe Gitlab::DependencyLinker::PodfileLinker do
   describe '.support?' do
@@ -43,7 +45,10 @@ describe Gitlab::DependencyLinker::PodfileLinker do
 
     it 'links packages' do
       expect(subject).to include(link('AFNetworking', 'https://cocoapods.org/pods/AFNetworking'))
-      expect(subject).to include(link('Interstellar/Core', 'https://cocoapods.org/pods/Interstellar'))
+    end
+
+    it 'links external packages' do
+      expect(subject).to include(link('Interstellar/Core', 'https://github.com/ashfurrow/Interstellar.git'))
     end
 
     it 'links Git repos' do

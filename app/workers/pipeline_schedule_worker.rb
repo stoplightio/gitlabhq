@@ -1,21 +1,15 @@
+# frozen_string_literal: true
+
 class PipelineScheduleWorker
   include ApplicationWorker
   include CronjobQueue
 
-  def perform
-    Ci::PipelineSchedule.active.where("next_run_at < ?", Time.now)
-      .preload(:owner, :project).find_each do |schedule|
-      begin
-        pipeline = Ci::CreatePipelineService.new(schedule.project,
-                                                 schedule.owner,
-                                                 ref: schedule.ref)
-          .execute(:schedule, ignore_skip_ci: true, save_on_errors: false, schedule: schedule)
+  feature_category :continuous_integration
 
-        schedule.deactivate! unless pipeline.persisted?
-      rescue => e
-        Rails.logger.error "#{schedule.id}: Failed to create a scheduled pipeline: #{e.message}"
-      ensure
-        schedule.schedule_next_run!
+  def perform
+    Ci::PipelineSchedule.runnable_schedules.preloaded.find_in_batches do |schedules|
+      schedules.each do |schedule|
+        Ci::PipelineScheduleService.new(schedule.project, schedule.owner).execute(schedule)
       end
     end
   end

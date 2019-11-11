@@ -1,20 +1,22 @@
-require 'rails_helper'
+# frozen_string_literal: true
 
-feature 'Manually create a todo item from issue', :js do
+require 'spec_helper'
+
+describe 'Manually create a todo item from issue', :js do
   let!(:project) { create(:project) }
   let!(:issue)   { create(:issue, project: project) }
   let!(:user)    { create(:user)}
 
   before do
-    project.add_master(user)
+    project.add_maintainer(user)
     sign_in(user)
     visit project_issue_path(project, issue)
   end
 
   it 'creates todo when clicking button' do
     page.within '.issuable-sidebar' do
-      click_button 'Add todo'
-      expect(page).to have_content 'Mark todo as done'
+      click_button 'Add a To Do'
+      expect(page).to have_content 'Mark as done'
     end
 
     page.within '.header-content .todos-count' do
@@ -30,8 +32,8 @@ feature 'Manually create a todo item from issue', :js do
 
   it 'marks a todo as done' do
     page.within '.issuable-sidebar' do
-      click_button 'Add todo'
-      click_button 'Mark todo as done'
+      click_button 'Add a To Do'
+      click_button 'Mark as done'
     end
 
     expect(page).to have_selector('.todos-count', visible: false)

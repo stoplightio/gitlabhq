@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Banzai::Filter::CommitRangeReferenceFilter do
@@ -60,6 +62,7 @@ describe Banzai::Filter::CommitRangeReferenceFilter do
       exp = act = "See #{commit1.id.reverse}...#{commit2.id}"
 
       allow(project.repository).to receive(:commit).with(commit1.id.reverse)
+      allow(project.repository).to receive(:commit).with(commit2.id)
       expect(reference_filter(act).to_html).to eq exp
     end
 
@@ -204,7 +207,7 @@ describe Banzai::Filter::CommitRangeReferenceFilter do
   context 'cross-project URL reference' do
     let(:namespace) { create(:namespace) }
     let(:project2)  { create(:project, :public, :repository, namespace: namespace) }
-    let(:range)  { CommitRange.new("#{commit1.id}...master", project) }
+    let(:range) { CommitRange.new("#{commit1.id}...master", project) }
     let(:reference) { urls.project_compare_url(project2, from: commit1.id, to: 'master') }
 
     before do

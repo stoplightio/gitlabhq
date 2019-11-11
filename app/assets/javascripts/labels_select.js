@@ -1,16 +1,17 @@
-/* eslint-disable no-useless-return, func-names, space-before-function-paren, wrap-iife, no-var, no-underscore-dangle, prefer-arrow-callback, max-len, one-var, no-unused-vars, one-var-declaration-per-line, prefer-template, no-new, consistent-return, object-shorthand, comma-dangle, no-shadow, no-param-reassign, brace-style, vars-on-top, quotes, no-lonely-if, no-else-return, dot-notation, no-empty, no-return-assign, camelcase, prefer-spread */
+/* eslint-disable no-useless-return, func-names, no-var, no-underscore-dangle, one-var, no-new, consistent-return, no-shadow, no-param-reassign, vars-on-top, no-lonely-if, no-else-return, dot-notation, no-empty */
 /* global Issuable */
 /* global ListLabel */
 
 import $ from 'jquery';
 import _ from 'underscore';
-import { __ } from './locale';
+import { sprintf, s__, __ } from './locale';
 import axios from './lib/utils/axios_utils';
 import IssuableBulkUpdateActions from './issuable_bulk_update_actions';
-import DropdownUtils from './filtered_search/dropdown_utils';
 import CreateLabelDropdown from './create_label';
 import flash from './flash';
 import ModalStore from './boards/stores/modal_store';
+import boardsStore from './boards/stores/boards_store';
+import { isScopedLabel } from '~/lib/utils/common_utils';
 
 export default class LabelsSelect {
   constructor(els, options = {}) {
@@ -23,23 +24,43 @@ export default class LabelsSelect {
       $els = $('.js-label-select');
     }
 
-    $els.each(function(i, dropdown) {
-      var $block, $colorPreview, $dropdown, $form, $loading, $selectbox, $sidebarCollapsedValue, $value, abilityName, defaultLabel, enableLabelCreateButton, issueURLSplit, issueUpdateURL, labelUrl, namespacePath, projectPath, saveLabelData, selectedLabel, showAny, showNo, $sidebarLabelTooltip, initialSelected, $toggleText, fieldName, useId, propertyName, showMenuAbove, $container, $dropdownContainer;
+    $els.each((i, dropdown) => {
+      var $block,
+        $dropdown,
+        $form,
+        $loading,
+        $selectbox,
+        $sidebarCollapsedValue,
+        $value,
+        $dropdownMenu,
+        abilityName,
+        defaultLabel,
+        issueUpdateURL,
+        labelUrl,
+        namespacePath,
+        projectPath,
+        saveLabelData,
+        selectedLabel,
+        showAny,
+        showNo,
+        $sidebarLabelTooltip,
+        initialSelected,
+        fieldName,
+        showMenuAbove,
+        $dropdownContainer;
       $dropdown = $(dropdown);
       $dropdownContainer = $dropdown.closest('.labels-filter');
-      $toggleText = $dropdown.find('.dropdown-toggle-text');
       namespacePath = $dropdown.data('namespacePath');
       projectPath = $dropdown.data('projectPath');
-      labelUrl = $dropdown.data('labels');
       issueUpdateURL = $dropdown.data('issueUpdate');
       selectedLabel = $dropdown.data('selected');
-      if ((selectedLabel != null) && !$dropdown.hasClass('js-multiselect')) {
+      if (selectedLabel != null && !$dropdown.hasClass('js-multiselect')) {
         selectedLabel = selectedLabel.split(',');
       }
       showNo = $dropdown.data('showNo');
       showAny = $dropdown.data('showAny');
       showMenuAbove = $dropdown.data('showMenuAbove');
-      defaultLabel = $dropdown.data('defaultLabel');
+      defaultLabel = $dropdown.data('defaultLabel') || __('Label');
       abilityName = $dropdown.data('abilityName');
       $selectbox = $dropdown.closest('.selectbox');
       $block = $selectbox.closest('.block');
@@ -47,28 +68,37 @@ export default class LabelsSelect {
       $sidebarCollapsedValue = $block.find('.sidebar-collapsed-icon span');
       $sidebarLabelTooltip = $block.find('.js-sidebar-labels-tooltip');
       $value = $block.find('.value');
+      $dropdownMenu = $dropdown.parent().find('.dropdown-menu');
       $loading = $block.find('.block-loading').fadeOut();
       fieldName = $dropdown.data('fieldName');
-      useId = $dropdown.is('.js-issuable-form-dropdown, .js-filter-bulk-update, .js-label-sidebar-dropdown');
-      propertyName = useId ? 'id' : 'title';
       initialSelected = $selectbox
-        .find('input[name="' + $dropdown.data('fieldName') + '"]')
-        .map(function () {
+        .find(`input[name="${$dropdown.data('fieldName')}"]`)
+        .map(function() {
           return this.value;
-        }).get();
-      const handleClick = options.handleClick;
-
+        })
+        .get();
+      const scopedLabels = $dropdown.data('scopedLabels');
+      const scopedLabelsDocumentationLink = $dropdown.data('scopedLabelsDocumentationLink');
+      const { handleClick } = options;
       $sidebarLabelTooltip.tooltip();
 
       if ($dropdown.closest('.dropdown').find('.dropdown-new-label').length) {
-        new CreateLabelDropdown($dropdown.closest('.dropdown').find('.dropdown-new-label'), namespacePath, projectPath);
+        new CreateLabelDropdown(
+          $dropdown.closest('.dropdown').find('.dropdown-new-label'),
+          namespacePath,
+          projectPath,
+        );
       }
 
       saveLabelData = function() {
         var data, selected;
-        selected = $dropdown.closest('.selectbox').find("input[name='" + fieldName + "']").map(function() {
-          return this.value;
-        }).get();
+        selected = $dropdown
+          .closest('.selectbox')
+          .find(`input[name='${fieldName}']`)
+          .map(function() {
+            return this.value;
+          })
+          .get();
 
         if (_.isEqual(initialSelected, selected)) return;
         initialSelected = selected;
@@ -81,9 +111,10 @@ export default class LabelsSelect {
         }
         $loading.removeClass('hidden').fadeIn();
         $dropdown.trigger('loading.gl.dropdown');
-        axios.put(issueUpdateURL, data)
+        axios
+          .put(issueUpdateURL, data)
           .then(({ data }) => {
-            var labelCount, template, labelTooltipTitle, labelTitles, formattedLabels;
+            var labelCount, template, labelTooltipTitle, labelTitles;
             $loading.fadeOut();
             $dropdown.trigger('loaded.gl.dropdown');
             $selectbox.hide();
@@ -91,78 +122,104 @@ export default class LabelsSelect {
             labelCount = 0;
             if (data.labels.length && issueUpdateURL) {
               template = LabelsSelect.getLabelTemplate({
-                labels: data.labels,
+                labels: _.sortBy(data.labels, 'title'),
                 issueUpdateURL,
+                enableScopedLabels: scopedLabels,
+                scopedLabelsDocumentationLink,
               });
               labelCount = data.labels.length;
-            }
-            else {
-              template = '<span class="no-value">None</span>';
+
+              // EE Specific
+              if (IS_EE) {
+                /**
+                 * For Scoped labels, the last label selected with the
+                 * same key will be applied to the current issueable.
+                 *
+                 * If these are the labels - priority::1, priority::2; and if
+                 * we apply them in the same order, only priority::2 will stick
+                 * with the issuable.
+                 *
+                 * In the current dropdown implementation, we keep track of all
+                 * the labels selected via a hidden DOM element. Since a User
+                 * can select priority::1 and priority::2 at the same time, the
+                 * DOM will have 2 hidden input and the dropdown will show both
+                 * the items selected but in reality server only applied
+                 * priority::2.
+                 *
+                 * We find all the labels then find all the labels server accepted
+                 * and then remove the excess ones.
+                 */
+                const toRemoveIds = Array.from(
+                  $form.find(`input[type="hidden"][name="${fieldName}"]`),
+                )
+                  .map(el => el.value)
+                  .map(Number);
+
+                data.labels.forEach(label => {
+                  const index = toRemoveIds.indexOf(label.id);
+                  toRemoveIds.splice(index, 1);
+                });
+
+                toRemoveIds.forEach(id => {
+                  $form
+                    .find(`input[type="hidden"][name="${fieldName}"][value="${id}"]`)
+                    .last()
+                    .remove();
+                });
+              }
+            } else {
+              template = `<span class="no-value">${__('None')}</span>`;
             }
             $value.removeAttr('style').html(template);
             $sidebarCollapsedValue.text(labelCount);
 
             if (data.labels.length) {
-              labelTitles = data.labels.map(function(label) {
-                return label.title;
-              });
+              labelTitles = data.labels.map(label => label.title);
 
               if (labelTitles.length > 5) {
                 labelTitles = labelTitles.slice(0, 5);
-                labelTitles.push('and ' + (data.labels.length - 5) + ' more');
+                labelTitles.push(
+                  sprintf(s__('Labels|and %{count} more'), { count: data.labels.length - 5 }),
+                );
               }
 
               labelTooltipTitle = labelTitles.join(', ');
-            }
-            else {
+            } else {
               labelTooltipTitle = __('Labels');
             }
 
-            $sidebarLabelTooltip
-              .attr('title', labelTooltipTitle)
-              .tooltip('_fixTitle');
+            $sidebarLabelTooltip.attr('title', labelTooltipTitle).tooltip('_fixTitle');
 
             $('.has-tooltip', $value).tooltip({
-              container: 'body'
+              container: 'body',
             });
           })
           .catch(() => flash(__('Error saving label update.')));
       };
       $dropdown.glDropdown({
-        showMenuAbove: showMenuAbove,
-        data: function(term, callback) {
-          axios.get(labelUrl)
-            .then((res) => {
-              let data = _.chain(res.data).groupBy(function(label) {
-                return label.title;
-              }).map(function(label) {
-                var color;
-                color = _.map(label, function(dup) {
-                  return dup.color;
-                });
-                return {
-                  id: label[0].id,
-                  title: label[0].title,
-                  color: color,
-                  duplicate: color.length > 1
-                };
-              }).value();
+        showMenuAbove,
+        data(term, callback) {
+          labelUrl = $dropdown.attr('data-labels');
+          axios
+            .get(labelUrl)
+            .then(res => {
+              let { data } = res;
               if ($dropdown.hasClass('js-extra-options')) {
                 var extraData = [];
                 if (showNo) {
                   extraData.unshift({
                     id: 0,
-                    title: 'No Label'
+                    title: __('No Label'),
                   });
                 }
                 if (showAny) {
                   extraData.unshift({
                     isAny: true,
-                    title: 'Any Label'
+                    title: __('Any Label'),
                   });
                 }
                 if (extraData.length) {
-                  extraData.push('divider');
+                  extraData.push({ type: 'divider' });
                   data = extraData.concat(data);
                 }
               }
@@ -174,12 +231,20 @@ export default class LabelsSelect {
             })
             .catch(() => flash(__('Error fetching labels.')));
         },
-        renderRow: function(label, instance) {
-          var $a, $li, color, colorEl, indeterminate, removesAll, selectedClass, spacing, i, marked, dropdownName, dropdownValue;
-          $li = $('<li>');
-          $a = $('<a href="#">');
+        renderRow(label) {
+          var linkEl,
+            listItemEl,
+            colorEl,
+            indeterminate,
+            removesAll,
+            selectedClass,
+            i,
+            marked,
+            dropdownValue;
+
           selectedClass = [];
-          removesAll = label.id <= 0 || (label.id == null);
+          removesAll = label.id <= 0 || label.id == null;
+
           if ($dropdown.hasClass('js-filter-bulk-update')) {
             indeterminate = $dropdown.data('indeterminate') || [];
             marked = $dropdown.data('marked') || [];
@@ -198,97 +263,103 @@ export default class LabelsSelect {
             }
           } else {
             if (this.id(label)) {
-              dropdownName = $dropdown.data('fieldName');
-              dropdownValue = this.id(label).toString().replace(/'/g, '\\\'');
+              dropdownValue = this.id(label)
+                .toString()
+                .replace(/'/g, "\\'");
 
-              if ($form.find("input[type='hidden'][name='" + dropdownName + "'][value='" + dropdownValue + "']").length) {
+              if (
+                $form.find(
+                  `input[type='hidden'][name='${this.fieldName}'][value='${dropdownValue}']`,
+                ).length
+              ) {
                 selectedClass.push('is-active');
               }
             }
 
-            if ($dropdown.hasClass('js-multiselect') && removesAll) {
+            if (this.multiSelect && removesAll) {
               selectedClass.push('dropdown-clear-active');
             }
           }
-          if (label.duplicate) {
-            color = DropdownUtils.duplicateLabelColor(label.color);
-          }
-          else {
-            if (label.color != null) {
-              color = label.color[0];
-            }
-          }
-          if (color) {
-            colorEl = "<span class='dropdown-label-box' style='background: " + color + "'></span>";
-          }
-          else {
+
+          if (label.color) {
+            colorEl = `<span class='dropdown-label-box' style='background: ${label.color}'></span>`;
+          } else {
             colorEl = '';
           }
+
+          linkEl = document.createElement('a');
+          linkEl.href = '#';
+
           // We need to identify which items are actually labels
           if (label.id) {
-            selectedClass.push('label-item');
-            $a.attr('data-label-id', label.id);
+            const selectedLayoutClasses = ['d-flex', 'flex-row', 'text-break-word'];
+            selectedClass.push('label-item', ...selectedLayoutClasses);
+            linkEl.dataset.labelId = label.id;
           }
-          $a.addClass(selectedClass.join(' ')).html(`${colorEl} ${_.escape(label.title)}`);
-          // Return generated html
-          return $li.html($a).prop('outerHTML');
+
+          linkEl.className = selectedClass.join(' ');
+          linkEl.innerHTML = `${colorEl} ${_.escape(label.title)}`;
+
+          listItemEl = document.createElement('li');
+          listItemEl.appendChild(linkEl);
+
+          return listItemEl;
         },
         search: {
-          fields: ['title']
+          fields: ['title'],
         },
         selectable: true,
         filterable: true,
         selected: $dropdown.data('selected') || [],
-        toggleLabel: function(selected, el) {
+        toggleLabel(selected, el) {
           var $dropdownParent = $dropdown.parent();
           var $dropdownInputField = $dropdownParent.find('.dropdown-input-field');
           var isSelected = el !== null ? el.hasClass('is-active') : false;
-          var title = selected.title;
+
+          var title = selected ? selected.title : null;
           var selectedLabels = this.selected;
 
           if ($dropdownInputField.length && $dropdownInputField.val().length) {
             $dropdownParent.find('.dropdown-input-clear').trigger('click');
           }
 
-          if (selected.id === 0) {
+          if (selected && selected.id === 0) {
             this.selected = [];
-            return 'No Label';
-          }
-          else if (isSelected) {
+            return __('No Label');
+          } else if (isSelected) {
             this.selected.push(title);
-          }
-          else {
+          } else if (!isSelected && title) {
             var index = this.selected.indexOf(title);
             this.selected.splice(index, 1);
           }
 
           if (selectedLabels.length === 1) {
             return selectedLabels;
-          }
-          else if (selectedLabels.length) {
-            return selectedLabels[0] + " +" + (selectedLabels.length - 1) + " more";
-          }
-          else {
+          } else if (selectedLabels.length) {
+            return sprintf(__('%{firstLabel} +%{labelCount} more'), {
+              firstLabel: selectedLabels[0],
+              labelCount: selectedLabels.length - 1,
+            });
+          } else {
             return defaultLabel;
           }
         },
         fieldName: $dropdown.data('fieldName'),
-        id: function(label) {
+        id(label) {
           if (label.id <= 0) return label.title;
 
           if ($dropdown.hasClass('js-issuable-form-dropdown')) {
             return label.id;
           }
 
-          if ($dropdown.hasClass("js-filter-submit") && (label.isAny == null)) {
+          if ($dropdown.hasClass('js-filter-submit') && label.isAny == null) {
             return label.title;
-          }
-          else {
+          } else {
             return label.id;
           }
         },
-        hidden: function() {
-          var isIssueIndex, isMRIndex, page, selectedLabels;
+        hidden() {
+          var isIssueIndex, isMRIndex, page;
           page = $('body').attr('data-page');
           isIssueIndex = page === 'projects:issues:index';
           isMRIndex = page === 'projects:merge_requests:index';
@@ -305,22 +376,20 @@ export default class LabelsSelect {
           }
           if ($dropdown.hasClass('js-multiselect')) {
             if ($dropdown.hasClass('js-filter-submit') && (isIssueIndex || isMRIndex)) {
-              selectedLabels = $dropdown.closest('form').find("input:hidden[name='" + ($dropdown.data('fieldName')) + "']");
               Issuable.filterResults($dropdown.closest('form'));
-            }
-            else if ($dropdown.hasClass('js-filter-submit')) {
+            } else if ($dropdown.hasClass('js-filter-submit')) {
               $dropdown.closest('form').submit();
-            }
-            else {
+            } else {
               if (!$dropdown.hasClass('js-filter-bulk-update')) {
                 saveLabelData();
+                $dropdown.data('glDropdown').clearMenu();
               }
             }
           }
         },
         multiSelect: $dropdown.hasClass('js-multiselect'),
         vue: $dropdown.hasClass('js-issue-board-sidebar'),
-        clicked: function (clickEvent) {
+        clicked(clickEvent) {
           const { $el, e, isMarking } = clickEvent;
           const label = clickEvent.selectedObj;
 
@@ -334,7 +403,8 @@ export default class LabelsSelect {
           isMRIndex = page === 'projects:merge_requests:index';
 
           if ($dropdown.parent().find('.is-active:not(.dropdown-clear-active)').length) {
-            $dropdown.parent()
+            $dropdown
+              .parent()
               .find('.dropdown-clear-active')
               .removeClass('is-active');
           }
@@ -362,52 +432,65 @@ export default class LabelsSelect {
 
             e.preventDefault();
             return;
-          }
-          else if ($dropdown.hasClass('js-filter-submit') && (isIssueIndex || isMRIndex)) {
+          } else if ($dropdown.hasClass('js-filter-submit') && (isIssueIndex || isMRIndex)) {
             if (!$dropdown.hasClass('js-multiselect')) {
               selectedLabel = label.title;
               return Issuable.filterResults($dropdown.closest('form'));
             }
-          }
-          else if ($dropdown.hasClass('js-filter-submit')) {
+          } else if ($dropdown.hasClass('js-filter-submit')) {
             return $dropdown.closest('form').submit();
-          }
-          else if ($dropdown.hasClass('js-issue-board-sidebar')) {
+          } else if ($dropdown.hasClass('js-issue-board-sidebar')) {
             if ($el.hasClass('is-active')) {
-              gl.issueBoards.BoardsStore.detail.issue.labels.push(new ListLabel({
-                id: label.id,
-                title: label.title,
-                color: label.color[0],
-                textColor: '#fff'
-              }));
-            }
-            else {
-              var labels = gl.issueBoards.BoardsStore.detail.issue.labels;
-              labels = labels.filter(function (selectedLabel) {
-                return selectedLabel.id !== label.id;
-              });
-              gl.issueBoards.BoardsStore.detail.issue.labels = labels;
+              boardsStore.detail.issue.labels.push(
+                new ListLabel({
+                  id: label.id,
+                  title: label.title,
+                  color: label.color,
+                  textColor: '#fff',
+                }),
+              );
+            } else {
+              var { labels } = boardsStore.detail.issue;
+              labels = labels.filter(selectedLabel => selectedLabel.id !== label.id);
+              boardsStore.detail.issue.labels = labels;
             }
 
             $loading.fadeIn();
+            const oldLabels = boardsStore.detail.issue.labels;
 
-            gl.issueBoards.BoardsStore.detail.issue.update($dropdown.attr('data-issue-update'))
+            boardsStore.detail.issue
+              .update($dropdown.attr('data-issue-update'))
+              .then(() => {
+                if (isScopedLabel(label)) {
+                  const prevIds = oldLabels.map(label => label.id);
+                  const newIds = boardsStore.detail.issue.labels.map(label => label.id);
+                  const differentIds = _.difference(prevIds, newIds);
+                  $dropdown.data('marked', newIds);
+                  $dropdownMenu
+                    .find(differentIds.map(id => `[data-label-id="${id}"]`).join(','))
+                    .removeClass('is-active');
+                }
+              })
               .then(fadeOutLoader)
               .catch(fadeOutLoader);
-          }
-          else if (handleClick) {
+          } else if (handleClick) {
             e.preventDefault();
             handleClick(label);
-          }
-          else {
+          } else {
             if ($dropdown.hasClass('js-multiselect')) {
-
-            }
-            else {
+            } else {
               return saveLabelData();
             }
           }
         },
+        opened() {
+          if ($dropdown.hasClass('js-issue-board-sidebar')) {
+            const previousSelection = $dropdown.attr('data-selected');
+            this.selected = previousSelection ? previousSelection.split(',') : [];
+            $dropdown.data('glDropdown').updateLabel();
+          }
+        },
+        preserveContext: true,
       });
 
       // Set dropdown data
@@ -423,28 +506,71 @@ export default class LabelsSelect {
     // so best approach is to use traditional way of
     // concatenation
     // see: http://2ality.com/2016/05/template-literal-whitespace.html#joining-arrays
-    const tpl = _.template([
-      '<% _.each(labels, function(label){ %>',
-      '<a href="<%- issueUpdateURL.slice(0, issueUpdateURL.lastIndexOf("/")) %>?label_name[]=<%- encodeURIComponent(label.title) %>">',
-      '<span class="badge label has-tooltip color-label" title="<%- label.description %>" style="background-color: <%- label.color %>; color: <%- label.text_color %>;">',
-      '<%- label.title %>',
-      '</span>',
-      '</a>',
-      '<% }); %>',
-    ].join(''));
 
-    return tpl(tplData);
+    const labelTemplate = _.template(
+      [
+        '<a href="<%- issueUpdateURL.slice(0, issueUpdateURL.lastIndexOf("/")) %>?label_name[]=<%- encodeURIComponent(label.title) %>">',
+        '<span class="badge label has-tooltip color-label" <%= linkAttrs %> title="<%= tooltipTitleTemplate({ label, isScopedLabel, enableScopedLabels, escapeStr }) %>" style="background-color: <%= escapeStr(label.color) %>; color: <%= escapeStr(label.text_color) %>;">',
+        '<%- label.title %>',
+        '</span>',
+        '</a>',
+      ].join(''),
+    );
+
+    const infoIconTemplate = _.template(
+      [
+        '<a href="<%= scopedLabelsDocumentationLink %>" class="label scoped-label" target="_blank" rel="noopener">',
+        '<i class="fa fa-question-circle" style="background-color: <%= escapeStr(label.color) %>; color: <%= escapeStr(label.text_color) %>;"></i>',
+        '</a>',
+      ].join(''),
+    );
+
+    const tooltipTitleTemplate = _.template(
+      [
+        '<% if (isScopedLabel(label) && enableScopedLabels) { %>',
+        "<span class='font-weight-bold scoped-label-tooltip-title'>Scoped label</span>",
+        '<br />',
+        '<%= escapeStr(label.description) %>',
+        '<% } else { %>',
+        '<%= escapeStr(label.description) %>',
+        '<% } %>',
+      ].join(''),
+    );
+
+    const tpl = _.template(
+      [
+        '<% _.each(labels, function(label){ %>',
+        '<% if (isScopedLabel(label) && enableScopedLabels) { %>',
+        '<span class="d-inline-block position-relative scoped-label-wrapper">',
+        '<%= labelTemplate({ label, issueUpdateURL, isScopedLabel, enableScopedLabels, tooltipTitleTemplate, escapeStr, linkAttrs: \'data-html="true"\' }) %>',
+        '<%= infoIconTemplate({ label, scopedLabelsDocumentationLink, escapeStr }) %>',
+        '</span>',
+        '<% } else { %>',
+        '<%= labelTemplate({ label, issueUpdateURL, isScopedLabel, enableScopedLabels, tooltipTitleTemplate, escapeStr, linkAttrs: "" }) %>',
+        '<% } %>',
+        '<% }); %>',
+      ].join(''),
+    );
+
+    return tpl({
+      ...tplData,
+      labelTemplate,
+      infoIconTemplate,
+      tooltipTitleTemplate,
+      isScopedLabel,
+      escapeStr: _.escape,
+    });
   }
 
   bindEvents() {
-    return $('body').on('change', '.selected_issue', this.onSelectCheckboxIssue);
+    return $('body').on('change', '.selected-issuable', this.onSelectCheckboxIssue);
   }
   // eslint-disable-next-line class-methods-use-this
   onSelectCheckboxIssue() {
-    if ($('.selected_issue:checked').length) {
+    if ($('.selected-issuable:checked').length) {
       return;
     }
-    return $('.issues-bulk-update .labels-filter .dropdown-toggle-text').text('Label');
+    return $('.issues-bulk-update .labels-filter .dropdown-toggle-text').text(__('Label'));
   }
   // eslint-disable-next-line class-methods-use-this
   enableBulkLabelDropdown() {

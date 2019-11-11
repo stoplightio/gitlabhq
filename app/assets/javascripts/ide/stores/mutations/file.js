@@ -1,5 +1,7 @@
-/* eslint-disable no-param-reassign */
 import * as types from '../mutation_types';
+import { sortTree } from '../utils';
+import { diffModes } from '../../constants';
+import { convertObjectPropsToCamelCase } from '~/lib/utils/common_utils';
 
 export default {
   [types.SET_FILE_ACTIVE](state, { path, active }) {
@@ -34,24 +36,46 @@ export default {
     }
   },
   [types.SET_FILE_DATA](state, { data, file }) {
-    Object.assign(state.entries[file.path], {
-      id: data.id,
-      blamePath: data.blame_path,
-      commitsPath: data.commits_path,
-      permalink: data.permalink,
-      rawPath: data.raw_path,
-      binary: data.binary,
-      renderError: data.render_error,
-      raw: null,
-      baseRaw: null,
-      html: data.html,
-      size: data.size,
+    const stateEntry = state.entries[file.path];
+    const stagedFile = state.stagedFiles.find(f => f.path === file.path);
+    const openFile = state.openFiles.find(f => f.path === file.path);
+    const changedFile = state.changedFiles.find(f => f.path === file.path);
+
+    [stateEntry, stagedFile, openFile, changedFile].forEach(f => {
+      if (f) {
+        Object.assign(
+          f,
+          convertObjectPropsToCamelCase(data, { dropKeys: ['path', 'name', 'raw', 'baseRaw'] }),
+          {
+            raw: (stateEntry && stateEntry.raw) || null,
+            baseRaw: null,
+          },
+        );
+      }
     });
   },
   [types.SET_FILE_RAW_DATA](state, { file, raw }) {
-    Object.assign(state.entries[file.path], {
-      raw,
-    });
+    const openPendingFile = state.openFiles.find(
+      f => f.path === file.path && f.pending && !(f.tempFile && !f.prevPath),
+    );
+
+    if (file.tempFile && file.content === '') {
+      Object.assign(state.entries[file.path], {
+        content: raw,
+      });
+    } else {
+      Object.assign(state.entries[file.path], {
+        raw,
+      });
+    }
+
+    if (!openPendingFile) return;
+
+    if (!openPendingFile.tempFile) {
+      openPendingFile.raw = raw;
+    } else if (openPendingFile.tempFile) {
+      openPendingFile.content = raw;
+    }
   },
   [types.SET_FILE_BASE_RAW_DATA](state, { file, baseRaw }) {
     Object.assign(state.entries[file.path], {
@@ -85,8 +109,19 @@ export default {
     });
   },
   [types.SET_FILE_MERGE_REQUEST_CHANGE](state, { file, mrChange }) {
+    let diffMode = diffModes.replaced;
+    if (mrChange.new_file) {
+      diffMode = diffModes.new;
+    } else if (mrChange.deleted_file) {
+      diffMode = diffModes.deleted;
+    } else if (mrChange.renamed_file) {
+      diffMode = diffModes.renamed;
+    }
     Object.assign(state.entries[file.path], {
-      mrChange,
+      mrChange: {
+        ...mrChange,
+        diffMode,
+      },
     });
   },
   [types.SET_FILE_VIEWMODE](state, { file, viewMode }) {
@@ -96,11 +131,28 @@ export default {
   },
   [types.DISCARD_FILE_CHANGES](state, path) {
     const stagedFile = state.stagedFiles.find(f => f.path === path);
+    const entry = state.entries[path];
+    const { deleted, prevPath } = entry;
 
     Object.assign(state.entries[path], {
       content: stagedFile ? stagedFile.content : state.entries[path].raw,
       changed: false,
+      deleted: false,
     });
+
+    if (deleted) {
+      const parent = entry.parentPath
+        ? state.entries[entry.parentPath]
+        : state.trees[`${state.currentProjectId}/${state.currentBranchId}`];
+
+      parent.tree = sortTree(parent.tree.concat(entry));
+    } else if (prevPath) {
+      const parent = entry.parentPath
+        ? state.entries[entry.parentPath]
+        : state.trees[`${state.currentProjectId}/${state.currentBranchId}`];
+
+      parent.tree = parent.tree.filter(f => f.path !== path);
+    }
   },
   [types.ADD_FILE_TO_CHANGED](state, path) {
     Object.assign(state, {
@@ -120,7 +172,6 @@ export default {
       entries: Object.assign(state.entries, {
         [path]: Object.assign(state.entries[path], {
           staged: true,
-          changed: false,
         }),
       }),
     });
@@ -192,6 +243,17 @@ export default {
   [types.REMOVE_PENDING_TAB](state, file) {
     Object.assign(state, {
       openFiles: state.openFiles.filter(f => f.key !== file.key),
+    });
+  },
+  [types.REMOVE_FILE_FROM_STAGED_AND_CHANGED](state, file) {
+    Object.assign(state, {
+      changedFiles: state.changedFiles.filter(f => f.key !== file.key),
+      stagedFiles: state.stagedFiles.filter(f => f.key !== file.key),
+    });
+
+    Object.assign(state.entries[file.path], {
+      changed: false,
+      staged: false,
     });
   },
 };

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Projects
   # Service class for counting and caching the number of open issues of a
   # project.
@@ -5,8 +7,8 @@ module Projects
     include Gitlab::Utils::StrongMemoize
 
     # Cache keys used to store issues count
-    PUBLIC_COUNT_KEY = 'public_open_issues_count'.freeze
-    TOTAL_COUNT_KEY = 'total_open_issues_count'.freeze
+    PUBLIC_COUNT_KEY = 'public_open_issues_count'
+    TOTAL_COUNT_KEY = 'total_open_issues_count'
 
     def initialize(project, user = nil)
       @user = user
@@ -40,6 +42,7 @@ module Projects
       cache_key(TOTAL_COUNT_KEY)
     end
 
+    # rubocop: disable CodeReuse/ActiveRecord
     def refresh_cache(&block)
       if block_given?
         super(&block)
@@ -57,11 +60,13 @@ module Projects
         end
       end
     end
+    # rubocop: enable CodeReuse/ActiveRecord
 
     # We only show total issues count for reporters
     # which are allowed to view confidential issues
     # This will still show a discrepancy on issues number but should be less than before.
-    # Check https://gitlab.com/gitlab-org/gitlab-ce/issues/38418 description.
+    # Check https://gitlab.com/gitlab-org/gitlab-foss/issues/38418 description.
+    # rubocop: disable CodeReuse/ActiveRecord
     def self.query(projects, public_only: true)
       if public_only
         Issue.opened.public_only.where(project: projects)
@@ -69,5 +74,6 @@ module Projects
         Issue.opened.where(project: projects)
       end
     end
+    # rubocop: enable CodeReuse/ActiveRecord
   end
 end

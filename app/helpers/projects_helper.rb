@@ -1,6 +1,10 @@
+# frozen_string_literal: true
+
 module ProjectsHelper
+  prepend_if_ee('::EE::ProjectsHelper') # rubocop: disable Cop/InjectEnterpriseEditionModule
+
   def link_to_project(project)
-    link_to [project.namespace.becomes(Namespace), project], title: h(project.name) do
+    link_to namespace_project_path(namespace_id: project.namespace, id: project), title: h(project.name) do
       title = content_tag(:span, project.name, class: 'project-name')
 
       if project.namespace
@@ -48,9 +52,15 @@ module ProjectsHelper
     default_opts = { avatar: true, name: true, title: ":name" }
     opts = default_opts.merge(opts)
 
+    data_attrs = {
+      user_id: author.id,
+      username: author.username,
+      name: author.name
+    }
+
     return "(deleted)" unless author
 
-    author_html = ""
+    author_html = []
 
     # Build avatar image tag
     author_html << link_to_member_avatar(author, opts) if opts[:avatar]
@@ -60,13 +70,13 @@ module ProjectsHelper
 
     author_html << capture(&block) if block
 
-    author_html = author_html.html_safe
+    author_html = author_html.join.html_safe
 
     if opts[:name]
-      link_to(author_html, user_path(author), class: "author_link #{"#{opts[:extra_class]}" if opts[:extra_class]} #{"#{opts[:mobile_classes]}" if opts[:mobile_classes]}").html_safe
+      link_to(author_html, user_path(author), class: "author-link js-user-link #{"#{opts[:extra_class]}" if opts[:extra_class]} #{"#{opts[:mobile_classes]}" if opts[:mobile_classes]}", data: data_attrs).html_safe
     else
       title = opts[:title].sub(":name", sanitize(author.name))
-      link_to(author_html, user_path(author), class: "author_link has-tooltip", title: title, data: { container: 'body' }).html_safe
+      link_to(author_html, user_path(author), class: "author-link has-tooltip", title: title, data: { container: 'body', qa_selector: 'assignee_link' }).html_safe
     end
   end
 
@@ -80,15 +90,8 @@ module ProjectsHelper
       end
 
     project_link = link_to project_path(project) do
-      output =
-        if project.avatar_url && !Rails.env.test?
-          project_icon(project, alt: project.name, class: 'avatar-tile', width: 15, height: 15)
-        else
-          ""
-        end
-
-      output << content_tag("span", simple_sanitize(project.name), class: "breadcrumb-item-text js-breadcrumb-item-text")
-      output.html_safe
+      icon = project_icon(project, alt: project.name, class: 'avatar-tile', width: 15, height: 15) if project.avatar_url && !Rails.env.test?
+      [icon, content_tag("span", simple_sanitize(project.name), class: "breadcrumb-item-text js-breadcrumb-item-text")].join.html_safe
     end
 
     namespace_link = breadcrumb_list_item(namespace_link) unless project.group
@@ -154,12 +157,18 @@ module ProjectsHelper
     end
   end
 
+  def can_disable_emails?(project, current_user)
+    return false if project.group&.emails_disabled?
+
+    can?(current_user, :set_emails_disabled, project)
+  end
+
   def last_push_event
     current_user&.recent_push(@project)
   end
 
   def link_to_autodeploy_doc
-    link_to _('About auto deploy'), help_page_path('ci/autodeploy/index'), target: '_blank'
+    link_to _('About auto deploy'), help_page_path('autodevops/index.md#auto-deploy'), target: '_blank'
   end
 
   def autodeploy_flash_notice(branch_name)
@@ -168,18 +177,21 @@ module ProjectsHelper
     translation.html_safe
   end
 
-  def project_list_cache_key(project)
+  def project_list_cache_key(project, pipeline_status: true)
     key = [
       project.route.cache_key,
       project.cache_key,
+      project.last_activity_date,
       controller.controller_name,
       controller.action_name,
       Gitlab::CurrentSettings.cache_key,
       "cross-project:#{can?(current_user, :read_cross_project)}",
+      max_project_member_access_cache_key(project),
+      pipeline_status,
       'v2.6'
     ]
 
-    key << pipeline_status_cache_key(project.pipeline_status) if project.pipeline_status.has_status?
+    key << pipeline_status_cache_key(project.pipeline_status) if pipeline_status && project.pipeline_status.has_status?
 
     key
   end
@@ -190,12 +202,21 @@ module ProjectsHelper
   end
 
   def show_no_ssh_key_message?
-    cookies[:hide_no_ssh_message].blank? && !current_user.hide_no_ssh_key && current_user.require_ssh_key?
+    Gitlab::CurrentSettings.user_show_add_ssh_key_message? &&
+      cookies[:hide_no_ssh_message].blank? &&
+      !current_user.hide_no_ssh_key &&
+      current_user.require_ssh_key?
   end
 
   def show_no_password_message?
     cookies[:hide_no_password_message].blank? && !current_user.hide_no_password &&
       current_user.require_extra_setup_for_git_auth?
+  end
+
+  def show_auto_devops_implicitly_enabled_banner?(project, user)
+    return false unless user_can_see_auto_devops_implicitly_enabled_banner?(project, user)
+
+    cookies["hide_auto_devops_implicitly_enabled_banner_#{project.id}".to_sym].blank?
   end
 
   def link_to_set_password
@@ -224,8 +245,11 @@ module ProjectsHelper
     end
   end
 
+  # TODO: Remove this method when removing the feature flag
+  # https://gitlab.com/gitlab-org/gitlab/merge_requests/11209#note_162234863
+  # make sure to remove from the EE specific controller as well: ee/app/controllers/ee/dashboard/projects_controller.rb
   def show_projects?(projects, params)
-    !!(params[:personal] || params[:name] || any_projects?(projects))
+    Feature.enabled?(:project_list_filter_bar) || !!(params[:personal] || params[:name] || any_projects?(projects))
   end
 
   def push_to_create_project_command(user = current_user)
@@ -247,13 +271,105 @@ module ProjectsHelper
     "xcode://clone?repo=#{CGI.escape(default_url_to_repo(project))}"
   end
 
+  def link_to_bfg
+    link_to 'BFG', 'https://rtyley.github.io/bfg-repo-cleaner/', target: '_blank', rel: 'noopener noreferrer'
+  end
+
+  def explore_projects_tab?
+    current_page?(explore_projects_path) ||
+      current_page?(trending_explore_projects_path) ||
+      current_page?(starred_explore_projects_path)
+  end
+
+  def show_merge_request_count?(disabled: false, compact_mode: false)
+    !disabled && !compact_mode && Feature.enabled?(:project_list_show_mr_count, default_enabled: true)
+  end
+
+  def show_issue_count?(disabled: false, compact_mode: false)
+    !disabled && !compact_mode && Feature.enabled?(:project_list_show_issue_count, default_enabled: true)
+  end
+
+  # overridden in EE
+  def settings_operations_available?
+    can?(current_user, :read_environment, @project)
+  end
+
+  def error_tracking_setting_project_json
+    setting = @project.error_tracking_setting
+
+    return if setting.blank? || setting.project_slug.blank? ||
+        setting.organization_slug.blank?
+
+    {
+      name: setting.project_name,
+      organization_name: setting.organization_name,
+      organization_slug: setting.organization_slug,
+      slug: setting.project_slug
+    }.to_json
+  end
+
+  def directory?
+    @path.present?
+  end
+
+  def external_classification_label_help_message
+    default_label = ::Gitlab::CurrentSettings.current_application_settings
+                      .external_authorization_service_default_label
+
+    s_(
+      "ExternalAuthorizationService|When no classification label is set the "\
+        "default label `%{default_label}` will be used."
+    ) % { default_label: default_label }
+  end
+
+  def can_import_members?
+    Ability.allowed?(current_user, :admin_project_member, @project)
+  end
+
+  def project_can_be_shared?
+    !membership_locked? || @project.allowed_to_share_with_group?
+  end
+
+  def membership_locked?
+    false
+  end
+
+  def share_project_description(project)
+    share_with_group   = project.allowed_to_share_with_group?
+    share_with_members = !membership_locked?
+
+    description =
+      if share_with_group && share_with_members
+        _("You can invite a new member to <strong>%{project_name}</strong> or invite another group.")
+      elsif share_with_group
+        _("You can invite another group to <strong>%{project_name}</strong>.")
+      elsif share_with_members
+        _("You can invite a new member to <strong>%{project_name}</strong>.")
+      end
+
+    description.html_safe % { project_name: project.name }
+  end
+
+  def metrics_external_dashboard_url
+    @project.metrics_setting_external_dashboard_url
+  end
+
+  def grafana_integration_url
+    @project.grafana_integration&.grafana_url
+  end
+
+  def grafana_integration_token
+    @project.grafana_integration&.token
+  end
+
   private
 
   def get_project_nav_tabs(project, current_user)
     nav_tabs = [:home]
 
-    if !project.empty_repo? && can?(current_user, :download_code, project)
-      nav_tabs << [:files, :commits, :network, :graphs, :forks]
+    unless project.empty_repo?
+      nav_tabs << [:files, :commits, :network, :graphs, :forks] if can?(current_user, :download_code, project)
+      nav_tabs << :releases if can?(current_user, :read_release, project)
     end
 
     if project.repo_exists? && can?(current_user, :read_merge_request, project)
@@ -264,16 +380,13 @@ module ProjectsHelper
       nav_tabs << :container_registry
     end
 
-    if project.builds_enabled? && can?(current_user, :read_pipeline, project)
+    # Pipelines feature is tied to presence of builds
+    if can?(current_user, :read_build, project)
       nav_tabs << :pipelines
     end
 
     if can?(current_user, :read_environment, project) || can?(current_user, :read_cluster, project)
       nav_tabs << :operations
-    end
-
-    if project.external_issue_tracker
-      nav_tabs << :external_issue_tracker
     end
 
     tab_ability_map.each do |tab, ability|
@@ -282,7 +395,16 @@ module ProjectsHelper
       end
     end
 
+    nav_tabs << external_nav_tabs(project)
+
     nav_tabs.flatten
+  end
+
+  def external_nav_tabs(project)
+    [].tap do |tabs|
+      tabs << :external_issue_tracker if project.external_issue_tracker
+      tabs << :external_wiki if project.external_wiki
+    end
   end
 
   def tab_ability_map
@@ -293,6 +415,8 @@ module ProjectsHelper
       settings:         :admin_project,
       builds:           :read_build,
       clusters:         :read_cluster,
+      serverless:       :read_cluster,
+      error_tracking:   :read_sentry_issue,
       labels:           :read_label,
       issues:           :read_issue,
       project_members:  :read_project_member,
@@ -305,7 +429,8 @@ module ProjectsHelper
       blobs:          :download_code,
       commits:        :download_code,
       merge_requests: :read_merge_request,
-      notes:          [:read_merge_request, :download_code, :read_issue, :read_project_snippet]
+      notes:          [:read_merge_request, :download_code, :read_issue, :read_project_snippet],
+      members:        :read_project_member
     )
   end
 
@@ -331,7 +456,7 @@ module ProjectsHelper
 
   def git_user_email
     if current_user
-      current_user.email
+      current_user.commit_email
     else
       "your@email.com"
     end
@@ -346,16 +471,28 @@ module ProjectsHelper
     end
   end
 
+  def default_clone_label
+    _("Copy %{protocol} clone URL") % { protocol: default_clone_protocol.upcase }
+  end
+
   def default_clone_protocol
     if allowed_protocols_present?
       enabled_protocol
     else
-      if !current_user || current_user.require_ssh_key?
-        gitlab_config.protocol
-      else
-        'ssh'
-      end
+      extra_default_clone_protocol
     end
+  end
+
+  def extra_default_clone_protocol
+    if !current_user || current_user.require_ssh_key?
+      gitlab_config.protocol
+    else
+      'ssh'
+    end
+  end
+
+  def sidebar_operations_link_path(project = @project)
+    metrics_project_environments_path(project) if can?(current_user, :read_environment, project)
   end
 
   def project_last_activity(project)
@@ -364,22 +501,6 @@ module ProjectsHelper
     else
       s_("ProjectLastActivity|Never")
     end
-  end
-
-  def koding_project_url(project = nil, branch = nil, sha = nil)
-    if project
-      import_path = "/Home/Stacks/import"
-
-      repo = project.full_path
-      branch ||= project.default_branch
-      sha ||= project.commit.short_id
-
-      path = "#{import_path}?repo=#{repo}&branch=#{branch}&sha=#{sha}"
-
-      return URI.join(Gitlab::CurrentSettings.koding_url, path).to_s
-    end
-
-    Gitlab::CurrentSettings.koding_url
   end
 
   def project_wiki_path_with_version(proj, page, version, is_newest)
@@ -407,19 +528,6 @@ module ProjectsHelper
     @ref || @repository.try(:root_ref)
   end
 
-  def sanitize_repo_path(project, message)
-    return '' unless message.present?
-
-    exports_path = File.join(Settings.shared['path'], 'tmp/project_exports')
-    filtered_message = message.strip.gsub(exports_path, "[REPO EXPORT PATH]")
-
-    disk_path = Gitlab::GitalyClient::StorageSettings.allow_disk_access do
-      Gitlab.config.repositories.storages[project.repository_storage].legacy_disk_path
-    end
-
-    filtered_message.gsub(disk_path.chomp('/'), "[REPOS PATH]")
-  end
-
   def project_child_container_class(view_path)
     view_path == "projects/issues/issues" ? "prepend-top-default" : "project-show-#{view_path}"
   end
@@ -445,24 +553,32 @@ module ProjectsHelper
       buildsAccessLevel: feature.builds_access_level,
       wikiAccessLevel: feature.wiki_access_level,
       snippetsAccessLevel: feature.snippets_access_level,
+      pagesAccessLevel: feature.pages_access_level,
       containerRegistryEnabled: !!project.container_registry_enabled,
-      lfsEnabled: !!project.lfs_enabled
+      lfsEnabled: !!project.lfs_enabled,
+      emailsDisabled: project.emails_disabled?
     }
   end
 
   def project_permissions_panel_data(project)
-    data = {
+    {
       currentSettings: project_permissions_settings(project),
+      canDisableEmails: can_disable_emails?(project, current_user),
       canChangeVisibilityLevel: can_change_visibility_level?(project, current_user),
       allowedVisibilityOptions: project_allowed_visibility_levels(project),
       visibilityHelpPath: help_page_path('public_access/public_access'),
       registryAvailable: Gitlab.config.registry.enabled,
-      registryHelpPath: help_page_path('user/project/container_registry'),
+      registryHelpPath: help_page_path('user/packages/container_registry/index'),
       lfsAvailable: Gitlab.config.lfs.enabled,
-      lfsHelpPath: help_page_path('workflow/lfs/manage_large_binaries_with_git_lfs')
+      lfsHelpPath: help_page_path('workflow/lfs/manage_large_binaries_with_git_lfs'),
+      pagesAvailable: Gitlab.config.pages.enabled,
+      pagesAccessControlEnabled: Gitlab.config.pages.access_control,
+      pagesHelpPath: help_page_path('user/project/pages/introduction', anchor: 'gitlab-pages-access-control-core')
     }
+  end
 
-    data.to_json.html_safe
+  def project_permissions_panel_data_json(project)
+    project_permissions_panel_data(project).to_json.html_safe
   end
 
   def project_allowed_visibility_levels(project)
@@ -499,5 +615,74 @@ module ProjectsHelper
     else
       "list-label"
     end
+  end
+
+  def filter_starrer_path(options = {})
+    options = params.slice(:sort).merge(options).permit!
+    "#{request.path}?#{options.to_param}"
+  end
+
+  def sidebar_projects_paths
+    %w[
+      projects#show
+      projects#activity
+      releases#index
+      cycle_analytics#show
+    ]
+  end
+
+  def sidebar_settings_paths
+    %w[
+      projects#edit
+      project_members#index
+      integrations#show
+      services#edit
+      repository#show
+      ci_cd#show
+      operations#show
+      badges#index
+      pages#show
+    ]
+  end
+
+  def sidebar_repository_paths
+    %w[
+      tree
+      blob
+      blame
+      edit_tree
+      new_tree
+      find_file
+      commit
+      commits
+      compare
+      projects/repositories
+      tags
+      branches
+      graphs
+      network
+    ]
+  end
+
+  def sidebar_operations_paths
+    %w[
+      environments
+      clusters
+      functions
+      error_tracking
+      user
+      gcp
+    ]
+  end
+
+  def user_can_see_auto_devops_implicitly_enabled_banner?(project, user)
+    Ability.allowed?(user, :admin_project, project) &&
+      project.has_auto_devops_implicitly_enabled? &&
+      project.builds_enabled? &&
+      !project.repository.gitlab_ci_yml
+  end
+
+  def vue_file_list_enabled?
+    Feature.enabled?(:vue_file_list, @project)
   end
 end

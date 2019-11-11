@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module MilestoneActions
   extend ActiveSupport::Concern
 
@@ -6,7 +8,7 @@ module MilestoneActions
       format.html { redirect_to milestone_redirect_path }
       format.json do
         render json: tabs_json("shared/milestones/_merge_requests_tab", {
-          merge_requests: @milestone.sorted_merge_requests, # rubocop:disable Gitlab/ModuleWithInstanceVariables
+          merge_requests: @milestone.sorted_merge_requests(current_user), # rubocop:disable Gitlab/ModuleWithInstanceVariables
           show_project_name: true
         })
       end
@@ -18,22 +20,28 @@ module MilestoneActions
       format.html { redirect_to milestone_redirect_path }
       format.json do
         render json: tabs_json("shared/milestones/_participants_tab", {
-          users: @milestone.participants # rubocop:disable Gitlab/ModuleWithInstanceVariables
+          users: @milestone.issue_participants_visible_by_user(current_user) # rubocop:disable Gitlab/ModuleWithInstanceVariables
         })
       end
     end
   end
 
+  # rubocop:disable Gitlab/ModuleWithInstanceVariables
   def labels
     respond_to do |format|
       format.html { redirect_to milestone_redirect_path }
       format.json do
+        milestone_labels = @milestone.issue_labels_visible_by_user(current_user)
+
         render json: tabs_json("shared/milestones/_labels_tab", {
-          labels: @milestone.labels # rubocop:disable Gitlab/ModuleWithInstanceVariables
+          labels: milestone_labels.map do |label|
+            label.present(issuable_subject: @milestone.resource_parent)
+          end
         })
       end
     end
   end
+  # rubocop:enable Gitlab/ModuleWithInstanceVariables
 
   private
 

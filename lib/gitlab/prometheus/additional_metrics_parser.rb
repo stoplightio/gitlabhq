@@ -1,11 +1,13 @@
+# frozen_string_literal: true
+
 module Gitlab
   module Prometheus
     module AdditionalMetricsParser
-      CONFIG_ROOT = 'config/prometheus'.freeze
+      CONFIG_ROOT = 'config/prometheus'
       MUTEX = Mutex.new
       extend self
 
-      def load_groups_from_yaml(file_name = 'additional_metrics.yml')
+      def load_groups_from_yaml(file_name)
         yaml_metrics_raw(file_name).map(&method(:group_from_entry))
       end
 

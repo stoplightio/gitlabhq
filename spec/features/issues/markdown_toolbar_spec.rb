@@ -1,6 +1,8 @@
-require 'rails_helper'
+# frozen_string_literal: true
 
-feature 'Issue markdown toolbar', :js do
+require 'spec_helper'
+
+describe 'Issue markdown toolbar', :js do
   let(:project) { create(:project, :public) }
   let(:issue)   { create(:issue, project: project) }
   let(:user)    { create(:user) }
@@ -32,7 +34,7 @@ feature 'Issue markdown toolbar', :js do
     find('.js-main-target-form #note-body')
     page.evaluate_script('document.querySelectorAll(".js-main-target-form #note-body")[0].setSelectionRange(4, 50)')
 
-    find('.toolbar-btn:nth-child(2)').click
+    all('.toolbar-btn')[1].click
 
     expect(find('#note-body')[:value]).to eq("test\n*underline*\n")
   end

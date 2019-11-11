@@ -1,14 +1,16 @@
+# frozen_string_literal: true
+
 FactoryBot.define do
   trait :base_label do
     title { generate(:label_title) }
-    color "#990000"
+    color { "#990000" }
   end
 
   factory :label, traits: [:base_label], class: ProjectLabel do
     project
 
     transient do
-      priority nil
+      priority { nil }
     end
 
     after(:create) do |label, evaluator|

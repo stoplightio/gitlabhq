@@ -1,3 +1,7 @@
+---
+type: reference
+---
+
 # Using PostgreSQL
 
 As many applications depend on PostgreSQL as their database, you will
@@ -21,6 +25,13 @@ variables:
   POSTGRES_PASSWORD: ""
 ```
 
+NOTE: **Note:**
+The `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` variables can't be set in
+the GitLab UI. To set them, assign them to a variable
+[in the UI](../variables/README.md#via-the-ui), and then assign that
+variable to the `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` variables in
+your `.gitlab-ci.yml`.
+
 And then configure your application to use the database, for example:
 
 ```yaml
@@ -31,7 +42,7 @@ Database: nice_marmot
 ```
 
 If you are wondering why we used `postgres` for the `Host`, read more at
-[How is service linked to the job](../docker/using_docker_images.md#how-is-service-linked-to-the-job).
+[How services are linked to the job](../docker/using_docker_images.md#how-services-are-linked-to-the-job).
 
 You can also use any other docker image available on [Docker Hub][hub-pg].
 For example, to use PostgreSQL 9.3 the service becomes `postgres:9.3`.
@@ -66,7 +77,7 @@ template1=# CREATE USER runner WITH PASSWORD '$password' CREATEDB;
 ```
 
 *__Note:__ Notice that we created the user with the privilege to be able to
-create databases (`CREATEDB`). In the following steps we will create a database 
+create databases (`CREATEDB`). In the following steps we will create a database
 explicitly for that user but having that privilege can be useful if in your
 testing framework you have tools that drop and create databases.*
 
@@ -110,5 +121,5 @@ available [shared runners](../runners/README.md).
 Want to hack on it? Simply fork it, commit and push  your changes. Within a few
 moments the changes will be picked by a public runner and the job will begin.
 
-[hub-pg]: https://hub.docker.com/r/_/postgres/
+[hub-pg]: https://hub.docker.com/_/postgres
 [postgres-example-repo]: https://gitlab.com/gitlab-examples/postgres

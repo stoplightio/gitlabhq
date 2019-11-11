@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # AccessMatchersForController
 #
 # For testing authorize_xxx in controller.
@@ -24,7 +26,7 @@ module AccessMatchersForController
     when User
       user = role
       sign_in(user)
-    when *Gitlab::Access.sym_options_with_owner.keys # owner, master, developer, reporter, guest
+    when *Gitlab::Access.sym_options_with_owner.keys # owner, maintainer, developer, reporter, guest
       raise ArgumentError, "cannot emulate #{role} without membership parent" unless membership
 
       user = create_user_by_membership(role, membership)

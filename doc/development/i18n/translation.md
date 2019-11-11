@@ -8,7 +8,7 @@ The first step is to get familiar with Crowdin.
 
 ### Sign In
 
-To contribute translations at [translate.gitlab.com](https://translate.gitlab.com)
+To contribute translations at <https://translate.gitlab.com>
 you must create a Crowdin account.
 You may create a new account or use any of their supported sign in services.
 
@@ -54,7 +54,7 @@ For example in French `OpenedNDaysAgo|Opened` would be translated to
 Some technical terms should be treated like proper nouns and not be translated.
 
 Technical terms that should always be in English are noted in the glossary when
-using [translate.gitlab.com](https://translate.gitlab.com).
+using <https://translate.gitlab.com>.
 
 This helps maintain a logical connection and consistency between tools (e.g.
 `git` client) and GitLab.
@@ -83,15 +83,12 @@ Therefore "create a new user" would translate into "Benutzer(in) anlegen".
 ### Updating the glossary
 
 To propose additions to the glossary please
-[open an issue](https://gitlab.com/gitlab-org/gitlab-ce/issues).
+[open an issue](https://gitlab.com/gitlab-org/gitlab-foss/issues).
 
 ## French Translation Guidelines
 
 ### Inclusive language in French
 
-In French, we should follow the guidelines from [ecriture-inclusive.fr]. For
-instance:
-
-- Utilisateur•rice•s
-
-[ecriture-inclusive.fr]: http://www.ecriture-inclusive.fr/
+In French, the "écriture inclusive" is now over (see on [Legifrance](https://www.legifrance.gouv.fr/affichTexte.do?cidTexte=JORFTEXT000036068906&categorieLien=id)).
+So, to include both genders, write “Utilisateurs et utilisatrices” instead of “Utilisateur·rice·s”.
+When space is missing, the male gender should be used alone.

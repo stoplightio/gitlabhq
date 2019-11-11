@@ -53,14 +53,16 @@ Git:              /usr/bin/git
 Runs the following rake tasks:
 
 - `gitlab:gitlab_shell:check`
+- `gitlab:gitaly:check`
 - `gitlab:sidekiq:check`
 - `gitlab:app:check`
 
-It will check that each component was setup according to the installation guide and suggest fixes for issues found.
+It will check that each component was set up according to the installation guide and suggest fixes for issues found.
 
-You may also have a look at our Trouble Shooting Guides:
-- [Trouble Shooting Guide (GitLab)](http://docs.gitlab.com/ee/README.html#troubleshooting)
-- [Trouble Shooting Guide (Omnibus Gitlab)](http://docs.gitlab.com/omnibus/README.html#troubleshooting)
+You may also have a look at our Troubleshooting Guides:
+
+- [Troubleshooting Guide (GitLab)](../index.md#troubleshooting)
+- [Troubleshooting Guide (Omnibus GitLab)](https://docs.gitlab.com/omnibus/README.html#troubleshooting)
 
 **Omnibus Installation**
 
@@ -74,7 +76,7 @@ sudo gitlab-rake gitlab:check
 bundle exec rake gitlab:check RAILS_ENV=production
 ```
 
-NOTE: Use SANITIZE=true for gitlab:check if you want to omit project names from the output.
+NOTE: Use `SANITIZE=true` for `gitlab:check` if you want to omit project names from the output.
 
 Example output:
 
@@ -144,7 +146,7 @@ You will lose any data stored in authorized_keys file.
 Do you want to continue (yes/no)? yes
 ```
 
-## Clear redis cache
+## Clear Redis cache
 
 If for some reason the dashboard shows wrong information you might want to
 clear Redis' cache.
@@ -181,7 +183,7 @@ For omnibus versions, the unoptimized assets (JavaScript, CSS) are frozen at
 the release of upstream GitLab. The omnibus version includes optimized versions
 of those assets. Unless you are modifying the JavaScript / CSS code on your
 production machine after installing the package, there should be no reason to redo
-rake gitlab:assets:compile on the production machine. If you suspect that assets
+`rake gitlab:assets:compile` on the production machine. If you suspect that assets
 have been corrupted, you should reinstall the omnibus package.
 
 ## Tracking Deployments
@@ -201,25 +203,6 @@ sudo gitlab-rake gitlab:track_deployment
 ```
 cd /home/git/gitlab
 sudo -u git -H bundle exec rake gitlab:track_deployment RAILS_ENV=production
-```
-
-## Create or repair repository hooks symlink
-
-If the GitLab shell hooks directory location changes or another circumstance
-leads to the hooks symlink becoming missing or invalid, run this Rake task
-to create or repair the symlinks.
-
-**Omnibus Installation**
-
-```
-sudo gitlab-rake gitlab:shell:create_hooks
-```
-
-**Source Installation**
-
-```
-cd /home/git/gitlab
-sudo -u git -H bundle exec rake gitlab:shell:create_hooks RAILS_ENV=production
 ```
 
 ## Check TCP connectivity to a remote site
@@ -252,7 +235,7 @@ clear it.
 
 To clear all exclusive leases:
 
-DANGER: **DANGER**: 
+DANGER: **DANGER**:
 Don't run it while GitLab or Sidekiq is running
 
 ```bash
@@ -267,4 +250,23 @@ sudo gitlab-rake gitlab:exclusive_lease:clear[project_housekeeping:*]
 
 # to clear a lease for repository garbage collection in a specific project: (id=4)
 sudo gitlab-rake gitlab:exclusive_lease:clear[project_housekeeping:4]
+```
+
+## Display status of database migrations
+
+To check the status of migrations, you can use the following rake task:
+
+```bash
+sudo gitlab-rake db:migrate:status
+```
+
+This will output a table with a `Status` of `up` or `down` for
+each Migration ID.
+
+```bash
+database: gitlabhq_production
+
+ Status   Migration ID    Migration Name
+--------------------------------------------------
+   up     migration_id    migration_name
 ```

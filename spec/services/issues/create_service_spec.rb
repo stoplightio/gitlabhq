@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Issues::CreateService do
@@ -13,8 +15,8 @@ describe Issues::CreateService do
       let(:labels) { create_pair(:label, project: project) }
 
       before do
-        project.add_master(user)
-        project.add_master(assignee)
+        project.add_maintainer(user)
+        project.add_maintainer(assignee)
       end
 
       let(:opts) do
@@ -130,11 +132,25 @@ describe Issues::CreateService do
         end
 
         it 'invalidates open issues counter for assignees when issue is assigned' do
-          project.add_master(assignee)
+          project.add_maintainer(assignee)
 
           described_class.new(project, user, opts).execute
 
           expect(assignee.assigned_open_issues_count).to eq 1
+        end
+      end
+
+      context 'when duplicate label titles are given' do
+        let(:label) { create(:label, project: project) }
+
+        let(:opts) do
+          { title: 'Title',
+            description: 'Description',
+            labels: [label.title, label.title] }
+        end
+
+        it 'assigns the label once' do
+          expect(issue.labels).to contain_exactly(label)
         end
       end
 
@@ -160,7 +176,7 @@ describe Issues::CreateService do
     context 'issue create service' do
       context 'assignees' do
         before do
-          project.add_master(user)
+          project.add_maintainer(user)
         end
 
         it 'removes assignee when user id is invalid' do
@@ -172,7 +188,7 @@ describe Issues::CreateService do
         end
 
         it 'removes assignee when user id is 0' do
-          opts = { title: 'Title', description: 'Description',  assignee_ids: [0] }
+          opts = { title: 'Title', description: 'Description', assignee_ids: [0] }
 
           issue = described_class.new(project, user, opts).execute
 
@@ -180,7 +196,7 @@ describe Issues::CreateService do
         end
 
         it 'saves assignee when user id is valid' do
-          project.add_master(assignee)
+          project.add_maintainer(assignee)
           opts = { title: 'Title', description: 'Description', assignee_ids: [assignee.id] }
 
           issue = described_class.new(project, user, opts).execute
@@ -224,8 +240,8 @@ describe Issues::CreateService do
         end
 
         before do
-          project.add_master(user)
-          project.add_master(assignee)
+          project.add_maintainer(user)
+          project.add_maintainer(assignee)
         end
 
         it 'assigns and sets milestone to issuable from command' do
@@ -242,7 +258,7 @@ describe Issues::CreateService do
       let(:project) { merge_request.source_project }
 
       before do
-        project.add_master(user)
+        project.add_maintainer(user)
       end
 
       describe 'for a single discussion' do
@@ -328,7 +344,7 @@ describe Issues::CreateService do
       end
 
       before do
-        allow_any_instance_of(SpamService).to receive(:check_for_spam?).and_return(true)
+        stub_feature_flags(allow_possible_spam: false)
       end
 
       context 'when recaptcha was verified' do
@@ -368,31 +384,67 @@ describe Issues::CreateService do
       end
 
       context 'when recaptcha was not verified' do
+        before do
+          expect_next_instance_of(SpamService) do |spam_service|
+            expect(spam_service).to receive_messages(check_for_spam?: true)
+          end
+        end
+
         context 'when akismet detects spam' do
           before do
-            allow_any_instance_of(AkismetService).to receive(:spam?).and_return(true)
+            expect_next_instance_of(AkismetService) do |akismet_service|
+              expect(akismet_service).to receive_messages(spam?: true)
+            end
           end
 
-          it 'marks an issue as a spam ' do
-            expect(issue).to be_spam
+          context 'when issuables_recaptcha_enabled feature flag is true' do
+            it 'marks an issue as a spam ' do
+              expect(issue).to be_spam
+            end
+
+            it 'invalidates the issue' do
+              expect(issue).to be_invalid
+            end
+
+            it 'creates a new spam_log' do
+              expect { issue }
+                .to log_spam(title: issue.title, description: issue.description, user_id: user.id, noteable_type: 'Issue')
+            end
+
+            it 'assigns a spam_log to an issue' do
+              expect(issue.spam_log).to eq(SpamLog.last)
+            end
           end
 
-          it 'an issue is not valid ' do
-            expect(issue.valid?).to be_falsey
-          end
+          context 'when issuable_recaptcha_enabled feature flag is false' do
+            before do
+              stub_feature_flags(allow_possible_spam: true)
+            end
 
-          it 'creates a new spam_log' do
-            expect {issue}.to change {SpamLog.count}.from(0).to(1)
-          end
+            it 'does not mark an issue as a spam ' do
+              expect(issue).not_to be_spam
+            end
 
-          it 'assigns a spam_log to an issue' do
-            expect(issue.spam_log).to eq(SpamLog.last)
+            it 'accepts the ​issue as valid' do
+              expect(issue).to be_valid
+            end
+
+            it 'creates a new spam_log' do
+              expect { issue }
+                .to log_spam(title: issue.title, description: issue.description, user_id: user.id, noteable_type: 'Issue')
+            end
+
+            it 'assigns a spam_log to an issue' do
+              expect(issue.spam_log).to eq(SpamLog.last)
+            end
           end
         end
 
         context 'when akismet does not detect spam' do
           before do
-            allow_any_instance_of(AkismetService).to receive(:spam?).and_return(false)
+            expect_next_instance_of(AkismetService) do |akismet_service|
+              expect(akismet_service).to receive_messages(spam?: false)
+            end
           end
 
           it 'does not mark an issue as a spam ' do

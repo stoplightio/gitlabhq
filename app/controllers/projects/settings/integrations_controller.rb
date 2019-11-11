@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Projects
   module Settings
     class IntegrationsController < Projects::ApplicationController
@@ -23,3 +25,5 @@ module Projects
     end
   end
 end
+
+Projects::Settings::IntegrationsController.prepend_if_ee('EE::Projects::Settings::IntegrationsController')

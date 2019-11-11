@@ -1,19 +1,19 @@
-/* eslint-disable import/no-unresolved */
-
 import Vue from 'vue';
-import { PDFJS } from 'vendor/pdf';
-import workerSrc from 'vendor/pdf.worker.min';
+import { GlobalWorkerOptions } from 'pdfjs-dist/build/pdf';
+import workerSrc from 'pdfjs-dist/build/pdf.worker.min';
 
 import PDFLab from '~/pdf/index.vue';
-import pdf from '../fixtures/blob/pdf/test.pdf';
+import { FIXTURES_PATH } from 'spec/test_constants';
 
-PDFJS.workerSrc = workerSrc;
+const pdf = `${FIXTURES_PATH}/blob/pdf/test.pdf`;
+
+GlobalWorkerOptions.workerSrc = workerSrc;
 const Component = Vue.extend(PDFLab);
 
 describe('PDF component', () => {
   let vm;
 
-  const checkLoaded = (done) => {
+  const checkLoaded = done => {
     if (vm.loading) {
       setTimeout(() => {
         checkLoaded(done);
@@ -24,7 +24,7 @@ describe('PDF component', () => {
   };
 
   describe('without PDF data', () => {
-    beforeEach((done) => {
+    beforeEach(done => {
       vm = new Component({
         propsData: {
           pdf: '',
@@ -42,7 +42,7 @@ describe('PDF component', () => {
   });
 
   describe('with PDF data', () => {
-    beforeEach((done) => {
+    beforeEach(done => {
       vm = new Component({
         propsData: {
           pdf,

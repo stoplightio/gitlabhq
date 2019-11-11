@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module Ci
     module Build
@@ -42,7 +44,7 @@ module Gitlab
             end
 
             def parent
-              return nil unless has_parent?
+              return unless has_parent?
 
               self.class.new(@path.to_s.chomp(basename), @entries)
             end
@@ -96,12 +98,14 @@ module Gitlab
               blank_node? || @entries.include?(@path.to_s)
             end
 
+            # rubocop: disable CodeReuse/ActiveRecord
             def total_size
               descendant_pattern = /^#{Regexp.escape(@path.to_s)}/
               entries.sum do |path, entry|
                 (entry[:size] if path =~ descendant_pattern).to_i
               end
             end
+            # rubocop: enable CodeReuse/ActiveRecord
 
             def path
               @path.to_s

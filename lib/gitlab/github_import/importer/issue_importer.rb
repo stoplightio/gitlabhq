@@ -4,6 +4,8 @@ module Gitlab
   module GithubImport
     module Importer
       class IssueImporter
+        include Gitlab::Import::DatabaseHelpers
+
         attr_reader :project, :issue, :client, :user_finder, :milestone_finder,
                     :issuable_finder
 
@@ -19,7 +21,7 @@ module Gitlab
           @issue = issue
           @project = project
           @client = client
-          @user_finder = UserFinder.new(project, client)
+          @user_finder = GithubImport::UserFinder.new(project, client)
           @milestone_finder = MilestoneFinder.new(project)
           @issuable_finder = GithubImport::IssuableFinder.new(project, issue)
         end
@@ -51,11 +53,12 @@ module Gitlab
             description: description,
             milestone_id: milestone_finder.id_for(issue),
             state: issue.state,
+            state_id: ::Issue.available_states[issue.state],
             created_at: issue.created_at,
             updated_at: issue.updated_at
           }
 
-          GithubImport.insert_and_return_id(attributes, project.issues)
+          insert_and_return_id(attributes, project.issues)
         rescue ActiveRecord::InvalidForeignKey
           # It's possible the project has been deleted since scheduling this
           # job. In this case we'll just skip creating the issue.

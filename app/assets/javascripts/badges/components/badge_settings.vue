@@ -2,7 +2,7 @@
 import { mapState, mapActions } from 'vuex';
 import createFlash from '~/flash';
 import { s__ } from '~/locale';
-import GlModal from '~/vue_shared/components/gl_modal.vue';
+import DeprecatedModal2 from '~/vue_shared/components/deprecated_modal_2.vue';
 import Badge from './badge.vue';
 import BadgeForm from './badge_form.vue';
 import BadgeList from './badge_list.vue';
@@ -13,7 +13,7 @@ export default {
     Badge,
     BadgeForm,
     BadgeList,
-    GlModal,
+    GlModal: DeprecatedModal2,
   },
   computed: {
     ...mapState(['badgeInModal', 'isEditing']),
@@ -44,9 +44,10 @@ export default {
     <gl-modal
       id="delete-badge-modal"
       :header-title-text="s__('Badges|Delete badge?')"
-      footer-primary-button-variant="danger"
       :footer-primary-button-text="s__('Badges|Delete badge')"
-      @submit="onSubmitModal">
+      footer-primary-button-variant="danger"
+      @submit="onSubmitModal"
+    >
       <div class="well">
         <badge
           :image-url="badgeInModal ? badgeInModal.renderedImageUrl : ''"
@@ -56,15 +57,9 @@ export default {
       <p v-html="deleteModalText"></p>
     </gl-modal>
 
-    <badge-form
-      v-show="isEditing"
-      :is-editing="true"
-    />
+    <badge-form v-show="isEditing" :is-editing="true" />
 
-    <badge-form
-      v-show="!isEditing"
-      :is-editing="false"
-    />
+    <badge-form v-show="!isEditing" :is-editing="false" />
     <badge-list v-show="!isEditing" />
   </div>
 </template>

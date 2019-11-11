@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module ServiceParams
   extend ActiveSupport::Concern
 
@@ -8,6 +10,7 @@ module ServiceParams
     :api_url,
     :api_version,
     :bamboo_url,
+    :branches_to_be_notified,
     :build_key,
     :build_type,
     :ca_pem,
@@ -39,7 +42,6 @@ module ServiceParams
     :new_issue_url,
     :notify,
     :notify_only_broken_pipelines,
-    :notify_only_default_branch,
     :password,
     :priority,
     :project_key,
@@ -68,9 +70,9 @@ module ServiceParams
 
   def service_params
     dynamic_params = @service.event_channel_names + @service.event_names # rubocop:disable Gitlab/ModuleWithInstanceVariables
-    service_params = params.permit(:id, service: ALLOWED_PARAMS_CE + dynamic_params)
+    service_params = params.permit(:id, service: allowed_service_params + dynamic_params)
 
-    if service_params[:service].is_a?(Hash)
+    if service_params[:service].is_a?(ActionController::Parameters)
       FILTER_BLANK_PARAMS.each do |param|
         service_params[:service].delete(param) if service_params[:service][param].blank?
       end
@@ -78,4 +80,10 @@ module ServiceParams
 
     service_params
   end
+
+  def allowed_service_params
+    ALLOWED_PARAMS_CE
+  end
 end
+
+ServiceParams.prepend_if_ee('EE::ServiceParams')

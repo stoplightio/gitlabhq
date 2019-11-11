@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe 'Projects > Wiki > User views Git access wiki page' do
@@ -9,7 +11,7 @@ describe 'Projects > Wiki > User views Git access wiki page' do
     sign_in(user)
   end
 
-  scenario 'Visit Wiki Page Current Commit' do
+  it 'Visit Wiki Page Current Commit' do
     visit project_wiki_path(project, wiki_page)
 
     click_link 'Clone repository'

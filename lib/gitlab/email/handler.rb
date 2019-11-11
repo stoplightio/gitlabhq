@@ -1,20 +1,25 @@
-require 'gitlab/email/handler/create_merge_request_handler'
-require 'gitlab/email/handler/create_note_handler'
-require 'gitlab/email/handler/create_issue_handler'
-require 'gitlab/email/handler/unsubscribe_handler'
+# frozen_string_literal: true
 
 module Gitlab
   module Email
     module Handler
-      HANDLERS = [
-        UnsubscribeHandler,
-        CreateNoteHandler,
-        CreateMergeRequestHandler,
-        CreateIssueHandler
-      ].freeze
+      prepend_if_ee('::EE::Gitlab::Email::Handler') # rubocop: disable Cop/InjectEnterpriseEditionModule
+
+      def self.handlers
+        @handlers ||= load_handlers
+      end
+
+      def self.load_handlers
+        [
+          UnsubscribeHandler,
+          CreateNoteHandler,
+          CreateMergeRequestHandler,
+          CreateIssueHandler
+        ]
+      end
 
       def self.for(mail, mail_key)
-        HANDLERS.find do |klass|
+        handlers.find do |klass|
           handler = klass.new(mail, mail_key)
           break handler if handler.can_handle?
         end

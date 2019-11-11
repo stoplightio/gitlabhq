@@ -1,8 +1,12 @@
+---
+type: tutorial
+---
+
 # Testing PHP projects
 
 This guide covers basic building instructions for PHP projects.
 
-There are covered two cases: testing using the Docker executor and testing
+Two testing scenarios are covered: using the Docker executor and
 using the Shell executor.
 
 ## Test PHP projects using the Docker executor
@@ -20,7 +24,7 @@ build environment.
 
 Let's first specify the PHP image that will be used for the job process
 (you can read more about what an image means in the Runner's lingo reading
-about [Using Docker images](../docker/using_docker_images.md#what-is-image)).
+about [Using Docker images](../docker/using_docker_images.md#what-is-an-image)).
 
 Start by adding the image to your `.gitlab-ci.yml`:
 
@@ -60,7 +64,7 @@ docker-php-ext-install pdo_mysql
 You might wonder what `docker-php-ext-install` is. In short, it is a script
 provided by the official php docker image that you can use to easily install
 extensions. For more information read the documentation at
-<https://hub.docker.com/r/_/php/>.
+<https://hub.docker.com/_/php>.
 
 Now that we created the script that contains all prerequisites for our build
 environment, let's add it in `.gitlab-ci.yml`:
@@ -92,7 +96,7 @@ Finally, commit your files and push them to GitLab to see your build succeeding
 The final `.gitlab-ci.yml` should look similar to this:
 
 ```yaml
-# Select image from https://hub.docker.com/r/_/php/
+# Select image from https://hub.docker.com/_/php
 image: php:5.6
 
 before_script:
@@ -199,7 +203,7 @@ pecl install <extension>
 ```
 
 It's not advised to add this to `.gitlab-ci.yml`. You should execute this
-command once, only to setup the build environment.
+command once, only to set up the build environment.
 
 ## Extend your tests
 
@@ -245,7 +249,7 @@ before_script:
 ...
 ```
 
-## Access private packages / dependencies
+## Access private packages or dependencies
 
 If your test suite needs to access a private repository, you need to configure
 [the SSH keys](../ssh_keys/README.md) in order to be able to clone it.
@@ -254,7 +258,7 @@ If your test suite needs to access a private repository, you need to configure
 
 Most of the time you will need a running database in order for your tests to
 run. If you are using the Docker executor you can leverage Docker's ability to
-link to other containers. In GitLab Runner lingo, this can be achieved by
+link to other containers. With GitLab Runner, this can be achieved by
 defining a `service`.
 
 This functionality is covered in [the CI services](../services/README.md)
@@ -279,10 +283,10 @@ We have set up an [Example PHP Project][php-example-repo] for your convenience
 that runs on [GitLab.com](https://gitlab.com) using our publicly available
 [shared runners](../runners/README.md).
 
-Want to hack on it? Simply fork it, commit and push  your changes. Within a few
+Want to hack on it? Simply fork it, commit, and push your changes. Within a few
 moments the changes will be picked by a public runner and the job will begin.
 
-[php-hub]: https://hub.docker.com/r/_/php/
+[php-hub]: https://hub.docker.com/_/php
 [phpenv]: https://github.com/phpenv/phpenv
 [phpenv-installation]: https://github.com/phpenv/phpenv#installation
 [php-example-repo]: https://gitlab.com/gitlab-examples/php

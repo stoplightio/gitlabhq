@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe SystemHooksService do
@@ -17,6 +19,7 @@ describe SystemHooksService do
     it { expect(event_data(project, :destroy)).to include(:event_name, :name, :created_at, :updated_at, :path, :project_id, :owner_name, :owner_email, :project_visibility) }
     it { expect(event_data(project_member, :create)).to include(:event_name, :created_at, :updated_at, :project_name, :project_path, :project_path_with_namespace, :project_id, :user_name, :user_username, :user_email, :user_id, :access_level, :project_visibility) }
     it { expect(event_data(project_member, :destroy)).to include(:event_name, :created_at, :updated_at, :project_name, :project_path, :project_path_with_namespace, :project_id, :user_name, :user_username, :user_email, :user_id, :access_level, :project_visibility) }
+    it { expect(event_data(project_member, :update)).to include(:event_name, :created_at, :updated_at, :project_name, :project_path, :project_path_with_namespace, :project_id, :user_name, :user_username, :user_email, :user_id, :access_level, :project_visibility) }
     it { expect(event_data(key, :create)).to include(:username, :key, :id) }
     it { expect(event_data(key, :destroy)).to include(:username, :key, :id) }
     it { expect(event_data(deploy_key, :create)).to include(:key, :id) }
@@ -32,7 +35,7 @@ describe SystemHooksService do
     end
 
     it do
-      project.old_path_with_namespace = 'transfered_from_path'
+      project.old_path_with_namespace = 'transferred_from_path'
       expect(event_data(project, :transfer)).to include(
         :event_name, :name, :created_at, :updated_at, :path, :project_id,
         :owner_name, :owner_email, :project_visibility,
@@ -68,6 +71,13 @@ describe SystemHooksService do
       )
     end
 
+    it do
+      expect(event_data(group_member, :update)).to include(
+        :event_name, :created_at, :updated_at, :group_name, :group_path,
+        :group_id, :user_id, :user_username, :user_name, :user_email, :group_access
+      )
+    end
+
     it 'includes the correct project visibility level' do
       data = event_data(project, :create)
 
@@ -75,7 +85,7 @@ describe SystemHooksService do
     end
 
     it 'handles nil datetime columns' do
-      user.update_attributes(created_at: nil, updated_at: nil)
+      user.update(created_at: nil, updated_at: nil)
       data = event_data(user, :destroy)
 
       expect(data[:created_at]).to be(nil)
@@ -84,20 +94,20 @@ describe SystemHooksService do
 
     context 'group_rename' do
       it 'contains old and new path' do
-        allow(group).to receive(:path_was).and_return('old-path')
+        allow(group).to receive(:path_before_last_save).and_return('old-path')
 
         data = event_data(group, :rename)
 
         expect(data).to include(:event_name, :name, :created_at, :updated_at, :full_path, :path, :group_id, :old_path, :old_full_path)
         expect(data[:path]).to eq(group.path)
         expect(data[:full_path]).to eq(group.path)
-        expect(data[:old_path]).to eq(group.path_was)
-        expect(data[:old_full_path]).to eq(group.path_was)
+        expect(data[:old_path]).to eq(group.path_before_last_save)
+        expect(data[:old_full_path]).to eq(group.path_before_last_save)
       end
 
       it 'contains old and new full_path for subgroup' do
         subgroup = create(:group, parent: group)
-        allow(subgroup).to receive(:path_was).and_return('old-path')
+        allow(subgroup).to receive(:path_before_last_save).and_return('old-path')
 
         data = event_data(subgroup, :rename)
 
@@ -108,13 +118,13 @@ describe SystemHooksService do
 
     context 'user_rename' do
       it 'contains old and new username' do
-        allow(user).to receive(:username_was).and_return('old-username')
+        allow(user).to receive(:username_before_last_save).and_return('old-username')
 
         data = event_data(user, :rename)
 
         expect(data).to include(:event_name, :name, :created_at, :updated_at, :email, :user_id, :username, :old_username)
         expect(data[:username]).to eq(user.username)
-        expect(data[:old_username]).to eq(user.username_was)
+        expect(data[:old_username]).to eq(user.username_before_last_save)
       end
     end
 
@@ -143,6 +153,7 @@ describe SystemHooksService do
     it { expect(event_name(project, :update)).to eq "project_update" }
     it { expect(event_name(project_member, :create)).to eq "user_add_to_team" }
     it { expect(event_name(project_member, :destroy)).to eq "user_remove_from_team" }
+    it { expect(event_name(project_member, :update)).to eq "user_update_for_team" }
     it { expect(event_name(key, :create)).to eq 'key_create' }
     it { expect(event_name(key, :destroy)).to eq 'key_destroy' }
     it { expect(event_name(group, :create)).to eq 'group_create' }
@@ -150,6 +161,7 @@ describe SystemHooksService do
     it { expect(event_name(group, :rename)).to eq 'group_rename' }
     it { expect(event_name(group_member, :create)).to eq 'user_add_to_group' }
     it { expect(event_name(group_member, :destroy)).to eq 'user_remove_from_group' }
+    it { expect(event_name(group_member, :update)).to eq 'user_update_for_group' }
   end
 
   def event_data(*args)

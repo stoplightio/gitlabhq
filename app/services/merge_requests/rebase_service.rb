@@ -1,6 +1,8 @@
+# frozen_string_literal: true
+
 module MergeRequests
   class RebaseService < MergeRequests::WorkingCopyBaseService
-    REBASE_ERROR = 'Rebase failed. Please rebase locally'.freeze
+    REBASE_ERROR = 'Rebase failed. Please rebase locally'
 
     def execute(merge_request)
       @merge_request = merge_request
@@ -13,20 +15,21 @@ module MergeRequests
     end
 
     def rebase
-      if merge_request.rebase_in_progress?
+      # Ensure Gitaly isn't already running a rebase
+      if source_project.repository.rebase_in_progress?(merge_request.id)
         log_error('Rebase task canceled: Another rebase is already in progress', save_message_on_model: true)
         return false
       end
 
-      rebase_sha = repository.rebase(current_user, merge_request)
-
-      merge_request.update_attributes(rebase_commit_sha: rebase_sha)
+      repository.rebase(current_user, merge_request)
 
       true
     rescue => e
       log_error(REBASE_ERROR, save_message_on_model: true)
       log_error(e.message)
       false
+    ensure
+      merge_request.update_column(:rebase_jid, nil)
     end
   end
 end

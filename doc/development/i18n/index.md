@@ -29,7 +29,7 @@ See [Externalization for GitLab](externalization.md).
 
 ### Translate strings
 
-The translation process is managed at [translate.gitlab.com](https://translate.gitlab.com)
+The translation process is managed at <https://translate.gitlab.com>
 using [Crowdin](https://crowdin.com/).
 You will need to create an account before you can submit translations.
 Once you are signed in, select the language you wish to contribute translations to.
@@ -50,3 +50,5 @@ able to proofread and instructions on becoming a proofreader yourself.
 ## Release
 
 Translations are typically included in the next major or minor release.
+
+See [Merging translations from Crowdin](merging_translations.md).

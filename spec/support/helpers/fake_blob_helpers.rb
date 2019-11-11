@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module FakeBlobHelpers
   class FakeBlob
     include BlobLike
@@ -23,7 +25,7 @@ module FakeBlobHelpers
       0
     end
 
-    def binary?
+    def binary_in_repo?
       @binary
     end
 

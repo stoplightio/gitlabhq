@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "spec_helper"
 
 shared_examples "migrating a deleted user's associated records to the ghost user" do |record_class, fields|
@@ -45,7 +47,7 @@ shared_examples "migrating a deleted user's associated records to the ghost user
     context "race conditions" do
       context "when #{record_class_name} migration fails and is rolled back" do
         before do
-          expect_any_instance_of(record_class::ActiveRecord_Associations_CollectionProxy)
+          expect_any_instance_of(ActiveRecord::Associations::CollectionProxy)
             .to receive(:update_all).and_raise(ActiveRecord::Rollback)
         end
 
@@ -66,7 +68,7 @@ shared_examples "migrating a deleted user's associated records to the ghost user
 
       context "when #{record_class_name} migration fails with a non-rollback exception" do
         before do
-          expect_any_instance_of(record_class::ActiveRecord_Associations_CollectionProxy)
+          expect_any_instance_of(ActiveRecord::Associations::CollectionProxy)
             .to receive(:update_all).and_raise(ArgumentError)
         end
 
@@ -86,7 +88,7 @@ shared_examples "migrating a deleted user's associated records to the ghost user
       end
 
       it "blocks the user before #{record_class_name} migration begins" do
-        expect(service).to receive("migrate_#{record_class_name.parameterize('_').pluralize}".to_sym) do
+        expect(service).to receive("migrate_#{record_class_name.parameterize(separator: '_').pluralize}".to_sym) do
           expect(user.reload).to be_blocked
         end
 

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 RSpec.shared_examples 'chat slash commands service' do
   describe "Associations" do
     it { is_expected.to respond_to :token }
@@ -90,6 +92,35 @@ RSpec.shared_examples 'chat slash commands service' do
           expect_any_instance_of(Gitlab::SlashCommands::Command).to receive(:execute)
 
           subject.trigger(params)
+        end
+
+        shared_examples_for 'blocks command execution' do
+          it do
+            expect_any_instance_of(Gitlab::SlashCommands::Command).not_to receive(:execute)
+
+            result = subject.trigger(params)
+            expect(result[:text]).to match(error_message)
+          end
+        end
+
+        context 'when user is blocked' do
+          before do
+            chat_name.user.block
+          end
+
+          it_behaves_like 'blocks command execution' do
+            let(:error_message) { 'you do not have access to the GitLab project' }
+          end
+        end
+
+        context 'when user is deactivated' do
+          before do
+            chat_name.user.deactivate
+          end
+
+          it_behaves_like 'blocks command execution' do
+            let(:error_message) { 'your account has been deactivated by your administrator' }
+          end
         end
       end
     end

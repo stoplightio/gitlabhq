@@ -1,0 +1,85 @@
+.review-docs:
+  extends:
+    - .default-tags
+    - .default-retry
+    - .only-docs-changes
+  only:
+    refs:
+      - merge_requests
+    variables:
+      - $CI_SERVER_HOST == "gitlab.com" && $CI_PROJECT_NAMESPACE == "gitlab-org"
+  image: ruby:2.6-alpine
+  stage: review
+  dependencies: []
+  variables:
+    GIT_STRATEGY: none
+  environment:
+    name: review-docs/$DOCS_GITLAB_REPO_SUFFIX-$CI_MERGE_REQUEST_IID
+    # DOCS_REVIEW_APPS_DOMAIN and DOCS_GITLAB_REPO_SUFFIX are CI variables
+    # Discussion: https://gitlab.com/gitlab-org/gitlab-foss/merge_requests/14236/diffs#note_40140693
+    url: http://docs-preview-$DOCS_GITLAB_REPO_SUFFIX-$CI_MERGE_REQUEST_IID.$DOCS_REVIEW_APPS_DOMAIN/$DOCS_GITLAB_REPO_SUFFIX
+    on_stop: review-docs-cleanup
+  before_script:
+    # We don't clone the repo by using GIT_STRATEGY: none and only download the
+    # single script we need here so it's much faster than cloning.
+    - apk add --update openssl
+    - wget $CI_PROJECT_URL/raw/$CI_COMMIT_SHA/scripts/trigger-build-docs
+    - chmod 755 trigger-build-docs
+    - gem install gitlab --no-document
+
+# Always trigger a docs build in gitlab-docs only on docs-only branches.
+# Useful to preview the docs changes live.
+review-docs-deploy:
+  extends: .review-docs
+  script:
+    - ./trigger-build-docs deploy
+  when: manual
+
+# Cleanup remote environment of gitlab-docs
+review-docs-cleanup:
+  extends: .review-docs
+  environment:
+    name: review-docs/$DOCS_GITLAB_REPO_SUFFIX-$CI_MERGE_REQUEST_IID
+    action: stop
+  script:
+    - ./trigger-build-docs cleanup
+  when: manual
+
+docs lint:
+  extends:
+    - .default-tags
+    - .default-retry
+    - .default-only
+    - .only-docs-changes
+  image: "registry.gitlab.com/gitlab-org/gitlab-build-images:gitlab-docs-lint"
+  stage: test
+  dependencies: []
+  script:
+    - scripts/lint-doc.sh
+    # Lint Markdown
+    - markdownlint --config .markdownlint.json 'doc/**/*.md'
+    # Prepare docs for build
+    - mv doc/ /tmp/gitlab-docs/content/$DOCS_GITLAB_REPO_SUFFIX
+    - cd /tmp/gitlab-docs
+    # Build HTML from Markdown
+    - bundle exec nanoc
+    # Check the internal links
+    - bundle exec nanoc check internal_links
+    # Check the internal anchor links
+    - bundle exec nanoc check internal_anchors
+
+graphql-docs-verify:
+  extends:
+    - .only-ee
+    - .default-tags
+    - .default-retry
+    - .default-cache
+    - .default-only
+    - .default-before_script
+    - .only-graphql-changes
+  variables:
+    SETUP_DB: "false"
+  stage: test
+  needs: ["setup-test-env"]
+  script:
+    - bundle exec rake gitlab:graphql:check_docs

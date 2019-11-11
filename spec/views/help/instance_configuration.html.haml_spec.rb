@@ -1,4 +1,6 @@
-require 'rails_helper'
+# frozen_string_literal: true
+
+require 'spec_helper'
 
 describe 'help/instance_configuration' do
   describe 'General Sections:' do
@@ -13,9 +15,9 @@ describe 'help/instance_configuration' do
     it 'has links to several sections' do
       render
 
-      expect(rendered).to have_link(nil, '#ssh-host-keys-fingerprints') if ssh_settings.any?
-      expect(rendered).to have_link(nil, '#gitlab-pages')
-      expect(rendered).to have_link(nil, '#gitlab-ci')
+      expect(rendered).to have_link(nil, href: '#ssh-host-keys-fingerprints') if ssh_settings.any?
+      expect(rendered).to have_link(nil, href: '#gitlab-pages')
+      expect(rendered).to have_link(nil, href: '#gitlab-ci')
     end
 
     it 'has several sections' do

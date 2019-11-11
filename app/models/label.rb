@@ -1,17 +1,18 @@
-class Label < ActiveRecord::Base
+# frozen_string_literal: true
+
+class Label < ApplicationRecord
   include CacheMarkdownField
   include Referable
   include Subscribable
-
-  # Represents a "No Label" state used for filtering Issues and Merge
-  # Requests that have no label assigned.
-  LabelStruct = Struct.new(:title, :name)
-  None = LabelStruct.new('No Label', 'No Label')
-  Any = LabelStruct.new('Any Label', '')
+  include Gitlab::SQL::Pattern
+  include OptionallySearch
+  include Sortable
+  include FromUnion
+  include Presentable
 
   cache_markdown_field :description, pipeline: :single_line
 
-  DEFAULT_COLOR = '#428BCA'.freeze
+  DEFAULT_COLOR = '#428BCA'
 
   default_value_for :color, DEFAULT_COLOR
 
@@ -32,11 +33,14 @@ class Label < ActiveRecord::Base
 
   default_scope { order(title: :asc) }
 
-  scope :templates, -> { where(template: true) }
+  scope :templates, -> { where(template: true, type: [Label.name, nil]) }
   scope :with_title, ->(title) { where(title: title) }
   scope :with_lists_and_board, -> { joins(lists: :board).merge(List.movable) }
-  scope :on_group_boards, ->(group_id) { with_lists_and_board.where(boards: { group_id: group_id }) }
   scope :on_project_boards, ->(project_id) { with_lists_and_board.where(boards: { project_id: project_id }) }
+  scope :on_board, ->(board_id) { with_lists_and_board.where(boards: { id: board_id }) }
+  scope :order_name_asc, -> { reorder(title: :asc) }
+  scope :order_name_desc, -> { reorder(title: :desc) }
+  scope :subscribed_by, ->(user_id) { joins(:subscriptions).where(subscriptions: { user_id: user_id, subscribed: true }) }
 
   def self.prioritized(project)
     joins(:priorities)
@@ -66,6 +70,14 @@ class Label < ActiveRecord::Base
     joins(label_priorities)
   end
 
+  def self.optionally_subscribed_by(user_id)
+    if user_id
+      subscribed_by(user_id)
+    else
+      all
+    end
+  end
+
   alias_attribute :name, :title
 
   def self.reference_prefix
@@ -85,17 +97,50 @@ class Label < ActiveRecord::Base
       (#{Project.reference_pattern})?
       #{Regexp.escape(reference_prefix)}
       (?:
-        (?<label_id>\d+(?!\S\w)\b) | # Integer-based label ID, or
-        (?<label_name>
-          [A-Za-z0-9_\-\?\.&]+ | # String-based single-word label title, or
-          ".+?"                  # String-based multi-word label surrounded in quotes
-        )
+          (?<label_id>\d+(?!\S\w)\b)
+        | # Integer-based label ID, or
+          (?<label_name>
+              # String-based single-word label title, or
+              [A-Za-z0-9_\-\?\.&]+
+              (?<!\.|\?)
+            |
+              # String-based multi-word label surrounded in quotes
+              ".+?"
+          )
       )
     }x
   end
 
   def self.link_reference_pattern
     nil
+  end
+
+  # Searches for labels with a matching title or description.
+  #
+  # This method uses ILIKE on PostgreSQL and LIKE on MySQL.
+  #
+  # query - The search query as a String.
+  #
+  # Returns an ActiveRecord::Relation.
+  def self.search(query)
+    fuzzy_search(query, [:title, :description])
+  end
+
+  # Override Gitlab::SQL::Pattern.min_chars_for_partial_matching as
+  # label queries are never global, and so will not use a trigram
+  # index. That means we can have just one character in the LIKE.
+  def self.min_chars_for_partial_matching
+    1
+  end
+
+  def self.by_ids(ids)
+    where(id: ids)
+  end
+
+  def self.on_project_board?(project_id, label_id)
+    return false if label_id.blank?
+
+    on_project_boards(project_id).where(id: label_id).exists?
   end
 
   def open_issues_count(user = nil)
@@ -154,7 +199,11 @@ class Label < ActiveRecord::Base
   end
 
   def title=(value)
-    write_attribute(:title, sanitize_title(value)) if value.present?
+    write_attribute(:title, sanitize_value(value)) if value.present?
+  end
+
+  def description=(value)
+    write_attribute(:description, sanitize_value(value)) if value.present?
   end
 
   ##
@@ -166,8 +215,8 @@ class Label < ActiveRecord::Base
   #
   #   Label.first.to_reference                                     # => "~1"
   #   Label.first.to_reference(format: :name)                      # => "~\"bug\""
-  #   Label.first.to_reference(project, target_project: same_namespace_project)    # => "gitlab-ce~1"
-  #   Label.first.to_reference(project, target_project: another_namespace_project) # => "gitlab-org/gitlab-ce~1"
+  #   Label.first.to_reference(project, target_project: same_namespace_project)    # => "gitlab-foss~1"
+  #   Label.first.to_reference(project, target_project: another_namespace_project) # => "gitlab-org/gitlab-foss~1"
   #
   # Returns a String
   #
@@ -186,11 +235,16 @@ class Label < ActiveRecord::Base
     super(options).tap do |json|
       json[:type] = self.try(:type)
       json[:priority] = priority(options[:project]) if options.key?(:project)
+      json[:textColor] = text_color
     end
   end
 
   def hook_attrs
     attributes
+  end
+
+  def present(attributes)
+    super(attributes.merge(presenter_class: ::LabelPresenter))
   end
 
   private
@@ -210,7 +264,7 @@ class Label < ActiveRecord::Base
     end
   end
 
-  def sanitize_title(value)
+  def sanitize_value(value)
     CGI.unescapeHTML(Sanitize.clean(value.to_s))
   end
 
@@ -218,3 +272,5 @@ class Label < ActiveRecord::Base
     %w(color title).each { |attr| self[attr] = self[attr]&.strip }
   end
 end
+
+Label.prepend_if_ee('EE::Label')

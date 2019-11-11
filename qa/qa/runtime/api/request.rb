@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module QA
   module Runtime
     module API
@@ -8,6 +10,10 @@ module QA
           query_string[:private_token] ||= api_client.personal_access_token unless query_string[:oauth_access_token]
           request_path = request_path(path, **query_string)
           @session_address = Runtime::Address.new(api_client.address, request_path)
+        end
+
+        def mask_url
+          @session_address.address.sub(/private_token=.*/, "private_token=[****]")
         end
 
         def url
@@ -28,7 +34,7 @@ module QA
         #
         # Returns the relative path to the requested API resource
         def request_path(path, version: API_VERSION, **query_string)
-          full_path = File.join('/api', version, path)
+          full_path = ::File.join('/api', version, path)
 
           if query_string.any?
             full_path << (path.include?('?') ? '&' : '?')

@@ -5,12 +5,18 @@
     = render 'shared/outdated_browser'
     .mobile-overlay
     .alert-wrapper
+      = render_if_exists "layouts/header/ee_license_banner"
       = render "layouts/broadcast"
-      = render 'layouts/header/read_only_banner'
+      = render "layouts/header/read_only_banner"
+      = render "layouts/nav/classification_level_banner"
       = yield :flash_message
+      = render "shared/ping_consent"
       - unless @hide_breadcrumbs
         = render "layouts/nav/breadcrumbs"
-      = render "layouts/flash"
+      .d-flex
     %div{ class: "#{(container_class unless @no_container)} #{@content_class}" }
       .content{ id: "content-body" }
+        = render "layouts/flash", extra_flash_class: 'limit-container-width'
+        - if Gitlab.com?
+          = render_if_exists "layouts/privacy_policy_update_callout"
         = yield

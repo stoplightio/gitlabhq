@@ -1,4 +1,6 @@
-require 'rails_helper'
+# frozen_string_literal: true
+
+require 'spec_helper'
 
 describe 'Merge Requests > Filters generic behavior', :js do
   include FilteredSearchHelpers

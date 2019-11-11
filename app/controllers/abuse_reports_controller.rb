@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class AbuseReportsController < ApplicationController
   before_action :set_user, only: [:new]
 
@@ -14,7 +16,7 @@ class AbuseReportsController < ApplicationController
     if @abuse_report.save
       @abuse_report.notify
 
-      message = "Thank you for your report. A GitLab administrator will look into it shortly."
+      message = _("Thank you for your report. A GitLab administrator will look into it shortly.")
       redirect_to @abuse_report.user, notice: message
     else
       render :new
@@ -30,13 +32,15 @@ class AbuseReportsController < ApplicationController
     ))
   end
 
+  # rubocop: disable CodeReuse/ActiveRecord
   def set_user
     @user = User.find_by(id: params[:user_id])
 
     if @user.nil?
-      redirect_to root_path, alert: "Cannot create the abuse report. The user has been deleted."
+      redirect_to root_path, alert: _("Cannot create the abuse report. The user has been deleted.")
     elsif @user.blocked?
-      redirect_to @user, alert: "Cannot create the abuse report. This user has been blocked."
+      redirect_to @user, alert: _("Cannot create the abuse report. This user has been blocked.")
     end
   end
+  # rubocop: enable CodeReuse/ActiveRecord
 end

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Admin::ProjectsFinder do
@@ -54,7 +56,7 @@ describe Admin::ProjectsFinder do
 
     context 'filter by visibility_level' do
       before do
-        private_project.add_master(user)
+        private_project.add_maintainer(user)
       end
 
       context 'private' do

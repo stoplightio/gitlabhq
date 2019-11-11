@@ -1,7 +1,9 @@
-require 'rails_helper'
+# frozen_string_literal: true
 
-feature 'Admin disables 2FA for a user' do
-  scenario 'successfully', :js do
+require 'spec_helper'
+
+describe 'Admin disables 2FA for a user' do
+  it 'successfully', :js do
     sign_in(create(:admin))
     user = create(:user, :two_factor)
 
@@ -16,7 +18,7 @@ feature 'Admin disables 2FA for a user' do
     end
   end
 
-  scenario 'for a user without 2FA enabled' do
+  it 'for a user without 2FA enabled' do
     sign_in(create(:admin))
     user = create(:user)
 

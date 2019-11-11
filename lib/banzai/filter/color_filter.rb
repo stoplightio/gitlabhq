@@ -1,9 +1,11 @@
+# frozen_string_literal: true
+
 module Banzai
   module Filter
     # HTML filter that renders `color` followed by a color "chip".
     #
     class ColorFilter < HTML::Pipeline::Filter
-      COLOR_CHIP_CLASS = 'gfm-color_chip'.freeze
+      COLOR_CHIP_CLASS = 'gfm-color_chip'
 
       def call
         doc.css('code').each do |node|

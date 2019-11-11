@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe 'User searches for merge requests', :js do
@@ -7,7 +9,7 @@ describe 'User searches for merge requests', :js do
   let!(:merge_request2) { create(:merge_request, :simple, title: 'Bar', source_project: project, target_project: project) }
 
   before do
-    project.add_master(user)
+    project.add_maintainer(user)
     sign_in(user)
 
     visit(search_path)
@@ -18,13 +20,11 @@ describe 'User searches for merge requests', :js do
   it 'finds a merge request' do
     fill_in('dashboard_search', with: merge_request1.title)
     find('.btn-search').click
-
-    page.within('.search-filter') do
-      click_link('Merge requests')
-    end
+    select_search_scope('Merge requests')
 
     page.within('.results') do
-      expect(find(:css, '.search-results')).to have_link(merge_request1.title).and have_no_link(merge_request2.title)
+      expect(page).to have_link(merge_request1.title)
+      expect(page).not_to have_link(merge_request2.title)
     end
   end
 
@@ -38,13 +38,11 @@ describe 'User searches for merge requests', :js do
 
       fill_in('dashboard_search', with: merge_request1.title)
       find('.btn-search').click
-
-      page.within('.search-filter') do
-        click_link('Merge requests')
-      end
+      select_search_scope('Merge requests')
 
       page.within('.results') do
-        expect(find(:css, '.search-results')).to have_link(merge_request1.title).and have_no_link(merge_request2.title)
+        expect(page).to have_link(merge_request1.title)
+        expect(page).not_to have_link(merge_request2.title)
       end
     end
   end

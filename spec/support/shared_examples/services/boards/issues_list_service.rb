@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 shared_examples 'issues list service' do
   it 'delegates search to IssuesFinder' do
     params = { board_id: board.id, id: list1.id }
@@ -5,6 +7,16 @@ shared_examples 'issues list service' do
     expect_any_instance_of(IssuesFinder).to receive(:execute).once.and_call_original
 
     described_class.new(parent, user, params).execute
+  end
+
+  context '#metadata' do
+    it 'returns issues count for list' do
+      params = { board_id: board.id, id: list1.id }
+
+      metadata = described_class.new(parent, user, params).metadata
+
+      expect(metadata[:size]).to eq(3)
+    end
   end
 
   context 'issues are ordered by priority' do

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe 'projects/merge_requests/creations/_new_submit.html.haml' do
@@ -9,7 +11,11 @@ describe 'projects/merge_requests/creations/_new_submit.html.haml' do
 
     assign(:merge_request, merge_request)
     assign(:commits, merge_request.commits)
+    assign(:hidden_commit_count, 0)
+    assign(:total_commit_count, merge_request.commits.count)
     assign(:project, merge_request.target_project)
+    assign(:target_project, merge_request.target_project)
+    assign(:mr_presenter, merge_request.present(current_user: merge_request.author))
 
     allow(view).to receive(:can?).and_return(true)
     allow(view).to receive(:url_for).and_return('#')
@@ -27,6 +33,19 @@ describe 'projects/merge_requests/creations/_new_submit.html.haml' do
       render
       expect(rendered).to have_text('Pipelines 1')
       expect(rendered).not_to have_text('Builds')
+    end
+  end
+
+  context 'when there are hidden commits' do
+    before do
+      assign(:pipelines, Ci::Pipeline.none)
+      assign(:hidden_commit_count, 2)
+    end
+
+    it 'shows notice about omitted commits' do
+      render
+
+      expect(rendered).to match(/2 additional commits have been omitted to prevent performance issues/)
     end
   end
 end

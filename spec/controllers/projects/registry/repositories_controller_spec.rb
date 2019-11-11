@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Projects::Registry::RepositoriesController do
@@ -36,6 +38,12 @@ describe Projects::Registry::RepositoriesController do
             go_to_index
 
             expect(response).to have_gitlab_http_status(:ok)
+          end
+
+          it 'tracks the event' do
+            expect(Gitlab::Tracking).to receive(:event).with(anything, 'list_repositories', {})
+
+            go_to_index
           end
 
           it 'creates a root container repository' do
@@ -86,10 +94,19 @@ describe Projects::Registry::RepositoriesController do
           stub_container_registry_tags(repository: :any, tags: [])
         end
 
-        it 'deletes a repository' do
-          expect { delete_repository(repository) }.to change { ContainerRepository.all.count }.by(-1)
+        it 'schedules a job to delete a repository' do
+          expect(DeleteContainerRepositoryWorker).to receive(:perform_async).with(user.id, repository.id)
+
+          delete_repository(repository)
 
           expect(response).to have_gitlab_http_status(:no_content)
+        end
+
+        it 'tracks the event' do
+          expect(Gitlab::Tracking).to receive(:event).with(anything, 'delete_repository', {})
+          allow(DeleteContainerRepositoryWorker).to receive(:perform_async).with(user.id, repository.id)
+
+          delete_repository(repository)
         end
       end
     end
@@ -110,15 +127,19 @@ describe Projects::Registry::RepositoriesController do
   end
 
   def go_to_index(format: :html)
-    get :index, namespace_id: project.namespace,
-                project_id: project,
+    get :index, params: {
+                  namespace_id: project.namespace,
+                  project_id: project
+                },
                 format: format
   end
 
   def delete_repository(repository)
-    delete :destroy, namespace_id: project.namespace,
-                     project_id: project,
-                     id: repository,
+    delete :destroy, params: {
+                       namespace_id: project.namespace,
+                       project_id: project,
+                       id: repository
+                     },
                      format: :json
   end
 end

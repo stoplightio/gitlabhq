@@ -1,8 +1,11 @@
+# frozen_string_literal: true
+
 class ProjectExportWorker
   include ApplicationWorker
   include ExceptionBacktrace
 
   sidekiq_options retry: 3
+  feature_category :source_code_management
 
   def perform(current_user_id, project_id, after_export_strategy = {}, params = {})
     current_user = User.find(current_user_id)

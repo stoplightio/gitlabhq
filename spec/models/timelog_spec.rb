@@ -1,7 +1,10 @@
-require 'rails_helper'
+# frozen_string_literal: true
+
+require 'spec_helper'
 
 RSpec.describe Timelog do
   subject { build(:timelog) }
+
   let(:issue) { create(:issue) }
   let(:merge_request) { create(:merge_request) }
 

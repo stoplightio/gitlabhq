@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Ldap::OmniauthCallbacksController < OmniauthCallbacksController
   extend ::Gitlab::Utils::Override
 
@@ -24,8 +26,10 @@ class Ldap::OmniauthCallbacksController < OmniauthCallbacksController
 
   override :fail_login
   def fail_login(user)
-    flash[:alert] = 'Access denied for your LDAP account.'
+    flash[:alert] = _('Access denied for your LDAP account.')
 
     redirect_to new_user_session_path
   end
 end
+
+Ldap::OmniauthCallbacksController.prepend_if_ee('EE::Ldap::OmniauthCallbacksController')

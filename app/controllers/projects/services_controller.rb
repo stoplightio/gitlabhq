@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Projects::ServicesController < Projects::ApplicationController
   include ServiceParams
 
@@ -16,10 +18,23 @@ class Projects::ServicesController < Projects::ApplicationController
   def update
     @service.attributes = service_params[:service]
 
-    if @service.save(context: :manual_change)
-      redirect_to(project_settings_integrations_path(@project), notice: success_message)
-    else
-      render 'edit'
+    saved = @service.save(context: :manual_change)
+
+    respond_to do |format|
+      format.html do
+        if saved
+          redirect_to project_settings_integrations_path(@project),
+            notice: success_message
+        else
+          render 'edit'
+        end
+      end
+
+      format.json do
+        status = saved ? :ok : :unprocessable_entity
+
+        render json: serialize_as_json, status: status
+      end
     end
   end
 
@@ -34,27 +49,27 @@ class Projects::ServicesController < Projects::ApplicationController
   private
 
   def service_test_response
-    if @service.update_attributes(service_params[:service])
+    if @service.update(service_params[:service])
       data = @service.test_data(project, current_user)
       outcome = @service.test(data)
 
       if outcome[:success]
         {}
       else
-        { error: true, message: 'Test failed.', service_response: outcome[:result].to_s, test_failed: true }
+        { error: true, message: _('Test failed.'), service_response: outcome[:result].to_s, test_failed: true }
       end
     else
-      { error: true, message: 'Validations failed.', service_response: @service.errors.full_messages.join(','), test_failed: false }
+      { error: true, message: _('Validations failed.'), service_response: @service.errors.full_messages.join(','), test_failed: false }
     end
   rescue Gitlab::HTTP::BlockedUrlError => e
-    { error: true, message: 'Test failed.', service_response: e.message, test_failed: true }
+    { error: true, message: _('Test failed.'), service_response: e.message, test_failed: true }
   end
 
   def success_message
     if @service.active?
-      "#{@service.title} activated."
+      _("%{service_title} activated.") % { service_title: @service.title }
     else
-      "#{@service.title} settings saved, but not activated."
+      _("%{service_title} settings saved, but not activated.") % { service_title: @service.title }
     end
   end
 
@@ -64,5 +79,11 @@ class Projects::ServicesController < Projects::ApplicationController
 
   def ensure_service_enabled
     render_404 unless service
+  end
+
+  def serialize_as_json
+    @service
+      .as_json(only: @service.json_fields)
+      .merge(errors: @service.errors.as_json)
   end
 end

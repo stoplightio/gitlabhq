@@ -17,46 +17,44 @@ unless Rails.env.production?
       Rake::Task['eslint'].invoke
     end
 
+    desc "GitLab | lint | Lint HAML files"
+    task :haml do
+      Rake::Task['haml_lint'].invoke
+    rescue RuntimeError # The haml_lint tasks raise a RuntimeError
+      exit(1)
+    end
+
     desc "GitLab | lint | Run several lint checks"
     task :all do
       status = 0
 
-      %w[
+      tasks = %w[
         config_lint
-        haml_lint
+        lint:haml
         scss_lint
-        flay
         gettext:lint
         lint:static_verification
-      ].each do |task|
+      ]
+
+      if Gitlab.ee?
+        # This task will fail on CE installations (e.g. gitlab-org/gitlab-foss)
+        # since it will detect strings in the locale files that do not exist in
+        # the source files. To work around this we will only enable this task on
+        # EE installations.
+        tasks << 'gettext:updated_check'
+      end
+
+      tasks.each do |task|
         pid = Process.fork do
-          rd_out, wr_out = IO.pipe
-          rd_err, wr_err = IO.pipe
-          stdout = $stdout.dup
-          stderr = $stderr.dup
-          $stdout.reopen(wr_out)
-          $stderr.reopen(wr_err)
+          puts "*** Running rake task: #{task} ***"
 
-          begin
-            begin
-              Rake::Task[task].invoke
-            rescue RuntimeError # The haml_lint tasks raise a RuntimeError
-              exit(1)
-            end
-          rescue SystemExit => ex
-            msg = "*** Rake task #{task} failed with the following error(s):"
-            raise ex
-          ensure
-            $stdout.reopen(stdout)
-            $stderr.reopen(stderr)
-            wr_out.close
-            wr_err.close
-
-            warn "\n#{msg}\n\n" if msg
-
-            IO.copy_stream(rd_out, $stdout)
-            IO.copy_stream(rd_err, $stderr)
-          end
+          Rake::Task[task].invoke
+        rescue SystemExit => ex
+          warn "!!! Rake task #{task} exited:"
+          raise ex
+        rescue StandardError, ScriptError => ex
+          warn "!!! Rake task #{task} raised #{ex.class}:"
+          raise ex
         end
 
         Process.waitpid(pid)

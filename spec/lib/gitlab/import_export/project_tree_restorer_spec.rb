@@ -2,6 +2,8 @@ require 'spec_helper'
 include ImportExport::CommonUtil
 
 describe Gitlab::ImportExport::ProjectTreeRestorer do
+  let(:shared) { project.import_export_shared }
+
   describe 'restore project tree' do
     before(:context) do
       # Using an admin for import, so we can check assignment of existing members
@@ -12,11 +14,11 @@ describe Gitlab::ImportExport::ProjectTreeRestorer do
       ]
 
       RSpec::Mocks.with_temporary_scope do
-        @project = create(:project, :builds_disabled, :issues_disabled, name: 'project', path: 'project')
+        @project = create(:project, :builds_enabled, :issues_disabled, name: 'project', path: 'project')
         @shared = @project.import_export_shared
-        allow(@shared).to receive(:export_path).and_return('spec/lib/gitlab/import_export/')
+        allow(@shared).to receive(:export_path).and_return('spec/fixtures/lib/gitlab/import_export/')
 
-        allow_any_instance_of(Repository).to receive(:fetch_ref).and_return(true)
+        allow_any_instance_of(Repository).to receive(:fetch_source_branch!).and_return(true)
         allow_any_instance_of(Gitlab::Git::Repository).to receive(:branch_exists?).and_return(false)
 
         expect_any_instance_of(Gitlab::Git::Repository).to receive(:create_branch).with('feature', 'DCBA')
@@ -32,6 +34,10 @@ describe Gitlab::ImportExport::ProjectTreeRestorer do
     end
 
     context 'JSON' do
+      before do
+        stub_feature_flags(use_legacy_pipeline_triggers: false)
+      end
+
       it 'restores models based on JSON' do
         expect(@restored_project_json).to be_truthy
       end
@@ -40,7 +46,7 @@ describe Gitlab::ImportExport::ProjectTreeRestorer do
         project = Project.find_by_path('project')
 
         expect(project.project_feature.issues_access_level).to eq(ProjectFeature::DISABLED)
-        expect(project.project_feature.builds_access_level).to eq(ProjectFeature::DISABLED)
+        expect(project.project_feature.builds_access_level).to eq(ProjectFeature::ENABLED)
         expect(project.project_feature.snippets_access_level).to eq(ProjectFeature::ENABLED)
         expect(project.project_feature.wiki_access_level).to eq(ProjectFeature::ENABLED)
         expect(project.project_feature.merge_requests_access_level).to eq(ProjectFeature::ENABLED)
@@ -58,12 +64,47 @@ describe Gitlab::ImportExport::ProjectTreeRestorer do
         expect(Milestone.find_by_description('test milestone').issues.count).to eq(2)
       end
 
+      context 'when importing a project with cached_markdown_version and note_html' do
+        context 'for an Issue' do
+          it 'does not import note_html' do
+            note_content = 'Quo reprehenderit aliquam qui dicta impedit cupiditate eligendi'
+            issue_note = Issue.find_by(description: 'Aliquam enim illo et possimus.').notes.select { |n| n.note.match(/#{note_content}/)}.first
+
+            expect(issue_note.note_html).to match(/#{note_content}/)
+          end
+        end
+
+        context 'for a Merge Request' do
+          it 'does not import note_html' do
+            note_content = 'Sit voluptatibus eveniet architecto quidem'
+            merge_request_note = MergeRequest.find_by(title: 'MR1').notes.select { |n| n.note.match(/#{note_content}/)}.first
+
+            expect(merge_request_note.note_html).to match(/#{note_content}/)
+          end
+        end
+      end
+
       it 'creates a valid pipeline note' do
-        expect(Ci::Pipeline.first.notes).not_to be_empty
+        expect(Ci::Pipeline.find_by_sha('sha-notes').notes).not_to be_empty
+      end
+
+      it 'pipeline has the correct user ID' do
+        expect(Ci::Pipeline.find_by_sha('sha-notes').user_id).to eq(@user.id)
       end
 
       it 'restores pipelines with missing ref' do
         expect(Ci::Pipeline.where(ref: nil)).not_to be_empty
+      end
+
+      it 'restores pipeline for merge request' do
+        pipeline = Ci::Pipeline.find_by_sha('048721d90c449b244b7b4c53a9186b04330174ec')
+
+        expect(pipeline).to be_valid
+        expect(pipeline.tag).to be_falsey
+        expect(pipeline.source).to eq('merge_request_event')
+        expect(pipeline.merge_request.id).to be > 0
+        expect(pipeline.merge_request.target_branch).to eq('feature')
+        expect(pipeline.merge_request.source_branch).to eq('feature_conflict')
       end
 
       it 'preserves updated_at on issues' do
@@ -87,6 +128,21 @@ describe Gitlab::ImportExport::ProjectTreeRestorer do
 
       it 'contains the create access levels on a protected tag' do
         expect(ProtectedTag.first.create_access_levels).not_to be_empty
+      end
+
+      it 'restores issue resource label events' do
+        expect(Issue.find_by(title: 'Voluptatem').resource_label_events).not_to be_empty
+      end
+
+      it 'restores merge requests resource label events' do
+        expect(MergeRequest.find_by(title: 'MR1').resource_label_events).not_to be_empty
+      end
+
+      it 'restores suggestion' do
+        note = Note.find_by("note LIKE 'Saepe asperiores exercitationem non dignissimos laborum reiciendis et ipsum%'")
+
+        expect(note.suggestions.count).to eq(1)
+        expect(note.suggestions.first.from_content).to eq("Original line\n")
       end
 
       context 'event at forth level of the tree' do
@@ -124,11 +180,19 @@ describe Gitlab::ImportExport::ProjectTreeRestorer do
       end
 
       it 'has project labels' do
-        expect(ProjectLabel.count).to eq(2)
+        expect(ProjectLabel.count).to eq(3)
       end
 
       it 'has no group labels' do
         expect(GroupLabel.count).to eq(0)
+      end
+
+      it 'has issue boards' do
+        expect(Project.find_by_path('project').boards.count).to eq(1)
+      end
+
+      it 'has lists associated with the issue board' do
+        expect(Project.find_by_path('project').boards.find_by_name('TestBoardABC').lists.count).to eq(3)
       end
 
       it 'has a project feature' do
@@ -166,8 +230,9 @@ describe Gitlab::ImportExport::ProjectTreeRestorer do
       end
 
       context 'tokens are regenerated' do
-        it 'has a new CI trigger token' do
-          expect(Ci::Trigger.where(token: 'cdbfasdf44a5958c83654733449e585')).to be_empty
+        it 'has new CI trigger tokens' do
+          expect(Ci::Trigger.where(token: %w[cdbfasdf44a5958c83654733449e585 33a66349b5ad01fc00174af87804e40]))
+            .to be_empty
         end
 
         it 'has a new CI build token' do
@@ -180,17 +245,17 @@ describe Gitlab::ImportExport::ProjectTreeRestorer do
           expect(@project.merge_requests.size).to eq(9)
         end
 
-        it 'has the correct number of triggers' do
+        it 'only restores valid triggers' do
           expect(@project.triggers.size).to eq(1)
         end
 
         it 'has the correct number of pipelines and statuses' do
-          expect(@project.pipelines.size).to eq(5)
+          expect(@project.ci_pipelines.size).to eq(5)
 
-          @project.pipelines.zip([2, 2, 2, 2, 2])
+          @project.ci_pipelines.zip([2, 2, 2, 2, 2])
             .each do |(pipeline, expected_status_size)|
-              expect(pipeline.statuses.size).to eq(expected_status_size)
-            end
+            expect(pipeline.statuses.size).to eq(expected_status_size)
+          end
         end
       end
 
@@ -218,44 +283,11 @@ describe Gitlab::ImportExport::ProjectTreeRestorer do
         it 'correctly restores association between a pipeline and a job' do
           expect(CommitStatus.all).to all(have_attributes(pipeline_id: a_value > 0))
         end
+
+        it 'restores a Hash for CommitStatus options' do
+          expect(CommitStatus.all.map(&:options).compact).to all(be_a(Hash))
+        end
       end
-    end
-  end
-
-  shared_examples 'restores project successfully' do
-    it 'correctly restores project' do
-      expect(shared.errors).to be_empty
-      expect(restored_project_json).to be_truthy
-    end
-  end
-
-  shared_examples 'restores project correctly' do |**results|
-    it 'has labels' do
-      expect(project.labels.size).to eq(results.fetch(:labels, 0))
-    end
-
-    it 'has label priorities' do
-      expect(project.labels.first.priorities).not_to be_empty
-    end
-
-    it 'has milestones' do
-      expect(project.milestones.size).to eq(results.fetch(:milestones, 0))
-    end
-
-    it 'has issues' do
-      expect(project.issues.size).to eq(results.fetch(:issues, 0))
-    end
-
-    it 'has issue with group label and project label' do
-      labels = project.issues.first.labels
-
-      expect(labels.where(type: "ProjectLabel").count).to eq(results.fetch(:first_issue_labels, 0))
-      expect(labels.where(type: "ProjectLabel").where.not(group_id: nil).count).to eq(0)
-    end
-
-    it 'does not set params that are excluded from import_export settings' do
-      expect(project.import_type).to be_nil
-      expect(project.creator_id).not_to eq 123
     end
   end
 
@@ -269,36 +301,36 @@ describe Gitlab::ImportExport::ProjectTreeRestorer do
       expect(project.group.milestones.size).to eq(results.fetch(:milestones, 0))
     end
 
-    it 'has issue with group label' do
-      labels = project.issues.first.labels
-
-      expect(labels.where(type: "GroupLabel").count).to eq(results.fetch(:first_issue_labels, 0))
+    it 'has the correct visibility level' do
+      # INTERNAL in the `project.json`, group's is PRIVATE
+      expect(project.visibility_level).to eq(Gitlab::VisibilityLevel::PRIVATE)
     end
   end
 
   context 'Light JSON' do
     let(:user) { create(:user) }
-    let(:shared) { project.import_export_shared }
     let!(:project) { create(:project, :builds_disabled, :issues_disabled, name: 'project', path: 'project') }
     let(:project_tree_restorer) { described_class.new(user: user, shared: shared, project: project) }
     let(:restored_project_json) { project_tree_restorer.restore }
 
     before do
-      allow(shared).to receive(:export_path).and_return('spec/lib/gitlab/import_export/')
+      allow(shared).to receive(:export_path).and_return('spec/fixtures/lib/gitlab/import_export/')
     end
 
     context 'with a simple project' do
       before do
-        project_tree_restorer.instance_variable_set(:@path, "spec/lib/gitlab/import_export/project.light.json")
+        project_tree_restorer.instance_variable_set(:@path, "spec/fixtures/lib/gitlab/import_export/project.light.json")
 
         restored_project_json
       end
 
       it_behaves_like 'restores project correctly',
                       issues: 1,
-                      labels: 1,
+                      labels: 2,
+                      label_with_priorities: 'A project label',
                       milestones: 1,
-                      first_issue_labels: 1
+                      first_issue_labels: 1,
+                      services: 1
 
       context 'project.json file access check' do
         it 'does not read a symlink' do
@@ -318,11 +350,29 @@ describe Gitlab::ImportExport::ProjectTreeRestorer do
           create(:ci_build, token: 'abcd')
         end
 
-        it_behaves_like 'restores project successfully'
+        it_behaves_like 'restores project correctly',
+                        issues: 1,
+                        labels: 2,
+                        label_with_priorities: 'A project label',
+                        milestones: 1,
+                        first_issue_labels: 1
       end
     end
 
-    context 'when the project has overriden params in import data' do
+    context 'when the project has overridden params in import data' do
+      it 'handles string versions of visibility_level' do
+        # Project needs to be in a group for visibility level comparison
+        # to happen
+        group = create(:group)
+        project.group = group
+
+        project.create_import_data(data: { override_params: { visibility_level: Gitlab::VisibilityLevel::INTERNAL.to_s } })
+
+        restored_project_json
+
+        expect(project.visibility_level).to eq(Gitlab::VisibilityLevel::INTERNAL)
+      end
+
       it 'overwrites the params stored in the JSON' do
         project.create_import_data(data: { override_params: { description: "Overridden" } })
 
@@ -336,7 +386,28 @@ describe Gitlab::ImportExport::ProjectTreeRestorer do
 
         restored_project_json
 
-        expect(project.lfs_enabled).to be_nil
+        expect(project.lfs_enabled).to be_falsey
+      end
+
+      it 'overrides project feature access levels' do
+        access_level_keys = project.project_feature.attributes.keys.select { |a| a =~ /_access_level/ }
+
+        # `pages_access_level` is not included, since it is not available in the public API
+        # and has a dependency on project's visibility level
+        # see ProjectFeature model
+        access_level_keys.delete('pages_access_level')
+
+        disabled_access_levels = Hash[access_level_keys.collect { |item| [item, 'disabled'] }]
+
+        project.create_import_data(data: { override_params: disabled_access_levels })
+
+        restored_project_json
+
+        aggregate_failures do
+          access_level_keys.each do |key|
+            expect(project.public_send(key)).to eq(ProjectFeature::DISABLED)
+          end
+        end
       end
     end
 
@@ -347,26 +418,193 @@ describe Gitlab::ImportExport::ProjectTreeRestorer do
                :issues_disabled,
                name: 'project',
                path: 'project',
-               group: create(:group))
+               group: create(:group, visibility_level: Gitlab::VisibilityLevel::PRIVATE))
       end
 
       before do
-        project_tree_restorer.instance_variable_set(:@path, "spec/lib/gitlab/import_export/project.group.json")
+        project_tree_restorer.instance_variable_set(:@path, "spec/fixtures/lib/gitlab/import_export/project.group.json")
 
         restored_project_json
       end
 
-      it_behaves_like 'restores project successfully'
       it_behaves_like 'restores project correctly',
                       issues: 2,
-                      labels: 1,
-                      milestones: 1,
+                      labels: 2,
+                      label_with_priorities: 'A project label',
+                      milestones: 2,
                       first_issue_labels: 1
 
       it_behaves_like 'restores group correctly',
-                      labels: 1,
-                      milestones: 1,
+                      labels: 0,
+                      milestones: 0,
                       first_issue_labels: 1
+
+      it 'restores issue states' do
+        expect(project.issues.with_state(:closed).count).to eq(1)
+        expect(project.issues.with_state(:opened).count).to eq(1)
+      end
+    end
+
+    context 'with existing group models' do
+      let!(:project) do
+        create(:project,
+               :builds_disabled,
+               :issues_disabled,
+               name: 'project',
+               path: 'project',
+               group: create(:group))
+      end
+
+      before do
+        project_tree_restorer.instance_variable_set(:@path, "spec/fixtures/lib/gitlab/import_export/project.light.json")
+      end
+
+      it 'does not import any templated services' do
+        restored_project_json
+
+        expect(project.services.where(template: true).count).to eq(0)
+      end
+
+      it 'imports labels' do
+        create(:group_label, name: 'Another label', group: project.group)
+
+        expect_any_instance_of(Gitlab::ImportExport::Shared).not_to receive(:error)
+
+        restored_project_json
+
+        expect(project.labels.count).to eq(1)
+      end
+
+      it 'imports milestones' do
+        create(:milestone, name: 'A milestone', group: project.group)
+
+        expect_any_instance_of(Gitlab::ImportExport::Shared).not_to receive(:error)
+
+        restored_project_json
+
+        expect(project.group.milestones.count).to eq(1)
+        expect(project.milestones.count).to eq(0)
+      end
+    end
+
+    context 'with clashing milestones on IID' do
+      let!(:project) do
+        create(:project,
+               :builds_disabled,
+               :issues_disabled,
+               name: 'project',
+               path: 'project',
+               group: create(:group))
+      end
+
+      it 'preserves the project milestone IID' do
+        project_tree_restorer.instance_variable_set(:@path, "spec/fixtures/lib/gitlab/import_export/project.milestone-iid.json")
+
+        expect_any_instance_of(Gitlab::ImportExport::Shared).not_to receive(:error)
+
+        restored_project_json
+
+        expect(project.milestones.count).to eq(2)
+        expect(Milestone.find_by_title('Another milestone').iid).to eq(1)
+        expect(Milestone.find_by_title('Group-level milestone').iid).to eq(2)
+      end
+    end
+
+    context 'with external authorization classification labels' do
+      it 'converts empty external classification authorization labels to nil' do
+        project.create_import_data(data: { override_params: { external_authorization_classification_label: "" } })
+
+        restored_project_json
+
+        expect(project.external_authorization_classification_label).to be_nil
+      end
+
+      it 'preserves valid external classification authorization labels' do
+        project.create_import_data(data: { override_params: { external_authorization_classification_label: "foobar" } })
+
+        restored_project_json
+
+        expect(project.external_authorization_classification_label).to eq("foobar")
+      end
+    end
+  end
+
+  context 'Minimal JSON' do
+    let(:project) { create(:project) }
+    let(:tree_hash) { { 'visibility_level' => visibility } }
+    let(:restorer) { described_class.new(user: nil, shared: shared, project: project) }
+
+    before do
+      expect(restorer).to receive(:read_tree_hash) { tree_hash }
+    end
+
+    context 'no group visibility' do
+      let(:visibility) { Gitlab::VisibilityLevel::PRIVATE }
+
+      it 'uses the project visibility' do
+        expect(restorer.restore).to eq(true)
+        expect(restorer.project.visibility_level).to eq(visibility)
+      end
+    end
+
+    context 'with restricted internal visibility' do
+      describe 'internal project' do
+        let(:visibility) { Gitlab::VisibilityLevel::INTERNAL }
+
+        it 'uses private visibility' do
+          stub_application_setting(restricted_visibility_levels: [Gitlab::VisibilityLevel::INTERNAL])
+
+          expect(restorer.restore).to eq(true)
+          expect(restorer.project.visibility_level).to eq(Gitlab::VisibilityLevel::PRIVATE)
+        end
+      end
+    end
+
+    context 'with group visibility' do
+      before do
+        group = create(:group, visibility_level: group_visibility)
+
+        project.update(group: group)
+      end
+
+      context 'private group visibility' do
+        let(:group_visibility) { Gitlab::VisibilityLevel::PRIVATE }
+        let(:visibility) { Gitlab::VisibilityLevel::PUBLIC }
+
+        it 'uses the group visibility' do
+          expect(restorer.restore).to eq(true)
+          expect(restorer.project.visibility_level).to eq(group_visibility)
+        end
+      end
+
+      context 'public group visibility' do
+        let(:group_visibility) { Gitlab::VisibilityLevel::PUBLIC }
+        let(:visibility) { Gitlab::VisibilityLevel::PRIVATE }
+
+        it 'uses the project visibility' do
+          expect(restorer.restore).to eq(true)
+          expect(restorer.project.visibility_level).to eq(visibility)
+        end
+      end
+
+      context 'internal group visibility' do
+        let(:group_visibility) { Gitlab::VisibilityLevel::INTERNAL }
+        let(:visibility) { Gitlab::VisibilityLevel::PUBLIC }
+
+        it 'uses the group visibility' do
+          expect(restorer.restore).to eq(true)
+          expect(restorer.project.visibility_level).to eq(group_visibility)
+        end
+
+        context 'with restricted internal visibility' do
+          it 'sets private visibility' do
+            stub_application_setting(restricted_visibility_levels: [Gitlab::VisibilityLevel::INTERNAL])
+
+            expect(restorer.restore).to eq(true)
+            expect(restorer.project.visibility_level).to eq(Gitlab::VisibilityLevel::PRIVATE)
+          end
+        end
+      end
     end
   end
 end

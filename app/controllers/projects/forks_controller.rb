@@ -1,5 +1,8 @@
+# frozen_string_literal: true
+
 class Projects::ForksController < Projects::ApplicationController
   include ContinueParams
+  include RendersMemberAccess
 
   # Authorize
   before_action :whitelist_query_limiting, only: [:create]
@@ -7,15 +10,18 @@ class Projects::ForksController < Projects::ApplicationController
   before_action :authorize_download_code!
   before_action :authenticate_user!, only: [:new, :create]
 
+  # rubocop: disable CodeReuse/ActiveRecord
   def index
-    base_query = project.forks.includes(:creator)
+    @total_forks_count    = project.forks.size
+    @public_forks_count   = project.forks.public_only.size
+    @private_forks_count  = @total_forks_count - project.forks.public_and_internal_only.size
+    @internal_forks_count = @total_forks_count - @public_forks_count - @private_forks_count
 
-    forks                = ForkProjectsFinder.new(project, params: params.merge(search: params[:filter_projects]), current_user: current_user).execute
-    @total_forks_count   = base_query.size
-    @private_forks_count = @total_forks_count - forks.size
-    @public_forks_count  = @total_forks_count - @private_forks_count
+    @forks = ForkProjectsFinder.new(project, params: params.merge(search: params[:filter_projects]), current_user: current_user).execute
+    @forks = @forks.includes(:route, :creator, :group, namespace: [:route, :owner])
+                   .page(params[:page])
 
-    @forks = forks.page(params[:page])
+    prepare_projects_for_rendering(@forks)
 
     respond_to do |format|
       format.html
@@ -27,12 +33,14 @@ class Projects::ForksController < Projects::ApplicationController
       end
     end
   end
+  # rubocop: enable CodeReuse/ActiveRecord
 
   def new
     @namespaces = current_user.manageable_namespaces
     @namespaces.delete(@project.namespace)
   end
 
+  # rubocop: disable CodeReuse/ActiveRecord
   def create
     namespace = Namespace.find(params[:namespace_key])
 
@@ -41,22 +49,19 @@ class Projects::ForksController < Projects::ApplicationController
 
     @forked_project ||= ::Projects::ForkService.new(project, current_user, namespace: namespace).execute
 
-    if @forked_project.saved? && @forked_project.forked?
-      if @forked_project.import_in_progress?
-        redirect_to project_import_path(@forked_project, continue: continue_params)
-      else
-        if continue_params
-          redirect_to continue_params[:to], notice: continue_params[:notice]
-        else
-          redirect_to project_path(@forked_project), notice: "The project '#{@forked_project.name}' was successfully forked."
-        end
-      end
-    else
+    if !@forked_project.saved? || !@forked_project.forked?
       render :error
+    elsif @forked_project.import_in_progress?
+      redirect_to project_import_path(@forked_project, continue: continue_params)
+    elsif continue_params[:to]
+      redirect_to continue_params[:to], notice: continue_params[:notice]
+    else
+      redirect_to project_path(@forked_project), notice: "The project '#{@forked_project.name}' was successfully forked."
     end
   end
+  # rubocop: enable CodeReuse/ActiveRecord
 
   def whitelist_query_limiting
-    Gitlab::QueryLimiting.whitelist('https://gitlab.com/gitlab-org/gitlab-ce/issues/42335')
+    Gitlab::QueryLimiting.whitelist('https://gitlab.com/gitlab-org/gitlab-foss/issues/42335')
   end
 end

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module LegacyGithubImport
     class UserFormatter
@@ -23,14 +25,15 @@ module Gitlab
       end
 
       def find_by_email
-        return nil unless email
+        return unless email
 
         User.find_by_any_email(email)
             .try(:id)
       end
 
+      # rubocop: disable CodeReuse/ActiveRecord
       def find_by_external_uid
-        return nil unless id
+        return unless id
 
         identities = ::Identity.arel_table
 
@@ -40,6 +43,7 @@ module Gitlab
             .first
             .try(:id)
       end
+      # rubocop: enable CodeReuse/ActiveRecord
     end
   end
 end

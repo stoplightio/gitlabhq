@@ -1,7 +1,10 @@
+# frozen_string_literal: true
+
 class UsersController < ApplicationController
   include RoutableActions
   include RendersMemberAccess
   include ControllerWithCrossProjectAccessCheck
+  include Gitlab::NoteableMetadata
 
   requires_cross_project_access show: false,
                                 groups: false,
@@ -12,7 +15,10 @@ class UsersController < ApplicationController
                                 calendar_activities: true
 
   skip_before_action :authenticate_user!
+  prepend_before_action(only: [:show]) { authenticate_sessionless_user!(:rss) }
   before_action :user, except: [:exists]
+  before_action :authorize_read_user_profile!,
+                only: [:calendar, :calendar_activities, :groups, :projects, :contributed_projects, :starred_projects, :snippets]
 
   def show
     respond_to do |format|
@@ -25,8 +31,14 @@ class UsersController < ApplicationController
 
       format.json do
         load_events
-        pager_json("events/_events", @events.count)
+        pager_json("events/_events", @events.count, events: @events)
       end
+    end
+  end
+
+  def activity
+    respond_to do |format|
+      format.html { render 'show' }
     end
   end
 
@@ -46,25 +58,30 @@ class UsersController < ApplicationController
   def projects
     load_projects
 
-    respond_to do |format|
-      format.html { render 'show' }
-      format.json do
-        render json: {
-          html: view_to_html_string("shared/projects/_list", projects: @projects)
-        }
-      end
-    end
+    present_projects(@projects)
   end
 
   def contributed
     load_contributed_projects
 
+    present_projects(@contributed_projects)
+  end
+
+  def starred
+    load_starred_projects
+
+    present_projects(@starred_projects)
+  end
+
+  def present_projects(projects)
+    skip_pagination = Gitlab::Utils.to_boolean(params[:skip_pagination])
+    skip_namespace = Gitlab::Utils.to_boolean(params[:skip_namespace])
+    compact_mode = Gitlab::Utils.to_boolean(params[:compact_mode])
+
     respond_to do |format|
       format.html { render 'show' }
       format.json do
-        render json: {
-          html: view_to_html_string("shared/projects/_list", projects: @contributed_projects)
-        }
+        pager_json("shared/projects/_list", projects.count, projects: projects, skip_pagination: skip_pagination, skip_namespace: skip_namespace, compact_mode: compact_mode)
       end
     end
   end
@@ -107,6 +124,10 @@ class UsersController < ApplicationController
     ContributedProjectsFinder.new(user).execute(current_user)
   end
 
+  def starred_projects
+    StarredProjectsFinder.new(user, current_user: current_user).execute
+  end
+
   def contributions_calendar
     @contributions_calendar ||= Gitlab::ContributionsCalendar.new(user, current_user)
   end
@@ -121,6 +142,7 @@ class UsersController < ApplicationController
     @projects =
       PersonalProjectsFinder.new(user).execute(current_user)
       .page(params[:page])
+      .per(params[:limit])
 
     prepare_projects_for_rendering(@projects)
   end
@@ -131,6 +153,12 @@ class UsersController < ApplicationController
     prepare_projects_for_rendering(@contributed_projects)
   end
 
+  def load_starred_projects
+    @starred_projects = starred_projects
+
+    prepare_projects_for_rendering(@starred_projects)
+  end
+
   def load_groups
     @groups = JoinedGroupsFinder.new(user).execute(current_user)
 
@@ -138,14 +166,21 @@ class UsersController < ApplicationController
   end
 
   def load_snippets
-    @snippets = SnippetsFinder.new(
-      current_user,
-      author: user,
-      scope: params[:scope]
-    ).execute.page(params[:page])
+    @snippets = SnippetsFinder.new(current_user, author: user, scope: params[:scope])
+      .execute
+      .page(params[:page])
+      .inc_author
+
+    @noteable_meta_data = noteable_meta_data(@snippets, 'Snippet')
   end
 
   def build_canonical_path(user)
     url_for(safe_params.merge(username: user.to_param))
   end
+
+  def authorize_read_user_profile!
+    access_denied! unless can?(current_user, :read_user_profile, user)
+  end
 end
+
+UsersController.prepend_if_ee('EE::UsersController')

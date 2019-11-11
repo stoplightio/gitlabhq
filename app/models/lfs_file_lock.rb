@@ -1,4 +1,6 @@
-class LfsFileLock < ActiveRecord::Base
+# frozen_string_literal: true
+
+class LfsFileLock < ApplicationRecord
   belongs_to :project
   belongs_to :user
 

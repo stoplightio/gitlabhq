@@ -1,6 +1,8 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
-feature 'Diff file viewer', :js do
+describe 'Diff file viewer', :js do
   let(:project) { create(:project, :public, :repository) }
 
   def visit_commit(sha, anchor: nil)
@@ -24,7 +26,7 @@ feature 'Diff file viewer', :js do
 
   context 'Ruby file (stored in LFS)' do
     before do
-      project.add_master(project.creator)
+      project.add_maintainer(project.creator)
 
       @commit_id = Files::CreateService.new(
         project,

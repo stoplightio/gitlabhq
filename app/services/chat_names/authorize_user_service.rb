@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module ChatNames
   class AuthorizeUserService
     include Gitlab::Routing
@@ -22,16 +24,16 @@ module ChatNames
     end
 
     def chat_name_token
-      Gitlab::ChatNameToken.new
+      @chat_name_token ||= Gitlab::ChatNameToken.new
     end
 
     def chat_name_params
       {
-        service_id: @service.id,
-        team_id: @params[:team_id],
+        service_id:  @service.id,
+        team_id:     @params[:team_id],
         team_domain: @params[:team_domain],
-        chat_id: @params[:user_id],
-        chat_name: @params[:user_name]
+        chat_id:     @params[:user_id],
+        chat_name:   @params[:user_name]
       }
     end
   end

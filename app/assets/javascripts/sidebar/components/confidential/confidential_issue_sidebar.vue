@@ -5,6 +5,7 @@ import tooltip from '~/vue_shared/directives/tooltip';
 import Icon from '~/vue_shared/components/icon.vue';
 import eventHub from '~/sidebar/event_hub';
 import editForm from './edit_form.vue';
+import recaptchaModalImplementor from '~/vue_shared/mixins/recaptcha_modal_implementor';
 
 export default {
   components: {
@@ -14,6 +15,7 @@ export default {
   directives: {
     tooltip,
   },
+  mixins: [recaptchaModalImplementor],
   props: {
     isConfidential: {
       required: true,
@@ -54,13 +56,14 @@ export default {
     updateConfidentialAttribute(confidential) {
       this.service
         .update('issue', { confidential })
-        .then(() => location.reload())
-        .catch(() => {
-          Flash(
-            __(
-              'Something went wrong trying to change the confidentiality of this issue',
-            ),
-          );
+        .then(({ data }) => this.checkForSpam(data))
+        .then(() => window.location.reload())
+        .catch(error => {
+          if (error.name === 'SpamError') {
+            this.openRecaptcha();
+          } else {
+            Flash(__('Something went wrong trying to change the confidentiality of this issue'));
+          }
         });
     },
   },
@@ -70,25 +73,27 @@ export default {
 <template>
   <div class="block issuable-sidebar-item confidentiality">
     <div
-      class="sidebar-collapsed-icon"
-      @click="toggleForm"
+      ref="collapseIcon"
       v-tooltip
+      :title="tooltipLabel"
+      class="sidebar-collapsed-icon"
       data-container="body"
       data-placement="left"
       data-boundary="viewport"
-      :title="tooltipLabel"
+      @click="toggleForm"
     >
-      <icon
-        :name="confidentialityIcon"
-        aria-hidden="true"
-      />
+      <icon :name="confidentialityIcon" aria-hidden="true" />
     </div>
     <div class="title hide-collapsed">
       {{ __('Confidentiality') }}
       <a
         v-if="isEditable"
+        ref="editLink"
         class="float-right confidential-edit"
         href="#"
+        data-track-event="click_edit_button"
+        data-track-label="right_sidebar"
+        data-track-property="confidentiality"
         @click.prevent="toggleForm"
       >
         {{ __('Edit') }}
@@ -100,28 +105,21 @@ export default {
         :is-confidential="isConfidential"
         :update-confidential-attribute="updateConfidentialAttribute"
       />
-      <div
-        v-if="!isConfidential"
-        class="no-value sidebar-item-value">
-        <icon
-          name="eye"
-          :size="16"
-          aria-hidden="true"
-          class="sidebar-item-icon inline"
-        />
+      <div v-if="!isConfidential" class="no-value sidebar-item-value">
+        <icon :size="16" name="eye" aria-hidden="true" class="sidebar-item-icon inline" />
         {{ __('Not confidential') }}
       </div>
-      <div
-        v-else
-        class="value sidebar-item-value hide-collapsed">
+      <div v-else class="value sidebar-item-value hide-collapsed">
         <icon
-          name="eye-slash"
           :size="16"
+          name="eye-slash"
           aria-hidden="true"
           class="sidebar-item-icon inline is-active"
         />
         {{ __('This issue is confidential') }}
       </div>
     </div>
+
+    <recaptcha-modal v-if="showRecaptcha" :html="recaptchaHTML" @close="closeRecaptcha" />
   </div>
 </template>

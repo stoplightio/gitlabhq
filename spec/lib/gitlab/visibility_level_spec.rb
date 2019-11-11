@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Gitlab::VisibilityLevel do
@@ -83,6 +85,14 @@ describe Gitlab::VisibilityLevel do
 
       expect(described_class.closest_allowed_level(described_class::PUBLIC))
         .to eq(described_class::PRIVATE)
+    end
+  end
+
+  describe '.valid_level?' do
+    it 'returns true when visibility is valid' do
+      expect(described_class.valid_level?(described_class::PRIVATE)).to be_truthy
+      expect(described_class.valid_level?(described_class::INTERNAL)).to be_truthy
+      expect(described_class.valid_level?(described_class::PUBLIC)).to be_truthy
     end
   end
 end

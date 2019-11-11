@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module FogbugzImport
     class ProjectCreator
@@ -18,7 +20,7 @@ module Gitlab
           path: repo.path,
           namespace: namespace,
           creator: current_user,
-          visibility_level: Gitlab::VisibilityLevel::INTERNAL,
+          visibility_level: Gitlab::VisibilityLevel::PRIVATE,
           import_type: 'fogbugz',
           import_source: repo.name,
           import_url: Project::UNKNOWN_IMPORT_URL,

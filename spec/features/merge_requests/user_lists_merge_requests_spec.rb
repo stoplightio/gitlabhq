@@ -1,4 +1,6 @@
-require 'rails_helper'
+# frozen_string_literal: true
+
+require 'spec_helper'
 
 describe 'Merge requests > User lists merge requests' do
   include MergeRequestHelpers
@@ -12,16 +14,16 @@ describe 'Merge requests > User lists merge requests' do
                   title: 'fix',
                   source_project: project,
                   source_branch: 'fix',
-                  assignee: user,
-                  milestone: create(:milestone, due_date: '2013-12-11'),
+                  assignees: [user],
+                  milestone: create(:milestone, project: project, due_date: '2013-12-11'),
                   created_at: 1.minute.ago,
                   updated_at: 1.minute.ago)
     create(:merge_request,
            title: 'markdown',
            source_project: project,
            source_branch: 'markdown',
-           assignee: user,
-           milestone: create(:milestone, due_date: '2013-12-12'),
+           assignees: [user],
+           milestone: create(:milestone, project: project, due_date: '2013-12-12'),
            created_at: 2.minutes.ago,
            updated_at: 2.minutes.ago)
     create(:merge_request,
@@ -33,7 +35,7 @@ describe 'Merge requests > User lists merge requests' do
   end
 
   it 'filters on no assignee' do
-    visit_merge_requests(project, assignee_id: IssuableFinder::NONE)
+    visit_merge_requests(project, assignee_id: IssuableFinder::FILTER_NONE)
 
     expect(current_path).to eq(project_merge_requests_path(project))
     expect(page).to have_content 'merge-test'

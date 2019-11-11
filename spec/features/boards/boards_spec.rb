@@ -1,4 +1,6 @@
-require 'rails_helper'
+# frozen_string_literal: true
+
+require 'spec_helper'
 
 describe 'Issue Boards', :js do
   include DragTo
@@ -11,8 +13,8 @@ describe 'Issue Boards', :js do
   let!(:user2)  { create(:user) }
 
   before do
-    project.add_master(user)
-    project.add_master(user2)
+    project.add_maintainer(user)
+    project.add_maintainer(user2)
 
     set_cookie('sidebar_collapsed', 'true')
 
@@ -44,7 +46,7 @@ describe 'Issue Boards', :js do
     end
 
     it 'creates default lists' do
-      lists = ['Backlog', 'To Do', 'Doing', 'Closed']
+      lists = ['Open', 'To Do', 'Doing', 'Closed']
 
       page.within(find('.board-blank-state')) do
         click_button('Add default lists')
@@ -68,7 +70,7 @@ describe 'Issue Boards', :js do
     let(:bug)         { create(:label, project: project, name: 'Bug') }
     let!(:backlog)    { create(:label, project: project, name: 'Backlog') }
     let!(:closed)       { create(:label, project: project, name: 'Closed') }
-    let!(:accepting)  { create(:label, project: project, name: 'Accepting Merge Requests') }
+    let!(:accepting) { create(:label, project: project, name: 'Accepting Merge Requests') }
     let!(:a_plus) { create(:label, project: project, name: 'A+') }
 
     let!(:list1) { create(:list, board: board, label: planning, position: 0) }
@@ -97,7 +99,7 @@ describe 'Issue Boards', :js do
       expect(find('.board:nth-child(4)')).to have_selector('.board-card')
     end
 
-    it 'shows description tooltip on list title' do
+    it 'shows description tooltip on list title', :quarantine do
       page.within('.board:nth-child(2)') do
         expect(find('.board-title span.has-tooltip')[:title]).to eq('Test')
       end
@@ -232,9 +234,24 @@ describe 'Issue Boards', :js do
 
         expect(find('.board:nth-child(2)')).to have_content(development.title)
         expect(find('.board:nth-child(2)')).to have_content(planning.title)
+
+        # Make sure list positions are preserved after a reload
+        visit project_board_path(project, board)
+
+        expect(find('.board:nth-child(2)')).to have_content(development.title)
+        expect(find('.board:nth-child(2)')).to have_content(planning.title)
       end
 
-      it 'issue moves between lists' do
+      it 'dragging does not duplicate list' do
+        selector = '.board:not(.is-ghost) .board-header'
+        expect(page).to have_selector(selector, text: development.title, count: 1)
+
+        drag(list_from_index: 2, list_to_index: 1, selector: '.board-header', perform_drop: false)
+
+        expect(page).to have_selector(selector, text: development.title, count: 1)
+      end
+
+      it 'issue moves between lists and does not show the "Development" label since the card is in the "Development" list label' do
         drag(list_from_index: 1, from_index: 1, list_to_index: 2)
 
         wait_for_board_cards(2, 7)
@@ -242,10 +259,10 @@ describe 'Issue Boards', :js do
         wait_for_board_cards(4, 1)
 
         expect(find('.board:nth-child(3)')).to have_content(issue6.title)
-        expect(find('.board:nth-child(3)').all('.board-card').last).to have_content(development.title)
+        expect(find('.board:nth-child(3)').all('.board-card').last).not_to have_content(development.title)
       end
 
-      it 'issue moves between lists' do
+      it 'issue moves between lists and does not show the "Planning" label since the card is in the "Planning" list label' do
         drag(list_from_index: 2, list_to_index: 1)
 
         wait_for_board_cards(2, 9)
@@ -253,7 +270,7 @@ describe 'Issue Boards', :js do
         wait_for_board_cards(4, 1)
 
         expect(find('.board:nth-child(2)')).to have_content(issue7.title)
-        expect(find('.board:nth-child(2)').all('.board-card').first).to have_content(planning.title)
+        expect(find('.board:nth-child(2)').all('.board-card').first).not_to have_content(planning.title)
       end
 
       it 'issue moves from closed' do
@@ -345,7 +362,7 @@ describe 'Issue Boards', :js do
 
           click_link 'Create project label'
 
-          fill_in('new_label_name', with: 'Testing New Label')
+          fill_in('new_label_name', with: 'Testing New Label - with list')
 
           first('.suggest-colors a').click
 
@@ -411,7 +428,7 @@ describe 'Issue Boards', :js do
         wait_for_empty_boards((2..4))
       end
 
-      it 'filters by label with space after reload' do
+      it 'filters by label with space after reload', :quarantine do
         set_filter("label", "\"#{accepting.title}")
         click_filter_link(accepting.title)
         submit_filter
@@ -477,7 +494,7 @@ describe 'Issue Boards', :js do
         end
       end
 
-      it 'filters by multiple labels' do
+      it 'filters by multiple labels', :quarantine do
         set_filter("label", testing.title)
         click_filter_link(testing.title)
 
@@ -574,7 +591,7 @@ describe 'Issue Boards', :js do
     end
   end
 
-  def drag(selector: '.board-list', list_from_index: 0, from_index: 0, to_index: 0, list_to_index: 0)
+  def drag(selector: '.board-list', list_from_index: 0, from_index: 0, to_index: 0, list_to_index: 0, perform_drop: true)
     # ensure there is enough horizontal space for four boards
     resize_window(2000, 800)
 
@@ -583,7 +600,8 @@ describe 'Issue Boards', :js do
             list_from_index: list_from_index,
             from_index: from_index,
             to_index: to_index,
-            list_to_index: list_to_index)
+            list_to_index: list_to_index,
+            perform_drop: perform_drop)
   end
 
   def wait_for_board_cards(board_number, expected_cards)

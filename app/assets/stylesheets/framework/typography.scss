@@ -1,13 +1,44 @@
-@mixin md-typography {
+/**
+ * Apply Markup (Markdown/AsciiDoc) typography
+ *
+ */
+.md {
   color: $gl-text-color;
   word-wrap: break-word;
 
-  [dir="auto"] {
+  [dir='auto'] {
     text-align: initial;
   }
 
+  *:first-child {
+    margin-top: 0;
+  }
+
+  > :last-child {
+    margin-bottom: 0;
+  }
+
+  p {
+    color: $gl-text-color;
+    margin: 0 0 16px;
+
+    > code {
+      font-weight: inherit;
+    }
+
+    a:not(.no-attachment-icon) img {
+      // Remove bottom padding because
+      // <p> already has $gl-padding bottom
+      margin-bottom: 0;
+    }
+  }
+
   a {
-    color: $md-link-color;
+    color: $blue-600;
+
+    > code {
+      color: $blue-600;
+    }
   }
 
   img:not(.emoji) {
@@ -28,32 +59,24 @@
     max-width: 100%;
   }
 
-  p a:not(.no-attachment-icon) img {
-    // Remove bottom padding because
-    // <p> already has $gl-padding bottom
-    margin-bottom: 0;
+  &:not(.md-file) img:not(.emoji) {
+    border: 1px solid $white-normal;
+    padding: 5px;
+    margin: 5px 0;
+    // Ensure that image does not exceed viewport
+    max-height: calc(100vh - 100px);
   }
 
-  *:first-child:not(.katex-display) {
-    margin-top: 0;
-  }
-
-  > :last-child {
-    margin-bottom: 0;
+  details {
+    margin-bottom: $gl-padding;
   }
 
   // Single code lines should wrap
   code {
-    font-family: $monospace_font;
+    font-family: $monospace-font;
     white-space: pre-wrap;
     word-wrap: normal;
-  }
-
-  // Multi-line code blocks should scroll horizontally
-  pre {
-    code {
-      white-space: pre;
-    }
+    word-break: keep-all;
   }
 
   kbd {
@@ -61,12 +84,12 @@
     padding: 3px 5px;
     font-size: 11px;
     line-height: 10px;
-    color: $kdb-color;
+    color: $gl-gray-700;
     vertical-align: middle;
     background-color: $kdb-bg;
     border-width: 1px;
     border-style: solid;
-    border-color: $kdb-border $kdb-border $kdb-border-bottom;
+    border-color: $gl-gray-200 $gl-gray-200 $kdb-border-bottom;
     border-image: none;
     border-radius: 3px;
     box-shadow: 0 -1px 0 $kdb-shadow inset;
@@ -138,19 +161,169 @@
     }
   }
 
-  p {
-    color: $gl-text-color;
-    margin: 0 0 16px;
+  hr {
+    // Darken 'whitesmoke' a bit to make it more visible in note bodies
+    border-color: darken($gray-normal, 8%);
+    margin: 10px 0;
   }
 
-  table {
+  table:not(.code) {
     @extend .table;
     @extend .table-bordered;
     margin: 16px 0;
     color: $gl-text-color;
+    border: 0;
+    width: auto;
+    display: block;
+    overflow-x: auto;
 
-    th {
-      background: $label-gray-bg;
+    tbody {
+      background-color: $white-light;
+    }
+
+    tr {
+      th {
+        border-bottom: solid 2px $gl-gray-200;
+      }
+
+      td {
+        border-color: $gl-gray-200;
+      }
+    }
+
+    &.grid-none {
+      > thead > tr {
+        > th {
+          border-bottom-width: 0;
+          border-right-width: 0;
+          border-left-width: 0;
+
+          &:first-child {
+            border-left-width: 1px;
+          }
+
+          &:last-child {
+            border-right-width: 1px;
+          }
+        }
+      }
+
+      > tbody {
+        > tr > td {
+          border-width: 0;
+
+          &:first-child {
+            border-left-width: 1px;
+          }
+
+          &:last-child {
+            border-right-width: 1px;
+          }
+        }
+
+        > tr:last-child > td {
+          border-bottom-width: 1px;
+        }
+      }
+    }
+
+
+    &.grid-rows {
+      > thead > tr > th,
+      > tbody > tr > td {
+        border-right-width: 0;
+        border-left-width: 0;
+      }
+
+      > thead > tr {
+        > th:first-child {
+          border-left-width: 1px;
+        }
+
+        > th:last-child {
+          border-right-width: 1px;
+        }
+      }
+
+      > tbody > tr {
+        > td {
+          border-left-width: 0;
+          border-right-width: 0;
+        }
+
+        > td:first-child {
+          border-left-width: 1px;
+        }
+
+        > td:last-child {
+          border-right-width: 1px;
+        }
+      }
+    }
+
+    &.grid-cols {
+      > thead > tr > th {
+        border-bottom-width: 0;
+      }
+
+      > tbody > tr > td {
+        border-top-width: 0;
+        border-bottom-width: 0;
+      }
+
+      > tbody > tr:last-child > td {
+        border-bottom-width: 1px;
+      }
+    }
+
+    &.frame-sides {
+      > thead > tr > th {
+        border-top-width: 0;
+      }
+
+      > tbody > tr:last-child > td {
+        border-bottom-width: 0;
+      }
+    }
+
+    &.frame-topbot,
+    &.frame-ends {
+      > thead > tr > th:first-child,
+      > tbody > tr > td:first-child {
+        border-left-width: 0;
+      }
+
+      > thead > tr > th:last-child,
+      > tbody > tr > td:last-child {
+        border-right-width: 0;
+      }
+    }
+
+    &.frame-none {
+      > thead > tr > th {
+        border-top-width: 0;
+      }
+
+      > tbody > tr:last-child > td {
+        border-bottom-width: 0;
+      }
+
+      > thead > tr > th:first-child,
+      > tbody > tr > td:first-child {
+        border-left-width: 0;
+      }
+
+      > thead > tr > th:last-child,
+      > tbody > tr > td:last-child {
+        border-right-width: 0;
+      }
+    }
+
+    &.stripes-all tr,
+    &.stripes-odd tr:nth-of-type(odd),
+    &.stripes-even tr:nth-of-type(even),
+    &.stripes-hover tr:hover {
+      background: $gray-light;
     }
   }
 
@@ -165,6 +338,10 @@
     overflow-x: auto;
     border-radius: 2px;
 
+    // Multi-line code blocks should scroll horizontally
+    code {
+      white-space: pre;
+    }
 
     &.plain-readme {
       background: none;
@@ -175,10 +352,6 @@
     }
   }
 
-  p > code {
-    font-weight: inherit;
-  }
-
   dd {
     margin-left: $gl-padding;
   }
@@ -187,11 +360,43 @@
   ol {
     padding: 0;
     margin: 0 0 16px;
+
+    ul,
+    ol {
+      margin-bottom: 0;
+    }
   }
 
   ul:dir(rtl),
   ol:dir(rtl) {
     margin: 3px 28px 3px 0 !important;
+  }
+
+  > ul {
+    list-style-type: disc;
+
+    ul {
+      list-style-type: circle;
+
+      ul {
+        list-style-type: square;
+      }
+    }
+  }
+
+  ul.checklist,
+  ul.none,
+  ol.none,
+  ul.no-bullet,
+  ol.no-bullet,
+  ol.unnumbered,
+  ul.unstyled,
+  ol.unstyled {
+    list-style-type: none;
+
+    li {
+      margin-left: 0;
+    }
   }
 
   li {
@@ -222,8 +427,8 @@
     }
   }
 
-  a[href*="/uploads/"],
-  a[href*="storage.googleapis.com/google-code-attachments/"] {
+  a[href*='/uploads/'],
+  a[href*='storage.googleapis.com/google-code-attachments/'] {
     &::before {
       margin-right: 4px;
 
@@ -231,17 +436,17 @@
       font-size: inherit;
       text-rendering: auto;
       -webkit-font-smoothing: antialiased;
-      content: "\f0c6";
+      content: '\f0c6';
     }
 
     &:hover::before {
       text-decoration: none;
     }
-  }
 
-  a.no-attachment-icon {
-    &::before {
-      display: none;
+    &.no-attachment-icon {
+      &::before {
+        display: none;
+      }
     }
   }
 
@@ -270,8 +475,66 @@
       visibility: visible;
     }
   }
-}
 
+  .big {
+    font-size: larger;
+  }
+
+  .small {
+    font-size: smaller;
+  }
+
+  .underline {
+    text-decoration: underline;
+  }
+
+  .overline {
+    text-decoration: overline;
+  }
+
+  .line-through {
+    text-decoration: line-through;
+  }
+
+  .admonitionblock td.icon {
+    width: 1%;
+
+    [class^='fa icon-'] {
+      @extend .fa-2x;
+    }
+
+    .icon-note {
+      @extend .fa-thumb-tack;
+    }
+
+    .icon-tip {
+      @extend .fa-lightbulb-o;
+    }
+
+    .icon-warning {
+      @extend .fa-exclamation-triangle;
+    }
+
+    .icon-caution {
+      @extend .fa-fire;
+    }
+
+    .icon-important {
+      @extend .fa-exclamation-circle;
+    }
+  }
+
+  .metrics-embed {
+    h3.popover-header {
+      /** Override <h3> .popover-header
+      * as embed metrics do not follow the same
+      * style as default md <h3> (which are deeply nested)
+      */
+      margin: 0;
+      font-size: $gl-font-size-small;
+    }
+  }
+}
 
 /**
  * Headers
@@ -282,7 +545,7 @@ body {
 }
 
 .page-title {
-  margin-top: $gl-padding;
+  margin: #{2 * $grid-size} 0;
   line-height: 1.3;
   font-size: 1.25em;
   font-weight: $gl-font-weight-bold;
@@ -298,11 +561,10 @@ body {
 }
 
 .page-title-empty {
-  margin-top: 0;
+  margin: 12px 0;
   line-height: 1.3;
   font-size: 1.25em;
   font-weight: $gl-font-weight-bold;
-  margin: 12px 0;
 }
 
 h1,
@@ -321,9 +583,9 @@ h6 {
 
 /** CODE **/
 pre {
-  font-family: $monospace_font;
+  font-family: $monospace-font;
   display: block;
-  padding: $gl-padding-8;
+  padding: $gl-padding-8 $input-horizontal-padding;
   margin: 0 0 $gl-padding-8;
   font-size: 13px;
   word-break: break-all;
@@ -342,7 +604,7 @@ code {
 }
 
 .monospace {
-  font-family: $monospace_font;
+  font-family: $monospace-font;
 }
 
 .weight-normal {
@@ -350,29 +612,15 @@ code {
 }
 
 .commit-sha,
-.ref-name {
+.ref-name,
+.pipeline-number {
   @extend .monospace;
   font-size: 95%;
 }
 
-.git-revision-dropdown-toggle {
-  @extend .monospace;
-}
-
 .git-revision-dropdown .dropdown-content ul li a {
   @extend .ref-name;
-}
-
-/**
- * Apply Markdown typography
- *
- */
-.wiki {
-  @include md-typography;
-}
-
-.md {
-  @include md-typography;
+  word-break: break-all;
 }
 
 /**
@@ -380,7 +628,7 @@ code {
  *
  */
 textarea.js-gfm-input {
-  font-family: $monospace_font;
+  font-family: $monospace-font;
   font-size: 13px;
 }
 
@@ -415,27 +663,35 @@ h4 {
 /**
  * form text input i.e. search bar, comments, forms, etc.
  */
+/* stylelint-disable selector-no-vendor-prefix  */
 input,
 textarea {
   &::-webkit-input-placeholder {
-    color: $placeholder-text-color;
+    color: $gl-text-color-tertiary;
   }
 
   // support firefox 19+ vendor prefix
   &::-moz-placeholder {
-    color: $placeholder-text-color;
+    color: $gl-text-color-tertiary;
     opacity: 1; // FF defaults to 0.54
   }
 
   // scss-lint:disable PseudoElement
   // support Edge vendor prefix
   &::-ms-input-placeholder {
-    color: $placeholder-text-color;
+    color: $gl-text-color-tertiary;
   }
 
   // scss-lint:disable PseudoElement
   // support IE vendor prefix
   &:-ms-input-placeholder {
-    color: $placeholder-text-color;
+    color: $gl-text-color-tertiary;
   }
+}
+/* stylelint-enable */
+
+.lh-100 { line-height: 1; }
+
+wbr {
+  display: inline-block;
 }

@@ -14,10 +14,8 @@ module Rack
 end
 
 gitlab_trusted_proxies = Array(Gitlab.config.gitlab.trusted_proxies).map do |proxy|
-  begin
-    IPAddr.new(proxy)
-  rescue IPAddr::InvalidAddressError
-  end
+  IPAddr.new(proxy)
+rescue IPAddr::InvalidAddressError
 end.compact
 
 Rails.application.config.action_dispatch.trusted_proxies = (
@@ -26,12 +24,10 @@ Rails.application.config.action_dispatch.trusted_proxies = (
 # A monkey patch to make trusted proxies work with Rails 5.0.
 # Inspired by https://github.com/rails/rails/issues/5223#issuecomment-263778719
 # Remove this monkey patch when upstream is fixed.
-if Gitlab.rails5?
-  module TrustedProxyMonkeyPatch
-    def ip
-      @ip ||= (get_header("action_dispatch.remote_ip") || super).to_s
-    end
+module TrustedProxyMonkeyPatch
+  def ip
+    @ip ||= (get_header("action_dispatch.remote_ip") || super).to_s
   end
-
-  ActionDispatch::Request.send(:include, TrustedProxyMonkeyPatch)
 end
+
+ActionDispatch::Request.send(:include, TrustedProxyMonkeyPatch)

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module API
   class Groups < Grape::API
     include PaginationParams
@@ -5,24 +7,9 @@ module API
 
     before { authenticate_non_get! }
 
+    helpers Helpers::GroupsHelpers
+
     helpers do
-      params :optional_params_ce do
-        optional :description, type: String, desc: 'The description of the group'
-        optional :visibility, type: String,
-                              values: Gitlab::VisibilityLevel.string_values,
-                              default: Gitlab::VisibilityLevel.string_level(
-                                Gitlab::CurrentSettings.current_application_settings.default_group_visibility),
-                              desc: 'The visibility of the group'
-        optional :lfs_enabled, type: Boolean, desc: 'Enable/disable LFS for the projects in this group'
-        optional :request_access_enabled, type: Boolean, desc: 'Allow users to request member access'
-        optional :share_with_group_lock, type: Boolean, desc: 'Prevent sharing a project with another group within this group'
-        optional :avatar, type: File, desc: 'Avatar image for group'
-      end
-
-      params :optional_params do
-        use :optional_params_ce
-      end
-
       params :statistics_params do
         optional :statistics, type: Boolean, default: false, desc: 'Include project statistics'
       end
@@ -33,13 +20,15 @@ module API
         optional :all_available, type: Boolean, desc: 'Show all group that you have access to'
         optional :search, type: String, desc: 'Search for a specific group'
         optional :owned, type: Boolean, default: false, desc: 'Limit by owned by authenticated user'
-        optional :order_by, type: String, values: %w[name path], default: 'name', desc: 'Order by name or path'
+        optional :order_by, type: String, values: %w[name path id], default: 'name', desc: 'Order by name, path or id'
         optional :sort, type: String, values: %w[asc desc], default: 'asc', desc: 'Sort by asc (ascending) or desc (descending)'
+        optional :min_access_level, type: Integer, values: Gitlab::Access.all_values, desc: 'Minimum access level of authenticated user'
         use :pagination
       end
 
+      # rubocop: disable CodeReuse/ActiveRecord
       def find_groups(params, parent_id = nil)
-        find_params = params.slice(:all_available, :custom_attributes, :owned)
+        find_params = params.slice(:all_available, :custom_attributes, :owned, :min_access_level)
         find_params[:parent] = find_group!(parent_id) if parent_id
         find_params[:all_available] =
           find_params.fetch(:all_available, current_user&.full_private_access?)
@@ -47,14 +36,46 @@ module API
         groups = GroupsFinder.new(current_user, find_params).execute
         groups = groups.search(params[:search]) if params[:search].present?
         groups = groups.where.not(id: params[:skip_groups]) if params[:skip_groups].present?
-        groups = groups.reorder(params[:order_by] => params[:sort])
+        order_options = { params[:order_by] => params[:sort] }
+        order_options["id"] ||= "asc"
+        groups = groups.reorder(order_options)
 
         groups
+      end
+      # rubocop: enable CodeReuse/ActiveRecord
+
+      def create_group
+        # This is a separate method so that EE can extend its behaviour, without
+        # having to modify this code directly.
+        ::Groups::CreateService
+          .new(current_user, declared_params(include_missing: false))
+          .execute
+      end
+
+      def update_group(group)
+        # This is a separate method so that EE can extend its behaviour, without
+        # having to modify this code directly.
+        ::Groups::UpdateService
+          .new(group, current_user, declared_params(include_missing: false))
+          .execute
       end
 
       def find_group_projects(params)
         group = find_group!(params[:id])
-        projects = GroupProjectsFinder.new(group: group, current_user: current_user, params: project_finder_params).execute
+        options = {
+          only_owned: !params[:with_shared],
+          include_subgroups: params[:include_subgroups]
+        }
+
+        projects = GroupProjectsFinder.new(
+          group: group,
+          current_user: current_user,
+          params: project_finder_params,
+          options: options
+        ).execute
+        projects = projects.with_issues_available_for_user(current_user) if params[:with_issues_enabled]
+        projects = projects.with_merge_requests_enabled if params[:with_merge_requests_enabled]
+        projects = projects.visible_to_user_and_access_level(current_user, params[:min_access_level]) if params[:min_access_level]
         projects = reorder_projects(projects)
         paginate(projects)
       end
@@ -94,10 +115,7 @@ module API
       params do
         requires :name, type: String, desc: 'The name of the group'
         requires :path, type: String, desc: 'The path of the group'
-
-        if ::Group.supports_nested_groups?
-          optional :parent_id, type: Integer, desc: 'The parent group id for creating nested group'
-        end
+        optional :parent_id, type: Integer, desc: 'The parent group id for creating nested group'
 
         use :optional_params
       end
@@ -109,12 +127,12 @@ module API
           authorize! :create_group
         end
 
-        group = ::Groups::CreateService.new(current_user, declared_params(include_missing: false)).execute
+        group = create_group
 
         if group.persisted?
           present group, with: Entities::GroupDetail, current_user: current_user
         else
-          render_validation_error!(group)
+          render_api_error!("Failed to save group #{group.errors.messages}", 400)
         end
       end
     end
@@ -122,7 +140,7 @@ module API
     params do
       requires :id, type: String, desc: 'The ID of a group'
     end
-    resource :groups, requirements: API::PROJECT_ENDPOINT_REQUIREMENTS do
+    resource :groups, requirements: API::NAMESPACE_OR_PROJECT_REQUIREMENTS do
       desc 'Update a group. Available only for users who can administrate groups.' do
         success Entities::Group
       end
@@ -130,12 +148,13 @@ module API
         optional :name, type: String, desc: 'The name of the group'
         optional :path, type: String, desc: 'The path of the group'
         use :optional_params
+        use :optional_update_params_ee
       end
       put ':id' do
         group = find_group!(params[:id])
         authorize! :admin_group, group
 
-        if ::Groups::UpdateService.new(group, current_user, declared_params(include_missing: false)).execute
+        if update_group(group)
           present group, with: Entities::GroupDetail, current_user: current_user
         else
           render_validation_error!(group)
@@ -147,13 +166,15 @@ module API
       end
       params do
         use :with_custom_attributes
+        optional :with_projects, type: Boolean, default: true, desc: 'Omit project details'
       end
       get ":id" do
         group = find_group!(params[:id])
 
         options = {
-          with: Entities::GroupDetail,
-          current_user: current_user
+          with: params[:with_projects] ? Entities::GroupDetail : Entities::Group,
+          current_user: current_user,
+          user_can_admin_group: can?(current_user, :admin_group, group)
         }
 
         group, options = with_custom_attributes(group, options)
@@ -166,7 +187,7 @@ module API
         group = find_group!(params[:id])
         authorize! :admin_group, group
 
-        Gitlab::QueryLimiting.whitelist('https://gitlab.com/gitlab-org/gitlab-ce/issues/46285')
+        Gitlab::QueryLimiting.whitelist('https://gitlab.com/gitlab-org/gitlab-foss/issues/46285')
         destroy_conditionally!(group) do |group|
           ::Groups::DestroyService.new(group, current_user).async_execute
         end
@@ -190,19 +211,18 @@ module API
                           desc: 'Return only the ID, URL, name, and path of each project'
         optional :owned, type: Boolean, default: false, desc: 'Limit by owned by authenticated user'
         optional :starred, type: Boolean, default: false, desc: 'Limit by starred status'
+        optional :with_issues_enabled, type: Boolean, default: false, desc: 'Limit by enabled issues feature'
+        optional :with_merge_requests_enabled, type: Boolean, default: false, desc: 'Limit by enabled merge requests feature'
+        optional :with_shared, type: Boolean, default: true, desc: 'Include projects shared to this group'
+        optional :include_subgroups, type: Boolean, default: false, desc: 'Includes projects in subgroups of this group'
+        optional :min_access_level, type: Integer, values: Gitlab::Access.all_values, desc: 'Limit by minimum access level of authenticated user on projects'
 
         use :pagination
         use :with_custom_attributes
+        use :optional_projects_params
       end
       get ":id/projects" do
         projects = find_group_projects(params)
-        if params[:simple]
-          entity = Entities::BasicProjectDetails
-        elsif current_user
-          entity = Entities::BasicProjectDetailsWithAccess
-        else
-          entity = Entities::Project
-        end
 
         options = {
           with: params[:simple] ? Entities::BasicProjectDetails : Entities::Project,
@@ -241,9 +261,11 @@ module API
         if result
           present group, with: Entities::GroupDetail, current_user: current_user
         else
-          render_validation_error!(project)
+          render_api_error!("Failed to transfer project #{project.errors.messages}", 400)
         end
       end
     end
   end
 end
+
+API::Groups.prepend_if_ee('EE::API::Groups')

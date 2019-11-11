@@ -16,13 +16,71 @@ describe Clusters::ClusterPolicy, :models do
       it { expect(policy).to be_disallowed :admin_cluster }
     end
 
-    context 'when master' do
+    context 'when maintainer' do
       before do
-        project.add_master(user)
+        project.add_maintainer(user)
       end
 
       it { expect(policy).to be_allowed :update_cluster }
       it { expect(policy).to be_allowed :admin_cluster }
+    end
+
+    context 'group cluster' do
+      let(:cluster) { create(:cluster, :group) }
+      let(:group) { cluster.group }
+      let(:project) { create(:project, namespace: group) }
+
+      context 'when group developer' do
+        before do
+          group.add_developer(user)
+        end
+
+        it { expect(policy).to be_disallowed :update_cluster }
+        it { expect(policy).to be_disallowed :admin_cluster }
+      end
+
+      context 'when group maintainer' do
+        before do
+          group.add_maintainer(user)
+        end
+
+        it { expect(policy).to be_allowed :update_cluster }
+        it { expect(policy).to be_allowed :admin_cluster }
+      end
+
+      context 'when project maintainer' do
+        before do
+          project.add_maintainer(user)
+        end
+
+        it { expect(policy).to be_disallowed :update_cluster }
+        it { expect(policy).to be_disallowed :admin_cluster }
+      end
+
+      context 'when project developer' do
+        before do
+          project.add_developer(user)
+        end
+
+        it { expect(policy).to be_disallowed :update_cluster }
+        it { expect(policy).to be_disallowed :admin_cluster }
+      end
+    end
+
+    context 'instance cluster' do
+      let(:cluster) { create(:cluster, :instance) }
+
+      context 'when user' do
+        it { expect(policy).to be_disallowed :update_cluster }
+        it { expect(policy).to be_disallowed :admin_cluster }
+      end
+
+      context 'when admin' do
+        let(:user) { create(:admin) }
+
+        it { expect(policy).to be_allowed :update_cluster }
+        it { expect(policy).to be_allowed :admin_cluster }
+      end
     end
   end
 end

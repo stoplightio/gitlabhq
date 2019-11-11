@@ -1,3 +1,7 @@
+---
+type: concepts, howto
+---
+
 # Using Docker images
 
 GitLab CI in conjunction with [GitLab Runner](../runners/README.md) can use
@@ -31,8 +35,8 @@ sudo gitlab-runner register \
   --description "docker-ruby-2.1" \
   --executor "docker" \
   --docker-image ruby:2.1 \
-  --docker-postgres latest \
-  --docker-mysql latest
+  --docker-services postgres:latest \
+  --docker-services mysql:latest
 ```
 
 The registered runner will use the `ruby:2.1` Docker image and will run two
@@ -45,10 +49,10 @@ The `image` keyword is the name of the Docker image the Docker executor
 will run to perform the CI tasks.
 
 By default, the executor will only pull images from [Docker Hub][hub],
-but this can be configured in the `gitlab-runner/config.toml` by setting
+however this can be configured in the `gitlab-runner/config.toml` by setting
 the [Docker pull policy][] to allow using local images.
 
-For more information about images and Docker Hub please read
+For more information about images and Docker Hub, please read
 the [Docker Fundamentals][] documentation.
 
 ## What is a service
@@ -66,6 +70,9 @@ You are not limited to have only database services. You can add as many
 services you need to `.gitlab-ci.yml` or manually modify `config.toml`.
 Any image found at [Docker Hub][hub] or your private Container Registry can be
 used as a service.
+
+Services inherit the same DNS servers, search domains, and additional hosts as
+the CI container itself.
 
 You can see some widely used services examples in the relevant documentation of
 [CI services examples](../services/README.md).
@@ -92,8 +99,8 @@ required for the CI/CD job to proceed and is accessed by network.
 
 To make sure this works, the Runner:
 
-1. checks which ports are exposed from the container by default
-1. starts a special container that waits for these ports to be accessible
+1. Checks which ports are exposed from the container by default.
+1. Starts a special container that waits for these ports to be accessible.
 
 When the second stage of the check fails, either because there is no opened port in the
 service, or the service was not started properly before the timeout and the port is not
@@ -103,7 +110,7 @@ In most cases it will affect the job, but there may be situations when the job
 will still succeed even if that warning was printed. For example:
 
 - The service was started a little after the warning was raised, and the job is
-  not using the linked service from the very beginning. In that case, when the
+  not using the linked service from the beginning. In that case, when the
   job needed to access the service, it may have been already there waiting for
   connections.
 - The service container is not providing any networking service, but it's doing
@@ -140,9 +147,9 @@ job:
 If you need to have `php`, `node` and `go` available for your script, you should
 either:
 
-- choose an existing Docker image that contains all required tools, or
-- create your own Docker image, which will have all the required tools included
-  and use that in your job
+- Choose an existing Docker image that contains all required tools.
+- Create your own Docker image, which will have all the required tools included
+  and use that in your job.
 
 ### Accessing the services
 
@@ -164,18 +171,18 @@ access to it from your build container under two hostnames to choose from:
 - `tutum-wordpress`
 - `tutum__wordpress`
 
->**Note:**
+NOTE: **Note:**
 Hostnames with underscores are not RFC valid and may cause problems in 3rd party
 applications.
 
 The default aliases for the service's hostname are created from its image name
 following these rules:
 
-- Everything after the colon (`:`) is stripped
+- Everything after the colon (`:`) is stripped.
 - Slash (`/`) is replaced with double underscores (`__`) and the primary alias
-  is created
+  is created.
 - Slash (`/`) is replaced with a single dash (`-`) and the secondary alias is
-  created (requires GitLab Runner v1.1.0 or higher)
+  created (requires GitLab Runner v1.1.0 or higher).
 
 To override the default behavior, you can
 [specify a service alias](#available-settings-for-services).
@@ -186,13 +193,14 @@ You can simply define an image that will be used for all jobs and a list of
 services that you want to use during build time:
 
 ```yaml
-image: ruby:2.2
+default:
+  image: ruby:2.2
 
-services:
-  - postgres:9.3
+  services:
+    - postgres:9.3
 
-before_script:
-  - bundle install
+  before_script:
+    - bundle install
 
 test:
   script:
@@ -202,8 +210,9 @@ test:
 It is also possible to define different images and services per job:
 
 ```yaml
-before_script:
-  - bundle install
+default:
+  before_script:
+    - bundle install
 
 test:2.1:
   image: ruby:2.1
@@ -224,15 +233,52 @@ Or you can pass some [extended configuration options](#extended-docker-configura
 for `image` and `services`:
 
 ```yaml
+default:
+  image:
+    name: ruby:2.2
+    entrypoint: ["/bin/bash"]
+
+  services:
+  - name: my-postgres:9.4
+    alias: db-postgres
+    entrypoint: ["/usr/local/bin/db-postgres"]
+    command: ["start"]
+
+  before_script:
+  - bundle install
+
+test:
+  script:
+  - bundle exec rake spec
+```
+
+## Passing environment variables to services
+
+You can also pass custom environment [variables](../variables/README.md)
+to fine tune your Docker `images` and `services` directly in the `.gitlab-ci.yml` file.
+For more information, see [custom environment variables](../variables/README.md#gitlab-ciyml-defined-variables)
+
+```yaml
+# The following variables will automatically be passed down to the Postgres container
+# as well as the Ruby container and available within each.
+variables:
+  HTTPS_PROXY: "https://10.1.1.1:8090"
+  HTTP_PROXY: "https://10.1.1.1:8090"
+  POSTGRES_DB: "my_custom_db"
+  POSTGRES_USER: "postgres"
+  POSTGRES_PASSWORD: "example"
+  PGDATA: "/var/lib/postgresql/data"
+  POSTGRES_INITDB_ARGS: "--encoding=UTF8 --data-checksums"
+
+services:
+- name: postgres:9.4
+  alias: db
+  entrypoint: ["docker-entrypoint.sh"]
+  command: ["postgres"]
+
 image:
   name: ruby:2.2
   entrypoint: ["/bin/bash"]
-
-services:
-- name: my-postgres:9.4
-  alias: db-postgres
-  entrypoint: ["/usr/local/bin/db-postgres"]
-  command: ["start"]
 
 before_script:
 - bundle install
@@ -259,25 +305,25 @@ For example, the following two definitions are equal:
 
 1. Using a string as an option to `image` and `services`:
 
-    ```yaml
-    image: "registry.example.com/my/image:latest"
+   ```yaml
+   image: "registry.example.com/my/image:latest"
 
-    services:
-    - postgresql:9.4
-    - redis:latest
-    ```
+   services:
+   - postgresql:9.4
+   - redis:latest
+   ```
 
 1. Using a map as an option to `image` and `services`. The use of `image:name` is
    required:
 
-    ```yaml
-    image:
-      name: "registry.example.com/my/image:latest"
+   ```yaml
+   image:
+     name: "registry.example.com/my/image:latest"
 
-    services:
-    - name: postgresql:9.4
-    - name: redis:latest
-    ```
+   services:
+   - name: postgresql:9.4
+   - name: redis:latest
+   ```
 
 ### Available settings for `image`
 
@@ -330,7 +376,7 @@ services:
 ```
 
 The Runner will still start two containers using the `mysql:latest` image,
-but now each of them will also be accessible with the alias configured
+however now each of them will also be accessible with the alias configured
 in `.gitlab-ci.yml` file.
 
 ### Setting a command for the service
@@ -388,9 +434,9 @@ CI jobs:
    from `Dockerfile` that may be overridden in `.gitlab-ci.yml`)
 1. The Runner attaches itself to a running container.
 1. The Runner prepares a script (the combination of
-   [`before_script`](../yaml/README.md#before_script),
+   [`before_script`](../yaml/README.md#before_script-and-after_script),
    [`script`](../yaml/README.md#script),
-   and [`after_script`](../yaml/README.md#after_script)).
+   and [`after_script`](../yaml/README.md#before_script-and-after_script)).
 1. The Runner sends the script to the container's shell STDIN and receives the
    output.
 
@@ -404,8 +450,6 @@ you should check which one your Runner is using. Specifically:
   `/bin/sh -c`, `/bin/bash -c` or an equivalent shell available in the image.
 
 The syntax of `image:entrypoint` is similar to [Dockerfile's `ENTRYPOINT`][entrypoint].
-
-----
 
 Let's assume you have a `super/sql:experimental` image with some SQL database
 inside it and you would like to use it as a base image for your job because you
@@ -440,7 +484,7 @@ image:
 
 Look for the `[runners.docker]` section:
 
-```
+```toml
 [runners.docker]
   image = "ruby:2.1"
   services = ["mysql:latest", "postgres:latest"]
@@ -451,84 +495,239 @@ that runner.
 
 ## Define an image from a private Container Registry
 
-> **Notes:**
-- This feature requires GitLab Runner **1.8** or higher
+To access private container registries, the GitLab Runner process can use:
+
+- [Statically defined credentials](#using-statically-defined-credentials). That is, a username and password for a specific registry.
+- [Credentials Store](#using-credentials-store). For more information, see [the relevant Docker documentation](https://docs.docker.com/engine/reference/commandline/login/#credentials-store).
+- [Credential Helpers](#using-credential-helpers). For more information, see [the relevant Docker documentation](https://docs.docker.com/engine/reference/commandline/login/#credential-helpers).
+
+To define which should be used, the GitLab Runner process reads the configuration in the following order:
+
+- `DOCKER_AUTH_CONFIG` variable provided as either:
+  - A [variable](../variables/README.md#gitlab-cicd-environment-variables) in `.gitlab-ci.yml`.
+  - A project's variables stored on the projects **Settings > CI/CD** page.
+- `DOCKER_AUTH_CONFIG` variable provided as environment variable in `config.toml` of the Runner.
+- `config.json` file placed in `$HOME/.docker` directory of the user running GitLab Runner process.
+  If the `--user` flag is provided to run the GitLab Runner child processes as unprivileged user,
+  the home directory of the main GitLab Runner process user will be used.
+
+NOTE: **Note:**
+GitLab Runner reads this configuration **only** from `config.toml` and ignores it if
+it's provided as an environment variable. This is because GitLab Runnner uses **only**
+`config.toml` configuration and doesn't interpolate **ANY** environment variables at
+runtime.
+
+### Requirements and limitations
+
+- This feature requires GitLab Runner **1.8** or higher.
 - For GitLab Runner versions **>= 0.6, <1.8** there was a partial
   support for using private registries, which required manual configuration
   of credentials on runner's host. We recommend to upgrade your Runner to
   at least version **1.8** if you want to use private registries.
-- If the repository is private you need to authenticate your GitLab Runner in the
-  registry. Learn more about how [GitLab Runner works in this case][runner-priv-reg].
+- Not available for [Kubernetes executor](https://docs.gitlab.com/runner/executors/kubernetes.html),
+  follow <https://gitlab.com/gitlab-org/gitlab-runner/issues/2673> for
+  details.
 
-As an example, let's assume that you want to use the `registry.example.com/private/image:latest`
+### Using statically-defined credentials
+
+There are two approaches that you can take in order to access a
+private registry. Both require setting the environment variable
+`DOCKER_AUTH_CONFIG` with appropriate authentication info.
+
+1. Per-job: To configure one job to access a private registry, add
+   `DOCKER_AUTH_CONFIG` as a job variable.
+1. Per-runner: To configure a Runner so all its jobs can access a
+   private registry, add `DOCKER_AUTH_CONFIG` to the environment in the
+   Runner's configuration.
+
+See below for examples of each.
+
+#### Determining your `DOCKER_AUTH_CONFIG` data
+
+As an example, let's assume that you want to use the `registry.example.com:5000/private/image:latest`
 image which is private and requires you to login into a private container registry.
 
 Let's also assume that these are the login credentials:
 
-| Key      | Value                |
-|----------|----------------------|
-| registry | registry.example.com |
-| username | my_username          |
-| password | my_password          |
+| Key      | Value                       |
+|:---------|:----------------------------|
+| registry | `registry.example.com:5000` |
+| username | `my_username`               |
+| password | `my_password`               |
 
-To configure access for `registry.example.com`, follow these steps:
+There are two ways to determine the value of `DOCKER_AUTH_CONFIG`:
 
-1. Find what the value of `DOCKER_AUTH_CONFIG` should be. There are two ways to
-   accomplish this:
-     - **First way -** Do a `docker login` on your local machine:
+- **First way -** Do a `docker login` on your local machine:
 
-         ```bash
-         docker login registry.example.com --username my_username --password my_password
-         ```
+  ```bash
+  docker login registry.example.com:5000 --username my_username --password my_password
+  ```
 
-          Then copy the content of `~/.docker/config.json`.
-     - **Second way -** In some setups, it's possible that Docker client will use
-       the available system keystore to store the result of `docker login`. In
-       that case, it's impossible to read `~/.docker/config.json`, so you will
-       need to prepare the required base64-encoded version of
-       `${username}:${password}` manually. Open a terminal and execute the
-       following command:
+  Then copy the content of `~/.docker/config.json`.
 
-           ```bash
-           echo -n "my_username:my_password" | base64
+  If you don't need access to the registry from your computer, you
+  can do a `docker logout`:
 
-           # Example output to copy
-           bXlfdXNlcm5hbWU6bXlfcGFzc3dvcmQ=
-           ```
+  ```bash
+  docker logout registry.example.com:5000
+  ```
 
-1. Create a [variable] `DOCKER_AUTH_CONFIG` with the content of the
+- **Second way -** In some setups, it's possible that Docker client
+  will use the available system keystore to store the result of `docker
+  login`. In that case, it's impossible to read `~/.docker/config.json`,
+  so you will need to prepare the required base64-encoded version of
+  `${username}:${password}` manually. Open a terminal and execute the
+  following command:
+
+  ```bash
+  echo -n "my_username:my_password" | base64
+
+  # Example output to copy
+  bXlfdXNlcm5hbWU6bXlfcGFzc3dvcmQ=
+  ```
+
+#### Configuring a job
+
+To configure a single job with access for `registry.example.com:5000`,
+follow these steps:
+
+1. Create a [variable](../variables/README.md#gitlab-cicd-environment-variables) `DOCKER_AUTH_CONFIG` with the content of the
    Docker configuration file as the value:
 
-     ```json
-     {
-         "auths": {
-             "registry.example.com": {
-                 "auth": "bXlfdXNlcm5hbWU6bXlfcGFzc3dvcmQ="
-             }
-         }
-     }
-     ```
+   ```json
+   {
+       "auths": {
+           "registry.example.com:5000": {
+               "auth": "bXlfdXNlcm5hbWU6bXlfcGFzc3dvcmQ="
+           }
+       }
+   }
+   ```
 
-1. Optionally,if you followed the first way of finding the `DOCKER_AUTH_CONFIG`
-   value, do a `docker logout` on your computer if you don't need access to the
-   registry from it:
-
-     ```bash
-     docker logout registry.example.com
-     ```
-
-1. You can now use any private image from `registry.example.com` defined in
+1. You can now use any private image from `registry.example.com:5000` defined in
    `image` and/or `services` in your `.gitlab-ci.yml` file:
 
-      ```yaml
-      image: my.registry.tld:5000/namespace/image:tag
-      ```
+   ```yaml
+   image: registry.example.com:5000/namespace/image:tag
+   ```
 
-      In the example above, GitLab Runner will look at `my.registry.tld:5000` for the
-      image `namespace/image:tag`.
+   In the example above, GitLab Runner will look at `registry.example.com:5000` for the
+   image `namespace/image:tag`.
 
 You can add configuration for as many registries as you want, adding more
 registries to the `"auths"` hash as described above.
+
+NOTE: **Note:**
+The full `hostname:port` combination is required everywhere
+for the Runner to match the `DOCKER_AUTH_CONFIG`. For example, if
+`registry.example.com:5000/namespace/image:tag` is specified in `.gitlab-ci.yml`,
+then the `DOCKER_AUTH_CONFIG` must also specify `registry.example.com:5000`.
+Specifying only `registry.example.com` will not work.
+
+### Configuring a Runner
+
+If you have many pipelines that access the same registry, it'll
+probably be better to setup registry access at the runner level.  This
+allows pipeline authors to have access to a private registry just by
+running a job on the appropriate runner. It also makes registry
+changes and credential rotations much simpler.
+
+Of course this means that any job on that runner can access the
+registry with the same privilege, even across projects. If you need to
+control access to the registry, you'll need to be sure to control
+access to the runner.
+
+To add `DOCKER_AUTH_CONFIG` to a Runner:
+
+1. Modify the Runner's `config.toml` file as follows:
+
+   ```toml
+   [[runners]]
+     environment = ["DOCKER_AUTH_CONFIG={\"auths\":{\"registry.example.com:5000\":{\"auth\":\"bXlfdXNlcm5hbWU6bXlfcGFzc3dvcmQ=\"}}}"]
+   ```
+
+1. Restart the Runner service.
+
+NOTE: **Note:** The double quotes included in the `DOCKER_AUTH_CONFIG`
+data must be escaped with backslashes. This prevents them from being
+interpreted as TOML.
+
+NOTE: **Note:** The `environment` option is a list. So your Runner may
+have existing entries and you should add this to the list, not replace
+it.
+
+### Using Credentials Store
+
+> Support for using Credentials Store was added in GitLab Runner 9.5.
+
+To configure credentials store, follow these steps:
+
+1. To use a credentials store, you need an external helper program to interact with a specific keychain or external store.
+   Make sure helper program is available in GitLab Runner `$PATH`.
+
+1. Make GitLab Runner use it. There are two ways to accomplish this. Either:
+
+   - Create a
+     [variable](../variables/README.md#gitlab-cicd-environment-variables)
+     `DOCKER_AUTH_CONFIG` with the content of the
+     Docker configuration file as the value:
+
+     ```json
+       {
+         "credsStore": "osxkeychain"
+       }
+     ```
+
+   - Or, if you are running self-hosted Runners, add the above JSON to
+     `${GITLAB_RUNNER_HOME}/.docker/config.json`. GitLab Runner will read this config file
+     and will use the needed helper for this specific repository.
+
+NOTE: **Note:** `credsStore` is used to access ALL the registries.
+If you will want to use both images from private registry and public images from DockerHub,
+pulling from DockerHub will fail, because Docker daemon will try to use the same credentials for **ALL** the registries.
+
+### Using Credential Helpers
+
+> Support for using Credential Helpers was added in GitLab Runner 12.0
+
+As an example, let's assume that you want to use the `aws_account_id.dkr.ecr.region.amazonaws.com/private/image:latest`
+image which is private and requires you to log in into a private container registry.
+
+To configure access for `aws_account_id.dkr.ecr.region.amazonaws.com`, follow these steps:
+
+1. Make sure `docker-credential-ecr-login` is available in GitLab Runner's `$PATH`.
+
+1. Make GitLab Runner use it. There are two ways to accomplish this. Either:
+
+   - Create a [variable](../variables/README.md#gitlab-cicd-environment-variables)
+     `DOCKER_AUTH_CONFIG` with the content of the
+     Docker configuration file as the value:
+
+     ```json
+     {
+       "credHelpers": {
+         "aws_account_id.dkr.ecr.region.amazonaws.com": "ecr-login"
+       }
+     }
+     ```
+
+   - Or, if you are running self-hosted Runners,
+     add the above JSON to `${GITLAB_RUNNER_HOME}/.docker/config.json`.
+     GitLab Runner will read this config file and will use the needed helper for this
+     specific repository.
+
+1. You can now use any private image from `aws_account_id.dkr.ecr.region.amazonaws.com` defined in
+   `image` and/or `services` in your `.gitlab-ci.yml` file:
+
+   ```yaml
+   image: aws_account_id.dkr.ecr.region.amazonaws.com/private/image:latest
+   ```
+
+   In the example above, GitLab Runner will look at `aws_account_id.dkr.ecr.region.amazonaws.com` for the
+   image `private/image:latest`.
+
+You can add configuration for as many registries as you want, adding more
+registries to the `"credHelpers"` hash as described above.
 
 ## Configuring services
 
@@ -541,8 +740,9 @@ service containers.
 For all possible configuration variables check the documentation of each image
 provided in their corresponding Docker hub page.
 
-*Note: All variables will be passed to all services containers. It's not
-designed to distinguish which variable should go where.*
+NOTE: **Note:**
+All variables will be passed to all services containers. It's not
+designed to distinguish which variable should go where.
 
 ### PostgreSQL service example
 
@@ -572,8 +772,9 @@ time.
 
 ## How to debug a job locally
 
-*Note: The following commands are run without root privileges. You should be
-able to run Docker with your regular user account.*
+NOTE: **Note:**
+The following commands are run without root privileges. You should be
+able to run Docker with your regular user account.
 
 First start with creating a file named `build_script`:
 
@@ -592,7 +793,7 @@ is specific to your project.
 
 Then create some service containers:
 
-```
+```sh
 docker run -d --name service-mysql mysql:latest
 docker run -d --name service-postgres postgres:latest
 ```
@@ -604,7 +805,7 @@ respectively. They will both run in the background (`-d`).
 Finally, create a build container by executing the `build_script` file we
 created earlier:
 
-```
+```sh
 docker run --name build -i --link=service-mysql:mysql --link=service-postgres:postgres ruby:2.1 /bin/bash < build_script
 ```
 
@@ -616,7 +817,7 @@ piped using STDIN to the bash interpreter which in turn executes the
 When you finish testing and no longer need the containers, you can remove them
 with:
 
-```
+```sh
 docker rm -f -v build service-mysql service-postgres
 ```
 
@@ -631,8 +832,6 @@ creation.
 [tutum/wordpress]: https://hub.docker.com/r/tutum/wordpress/
 [postgres-hub]: https://hub.docker.com/r/_/postgres/
 [mysql-hub]: https://hub.docker.com/r/_/mysql/
-[runner-priv-reg]: http://docs.gitlab.com/runner/configuration/advanced-configuration.html#using-a-private-container-registry
-[variable]: ../variables/README.md#variables
 [entrypoint]: https://docs.docker.com/engine/reference/builder/#entrypoint
 [cmd]: https://docs.docker.com/engine/reference/builder/#cmd
 [register]: https://docs.gitlab.com/runner/register/

@@ -1,9 +1,10 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe HealthController do
   include StubENV
 
-  let(:json_response) { JSON.parse(response.body) }
   let(:token) { Gitlab::CurrentSettings.health_check_access_token }
   let(:whitelisted_ip) { '127.0.0.1' }
   let(:not_whitelisted_ip) { '127.0.0.2' }
@@ -14,63 +15,35 @@ describe HealthController do
     stub_env('IN_MEMORY_APPLICATION_SETTINGS', 'false')
   end
 
-  describe '#storage_check' do
-    before do
-      allow(Gitlab::RequestContext).to receive(:client_ip).and_return(whitelisted_ip)
-    end
-
-    subject { post :storage_check }
-
-    it 'checks all the configured storages' do
-      expect(Gitlab::Git::Storage::Checker).to receive(:check_all).and_call_original
-
-      subject
-    end
-
-    it 'returns the check interval' do
-      stub_env('IN_MEMORY_APPLICATION_SETTINGS', 'true')
-      stub_application_setting(circuitbreaker_check_interval: 10)
-
-      subject
-
-      expect(json_response['check_interval']).to eq(10)
-    end
-
-    context 'with failing storages', :broken_storage do
-      before do
-        stub_storage_settings(
-          broken: { path: 'tmp/tests/non-existent-repositories' }
-        )
-      end
-
-      it 'includes the failure information' do
-        subject
-
-        expected_results = [
-          { 'storage' => 'broken', 'success' => false },
-          { 'storage' => 'default', 'success' => true }
-        ]
-
-        expect(json_response['results']).to eq(expected_results)
-      end
-    end
-  end
-
   describe '#readiness' do
     shared_context 'endpoint responding with readiness data' do
       let(:request_params) { {} }
 
-      subject { get :readiness, request_params }
+      subject { get :readiness, params: request_params }
 
       it 'responds with readiness checks data' do
         subject
 
-        expect(json_response['db_check']['status']).to eq('ok')
-        expect(json_response['cache_check']['status']).to eq('ok')
-        expect(json_response['queues_check']['status']).to eq('ok')
-        expect(json_response['shared_state_check']['status']).to eq('ok')
-        expect(json_response['fs_shards_check']['status']).to eq('ok')
-        expect(json_response['fs_shards_check']['labels']['shard']).to eq('default')
+        expect(json_response['db_check']).to contain_exactly({ 'status' => 'ok' })
+        expect(json_response['cache_check']).to contain_exactly({ 'status' => 'ok' })
+        expect(json_response['queues_check']).to contain_exactly({ 'status' => 'ok' })
+        expect(json_response['shared_state_check']).to contain_exactly({ 'status' => 'ok' })
+        expect(json_response['gitaly_check']).to contain_exactly(
+          { 'status' => 'ok', 'labels' => { 'shard' => 'default' } })
+      end
+
+      it 'responds with readiness checks data when a failure happens' do
+        allow(Gitlab::HealthChecks::Redis::RedisCheck).to receive(:readiness).and_return(
+          Gitlab::HealthChecks::Result.new('redis_check', false, "check error"))
+
+        subject
+
+        expect(json_response['cache_check']).to contain_exactly({ 'status' => 'ok' })
+        expect(json_response['redis_check']).to contain_exactly(
+          { 'status' => 'failed', 'message' => 'check error' })
+
+        expect(response.status).to eq(503)
+        expect(response.headers['X-GitLab-Custom-Error']).to eq(1)
       end
     end
 
@@ -118,11 +91,7 @@ describe HealthController do
       it 'responds with liveness checks data' do
         subject
 
-        expect(json_response['db_check']['status']).to eq('ok')
-        expect(json_response['cache_check']['status']).to eq('ok')
-        expect(json_response['queues_check']['status']).to eq('ok')
-        expect(json_response['shared_state_check']['status']).to eq('ok')
-        expect(json_response['fs_shards_check']['status']).to eq('ok')
+        expect(json_response).to eq('status' => 'ok')
       end
     end
 
@@ -156,7 +125,7 @@ describe HealthController do
 
         context 'token passed as URL param' do
           it_behaves_like 'endpoint responding with liveness data' do
-            subject { get :liveness, token: token }
+            subject { get :liveness, params: { token: token } }
           end
         end
       end

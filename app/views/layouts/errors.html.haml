@@ -8,12 +8,16 @@
   %body
     .page-container
       = yield
-    -# haml-lint:disable InlineJavaScript
-    :javascript
-      (function(){
-        var goBackElement = document.querySelector('.js-go-back');
+    = javascript_tag nonce: true do
+      :plain
+        (function(){
+          var goBackElement = document.querySelector('.js-go-back');
 
-        if (goBackElement && history.length > 1) {
-          goBackElement.style.display = 'block';
-        }
-      }());
+          if (goBackElement && history.length > 1) {
+            goBackElement.removeAttribute('hidden');
+
+            goBackElement.querySelector('button').addEventListener('click', function() {
+              history.back();
+            });
+          }
+        }());

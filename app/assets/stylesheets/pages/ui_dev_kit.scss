@@ -6,11 +6,11 @@
 
   .example {
     padding: 15px;
-    border: 1px dashed $ui-dev-kit-example-border;
+    border: 1px dashed $gl-gray-100;
     margin-bottom: 15px;
 
     &::before {
-      content: "Example";
+      content: 'Example';
       color: $ui-dev-kit-example-color;
     }
   }

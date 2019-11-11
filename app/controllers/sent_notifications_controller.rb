@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class SentNotificationsController < ApplicationController
   skip_before_action :authenticate_user!
 
@@ -14,10 +16,14 @@ class SentNotificationsController < ApplicationController
     noteable = @sent_notification.noteable
     noteable.unsubscribe(@sent_notification.recipient, @sent_notification.project)
 
-    flash[:notice] = "You have been unsubscribed from this thread."
+    flash[:notice] = _("You have been unsubscribed from this thread.")
 
     if current_user
-      redirect_to noteable_path(noteable)
+      if current_user.can?(:"read_#{noteable.class.to_ability_name}", noteable)
+        redirect_to noteable_path(noteable)
+      else
+        redirect_to root_path
+      end
     else
       redirect_to new_user_session_path
     end
@@ -34,3 +40,5 @@ class SentNotificationsController < ApplicationController
     end
   end
 end
+
+SentNotificationsController.prepend_if_ee('EE::SentNotificationsController')

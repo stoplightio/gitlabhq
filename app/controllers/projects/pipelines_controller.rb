@@ -1,10 +1,20 @@
+# frozen_string_literal: true
+
 class Projects::PipelinesController < Projects::ApplicationController
+  include ::Gitlab::Utils::StrongMemoize
+
   before_action :whitelist_query_limiting, only: [:create, :retry]
   before_action :pipeline, except: [:index, :new, :create, :charts]
-  before_action :commit, only: [:show, :builds, :failures]
+  before_action :set_pipeline_path, only: [:show]
   before_action :authorize_read_pipeline!
+  before_action :authorize_read_build!, only: [:index]
   before_action :authorize_create_pipeline!, only: [:new, :create]
   before_action :authorize_update_pipeline!, only: [:retry, :cancel]
+  before_action do
+    push_frontend_feature_flag(:hide_dismissed_vulnerabilities)
+  end
+
+  around_action :allow_gitaly_ref_name_caching, only: [:index, :show]
 
   wrap_parameters Ci::Pipeline
 
@@ -13,7 +23,7 @@ class Projects::PipelinesController < Projects::ApplicationController
   def index
     @scope = params[:scope]
     @pipelines = PipelinesFinder
-      .new(project, scope: @scope)
+      .new(project, current_user, scope: @scope)
       .execute
       .page(params[:page])
       .per(30)
@@ -29,10 +39,7 @@ class Projects::PipelinesController < Projects::ApplicationController
         Gitlab::PollingInterval.set_header(response, interval: POLLING_INTERVAL)
 
         render json: {
-          pipelines: PipelineSerializer
-            .new(project: @project, current_user: @current_user)
-            .with_pagination(request, response)
-            .represent(@pipelines, disable_coverage: true, preload: true),
+          pipelines: serialize_pipelines,
           count: {
             all: @pipelines_count,
             running: @running_count,
@@ -45,7 +52,7 @@ class Projects::PipelinesController < Projects::ApplicationController
   end
 
   def new
-    @pipeline = project.pipelines.new(ref: @project.default_branch)
+    @pipeline = project.all_pipelines.new(ref: @project.default_branch)
   end
 
   def create
@@ -68,7 +75,7 @@ class Projects::PipelinesController < Projects::ApplicationController
 
         render json: PipelineSerializer
           .new(project: @project, current_user: @current_user)
-          .represent(@pipeline, grouped: true)
+          .represent(@pipeline, show_represent_params)
       end
     end
   end
@@ -97,7 +104,7 @@ class Projects::PipelinesController < Projects::ApplicationController
 
     render json: StageSerializer
       .new(project: @project, current_user: @current_user)
-      .represent(@stage, details: true)
+      .represent(@stage, details: true, retried: params[:retried])
   end
 
   # TODO: This endpoint is used by mini-pipeline-graph
@@ -141,12 +148,32 @@ class Projects::PipelinesController < Projects::ApplicationController
     @charts[:pipeline_times] = Gitlab::Ci::Charts::PipelineTime.new(project)
 
     @counts = {}
-    @counts[:total] = @project.pipelines.count(:all)
-    @counts[:success] = @project.pipelines.success.count(:all)
-    @counts[:failed] = @project.pipelines.failed.count(:all)
+    @counts[:total] = @project.all_pipelines.count(:all)
+    @counts[:success] = @project.all_pipelines.success.count(:all)
+    @counts[:failed] = @project.all_pipelines.failed.count(:all)
+  end
+
+  def test_report
+    return unless Feature.enabled?(:junit_pipeline_view, project)
+
+    if pipeline_test_report == :error
+      render json: { status: :error_parsing_report }
+      return
+    end
+
+    render json: TestReportSerializer
+      .new(current_user: @current_user)
+      .represent(pipeline_test_report)
   end
 
   private
+
+  def serialize_pipelines
+    PipelineSerializer
+      .new(project: @project, current_user: @current_user)
+      .with_pagination(request, response)
+      .represent(@pipelines, disable_coverage: true, preload: true)
+  end
 
   def render_show
     respond_to do |format|
@@ -156,21 +183,44 @@ class Projects::PipelinesController < Projects::ApplicationController
     end
   end
 
+  def show_represent_params
+    { grouped: true, expanded: params[:expanded].to_a.map(&:to_i) }
+  end
+
   def create_params
-    params.require(:pipeline).permit(:ref, variables_attributes: %i[key secret_value])
+    params.require(:pipeline).permit(:ref, variables_attributes: %i[key variable_type secret_value])
   end
 
+  # rubocop: disable CodeReuse/ActiveRecord
   def pipeline
-    @pipeline ||= project.pipelines.find_by!(id: params[:id]).present(current_user: current_user)
+    @pipeline ||= if params[:id].blank? && params[:latest]
+                    latest_pipeline
+                  else
+                    project
+                      .all_pipelines
+                      .includes(builds: :tags, user: :status)
+                      .find_by!(id: params[:id])
+                      .present(current_user: current_user)
+                  end
+  end
+  # rubocop: enable CodeReuse/ActiveRecord
+
+  def set_pipeline_path
+    @pipeline_path ||= if params[:id].blank? && params[:latest]
+                         latest_project_pipelines_path(@project, params['ref'])
+                       else
+                         project_pipeline_path(@project, @pipeline)
+                       end
   end
 
-  def commit
-    @commit ||= @pipeline.commit
+  def latest_pipeline
+    @project.latest_pipeline_for_ref(params['ref'])
+            &.present(current_user: current_user)
   end
 
   def whitelist_query_limiting
-    # Also see https://gitlab.com/gitlab-org/gitlab-ce/issues/42343
-    Gitlab::QueryLimiting.whitelist('https://gitlab.com/gitlab-org/gitlab-ce/issues/42339')
+    # Also see https://gitlab.com/gitlab-org/gitlab-foss/issues/42343
+    Gitlab::QueryLimiting.whitelist('https://gitlab.com/gitlab-org/gitlab-foss/issues/42339')
   end
 
   def authorize_update_pipeline!
@@ -178,8 +228,18 @@ class Projects::PipelinesController < Projects::ApplicationController
   end
 
   def limited_pipelines_count(project, scope = nil)
-    finder = PipelinesFinder.new(project, scope: scope)
+    finder = PipelinesFinder.new(project, current_user, scope: scope)
 
     view_context.limited_counter_with_delimiter(finder.execute)
   end
+
+  def pipeline_test_report
+    strong_memoize(:pipeline_test_report) do
+      @pipeline.test_reports
+    rescue Gitlab::Ci::Parsers::ParserError
+      :error
+    end
+  end
 end
+
+Projects::PipelinesController.prepend_if_ee('EE::Projects::PipelinesController')

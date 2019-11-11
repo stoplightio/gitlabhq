@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe VariableEntity do
@@ -8,7 +10,7 @@ describe VariableEntity do
     subject { entity.as_json }
 
     it 'contains required fields' do
-      expect(subject).to include(:id, :key, :value, :protected)
+      expect(subject).to include(:id, :key, :value, :protected, :environment_scope)
     end
   end
 end

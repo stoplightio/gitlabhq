@@ -1,5 +1,7 @@
+# frozen_string_literal: true
+
 module Ci
-  class Stage < ActiveRecord::Base
+  class Stage < ApplicationRecord
     extend Gitlab::Ci::Model
     include Importable
     include HasStatus
@@ -12,6 +14,7 @@ module Ci
 
     has_many :statuses, class_name: 'CommitStatus', foreign_key: :stage_id
     has_many :builds, foreign_key: :stage_id
+    has_many :bridges, foreign_key: :stage_id
 
     with_options unless: :importing? do
       validates :project, presence: true
@@ -36,8 +39,12 @@ module Ci
 
     state_machine :status, initial: :created do
       event :enqueue do
-        transition created: :pending
+        transition [:created, :preparing] => :pending
         transition [:success, :failed, :canceled, :skipped] => :running
+      end
+
+      event :prepare do
+        transition any - [:preparing] => :preparing
       end
 
       event :run do
@@ -63,22 +70,29 @@ module Ci
       event :block do
         transition any - [:manual] => :manual
       end
+
+      event :delay do
+        transition any - [:scheduled] => :scheduled
+      end
     end
 
     def update_status
       retry_optimistic_lock(self) do
-        case statuses.latest.status
+        new_status = latest_stage_status.to_s
+        case new_status
         when 'created' then nil
+        when 'preparing' then prepare
         when 'pending' then enqueue
         when 'running' then run
         when 'success' then succeed
         when 'failed' then drop
         when 'canceled' then cancel
         when 'manual' then block
+        when 'scheduled' then delay
         when 'skipped', nil then skip
         else
           raise HasStatus::UnknownStatusError,
-                "Unknown status `#{statuses.latest.status}`"
+                "Unknown status `#{new_status}`"
         end
       end
     end
@@ -106,6 +120,14 @@ module Ci
       Gitlab::Ci::Status::Stage::Factory
         .new(self, current_user)
         .fabricate!
+    end
+
+    def manual_playable?
+      blocked? || skipped?
+    end
+
+    def latest_stage_status
+      statuses.latest.slow_composite_status || 'skipped'
     end
   end
 end

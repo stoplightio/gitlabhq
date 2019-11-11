@@ -1,6 +1,8 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
-describe "Container Registry", :js do
+describe 'Container Registry', :js do
   let(:user) { create(:user) }
   let(:project) { create(:project) }
 
@@ -15,45 +17,54 @@ describe "Container Registry", :js do
     stub_container_registry_tags(repository: :any, tags: [])
   end
 
+  it 'has a page title set' do
+    visit_container_registry
+    expect(page).to have_title(_('Container Registry'))
+  end
+
   context 'when there are no image repositories' do
-    scenario 'user visits container registry main page' do
+    it 'user visits container registry main page' do
       visit_container_registry
 
-      expect(page).to have_content 'No container images'
+      expect(page).to have_content 'no container images'
     end
   end
 
   context 'when there are image repositories' do
     before do
-      stub_container_registry_tags(repository: %r{my/image}, tags: %w[latest])
+      stub_container_registry_tags(repository: %r{my/image}, tags: %w[latest], with_manifest: true)
       project.container_repositories << container_repository
     end
 
-    scenario 'user wants to see multi-level container repository' do
+    it 'user wants to see multi-level container repository' do
       visit_container_registry
 
       expect(page).to have_content('my/image')
     end
 
-    scenario 'user removes entire container repository' do
+    it 'user removes entire container repository' do
       visit_container_registry
 
-      expect_any_instance_of(ContainerRepository)
-        .to receive(:delete_tags!).and_return(true)
+      expect_any_instance_of(ContainerRepository).to receive(:delete_tags!).and_return(true)
 
       click_on(class: 'js-remove-repo')
+      expect(find('.modal .modal-title')).to have_content 'Remove repository'
+      find('.modal .modal-footer .btn-danger').click
     end
 
-    scenario 'user removes a specific tag from container repository' do
+    it 'user removes a specific tag from container repository' do
       visit_container_registry
 
       find('.js-toggle-repo').click
       wait_for_requests
 
-      expect_any_instance_of(ContainerRegistry::Tag)
-        .to receive(:delete).and_return(true)
+      service = double('service')
+      expect(service).to receive(:execute).with(container_repository) { { status: :success } }
+      expect(Projects::ContainerRepository::DeleteTagsService).to receive(:new).with(container_repository.project, user, tags: ['latest']) { service }
 
-      click_on(class: 'js-delete-registry')
+      click_on(class: 'js-delete-registry-row', visible: false)
+      expect(find('.modal .modal-title')).to have_content 'Remove tag'
+      find('.modal .modal-footer .btn-danger').click
     end
   end
 

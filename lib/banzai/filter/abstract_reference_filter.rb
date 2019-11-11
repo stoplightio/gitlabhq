@@ -1,9 +1,19 @@
+# frozen_string_literal: true
+
 module Banzai
   module Filter
     # Issues, Merge Requests, Snippets, Commits and Commit Ranges share
     # similar functionality in reference filtering.
     class AbstractReferenceFilter < ReferenceFilter
       include CrossProjectReference
+
+      # REFERENCE_PLACEHOLDER is used for re-escaping HTML text except found
+      # reference (which we replace with placeholder during re-scaping).  The
+      # random number helps ensure it's pretty close to unique. Since it's a
+      # transitory value (it never gets saved) we can initialize once, and it
+      # doesn't matter if it changes on a restart.
+      REFERENCE_PLACEHOLDER = "_reference_#{SecureRandom.hex(16)}_"
+      REFERENCE_PLACEHOLDER_PATTERN = %r{#{REFERENCE_PLACEHOLDER}(\d+)}.freeze
 
       def self.object_class
         # Implement in child class
@@ -100,6 +110,11 @@ module Banzai
         ref_pattern = object_class.reference_pattern
         link_pattern = object_class.link_reference_pattern
 
+        # Compile often used regexps only once outside of the loop
+        ref_pattern_anchor = /\A#{ref_pattern}\z/
+        link_pattern_start = /\A#{link_pattern}/
+        link_pattern_anchor = /\A#{link_pattern}\z/
+
         nodes.each do |node|
           if text_node?(node) && ref_pattern
             replace_text_when_pattern_matches(node, ref_pattern) do |content|
@@ -108,7 +123,7 @@ module Banzai
 
           elsif element_node?(node)
             yield_valid_link(node) do |link, inner_html|
-              if ref_pattern && link =~ /\A#{ref_pattern}\z/
+              if ref_pattern && link =~ ref_pattern_anchor
                 replace_link_node_with_href(node, link) do
                   object_link_filter(link, ref_pattern, link_content: inner_html)
                 end
@@ -118,7 +133,7 @@ module Banzai
 
               next unless link_pattern
 
-              if link == inner_html && inner_html =~ /\A#{link_pattern}/
+              if link == inner_html && inner_html =~ link_pattern_start
                 replace_link_node_with_text(node, link) do
                   object_link_filter(inner_html, link_pattern, link_reference: true)
                 end
@@ -126,7 +141,7 @@ module Banzai
                 next
               end
 
-              if link =~ /\A#{link_pattern}\z/
+              if link =~ link_pattern_anchor
                 replace_link_node_with_href(node, link) do
                   object_link_filter(link, link_pattern, link_content: inner_html, link_reference: true)
                 end
@@ -174,9 +189,10 @@ module Banzai
             title = object_link_title(object, matches)
             klass = reference_class(object_sym)
 
-            data = data_attributes_for(link_content || match, parent, object,
-                                       link_content: !!link_content,
-                                       link_reference: link_reference)
+            data_attributes = data_attributes_for(link_content || match, parent, object,
+                                                  link_content: !!link_content,
+                                                  link_reference: link_reference)
+            data = data_attribute(data_attributes)
 
             url =
               if matches.names.include?("url") && matches[:url]
@@ -187,25 +203,31 @@ module Banzai
 
             content = link_content || object_link_text(object, matches)
 
-            %(<a href="#{url}" #{data}
-                 title="#{escape_once(title)}"
-                 class="#{klass}">#{content}</a>)
+            link = %(<a href="#{url}" #{data}
+                        title="#{escape_once(title)}"
+                        class="#{klass}">#{content}</a>)
+
+            wrap_link(link, object)
           else
             match
           end
         end
       end
 
+      def wrap_link(link, object)
+        link
+      end
+
       def data_attributes_for(text, parent, object, link_content: false, link_reference: false)
         object_parent_type = parent.is_a?(Group) ? :group : :project
 
-        data_attribute(
+        {
           original:             text,
           link:                 link_content,
           link_reference:       link_reference,
           object_parent_type => parent.id,
           object_sym =>         object.id
-        )
+        }
       end
 
       def object_link_text_extras(object, matches)
@@ -289,7 +311,7 @@ module Banzai
 
       # Returns projects for the given paths.
       def find_for_paths(paths)
-        if RequestStore.active?
+        if Gitlab::SafeRequestStore.active?
           cache = refs_cache
           to_query = paths - cache.keys
 
@@ -323,6 +345,24 @@ module Banzai
         @current_project_namespace_path ||= project&.namespace&.full_path
       end
 
+      def records_per_parent
+        @_records_per_project ||= {}
+
+        @_records_per_project[object_class.to_s.underscore] ||= begin
+          hash = Hash.new { |h, k| h[k] = {} }
+
+          parent_per_reference.each do |path, parent|
+            record_ids = references_per_parent[path]
+
+            parent_records(parent, record_ids).each do |record|
+              hash[parent][record_identifier(record)] = record
+            end
+          end
+
+          hash
+        end
+      end
+
       private
 
       def full_project_path(namespace, project_ref)
@@ -333,7 +373,7 @@ module Banzai
       end
 
       def refs_cache
-        RequestStore["banzai_#{parent_type}_refs".to_sym] ||= {}
+        Gitlab::SafeRequestStore["banzai_#{parent_type}_refs".to_sym] ||= {}
       end
 
       def parent_type
@@ -349,6 +389,24 @@ module Banzai
 
         group_ref
       end
+
+      def unescape_html_entities(text)
+        CGI.unescapeHTML(text.to_s)
+      end
+
+      def escape_html_entities(text)
+        CGI.escapeHTML(text.to_s)
+      end
+
+      def escape_with_placeholders(text, placeholder_data)
+        escaped = escape_html_entities(text)
+
+        escaped.gsub(REFERENCE_PLACEHOLDER_PATTERN) do |match|
+          placeholder_data[$1.to_i]
+        end
+      end
     end
   end
 end
+
+Banzai::Filter::AbstractReferenceFilter.prepend_if_ee('EE::Banzai::Filter::AbstractReferenceFilter')

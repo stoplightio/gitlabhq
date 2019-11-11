@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module HealthChecks
     module BaseAbstractCheck
@@ -11,10 +13,6 @@ module Gitlab
 
       def readiness
         raise NotImplementedError
-      end
-
-      def liveness
-        HealthChecks::Result.new(true)
       end
 
       def metrics

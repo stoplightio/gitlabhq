@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module LdapHelpers
   def ldap_adapter(provider = 'ldapmain', ldap = double(:ldap))
     ::Gitlab::Auth::LDAP::Adapter.new(provider, ldap)
@@ -37,6 +39,23 @@ module LdapHelpers
       .to receive(:find_by_uid).with(uid, any_args).and_return(return_value)
   end
 
+  def stub_ldap_person_find_by_dn(entry, provider = 'ldapmain')
+    person = ::Gitlab::Auth::LDAP::Person.new(entry, provider) if entry.present?
+
+    allow(::Gitlab::Auth::LDAP::Person)
+      .to receive(:find_by_dn)
+      .and_return(person)
+  end
+
+  def stub_ldap_person_find_by_email(email, entry, provider = 'ldapmain')
+    person = ::Gitlab::Auth::LDAP::Person.new(entry, provider) if entry.present?
+
+    allow(::Gitlab::Auth::LDAP::Person)
+      .to receive(:find_by_email)
+      .with(email, anything)
+      .and_return(person)
+  end
+
   # Create a simple LDAP user entry.
   def ldap_user_entry(uid)
     entry = Net::LDAP::Entry.new
@@ -51,3 +70,5 @@ module LdapHelpers
       .to receive(:ldap_search).and_raise(Gitlab::Auth::LDAP::LDAPConnectionError)
   end
 end
+
+LdapHelpers.include_if_ee('EE::LdapHelpers')

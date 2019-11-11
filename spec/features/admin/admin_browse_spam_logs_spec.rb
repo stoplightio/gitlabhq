@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe 'Admin browse spam logs' do
@@ -7,7 +9,7 @@ describe 'Admin browse spam logs' do
     sign_in(create(:admin))
   end
 
-  scenario 'Browse spam logs' do
+  it 'Browse spam logs' do
     visit admin_spam_logs_path
 
     expect(page).to have_content('Spam Logs')

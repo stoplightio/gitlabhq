@@ -1,9 +1,12 @@
-# Blob is a Rails-specific wrapper around Gitlab::Git::Blob objects
+# frozen_string_literal: true
+
+# Blob is a Rails-specific wrapper around Gitlab::Git::Blob, SnippetBlob and Ci::ArtifactBlob
 class Blob < SimpleDelegator
+  include Presentable
+  include BlobLanguageFromGitAttributes
+
   CACHE_TIME = 60 # Cache raw blobs referred to by a (mutable) ref for 1 minute
   CACHE_TIME_IMMUTABLE = 3600 # Cache blobs referred to by an immutable reference for 1 hour
-
-  MAXIMUM_TEXT_HIGHLIGHT_SIZE = 1.megabyte
 
   # Finding a viewer for a blob happens based only on extension and whether the
   # blob is binary or text, which means 1 blob should only be matched by 1 viewer,
@@ -29,6 +32,7 @@ class Blob < SimpleDelegator
     BlobViewer::Balsamiq,
 
     BlobViewer::Video,
+    BlobViewer::Audio,
 
     BlobViewer::PDF,
 
@@ -77,15 +81,9 @@ class Blob < SimpleDelegator
   end
 
   def self.lazy(project, commit_id, path)
-    BatchLoader.for({ project: project, commit_id: commit_id, path: path }).batch do |items, loader|
-      items_by_project = items.group_by { |i| i[:project] }
-
-      items_by_project.each do |project, items|
-        items = items.map { |i| i.values_at(:commit_id, :path) }
-
-        project.repository.blobs_at(items).each do |blob|
-          loader.call({ project: blob.project, commit_id: blob.commit_id, path: blob.path }, blob) if blob
-        end
+    BatchLoader.for([commit_id, path]).batch(key: project.repository) do |items, loader, args|
+      args[:key].blobs_at(items).each do |blob|
+        loader.call([blob.commit_id, blob.path], blob) if blob
       end
     end
   end
@@ -105,7 +103,7 @@ class Blob < SimpleDelegator
   # If the blob is a text based blob the content is converted to UTF-8 and any
   # invalid byte sequences are replaced.
   def data
-    if binary?
+    if binary_in_repo?
       super
     else
       @data ||= super.encode(Encoding::UTF_8, invalid: :replace, undef: :replace)
@@ -113,14 +111,10 @@ class Blob < SimpleDelegator
   end
 
   def load_all_data!
-    # Endpoint needed: gitlab-org/gitaly#756
+    # Endpoint needed: https://gitlab.com/gitlab-org/gitaly/issues/756
     Gitlab::GitalyClient.allow_n_plus_1_calls do
       super(project.repository) if project
     end
-  end
-
-  def no_highlighting?
-    raw_size && raw_size > MAXIMUM_TEXT_HIGHLIGHT_SIZE
   end
 
   def empty?
@@ -156,11 +150,11 @@ class Blob < SimpleDelegator
   # an LFS pointer, we assume the file stored in LFS is binary, unless a
   # text-based rich blob viewer matched on the file's extension. Otherwise, this
   # depends on the type of the blob itself.
-  def raw_binary?
+  def binary?
     if stored_externally?
       if rich_viewer
         rich_viewer.binary?
-      elsif Linguist::Language.find_by_extension(name).any?
+      elsif known_extension?
         false
       elsif _mime_type
         _mime_type.binary?
@@ -168,7 +162,7 @@ class Blob < SimpleDelegator
         true
       end
     else
-      binary?
+      binary_in_repo?
     end
   end
 
@@ -183,11 +177,15 @@ class Blob < SimpleDelegator
   end
 
   def video?
-    UploaderHelper::VIDEO_EXT.include?(extension)
+    UploaderHelper::SAFE_VIDEO_EXT.include?(extension)
+  end
+
+  def audio?
+    UploaderHelper::SAFE_AUDIO_EXT.include?(extension)
   end
 
   def readable_text?
-    text? && !stored_externally? && !truncated?
+    text_in_repo? && !stored_externally? && !truncated?
   end
 
   def simple_viewer
@@ -227,7 +225,7 @@ class Blob < SimpleDelegator
   def simple_viewer_class
     if empty?
       BlobViewer::Empty
-    elsif raw_binary?
+    elsif binary?
       BlobViewer::Download
     else # text
       BlobViewer::Text
@@ -250,3 +248,5 @@ class Blob < SimpleDelegator
     classes.find { |viewer_class| viewer_class.can_render?(self, verify_binary: verify_binary) }
   end
 end
+
+Blob.prepend_if_ee('EE::Blob')

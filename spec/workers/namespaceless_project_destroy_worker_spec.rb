@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe NamespacelessProjectDestroyWorker do
@@ -7,7 +9,6 @@ describe NamespacelessProjectDestroyWorker do
 
   before do
     # Stub after_save callbacks that will fail when Project has no namespace
-    allow_any_instance_of(Project).to receive(:ensure_storage_path_exists).and_return(nil)
     allow_any_instance_of(Project).to receive(:update_project_statistics).and_return(nil)
   end
 
@@ -71,10 +72,10 @@ describe NamespacelessProjectDestroyWorker do
           expect(merge_request.reload).to be_closed
         end
 
-        it 'destroys the link' do
+        it 'destroys fork network members' do
           subject.perform(project.id)
 
-          expect(parent_project.forked_project_links).to be_empty
+          expect(parent_project.forked_to_members).to be_empty
         end
       end
     end

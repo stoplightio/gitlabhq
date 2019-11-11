@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module ChatMessage
   class PushMessage < BaseMessage
     attr_reader :after
@@ -24,16 +26,8 @@ module ChatMessage
     end
 
     def activity
-      action = if new_branch?
-                 "created"
-               elsif removed_branch?
-                 "removed"
-               else
-                 "pushed to"
-               end
-
       {
-        title: "#{user_combined_name} #{action} #{ref_type}",
+        title: humanized_action(short: true),
         subtitle: "in #{project_link}",
         text: compare_link,
         image: user_avatar
@@ -42,34 +36,24 @@ module ChatMessage
 
     private
 
+    def humanized_action(short: false)
+      action, ref_link, target_link = compose_action_details
+      text = [user_combined_name, action, ref_type, ref_link]
+      text << target_link unless short
+      text.join(' ')
+    end
+
     def message
-      if new_branch?
-        new_branch_message
-      elsif removed_branch?
-        removed_branch_message
-      else
-        push_message
-      end
+      humanized_action
     end
 
     def format(string)
       Slack::Notifier::LinkFormatter.format(string)
     end
 
-    def new_branch_message
-      "#{user_combined_name} pushed new #{ref_type} #{branch_link} to #{project_link}"
-    end
-
-    def removed_branch_message
-      "#{user_combined_name} removed #{ref_type} #{ref} from #{project_link}"
-    end
-
-    def push_message
-      "#{user_combined_name} pushed to #{ref_type} #{branch_link} of #{project_link} (#{compare_link})"
-    end
-
     def commit_messages
-      commits.map { |commit| compose_commit_message(commit) }.join("\n\n")
+      linebreak_chars = commit_message_html ? "<br/>\n<br/>\n" : "\n\n"
+      commits.map { |commit| compose_commit_message(commit) }.join(linebreak_chars)
     end
 
     def commit_message_attachments
@@ -80,6 +64,11 @@ module ChatMessage
       author = commit[:author][:name]
       id = Commit.truncate_sha(commit[:id])
       message = commit[:message]
+
+      if commit_message_html
+        message = message.gsub(Gitlab::Regex.breakline_regex, "<br/>\n")
+      end
+
       url = commit[:url]
 
       "[#{id}](#{url}): #{message} - #{author}"
@@ -111,6 +100,16 @@ module ChatMessage
 
     def compare_link
       "[Compare changes](#{compare_url})"
+    end
+
+    def compose_action_details
+      if new_branch?
+        ['pushed new', branch_link, "to #{project_link}"]
+      elsif removed_branch?
+        ['removed', ref, "from #{project_link}"]
+      else
+        ['pushed to', branch_link, "of #{project_link} (#{compare_link})"]
+      end
     end
 
     def attachment_color

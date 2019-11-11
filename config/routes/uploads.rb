@@ -7,7 +7,7 @@ scope path: :uploads do
   # show uploads for models, snippets (notes) available for now
   get '-/system/:model/:id/:secret/:filename',
     to: 'uploads#show',
-    constraints: { model: /personal_snippet/, id: /\d+/, filename: %r{[^/]+} }
+    constraints: { model: /personal_snippet|user/, id: /\d+/, filename: %r{[^/]+} }
 
   # show temporary uploads
   get '-/system/temp/:secret/:filename',
@@ -17,7 +17,8 @@ scope path: :uploads do
   # Appearance
   get "-/system/:model/:mounted_as/:id/:filename",
       to:           "uploads#show",
-      constraints:  { model: /appearance/, mounted_as: /logo|header_logo|favicon/, filename: /.+/ }
+      constraints:  { model: /appearance/, mounted_as: /logo|header_logo|favicon/, filename: /.+/ },
+      as: 'appearance_upload'
 
   # Project markdown uploads
   get ":namespace_id/:project_id/:secret/:filename",
@@ -27,8 +28,12 @@ scope path: :uploads do
   # create uploads for models, snippets (notes) available for now
   post ':model',
     to: 'uploads#create',
-    constraints: { model: /personal_snippet/, id: /\d+/ },
+    constraints: { model: /personal_snippet|user/, id: /\d+/ },
     as: 'upload'
+
+  post ':model/authorize',
+    to: 'uploads#authorize',
+    constraints: { model: /personal_snippet|user/ }
 end
 
 # Redirect old note attachments path to new uploads path.

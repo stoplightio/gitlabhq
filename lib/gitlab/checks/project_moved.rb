@@ -1,7 +1,9 @@
+# frozen_string_literal: true
+
 module Gitlab
   module Checks
     class ProjectMoved < PostPushMessage
-      REDIRECT_NAMESPACE = "redirect_namespace".freeze
+      REDIRECT_NAMESPACE = "redirect_namespace"
 
       def initialize(project, user, protocol, redirected_path)
         @redirected_path = redirected_path

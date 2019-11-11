@@ -14,30 +14,33 @@ want to configure.
 
  ![Project services list](img/project_services.png)
 
-Below, you will find a list of the currently supported ones accompanied with
-comprehensive documentation.
+Below, you will find a list of the currently supported ones accompanied with comprehensive documentation.
 
 ## Services
 
 Click on the service links to see further configuration instructions and details.
 
-| Service |	Description |
+| Service | Description |
 | ------- | ----------- |
-| Asana     |	Asana - Teamwork without email |
-| Assembla 	| Project Management Software (Source Commits Endpoint) |
+| Asana     | Asana - Teamwork without email |
+| Assembla | Project Management Software (Source Commits Endpoint) |
 | [Atlassian Bamboo CI](bamboo.md) | A continuous integration and build server |
 | Buildkite | Continuous integration and deployments |
 | [Bugzilla](bugzilla.md) | Bugzilla issue tracker |
 | Campfire | Simple web-based real-time group chat |
 | Custom Issue Tracker | Custom issue tracker |
+| [Discord Notifications](discord_notifications.md) | Receive event notifications in Discord |
 | Drone CI | Continuous Integration platform built on Docker, written in Go |
 | [Emails on push](emails_on_push.md) | Email the commits and diff of each push to a list of recipients |
 | External Wiki | Replaces the link to the internal wiki with a link to an external wiki |
 | Flowdock | Flowdock is a collaboration web app for technical teams |
-| Gemnasium   _(Has been deprecated in GitLab 11.0)_ | Gemnasium monitors your project dependencies and alerts you about updates and security vulnerabilities |
+| [Generic alerts](generic_alerts.md) **(ULTIMATE)** | Receive alerts on GitLab from any source |
+| [GitHub](github.md) **(PREMIUM)** | Sends pipeline notifications to GitHub |
+| [Hangouts Chat](hangouts_chat.md) | Receive events notifications in Google Hangouts Chat |
 | [HipChat](hipchat.md) | Private group chat and IM |
 | [Irker (IRC gateway)](irker.md) | Send IRC messages, on update, to a list of recipients through an Irker gateway |
-| [JIRA](jira.md) | JIRA issue tracker |
+| [Jira](jira.md) | Jira issue tracker |
+| [Jenkins](../../../integration/jenkins.md) **(STARTER)** | An extendable open source continuous integration server |
 | JetBrains TeamCity CI | A continuous integration and build server |
 | [Mattermost slash commands](mattermost_slash_commands.md) | Mattermost chat and ChatOps slash commands |
 | [Mattermost Notifications](mattermost.md) | Receive event notifications in Mattermost |
@@ -45,11 +48,23 @@ Click on the service links to see further configuration instructions and details
 | Packagist | Update your project on Packagist, the main Composer repository |
 | Pipelines emails | Email the pipeline status to a list of recipients |
 | [Slack Notifications](slack.md) | Send GitLab events (e.g. issue created) to Slack as notifications |
-| [Slack slash commands](slack_slash_commands.md) | Use slash commands in Slack to control GitLab |
+| [Slack slash commands](slack_slash_commands.md) **(CORE ONLY)** | Use slash commands in Slack to control GitLab |
+| [GitLab Slack application](gitlab_slack_application.md) **(FREE ONLY)** | Use Slack's official application |
 | PivotalTracker | Project Management Software (Source Commits Endpoint) |
 | [Prometheus](prometheus.md) | Monitor the performance of your deployed apps |
 | Pushover | Pushover makes it easy to get real-time notifications on your Android device, iPhone, iPad, and Desktop |
 | [Redmine](redmine.md) | Redmine issue tracker |
+| [YouTrack](youtrack.md) | YouTrack issue tracker |
+
+## Push hooks limit
+
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/issues/31009) in GitLab 12.4.
+
+If a single push includes changes to more than three branches or tags, services
+supported by `push_hooks` and `tag_push_hooks` events won't be executed.
+
+The number of branches or tags supported can be changed via
+[`push_event_hooks_limit` application setting](../../../api/settings.md#list-of-settings-that-can-be-accessed-via-api-calls).
 
 ## Services templates
 
@@ -69,5 +84,5 @@ For an overview of what projects services are available, please see the
 
 Contributions are welcome!
 
-[projects-code]: https://gitlab.com/gitlab-org/gitlab-ce/tree/master/app/models/project_services
+[projects-code]: https://gitlab.com/gitlab-org/gitlab-foss/tree/master/app/models/project_services
 [permissions]: ../../permissions.md

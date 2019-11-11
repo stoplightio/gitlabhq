@@ -1,6 +1,11 @@
 - @hide_top_links = true
-- breadcrumb_title "Search"
 - page_title @search_term
+- @hide_breadcrumbs = true
+
+.page-title-holder.d-sm-flex.align-items-sm-center
+  %h1.page-title<
+    = _('Search')
+  = render_if_exists 'search/form_elasticsearch', attrs: { class: 'ml-sm-auto' }
 
 .prepend-top-default
   = render 'search/form'

@@ -1,11 +1,13 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Groups::BoardsController do
   let(:group) { create(:group) }
-  let(:user)    { create(:user) }
+  let(:user)  { create(:user) }
 
   before do
-    group.add_master(user)
+    group.add_maintainer(user)
     sign_in(user)
   end
 
@@ -35,18 +37,34 @@ describe Groups::BoardsController do
           expect(response.content_type).to eq 'text/html'
         end
       end
+
+      context 'when user is signed out' do
+        let(:group) { create(:group, :public) }
+
+        it 'renders template' do
+          sign_out(user)
+
+          board = create(:board, group: group)
+          create(:board_group_recent_visit, group: board.group, board: board, user: user)
+
+          list_boards
+
+          expect(response).to render_template :index
+          expect(response.content_type).to eq 'text/html'
+        end
+      end
     end
 
     context 'when format is JSON' do
       it 'return an array with one group board' do
         create(:board, group: group)
 
+        expect(Boards::VisitsFinder).not_to receive(:new)
+
         list_boards format: :json
 
-        parsed_response = JSON.parse(response.body)
-
         expect(response).to match_response_schema('boards')
-        expect(parsed_response.length).to eq 1
+        expect(json_response.length).to eq 1
       end
 
       context 'with unauthorized user' do
@@ -64,8 +82,12 @@ describe Groups::BoardsController do
       end
     end
 
+    it_behaves_like 'disabled when using an external authorization service' do
+      subject { list_boards }
+    end
+
     def list_boards(format: :html)
-      get :index, group_id: group, format: format
+      get :index, params: { group_id: group }, format: format
     end
   end
 
@@ -74,7 +96,7 @@ describe Groups::BoardsController do
 
     context 'when format is HTML' do
       it 'renders template' do
-        read_board board: board
+        expect { read_board board: board }.to change(BoardGroupRecentVisit, :count).by(1)
 
         expect(response).to render_template :show
         expect(response.content_type).to eq 'text/html'
@@ -93,10 +115,25 @@ describe Groups::BoardsController do
           expect(response.content_type).to eq 'text/html'
         end
       end
+
+      context 'when user is signed out' do
+        let(:group) { create(:group, :public) }
+
+        it 'does not save visit' do
+          sign_out(user)
+
+          expect { read_board board: board }.to change(BoardGroupRecentVisit, :count).by(0)
+
+          expect(response).to render_template :show
+          expect(response.content_type).to eq 'text/html'
+        end
+      end
     end
 
     context 'when format is JSON' do
       it 'returns project board' do
+        expect(Boards::Visits::CreateService).not_to receive(:new)
+
         read_board board: board, format: :json
 
         expect(response).to match_response_schema('board')
@@ -127,9 +164,15 @@ describe Groups::BoardsController do
       end
     end
 
+    it_behaves_like 'disabled when using an external authorization service' do
+      subject { read_board board: board }
+    end
+
     def read_board(board:, format: :html)
-      get :show, group_id: group,
-                 id: board.to_param,
+      get :show, params: {
+                   group_id: group,
+                   id: board.to_param
+                 },
                  format: format
     end
   end

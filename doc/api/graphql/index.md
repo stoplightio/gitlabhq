@@ -1,6 +1,8 @@
-# GraphQL API (Beta)
+# GraphQL API
 
-> [Introduced][ce-19008] in GitLab 11.0.
+> - [Introduced][ce-19008] in GitLab 11.0 (enabled by feature flag `graphql`).
+> - [Always enabled](https://gitlab.com/gitlab-org/gitlab-foss/merge_requests/30444)
+  in GitLab 12.1.
 
 [GraphQL](https://graphql.org/) is a query language for APIs that
 allows clients to request exactly the data they need, making it
@@ -16,27 +18,45 @@ added to the API without creating breaking changes. This allows us to
 have a versionless API as described in [the GraphQL
 documentation](https://graphql.org/learn/best-practices/#versioning).
 
-## Enabling the GraphQL feature
+## Vision
 
-The GraphQL API itself is currently in Alpha, and therefore hidden behind a
-feature flag. You can enable the feature using the [features api][features-api] on a self-hosted instance.
+We want the GraphQL API to be the **primary** means of interacting
+programmatically with GitLab. To achieve this, it needs full coverage - anything
+possible in the REST API should also be possible in the GraphQL API.
 
-For example:
+To help us meet this vision, the frontend should use GraphQL in preference to
+the REST API for new features.
 
-```shell
-curl --data "value=100" --header "PRIVATE-TOKEN: 9koXpg98eAheJpvBs5tK" https://gitlab.example.com/api/v4/features/graphql
-```
+There are no plans to deprecate the REST API. To reduce the technical burden of
+supporting two APIs in parallel, they should share implementations as much as
+possible.
 
 ## Available queries
 
-A first iteration of a GraphQL API includes only 2 queries: `project` and
-`merge_request` and only returns scalar fields, or fields of the type `Project`
-or `MergeRequest`.
+A first iteration of a GraphQL API includes the following queries
+
+1. `project` : Within a project it is also possible to fetch a `mergeRequest` by IID.
+1. `group` : Basic group information and epics **(ULTIMATE)** are currently supported.
+1. `namespace` : Within a namespace it is also possible to fetch `projects`.
+
+### Multiplex queries
+
+GitLab supports batching queries into a single request using
+[apollo-link-batch-http](https://www.apollographql.com/docs/link/links/batch-http/). More
+info about multiplexed queries is also available for
+[graphql-ruby](https://graphql-ruby.org/queries/multiplex.html) the
+library GitLab uses on the backend.
+
+## Reference
+
+GitLab's GraphQL reference [is available](reference/index.md).
+
+It is automatically generated from GitLab's GraphQL schema and embedded in a Markdown file.
 
 ## GraphiQL
 
 The API can be explored by using the GraphiQL IDE, it is available on your
 instance on `gitlab.example.com/-/graphql-explorer`.
 
-[ce-19008]: https://gitlab.com/gitlab-org/gitlab-ce/merge_requests/19008
+[ce-19008]: https://gitlab.com/gitlab-org/gitlab-foss/merge_requests/19008
 [features-api]: ../features.md

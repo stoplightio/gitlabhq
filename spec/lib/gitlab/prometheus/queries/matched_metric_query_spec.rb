@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Gitlab::Prometheus::Queries::MatchedMetricQuery do
@@ -15,7 +17,7 @@ describe Gitlab::Prometheus::Queries::MatchedMetricQuery do
     [{ '__name__' => 'metric_a' },
      { '__name__' => 'metric_b' }]
   end
-  let(:partialy_empty_series_info) { [{ '__name__' => 'metric_a', 'environment' => '' }] }
+  let(:partially_empty_series_info) { [{ '__name__' => 'metric_a', 'environment' => '' }] }
   let(:empty_series_info) { [] }
 
   let(:client) { double('prometheus_client') }
@@ -60,7 +62,7 @@ describe Gitlab::Prometheus::Queries::MatchedMetricQuery do
 
     context 'one of the series info was not found' do
       before do
-        allow(client).to receive(:series).and_return(partialy_empty_series_info)
+        allow(client).to receive(:series).and_return(partially_empty_series_info)
       end
       it 'responds with one active and one missing metric' do
         expect(subject.query).to eq([{ group: 'name', priority: 1, active_metrics: 1, metrics_missing_requirements: 1 }])

@@ -1,15 +1,28 @@
+---
+type: reference
+---
+
 # Getting started with GitLab CI/CD
 
->**Note:** Starting from version 8.0, GitLab [Continuous Integration][ci] (CI)
+NOTE: **Note:**
+Starting from version 8.0, GitLab [Continuous Integration][ci] (CI)
 is fully integrated into GitLab itself and is [enabled] by default on all
 projects.
+
+NOTE: **Note:**
+Please keep in mind that only project Maintainers and Admin users have
+the permissions to access a project's settings.
+
+NOTE: **Note:**
+Coming over to GitLab from Jenkins? Check out our [reference](../jenkins/index.md)
+for converting your pre-existing pipelines over to our format.
 
 GitLab offers a [continuous integration][ci] service. If you
 [add a `.gitlab-ci.yml` file][yaml] to the root directory of your repository,
 and configure your GitLab project to use a [Runner], then each commit or
-push, triggers your CI [pipeline].
+push triggers your CI [pipeline].
 
-The `.gitlab-ci.yml` file tells the GitLab runner what to do. By default it runs
+The `.gitlab-ci.yml` file tells the GitLab Runner what to do. By default it runs
 a pipeline with three [stages]: `build`, `test`, and `deploy`. You don't need to
 use all three stages; stages with no jobs are simply ignored.
 
@@ -30,16 +43,17 @@ So in brief, the steps needed to have a working CI can be summed up to:
 1. Configure a Runner
 
 From there on, on every push to your Git repository, the Runner will
-automagically start the pipeline and the pipeline will appear under the
+automatically start the pipeline and the pipeline will appear under the
 project's **Pipelines** page.
 
 ---
 
-This guide assumes that you:
+This guide assumes that you have:
 
-- have a working GitLab instance of version 8.0+r or are using
-  [GitLab.com](https://gitlab.com)
-- have a project in GitLab that you would like to use CI for
+- A working GitLab instance of version 8.0+r or are using
+  [GitLab.com](https://gitlab.com).
+- A project in GitLab that you would like to use CI for.
+- Maintainer or owner access to the project
 
 Let's break it down to pieces and work on solving the GitLab CI puzzle.
 
@@ -73,11 +87,13 @@ You need to create a file named `.gitlab-ci.yml` in the root directory of your
 repository. Below is an example for a Ruby on Rails project.
 
 ```yaml
+image: "ruby:2.5"
+
 before_script:
   - apt-get update -qq && apt-get install -y -qq sqlite3 libsqlite3-dev nodejs
   - ruby -v
   - which ruby
-  - gem install bundler --no-ri --no-rdoc
+  - gem install bundler --no-document
   - bundle install --jobs $(nproc)  "${FLAGS[@]}"
 
 rspec:
@@ -105,12 +121,12 @@ Jobs are used to create jobs, which are then picked by
 What is important is that each job is run independently from each other.
 
 If you want to check whether the `.gitlab-ci.yml` of your project is valid, there is a
-Lint tool under the page `/ci/lint` of your project namespace. You can also find
+Lint tool under the page `/-/ci/lint` of your project namespace. You can also find
 a "CI Lint" button to go to this page under **CI/CD ➔ Pipelines** and
 **Pipelines ➔ Jobs** in your project.
 
 For more information and a complete `.gitlab-ci.yml` syntax, please read
-[the reference documentation on .gitlab-ci.yml](../yaml/README.md).
+[the reference documentation on `.gitlab-ci.yml`](../yaml/README.md).
 
 ### Push `.gitlab-ci.yml` to GitLab
 
@@ -127,7 +143,7 @@ Now if you go to the **Pipelines** page you will see that the pipeline is
 pending.
 
 NOTE: **Note:**
-If you have a [mirrored repository where GitLab pulls from](https://docs.gitlab.com/ee/workflow/repository_mirroring.html#pulling-from-a-remote-repository),
+If you have a [mirrored repository where GitLab pulls from](../../workflow/repository_mirroring.md#pulling-from-a-remote-repository-starter),
 you may need to enable pipeline triggering in your project's
 **Settings > Repository > Pull from a remote repository > Trigger pipelines for mirror updates**.
 
@@ -168,7 +184,7 @@ can be found at <https://docs.gitlab.com/runner/>.
 In order to have a functional Runner you need to follow two steps:
 
 1. [Install it][runner-install]
-2. [Configure it](../runners/README.md#registering-a-specific-runner)
+1. [Configure it](../runners/README.md#registering-a-specific-runner)
 
 Follow the links above to set up your own Runner or use a Shared Runner as
 described in the next section.
@@ -219,9 +235,9 @@ Visit the [examples README][examples] to see a list of examples using GitLab
 CI with various languages.
 
 [runner-install]: https://docs.gitlab.com/runner/install/
-[blog-ci]: https://about.gitlab.com/2015/05/06/why-were-replacing-gitlab-ci-jobs-with-gitlab-ci-dot-yml/
+[blog-ci]: https://about.gitlab.com/blog/2015/05/06/why-were-replacing-gitlab-ci-jobs-with-gitlab-ci-dot-yml/
 [examples]: ../examples/README.md
-[ci]: https://about.gitlab.com/gitlab-ci/
+[ci]: https://about.gitlab.com/product/continuous-integration/
 [yaml]: ../yaml/README.md
 [runner]: ../runners/README.md
 [enabled]: ../enable_or_disable_ci.md

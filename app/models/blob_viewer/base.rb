@@ -1,6 +1,8 @@
+# frozen_string_literal: true
+
 module BlobViewer
   class Base
-    PARTIAL_PATH_PREFIX = 'projects/blob/viewers'.freeze
+    PARTIAL_PATH_PREFIX = 'projects/blob/viewers'
 
     class_attribute :partial_name, :loading_partial_name, :type, :extensions, :file_types, :load_async, :binary, :switcher_icon, :switcher_title, :collapse_limit, :size_limit
 
@@ -14,7 +16,7 @@ module BlobViewer
 
     def initialize(blob)
       @blob = blob
-      @initially_binary = blob.binary?
+      @initially_binary = blob.binary_in_repo?
     end
 
     def self.partial_path
@@ -50,7 +52,7 @@ module BlobViewer
     end
 
     def self.can_render?(blob, verify_binary: true)
-      return false if verify_binary && binary? != blob.binary?
+      return false if verify_binary && binary? != blob.binary_in_repo?
       return true if extensions&.include?(blob.extension)
       return true if file_types&.include?(blob.file_type)
 
@@ -70,7 +72,7 @@ module BlobViewer
     end
 
     def binary_detected_after_load?
-      !@initially_binary && blob.binary?
+      !@initially_binary && blob.binary_in_repo?
     end
 
     # This method is used on the server side to check whether we can attempt to

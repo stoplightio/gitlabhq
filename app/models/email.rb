@@ -1,11 +1,12 @@
-class Email < ActiveRecord::Base
+# frozen_string_literal: true
+
+class Email < ApplicationRecord
   include Sortable
   include Gitlab::SQL::Pattern
 
-  belongs_to :user
+  belongs_to :user, optional: false
 
-  validates :user_id, presence: true
-  validates :email, presence: true, uniqueness: true, email: true
+  validates :email, presence: true, uniqueness: true, devise_email: true
   validate :unique_email, if: ->(email) { email.email_changed? }
 
   scope :confirmed, -> { where.not(confirmed_at: nil) }
@@ -13,7 +14,7 @@ class Email < ActiveRecord::Base
   after_commit :update_invalid_gpg_signatures, if: -> { previous_changes.key?('confirmed_at') }
 
   devise :confirmable
-  self.reconfirmable = false  # currently email can't be changed, no need to reconfirm
+  self.reconfirmable = false # currently email can't be changed, no need to reconfirm
 
   delegate :username, to: :user
 
@@ -23,6 +24,10 @@ class Email < ActiveRecord::Base
 
   def unique_email
     self.errors.add(:email, 'has already been taken') if User.exists?(email: self.email)
+  end
+
+  def accept_pending_invitations!
+    user.accept_pending_invitations!
   end
 
   # once email is confirmed, update the gpg signatures

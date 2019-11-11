@@ -1,20 +1,26 @@
+# frozen_string_literal: true
+
 module Issuable
   class CommonSystemNotesService < ::BaseService
     attr_reader :issuable
 
-    def execute(issuable, old_labels)
+    def execute(issuable, old_labels: [], is_update: true)
       @issuable = issuable
 
-      if issuable.previous_changes.include?('title')
-        create_title_change_note(issuable.previous_changes['title'].first)
+      if is_update
+        if issuable.previous_changes.include?('title')
+          create_title_change_note(issuable.previous_changes['title'].first)
+        end
+
+        handle_description_change_note
+
+        handle_time_tracking_note if issuable.is_a?(TimeTrackable)
+        create_discussion_lock_note if issuable.previous_changes.include?('discussion_locked')
       end
 
-      handle_description_change_note
-
-      handle_time_tracking_note if issuable.is_a?(TimeTrackable)
-      create_labels_note(old_labels) if issuable.labels != old_labels
-      create_discussion_lock_note if issuable.previous_changes.include?('discussion_locked')
+      create_due_date_note if issuable.previous_changes.include?('due_date')
       create_milestone_note if issuable.previous_changes.include?('milestone_id')
+      create_labels_note(old_labels) if old_labels && issuable.labels != old_labels
     end
 
     private
@@ -35,7 +41,7 @@ module Issuable
           create_task_status_note
         else
           # TODO: Show this note if non-task content was modified.
-          # https://gitlab.com/gitlab-org/gitlab-ce/issues/33577
+          # https://gitlab.com/gitlab-org/gitlab-foss/issues/33577
           create_description_change_note
         end
       end
@@ -53,7 +59,9 @@ module Issuable
       added_labels = issuable.labels - old_labels
       removed_labels = old_labels - issuable.labels
 
-      SystemNoteService.change_label(issuable, issuable.project, current_user, added_labels, removed_labels)
+      ResourceEvents::ChangeLabelsService
+        .new(issuable, current_user)
+        .execute(added_labels: added_labels, removed_labels: removed_labels)
     end
 
     def create_title_change_note(old_title)
@@ -86,8 +94,14 @@ module Issuable
       SystemNoteService.change_milestone(issuable, issuable.project, current_user, issuable.milestone)
     end
 
+    def create_due_date_note
+      SystemNoteService.change_due_date(issuable, issuable.project, current_user, issuable.due_date)
+    end
+
     def create_discussion_lock_note
       SystemNoteService.discussion_lock(issuable, current_user)
     end
   end
 end
+
+Issuable::CommonSystemNotesService.prepend_if_ee('EE::Issuable::CommonSystemNotesService')

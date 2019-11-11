@@ -2,27 +2,34 @@ import $ from 'jquery';
 import axios from './lib/utils/axios_utils';
 import Api from './api';
 import { normalizeHeaders } from './lib/utils/common_utils';
+import { __ } from '~/locale';
 
-export default function groupsSelect() {
+const groupsSelect = () => {
   // Needs to be accessible in rspec
   window.GROUP_SELECT_PER_PAGE = 20;
   $('.ajax-groups-select').each(function setAjaxGroupsSelect2() {
     const $select = $(this);
     const allAvailable = $select.data('allAvailable');
     const skipGroups = $select.data('skipGroups') || [];
+    const parentGroupID = $select.data('parentId');
+    const groupsPath = parentGroupID
+      ? Api.subgroupsPath.replace(':id', parentGroupID)
+      : Api.groupsPath;
+
     $select.select2({
-      placeholder: 'Search for a group',
+      placeholder: __('Search for a group'),
+      allowClear: $select.hasClass('allowClear'),
       multiple: $select.hasClass('multiselect'),
       minimumInputLength: 0,
       ajax: {
-        url: Api.buildUrl(Api.groupsPath),
+        url: Api.buildUrl(groupsPath),
         dataType: 'json',
         quietMillis: 250,
         transport(params) {
           axios[params.type.toLowerCase()](params.url, {
             params: params.data,
           })
-            .then((res) => {
+            .then(res => {
               const results = res.data || [];
               const headers = normalizeHeaders(res.headers);
               const currentPage = parseInt(headers['X-PAGE'], 10) || 0;
@@ -35,7 +42,8 @@ export default function groupsSelect() {
                   more,
                 },
               });
-            }).catch(params.error);
+            })
+            .catch(params.error);
         },
         data(search, page) {
           return {
@@ -84,4 +92,9 @@ export default function groupsSelect() {
       dropdown.style.height = `${Math.floor(dropdown.scrollHeight)}px`;
     });
   });
-}
+};
+
+export default () =>
+  import(/* webpackChunkName: 'select2' */ 'select2/select2')
+    .then(groupsSelect)
+    .catch(() => {});

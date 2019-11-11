@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # Inspired by https://github.com/ljkbennett/stub_env/blob/master/lib/stub_env/helpers.rb
 module StubENV
   def stub_env(key_or_hash, value = nil)
@@ -18,7 +20,7 @@ module StubENV
     allow(ENV).to receive(:[]).with(key).and_return(value)
     allow(ENV).to receive(:key?).with(key).and_return(true)
     allow(ENV).to receive(:fetch).with(key).and_return(value)
-    allow(ENV).to receive(:fetch).with(key, anything()) do |_, default_val|
+    allow(ENV).to receive(:fetch).with(key, anything) do |_, default_val|
       value || default_val
     end
   end

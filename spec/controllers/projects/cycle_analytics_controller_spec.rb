@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Projects::CycleAnalyticsController do
@@ -6,17 +8,33 @@ describe Projects::CycleAnalyticsController do
 
   before do
     sign_in(user)
-    project.add_master(user)
+    project.add_maintainer(user)
+  end
+
+  context "counting page views for 'show'" do
+    it 'increases the counter' do
+      expect(Gitlab::UsageDataCounters::CycleAnalyticsCounter).to receive(:count).with(:views)
+
+      get(:show,
+          params: {
+            namespace_id: project.namespace,
+            project_id: project
+          })
+
+      expect(response).to be_successful
+    end
   end
 
   describe 'cycle analytics not set up flag' do
     context 'with no data' do
       it 'is true' do
         get(:show,
-            namespace_id: project.namespace,
-            project_id: project)
+            params: {
+              namespace_id: project.namespace,
+              project_id: project
+            })
 
-        expect(response).to be_success
+        expect(response).to be_successful
         expect(assigns(:cycle_analytics_no_data)).to eq(true)
       end
     end
@@ -32,10 +50,12 @@ describe Projects::CycleAnalyticsController do
 
       it 'is false' do
         get(:show,
-            namespace_id: project.namespace,
-            project_id: project)
+            params: {
+              namespace_id: project.namespace,
+              project_id: project
+            })
 
-        expect(response).to be_success
+        expect(response).to be_successful
         expect(assigns(:cycle_analytics_no_data)).to eq(false)
       end
     end

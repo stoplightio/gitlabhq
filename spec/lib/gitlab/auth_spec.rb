@@ -1,11 +1,22 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Gitlab::Auth do
   let(:gl_auth) { described_class }
+  set(:project) { create(:project) }
 
   describe 'constants' do
     it 'API_SCOPES contains all scopes for API access' do
-      expect(subject::API_SCOPES).to eq %i[api read_user sudo read_repository]
+      expect(subject::API_SCOPES).to eq %i[api read_user]
+    end
+
+    it 'ADMIN_SCOPES contains all scopes for ADMIN access' do
+      expect(subject::ADMIN_SCOPES).to eq %i[sudo]
+    end
+
+    it 'REPOSITORY_SCOPES contains all scopes for REPOSITORY access' do
+      expect(subject::REPOSITORY_SCOPES).to eq %i[read_repository write_repository]
     end
 
     it 'OPENID_SCOPES contains all scopes for OpenID Connect' do
@@ -19,7 +30,29 @@ describe Gitlab::Auth do
     it 'optional_scopes contains all non-default scopes' do
       stub_container_registry_config(enabled: true)
 
-      expect(subject.optional_scopes).to eq %i[read_user sudo read_repository read_registry openid]
+      expect(subject.optional_scopes).to eq %i[read_user read_repository write_repository read_registry sudo openid profile email]
+    end
+  end
+
+  context 'available_scopes' do
+    it 'contains all non-default scopes' do
+      stub_container_registry_config(enabled: true)
+
+      expect(subject.all_available_scopes).to eq %i[api read_user read_repository write_repository read_registry sudo]
+    end
+
+    it 'contains for non-admin user all non-default scopes without ADMIN access' do
+      stub_container_registry_config(enabled: true)
+      user = create(:user, admin: false)
+
+      expect(subject.available_scopes_for(user)).to eq %i[api read_user read_repository write_repository read_registry]
+    end
+
+    it 'contains for admin user all non-default scopes with ADMIN access' do
+      stub_container_registry_config(enabled: true)
+      user = create(:user, admin: true)
+
+      expect(subject.available_scopes_for(user)).to eq %i[api read_user read_repository write_repository read_registry sudo]
     end
 
     context 'registry_scopes' do
@@ -54,17 +87,17 @@ describe Gitlab::Auth do
         let(:project) { build.project }
 
         before do
-          expect(gl_auth).to receive(:rate_limit!).with('ip', success: true, login: 'gitlab-ci-token')
+          expect(gl_auth).not_to receive(:rate_limit!).with('ip', success: true, login: 'gitlab-ci-token')
         end
 
         it 'recognises user-less build' do
-          expect(subject).to eq(Gitlab::Auth::Result.new(nil, build.project, :ci, build_authentication_abilities))
+          expect(subject).to eq(Gitlab::Auth::Result.new(nil, build.project, :ci, described_class.build_authentication_abilities))
         end
 
         it 'recognises user token' do
           build.update(user: create(:user))
 
-          expect(subject).to eq(Gitlab::Auth::Result.new(build.user, build.project, :build, build_authentication_abilities))
+          expect(subject).to eq(Gitlab::Auth::Result.new(build.user, build.project, :build, described_class.build_authentication_abilities))
         end
       end
 
@@ -74,7 +107,7 @@ describe Gitlab::Auth do
           let(:project) { build.project }
 
           before do
-            expect(gl_auth).to receive(:rate_limit!).with('ip', success: false, login: 'gitlab-ci-token')
+            expect(gl_auth).not_to receive(:rate_limit!).with('ip', success: false, login: 'gitlab-ci-token')
           end
 
           it 'denies authentication' do
@@ -85,26 +118,25 @@ describe Gitlab::Auth do
     end
 
     it 'recognizes other ci services' do
-      project = create(:project)
       project.create_drone_ci_service(active: true)
       project.drone_ci_service.update(token: 'token')
 
       expect(gl_auth).to receive(:rate_limit!).with('ip', success: true, login: 'drone-ci-token')
-      expect(gl_auth.find_for_git_client('drone-ci-token', 'token', project: project, ip: 'ip')).to eq(Gitlab::Auth::Result.new(nil, project, :ci, build_authentication_abilities))
+      expect(gl_auth.find_for_git_client('drone-ci-token', 'token', project: project, ip: 'ip')).to eq(Gitlab::Auth::Result.new(nil, project, :ci, described_class.build_authentication_abilities))
     end
 
     it 'recognizes master passwords' do
       user = create(:user, password: 'password')
 
       expect(gl_auth).to receive(:rate_limit!).with('ip', success: true, login: user.username)
-      expect(gl_auth.find_for_git_client(user.username, 'password', project: nil, ip: 'ip')).to eq(Gitlab::Auth::Result.new(user, nil, :gitlab_or_ldap, full_authentication_abilities))
+      expect(gl_auth.find_for_git_client(user.username, 'password', project: nil, ip: 'ip')).to eq(Gitlab::Auth::Result.new(user, nil, :gitlab_or_ldap, described_class.full_authentication_abilities))
     end
 
     include_examples 'user login operation with unique ip limit' do
       let(:user) { create(:user, password: 'password') }
 
       def operation
-        expect(gl_auth.find_for_git_client(user.username, 'password', project: nil, ip: 'ip')).to eq(Gitlab::Auth::Result.new(user, nil, :gitlab_or_ldap, full_authentication_abilities))
+        expect(gl_auth.find_for_git_client(user.username, 'password', project: nil, ip: 'ip')).to eq(Gitlab::Auth::Result.new(user, nil, :gitlab_or_ldap, described_class.full_authentication_abilities))
       end
     end
 
@@ -114,7 +146,7 @@ describe Gitlab::Auth do
         token = Gitlab::LfsToken.new(user).token
 
         expect(gl_auth).to receive(:rate_limit!).with('ip', success: true, login: user.username)
-        expect(gl_auth.find_for_git_client(user.username, token, project: nil, ip: 'ip')).to eq(Gitlab::Auth::Result.new(user, nil, :lfs_token, full_authentication_abilities))
+        expect(gl_auth.find_for_git_client(user.username, token, project: nil, ip: 'ip')).to eq(Gitlab::Auth::Result.new(user, nil, :lfs_token, described_class.read_write_project_authentication_abilities))
       end
 
       it 'recognizes deploy key lfs tokens' do
@@ -122,7 +154,7 @@ describe Gitlab::Auth do
         token = Gitlab::LfsToken.new(key).token
 
         expect(gl_auth).to receive(:rate_limit!).with('ip', success: true, login: "lfs+deploy-key-#{key.id}")
-        expect(gl_auth.find_for_git_client("lfs+deploy-key-#{key.id}", token, project: nil, ip: 'ip')).to eq(Gitlab::Auth::Result.new(key, nil, :lfs_deploy_token, read_authentication_abilities))
+        expect(gl_auth.find_for_git_client("lfs+deploy-key-#{key.id}", token, project: nil, ip: 'ip')).to eq(Gitlab::Auth::Result.new(key, nil, :lfs_deploy_token, described_class.read_only_authentication_abilities))
       end
 
       it 'does not try password auth before oauth' do
@@ -135,22 +167,20 @@ describe Gitlab::Auth do
       end
 
       it 'grants deploy key write permissions' do
-        project = create(:project)
         key = create(:deploy_key)
         create(:deploy_keys_project, :write_access, deploy_key: key, project: project)
         token = Gitlab::LfsToken.new(key).token
 
         expect(gl_auth).to receive(:rate_limit!).with('ip', success: true, login: "lfs+deploy-key-#{key.id}")
-        expect(gl_auth.find_for_git_client("lfs+deploy-key-#{key.id}", token, project: project, ip: 'ip')).to eq(Gitlab::Auth::Result.new(key, nil, :lfs_deploy_token, read_write_authentication_abilities))
+        expect(gl_auth.find_for_git_client("lfs+deploy-key-#{key.id}", token, project: project, ip: 'ip')).to eq(Gitlab::Auth::Result.new(key, nil, :lfs_deploy_token, described_class.read_write_authentication_abilities))
       end
 
       it 'does not grant deploy key write permissions' do
-        project = create(:project)
         key = create(:deploy_key)
         token = Gitlab::LfsToken.new(key).token
 
         expect(gl_auth).to receive(:rate_limit!).with('ip', success: true, login: "lfs+deploy-key-#{key.id}")
-        expect(gl_auth.find_for_git_client("lfs+deploy-key-#{key.id}", token, project: project, ip: 'ip')).to eq(Gitlab::Auth::Result.new(key, nil, :lfs_deploy_token, read_authentication_abilities))
+        expect(gl_auth.find_for_git_client("lfs+deploy-key-#{key.id}", token, project: project, ip: 'ip')).to eq(Gitlab::Auth::Result.new(key, nil, :lfs_deploy_token, described_class.read_only_authentication_abilities))
       end
     end
 
@@ -161,7 +191,7 @@ describe Gitlab::Auth do
 
       it 'succeeds for OAuth tokens with the `api` scope' do
         expect(gl_auth).to receive(:rate_limit!).with('ip', success: true, login: 'oauth2')
-        expect(gl_auth.find_for_git_client("oauth2", token_w_api_scope.token, project: nil, ip: 'ip')).to eq(Gitlab::Auth::Result.new(user, nil, :oauth, full_authentication_abilities))
+        expect(gl_auth.find_for_git_client("oauth2", token_w_api_scope.token, project: nil, ip: 'ip')).to eq(Gitlab::Auth::Result.new(user, nil, :oauth, described_class.full_authentication_abilities))
       end
 
       it 'fails for OAuth tokens with other scopes' do
@@ -182,8 +212,19 @@ describe Gitlab::Auth do
       it 'succeeds for personal access tokens with the `api` scope' do
         personal_access_token = create(:personal_access_token, scopes: ['api'])
 
-        expect(gl_auth).to receive(:rate_limit!).with('ip', success: true, login: '')
-        expect(gl_auth.find_for_git_client('', personal_access_token.token, project: nil, ip: 'ip')).to eq(Gitlab::Auth::Result.new(personal_access_token.user, nil, :personal_access_token, full_authentication_abilities))
+        expect_results_with_abilities(personal_access_token, described_class.full_authentication_abilities)
+      end
+
+      it 'succeeds for personal access tokens with the `read_repository` scope' do
+        personal_access_token = create(:personal_access_token, scopes: ['read_repository'])
+
+        expect_results_with_abilities(personal_access_token, [:download_code])
+      end
+
+      it 'succeeds for personal access tokens with the `write_repository` scope' do
+        personal_access_token = create(:personal_access_token, scopes: ['write_repository'])
+
+        expect_results_with_abilities(personal_access_token, [:download_code, :push_code])
       end
 
       context 'when registry is enabled' do
@@ -194,28 +235,24 @@ describe Gitlab::Auth do
         it 'succeeds for personal access tokens with the `read_registry` scope' do
           personal_access_token = create(:personal_access_token, scopes: ['read_registry'])
 
-          expect(gl_auth).to receive(:rate_limit!).with('ip', success: true, login: '')
-          expect(gl_auth.find_for_git_client('', personal_access_token.token, project: nil, ip: 'ip')).to eq(Gitlab::Auth::Result.new(personal_access_token.user, nil, :personal_access_token, [:read_container_image]))
+          expect_results_with_abilities(personal_access_token, [:read_container_image])
         end
       end
 
       it 'succeeds if it is an impersonation token' do
         impersonation_token = create(:personal_access_token, :impersonation, scopes: ['api'])
 
-        expect(gl_auth).to receive(:rate_limit!).with('ip', success: true, login: '')
-        expect(gl_auth.find_for_git_client('', impersonation_token.token, project: nil, ip: 'ip')).to eq(Gitlab::Auth::Result.new(impersonation_token.user, nil, :personal_access_token, full_authentication_abilities))
+        expect_results_with_abilities(impersonation_token, described_class.full_authentication_abilities)
       end
 
       it 'limits abilities based on scope' do
         personal_access_token = create(:personal_access_token, scopes: %w[read_user sudo])
 
-        expect(gl_auth).to receive(:rate_limit!).with('ip', success: true, login: '')
-        expect(gl_auth.find_for_git_client('', personal_access_token.token, project: nil, ip: 'ip')).to eq(Gitlab::Auth::Result.new(personal_access_token.user, nil, :personal_access_token, []))
+        expect_results_with_abilities(personal_access_token, [])
       end
 
       it 'fails if password is nil' do
-        expect(gl_auth).to receive(:rate_limit!).with('ip', success: false, login: '')
-        expect(gl_auth.find_for_git_client('', nil, project: nil, ip: 'ip')).to eq(Gitlab::Auth::Result.new(nil, nil))
+        expect_results_with_abilities(nil, nil, false)
       end
     end
 
@@ -228,7 +265,7 @@ describe Gitlab::Auth do
         )
 
         expect(gl_auth.find_for_git_client(user.username, user.password, project: nil, ip: 'ip'))
-          .to eq(Gitlab::Auth::Result.new(user, nil, :gitlab_or_ldap, full_authentication_abilities))
+          .to eq(Gitlab::Auth::Result.new(user, nil, :gitlab_or_ldap, described_class.full_authentication_abilities))
       end
 
       it 'fails through oauth authentication when the username is oauth2' do
@@ -239,7 +276,7 @@ describe Gitlab::Auth do
         )
 
         expect(gl_auth.find_for_git_client(user.username, user.password, project: nil, ip: 'ip'))
-          .to eq(Gitlab::Auth::Result.new(user, nil, :gitlab_or_ldap, full_authentication_abilities))
+          .to eq(Gitlab::Auth::Result.new(user, nil, :gitlab_or_ldap, described_class.full_authentication_abilities))
       end
     end
 
@@ -257,8 +294,71 @@ describe Gitlab::Auth do
     end
 
     context 'while using deploy tokens' do
-      let(:project) { create(:project) }
       let(:auth_failure) { Gitlab::Auth::Result.new(nil, nil) }
+
+      context 'when deploy token and user have the same username' do
+        let(:username) { 'normal_user' }
+        let(:user) { create(:user, username: username, password: 'my-secret') }
+        let(:deploy_token) { create(:deploy_token, username: username, read_registry: false, projects: [project]) }
+
+        before do
+          expect(gl_auth).to receive(:rate_limit!).with('ip', success: true, login: username)
+        end
+
+        it 'succeeds for the token' do
+          auth_success = Gitlab::Auth::Result.new(deploy_token, project, :deploy_token, [:download_code])
+
+          expect(gl_auth.find_for_git_client(username, deploy_token.token, project: project, ip: 'ip'))
+            .to eq(auth_success)
+        end
+
+        it 'succeeds for the user' do
+          auth_success = Gitlab::Auth::Result.new(user, nil, :gitlab_or_ldap, described_class.full_authentication_abilities)
+
+          expect(gl_auth.find_for_git_client(username, 'my-secret', project: project, ip: 'ip'))
+            .to eq(auth_success)
+        end
+      end
+
+      context 'when deploy tokens have the same username' do
+        context 'and belong to the same project' do
+          let!(:read_registry) { create(:deploy_token, username: 'deployer', read_repository: false, projects: [project]) }
+          let!(:read_repository) { create(:deploy_token, username: read_registry.username, read_registry: false, projects: [project]) }
+
+          it 'succeeds for the right token' do
+            auth_success = Gitlab::Auth::Result.new(read_repository, project, :deploy_token, [:download_code])
+
+            expect(gl_auth).to receive(:rate_limit!).with('ip', success: true, login: 'deployer')
+            expect(gl_auth.find_for_git_client('deployer', read_repository.token, project: project, ip: 'ip'))
+              .to eq(auth_success)
+          end
+
+          it 'fails for the wrong token' do
+            expect(gl_auth).to receive(:rate_limit!).with('ip', success: false, login: 'deployer')
+            expect(gl_auth.find_for_git_client('deployer', read_registry.token, project: project, ip: 'ip'))
+              .to eq(auth_failure)
+          end
+        end
+
+        context 'and belong to different projects' do
+          let!(:read_registry) { create(:deploy_token, username: 'deployer', read_repository: false, projects: [project]) }
+          let!(:read_repository) { create(:deploy_token, username: read_registry.username, read_registry: false, projects: [project]) }
+
+          it 'succeeds for the right token' do
+            auth_success = Gitlab::Auth::Result.new(read_repository, project, :deploy_token, [:download_code])
+
+            expect(gl_auth).to receive(:rate_limit!).with('ip', success: true, login: 'deployer')
+            expect(gl_auth.find_for_git_client('deployer', read_repository.token, project: project, ip: 'ip'))
+              .to eq(auth_success)
+          end
+
+          it 'fails for the wrong token' do
+            expect(gl_auth).to receive(:rate_limit!).with('ip', success: false, login: 'deployer')
+            expect(gl_auth.find_for_git_client('deployer', read_registry.token, project: project, ip: 'ip'))
+              .to eq(auth_failure)
+          end
+        end
+      end
 
       context 'when the deploy token has read_repository as scope' do
         let(:deploy_token) { create(:deploy_token, read_registry: false, projects: [project]) }
@@ -269,6 +369,15 @@ describe Gitlab::Auth do
 
           expect(gl_auth).to receive(:rate_limit!).with('ip', success: true, login: login)
           expect(gl_auth.find_for_git_client(login, deploy_token.token, project: project, ip: 'ip'))
+            .to eq(auth_success)
+        end
+
+        it 'succeeds when custom login and token are valid' do
+          deploy_token = create(:deploy_token, username: 'deployer', read_registry: false, projects: [project])
+          auth_success = Gitlab::Auth::Result.new(deploy_token, project, :deploy_token, [:download_code])
+
+          expect(gl_auth).to receive(:rate_limit!).with('ip', success: true, login: 'deployer')
+          expect(gl_auth.find_for_git_client('deployer', deploy_token.token, project: project, ip: 'ip'))
             .to eq(auth_success)
         end
 
@@ -380,7 +489,7 @@ describe Gitlab::Auth do
         password: password,
         password_confirmation: password)
     end
-    let(:username) { 'John' }     # username isn't lowercase, test this
+    let(:username) { 'John' } # username isn't lowercase, test this
     let(:password) { 'my-secret' }
 
     it "finds user by valid login/password" do
@@ -409,6 +518,12 @@ describe Gitlab::Auth do
       def operation
         expect(gl_auth.find_with_user_password(username, password)).to eq(user)
       end
+    end
+
+    it 'finds the user in deactivated state' do
+      user.deactivate!
+
+      expect( gl_auth.find_with_user_password(username, password) ).to eql user
     end
 
     it "does not find user in blocked state" do
@@ -470,33 +585,9 @@ describe Gitlab::Auth do
 
   private
 
-  def build_authentication_abilities
-    [
-      :read_project,
-      :build_download_code,
-      :build_read_container_image,
-      :build_create_container_image
-    ]
-  end
-
-  def read_authentication_abilities
-    [
-      :read_project,
-      :download_code,
-      :read_container_image
-    ]
-  end
-
-  def read_write_authentication_abilities
-    read_authentication_abilities + [
-      :push_code,
-      :create_container_image
-    ]
-  end
-
-  def full_authentication_abilities
-    read_write_authentication_abilities + [
-      :admin_container_image
-    ]
+  def expect_results_with_abilities(personal_access_token, abilities, success = true)
+    expect(gl_auth).to receive(:rate_limit!).with('ip', success: success, login: '')
+    expect(gl_auth.find_for_git_client('', personal_access_token&.token, project: nil, ip: 'ip'))
+      .to eq(Gitlab::Auth::Result.new(personal_access_token&.user, nil, personal_access_token.nil? ? nil : :personal_access_token, abilities))
   end
 end

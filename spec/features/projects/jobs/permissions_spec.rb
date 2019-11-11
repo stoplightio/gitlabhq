@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe 'Project Jobs Permissions' do
@@ -8,6 +10,7 @@ describe 'Project Jobs Permissions' do
   let!(:job) { create(:ci_build, :running, :coverage, :trace_artifact, pipeline: pipeline) }
 
   before do
+    stub_feature_flags(job_log_json: true)
     sign_in(user)
 
     project.enable_ci
@@ -67,7 +70,7 @@ describe 'Project Jobs Permissions' do
         it_behaves_like 'recent job page details responds with status', 200 do
           it 'renders job details', :js do
             expect(page).to have_content "Job ##{job.id}"
-            expect(page).to have_css '#build-trace'
+            expect(page).to have_css '.log-line'
           end
         end
 
@@ -88,10 +91,9 @@ describe 'Project Jobs Permissions' do
   describe 'artifacts page' do
     context 'when recent job has artifacts available' do
       before do
-        artifacts = Rails.root.join('spec/fixtures/ci_build_artifacts.zip')
-        archive = fixture_file_upload(artifacts, 'application/zip')
+        archive = fixture_file_upload('spec/fixtures/ci_build_artifacts.zip')
 
-        job.update_attributes(legacy_artifacts_file: archive)
+        create(:ci_job_artifact, :archive, file: archive, job: job)
       end
 
       context 'when public access for jobs is disabled' do

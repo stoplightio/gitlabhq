@@ -1,3 +1,7 @@
+# frozen_string_literal: true
+
+require 'json'
+
 module IconsHelper
   extend self
   include FontAwesome::Rails::IconHelper
@@ -38,9 +42,17 @@ module IconsHelper
   end
 
   def sprite_icon(icon_name, size: nil, css_class: nil)
-    css_classes = size ? "s#{size}" : ""
-    css_classes << " #{css_class}" unless css_class.blank?
-    content_tag(:svg, content_tag(:use, "", { "xlink:href" => "#{sprite_icon_path}##{icon_name}" } ), class: css_classes.empty? ? nil : css_classes)
+    if Gitlab::Sentry.should_raise_for_dev?
+      unless known_sprites.include?(icon_name)
+        exception = ArgumentError.new("#{icon_name} is not a known icon in @gitlab-org/gitlab-svg")
+        raise exception
+      end
+    end
+
+    css_classes = []
+    css_classes << "s#{size}" if size
+    css_classes << "#{css_class}" unless css_class.blank?
+    content_tag(:svg, content_tag(:use, "", { "xlink:href" => "#{sprite_icon_path}##{icon_name}" } ), class: css_classes.empty? ? nil : css_classes.join(' '))
   end
 
   def external_snippet_icon(name)
@@ -53,16 +65,18 @@ module IconsHelper
       names = "key"
     when "two-factor"
       names = "key"
+    when "google_oauth2"
+      names = "google"
     end
 
     options.include?(:base) ? fa_stacked_icon(names, options) : fa_icon(names, options)
   end
 
   def spinner(text = nil, visible = false)
-    css_class = 'loading'
-    css_class << ' hide' unless visible
+    css_class = ['loading']
+    css_class << 'hide' unless visible
 
-    content_tag :div, class: css_class do
+    content_tag :div, class: css_class.join(' ') do
       icon('spinner spin') + text
     end
   end
@@ -75,7 +89,7 @@ module IconsHelper
     end
   end
 
-  def visibility_level_icon(level, fw: true)
+  def visibility_level_icon(level, fw: true, options: {})
     name =
       case level
       when Gitlab::VisibilityLevel::PRIVATE
@@ -86,14 +100,17 @@ module IconsHelper
         'globe'
       end
 
-    name << " fw" if fw
+    name = [name]
+    name << "fw" if fw
 
-    icon(name)
+    icon(name.join(' '), options)
   end
 
   def file_type_icon_class(type, mode, name)
     if type == 'folder'
       icon_class = 'folder'
+    elsif type == 'archive'
+      icon_class = 'archive'
     elsif mode == '120000'
       icon_class = 'share'
     else
@@ -105,27 +122,30 @@ module IconsHelper
         icon_class = 'file-pdf-o'
       when '.jpg', '.jpeg', '.jif', '.jfif',
           '.jp2', '.jpx', '.j2k', '.j2c',
-          '.png', '.gif', '.tif', '.tiff',
-          '.svg', '.ico', '.bmp'
+          '.apng', '.png', '.gif', '.tif', '.tiff',
+          '.svg', '.ico', '.bmp', '.webp'
         icon_class = 'file-image-o'
-      when '.zip', '.zipx', '.tar', '.gz', '.bz', '.bzip',
-          '.xz', '.rar', '.7z'
+      when '.zip', '.zipx', '.tar', '.gz', '.gzip', '.tgz', '.bz', '.bzip',
+          '.bz2', '.bzip2', '.car', '.tbz', '.xz', 'txz', '.rar', '.7z',
+          '.lz', '.lzma', '.tlz'
         icon_class = 'file-archive-o'
-      when '.mp3', '.wma', '.ogg', '.oga', '.wav', '.flac', '.aac'
+      when '.mp3', '.wma', '.ogg', '.oga', '.wav', '.flac', '.aac', '.3ga',
+          '.ac3', '.midi', '.m4a', '.ape', '.mpa'
         icon_class = 'file-audio-o'
       when '.mp4', '.m4p', '.m4v',
           '.mpg', '.mp2', '.mpeg', '.mpe', '.mpv',
-          '.mpg', '.mpeg', '.m2v',
+          '.mpg', '.mpeg', '.m2v', '.m2ts',
           '.avi', '.mkv', '.flv', '.ogv', '.mov',
           '.3gp', '.3g2'
         icon_class = 'file-video-o'
-      when '.doc', '.dot', '.docx', '.docm', '.dotx', '.dotm', '.docb'
+      when '.doc', '.dot', '.docx', '.docm', '.dotx', '.dotm', '.docb',
+          '.odt', '.ott', '.uot', '.rtf'
         icon_class = 'file-word-o'
       when '.xls', '.xlt', '.xlm', '.xlsx', '.xlsm', '.xltx', '.xltm',
-          '.xlsb', '.xla', '.xlam', '.xll', '.xlw'
+          '.xlsb', '.xla', '.xlam', '.xll', '.xlw', '.ots', '.ods', '.uos'
         icon_class = 'file-excel-o'
       when '.ppt', '.pot', '.pps', '.pptx', '.pptm', '.potx', '.potm',
-          '.ppam', '.ppsx', '.ppsm', '.sldx', '.sldm'
+          '.ppam', '.ppsx', '.ppsm', '.sldx', '.sldm', '.odp', '.otp', '.uop'
         icon_class = 'file-powerpoint-o'
       else
         icon_class = 'file-text-o'
@@ -133,5 +153,11 @@ module IconsHelper
     end
 
     icon_class
+  end
+
+  private
+
+  def known_sprites
+    @known_sprites ||= JSON.parse(File.read(Rails.root.join('node_modules/@gitlab/svgs/dist/icons.json')))['icons']
   end
 end

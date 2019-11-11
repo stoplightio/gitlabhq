@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'logger'
 
 module Gitlab
@@ -17,7 +19,7 @@ module Gitlab
         def safe_sample
           sample
         rescue => e
-          Rails.logger.warn("#{self.class}: #{e}, stopping")
+          Rails.logger.warn("#{self.class}: #{e}, stopping") # rubocop:disable Gitlab/RailsLogger
           stop
         end
 
@@ -48,6 +50,11 @@ module Gitlab
 
         def start_working
           @running = true
+
+          true
+        end
+
+        def run_thread
           sleep(sleep_interval)
           while running
             safe_sample

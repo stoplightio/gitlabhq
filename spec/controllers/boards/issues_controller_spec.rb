@@ -1,7 +1,11 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Boards::IssuesController do
-  let(:project) { create(:project) }
+  include ExternalAuthorizationServiceHelpers
+
+  let(:project) { create(:project, :private) }
   let(:board)   { create(:board, project: project) }
   let(:user)    { create(:user) }
   let(:guest)   { create(:user) }
@@ -13,12 +17,12 @@ describe Boards::IssuesController do
   let!(:list2) { create(:list, board: board, label: development, position: 1) }
 
   before do
-    project.add_master(user)
+    project.add_maintainer(user)
     project.add_guest(guest)
   end
 
   describe 'GET index', :request_store do
-    let(:johndoe) { create(:user, avatar: fixture_file_upload(File.join(Rails.root, 'spec/fixtures/dk.png'))) }
+    let(:johndoe) { create(:user, avatar: fixture_file_upload(File.join('spec/fixtures/dk.png'))) }
 
     context 'with invalid board id' do
       it 'returns a not found 404 response' do
@@ -30,6 +34,15 @@ describe Boards::IssuesController do
 
     context 'when list id is present' do
       context 'with valid list id' do
+        let(:group) { create(:group, :private, projects: [project]) }
+        let(:group_board) { create(:board, group: group) }
+        let!(:list3) { create(:list, board: group_board, label: development, position: 2) }
+        let(:sub_group_1) { create(:group, :private, parent: group) }
+
+        before do
+          group.add_maintainer(user)
+        end
+
         it 'returns issues that have the list label applied' do
           issue = create(:labeled_issue, project: project, labels: [planning])
           create(:labeled_issue, project: project, labels: [planning])
@@ -39,10 +52,8 @@ describe Boards::IssuesController do
 
           list_issues user: user, board: board, list: list2
 
-          parsed_response = JSON.parse(response.body)
-
-          expect(response).to match_response_schema('issues')
-          expect(parsed_response.length).to eq 2
+          expect(response).to match_response_schema('entities/issue_boards')
+          expect(json_response['issues'].length).to eq 2
           expect(development.issues.map(&:relative_position)).not_to include(nil)
         end
 
@@ -55,6 +66,39 @@ describe Boards::IssuesController do
           create_list(:labeled_issue, 25, project: project, labels: [development], assignees: [johndoe], relative_position: 1)
 
           expect { list_issues(user: user, board: board, list: list2) }.not_to exceed_query_limit(control_count)
+        end
+
+        it 'avoids N+1 database queries when adding a project', :request_store do
+          create(:labeled_issue, project: project, labels: [development])
+          control_count = ActiveRecord::QueryRecorder.new { list_issues(user: user, board: group_board, list: list3) }.count
+
+          2.times do
+            p = create(:project, group: group)
+            create(:labeled_issue, project: p, labels: [development])
+          end
+
+          project_2 = create(:project, group: group)
+          create(:labeled_issue, project: project_2, labels: [development], assignees: [johndoe])
+
+          # because each issue without relative_position must be updated with
+          # a different value, we have 8 extra queries per issue
+          expect { list_issues(user: user, board: group_board, list: list3) }.not_to exceed_query_limit(control_count + (2 * 8 - 1))
+        end
+
+        it 'avoids N+1 database queries when adding a subgroup, project, and issue' do
+          create(:project, group: sub_group_1)
+          create(:labeled_issue, project: project, labels: [development])
+          control_count = ActiveRecord::QueryRecorder.new { list_issues(user: user, board: group_board, list: list3) }.count
+          project_2 = create(:project, group: group)
+
+          2.times do
+            p = create(:project, group: sub_group_1)
+            create(:labeled_issue, project: p, labels: [development])
+          end
+
+          create(:labeled_issue, project: project_2, labels: [development], assignees: [johndoe])
+
+          expect { list_issues(user: user, board: group_board, list: list3) }.not_to exceed_query_limit(control_count + (2 * 8 - 1))
         end
       end
 
@@ -77,24 +121,251 @@ describe Boards::IssuesController do
 
         list_issues user: user, board: board
 
-        parsed_response = JSON.parse(response.body)
-
-        expect(response).to match_response_schema('issues')
-        expect(parsed_response.length).to eq 2
+        expect(response).to match_response_schema('entities/issue_boards')
+        expect(json_response['issues'].length).to eq 2
       end
     end
 
     context 'with unauthorized user' do
-      before do
-        allow(Ability).to receive(:allowed?).and_call_original
-        allow(Ability).to receive(:allowed?).with(user, :read_project, project).and_return(true)
-        allow(Ability).to receive(:allowed?).with(user, :read_issue, project).and_return(false)
-      end
+      let(:unauth_user) { create(:user) }
 
       it 'returns a forbidden 403 response' do
-        list_issues user: user, board: board, list: list2
+        list_issues user: unauth_user, board: board, list: list2
 
         expect(response).to have_gitlab_http_status(403)
+      end
+    end
+
+    context 'with external authorization' do
+      before do
+        sign_in(user)
+        enable_external_authorization_service_check
+      end
+
+      it 'returns a 403 for group boards' do
+        group = create(:group)
+        group_board = create(:board, group: group)
+
+        list_issues(user: user, board: group_board)
+
+        expect(response).to have_gitlab_http_status(403)
+      end
+
+      it 'is successful for project boards' do
+        project_board = create(:board, project: project)
+
+        list_issues(user: user, board: project_board)
+
+        expect(response).to have_gitlab_http_status(200)
+      end
+    end
+
+    describe 'PUT bulk_move' do
+      let(:todo) { create(:group_label, group: group, name: 'Todo') }
+      let(:development) { create(:group_label, group: group, name: 'Development') }
+      let(:user) { create(:group_member, :maintainer, user: create(:user), group: group ).user }
+      let(:guest) { create(:group_member, :guest, user: create(:user), group: group ).user }
+      let(:project) { create(:project, group: group) }
+      let(:group) { create(:group) }
+      let(:board) { create(:board, project: project) }
+      let(:list1) { create(:list, board: board, label: todo, position: 0) }
+      let(:list2) { create(:list, board: board, label: development, position: 1) }
+      let(:issue1) { create(:labeled_issue, project: project, labels: [todo], author: user, relative_position: 10) }
+      let(:issue2) { create(:labeled_issue, project: project, labels: [todo], author: user, relative_position: 20) }
+      let(:issue3) { create(:labeled_issue, project: project, labels: [todo], author: user, relative_position: 30) }
+      let(:issue4) { create(:labeled_issue, project: project, labels: [development], author: user, relative_position: 100) }
+
+      let(:move_params) do
+        {
+          board_id: board.id,
+          ids: [issue1.id, issue2.id, issue3.id],
+          from_list_id: list1.id,
+          to_list_id: list2.id,
+          move_before_id: issue4.id,
+          move_after_id: nil
+        }
+      end
+
+      before do
+        project.add_maintainer(user)
+        project.add_guest(guest)
+      end
+
+      shared_examples 'move issues endpoint provider' do
+        before do
+          sign_in(signed_in_user)
+        end
+
+        it 'responds as expected' do
+          put :bulk_move, params: move_issues_params
+          expect(response).to have_gitlab_http_status(expected_status)
+
+          if expected_status == 200
+            expect(json_response).to include(
+              'count' => move_issues_params[:ids].size,
+              'success' => true
+            )
+
+            expect(json_response['issues'].pluck('id')).to match_array(move_issues_params[:ids])
+          end
+        end
+
+        it 'moves issues as expected' do
+          put :bulk_move, params: move_issues_params
+          expect(response).to have_gitlab_http_status(expected_status)
+
+          list_issues user: requesting_user, board: board, list: list2
+          expect(response).to have_gitlab_http_status(200)
+
+          expect(response).to match_response_schema('entities/issue_boards')
+
+          responded_issues = json_response['issues']
+          expect(responded_issues.length).to eq expected_issue_count
+
+          ids_in_order = responded_issues.pluck('id')
+          expect(ids_in_order).to eq(expected_issue_ids_in_order)
+        end
+      end
+
+      context 'when items are moved to another list' do
+        it_behaves_like 'move issues endpoint provider' do
+          let(:signed_in_user) { user }
+          let(:move_issues_params) { move_params }
+          let(:requesting_user) { user }
+          let(:expected_status) { 200 }
+          let(:expected_issue_count) { 4 }
+          let(:expected_issue_ids_in_order) { [issue4.id, issue1.id, issue2.id, issue3.id] }
+        end
+      end
+
+      context 'when moving just one issue' do
+        it_behaves_like 'move issues endpoint provider' do
+          let(:signed_in_user) { user }
+          let(:move_issues_params) do
+            move_params.dup.tap do |hash|
+              hash[:ids] = [issue2.id]
+            end
+          end
+          let(:requesting_user) { user }
+          let(:expected_status) { 200 }
+          let(:expected_issue_count) { 2 }
+          let(:expected_issue_ids_in_order) { [issue4.id, issue2.id] }
+        end
+      end
+
+      context 'when user is not allowed to move issue' do
+        it_behaves_like 'move issues endpoint provider' do
+          let(:signed_in_user) { guest }
+          let(:move_issues_params) do
+            move_params.dup.tap do |hash|
+              hash[:ids] = [issue2.id]
+            end
+          end
+          let(:requesting_user) { user }
+          let(:expected_status) { 403 }
+          let(:expected_issue_count) { 1 }
+          let(:expected_issue_ids_in_order) { [issue4.id] }
+        end
+      end
+
+      context 'when issues should be moved visually above existing issue in list' do
+        it_behaves_like 'move issues endpoint provider' do
+          let(:signed_in_user) { user }
+          let(:move_issues_params) do
+            move_params.dup.tap do |hash|
+              hash[:move_after_id] = issue4.id
+              hash[:move_before_id] = nil
+            end
+          end
+          let(:requesting_user) { user }
+          let(:expected_status) { 200 }
+          let(:expected_issue_count) { 4 }
+          let(:expected_issue_ids_in_order) { [issue1.id, issue2.id, issue3.id, issue4.id] }
+        end
+      end
+
+      context 'when destination list is empty' do
+        before do
+          # Remove issue from list
+          issue4.labels -= [development]
+          issue4.save!
+        end
+
+        it_behaves_like 'move issues endpoint provider' do
+          let(:signed_in_user) { user }
+          let(:move_issues_params) do
+            move_params.dup.tap do |hash|
+              hash[:move_before_id] = nil
+            end
+          end
+          let(:requesting_user) { user }
+          let(:expected_status) { 200 }
+          let(:expected_issue_count) { 3 }
+          let(:expected_issue_ids_in_order) { [issue1.id, issue2.id, issue3.id] }
+        end
+      end
+
+      context 'when no position arguments are given' do
+        it_behaves_like 'move issues endpoint provider' do
+          let(:signed_in_user) { user }
+          let(:move_issues_params) do
+            move_params.dup.tap do |hash|
+              hash[:move_before_id] = nil
+            end
+          end
+          let(:requesting_user) { user }
+          let(:expected_status) { 200 }
+          let(:expected_issue_count) { 4 }
+          let(:expected_issue_ids_in_order) { [issue1.id, issue2.id, issue3.id, issue4.id] }
+        end
+      end
+
+      context 'when move_before_id and move_after_id are given' do
+        let(:issue5) { create(:labeled_issue, project: project, labels: [development], author: user, relative_position: 90) }
+
+        it_behaves_like 'move issues endpoint provider' do
+          let(:signed_in_user) { user }
+          let(:move_issues_params) do
+            move_params.dup.tap do |hash|
+              hash[:move_before_id] = issue5.id
+              hash[:move_after_id] = issue4.id
+            end
+          end
+          let(:requesting_user) { user }
+          let(:expected_status) { 200 }
+          let(:expected_issue_count) { 5 }
+          let(:expected_issue_ids_in_order) { [issue5.id, issue1.id, issue2.id, issue3.id, issue4.id] }
+        end
+      end
+
+      context 'when request contains too many issues' do
+        it_behaves_like 'move issues endpoint provider' do
+          let(:signed_in_user) { user }
+          let(:move_issues_params) do
+            move_params.dup.tap do |hash|
+              hash[:ids] = (0..51).to_a
+            end
+          end
+          let(:requesting_user) { user }
+          let(:expected_status) { 422 }
+          let(:expected_issue_count) { 1 }
+          let(:expected_issue_ids_in_order) { [issue4.id] }
+        end
+      end
+
+      context 'when request is malformed' do
+        it_behaves_like 'move issues endpoint provider' do
+          let(:signed_in_user) { user }
+          let(:move_issues_params) do
+            move_params.dup.tap do |hash|
+              hash[:ids] = 'foobar'
+            end
+          end
+          let(:requesting_user) { user }
+          let(:expected_status) { 400 }
+          let(:expected_issue_count) { 1 }
+          let(:expected_issue_ids_in_order) { [issue4.id] }
+        end
       end
     end
 
@@ -102,13 +373,16 @@ describe Boards::IssuesController do
       sign_in(user)
 
       params = {
-        namespace_id: project.namespace.to_param,
-        project_id: project,
         board_id: board.to_param,
         list_id: list.try(:to_param)
       }
 
-      get :index, params.compact
+      unless board.try(:parent)&.is_a?(Group)
+        params[:namespace_id] = project.namespace.to_param
+        params[:project_id] = project
+      end
+
+      get :index, params: params.compact
     end
   end
 
@@ -123,7 +397,7 @@ describe Boards::IssuesController do
       it 'returns the created issue' do
         create_issue user: user, board: board, list: list1, title: 'New issue'
 
-        expect(response).to match_response_schema('issue')
+        expect(response).to match_response_schema('entities/issue_board')
       end
     end
 
@@ -163,20 +437,33 @@ describe Boards::IssuesController do
       end
     end
 
-    context 'with unauthorized user' do
-      it 'returns a forbidden 403 response' do
-        create_issue user: guest, board: board, list: list1, title: 'New issue'
+    context 'with guest user' do
+      context 'in open list' do
+        it 'returns a successful 200 response' do
+          open_list = board.lists.create(list_type: :backlog)
+          create_issue user: guest, board: board, list: open_list, title: 'New issue'
 
-        expect(response).to have_gitlab_http_status(403)
+          expect(response).to have_gitlab_http_status(200)
+        end
+      end
+
+      context 'in label list' do
+        it 'returns a forbidden 403 response' do
+          create_issue user: guest, board: board, list: list1, title: 'New issue'
+
+          expect(response).to have_gitlab_http_status(403)
+        end
       end
     end
 
     def create_issue(user:, board:, list:, title:)
       sign_in(user)
 
-      post :create, board_id: board.to_param,
-                    list_id: list.to_param,
-                    issue: { title: title,  project_id: project.id },
+      post :create, params: {
+                      board_id: board.to_param,
+                      list_id: list.to_param,
+                      issue: { title: title, project_id: project.id }
+                    },
                     format: :json
     end
   end
@@ -235,12 +522,14 @@ describe Boards::IssuesController do
     def move(user:, board:, issue:, from_list_id:, to_list_id:)
       sign_in(user)
 
-      patch :update, namespace_id: project.namespace.to_param,
-                     project_id: project.id,
-                     board_id: board.to_param,
-                     id: issue.id,
-                     from_list_id: from_list_id,
-                     to_list_id: to_list_id,
+      patch :update, params: {
+                       namespace_id: project.namespace.to_param,
+                       project_id: project.id,
+                       board_id: board.to_param,
+                       id: issue.id,
+                       from_list_id: from_list_id,
+                       to_list_id: to_list_id
+                     },
                      format: :json
     end
   end

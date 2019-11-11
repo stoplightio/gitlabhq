@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # Base class for services that count a single resource such as the number of
 # issues for a project.
 class BaseCountService
@@ -33,7 +35,7 @@ class BaseCountService
   end
 
   def cache_key
-    raise NotImplementedError, 'cache_key must be implemented and return a String'
+    raise NotImplementedError, 'cache_key must be implemented and return a String, Array, or Hash'
   end
 
   # subclasses can override to add any specific options, such as
@@ -46,3 +48,5 @@ class BaseCountService
     Rails.cache.write(key, block_given? ? yield : uncached_count, raw: raw?)
   end
 end
+
+BaseCountService.prepend_if_ee('EE::BaseCountService')

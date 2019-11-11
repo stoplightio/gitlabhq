@@ -1,6 +1,8 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
-describe 'Projects > Files > User replaces files' do
+describe 'Projects > Files > User replaces files', :js do
   include DropzoneHelper
 
   let(:fork_message) do
@@ -14,16 +16,19 @@ describe 'Projects > Files > User replaces files' do
   let(:user) { create(:user) }
 
   before do
+    stub_feature_flags(vue_file_list: false)
+
     sign_in(user)
   end
 
   context 'when an user has write access' do
     before do
-      project.add_master(user)
+      project.add_maintainer(user)
       visit(project_tree_path_root_ref)
+      wait_for_requests
     end
 
-    it 'replaces an existed file with a new one', :js do
+    it 'replaces an existed file with a new one' do
       click_link('.gitignore')
 
       expect(page).to have_content('.gitignore')
@@ -47,9 +52,10 @@ describe 'Projects > Files > User replaces files' do
     before do
       project2.add_reporter(user)
       visit(project2_tree_path_root_ref)
+      wait_for_requests
     end
 
-    it 'replaces an existed file with a new one in a forked project', :js do
+    it 'replaces an existed file with a new one in a forked project' do
       click_link('.gitignore')
 
       expect(page).to have_content('.gitignore')

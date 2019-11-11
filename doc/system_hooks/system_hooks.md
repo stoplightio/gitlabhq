@@ -1,3 +1,7 @@
+---
+type: reference
+---
+
 # System hooks
 
 Your GitLab instance can perform HTTP POST requests on the following events:
@@ -9,6 +13,7 @@ Your GitLab instance can perform HTTP POST requests on the following events:
 - `project_update`
 - `user_add_to_team`
 - `user_remove_from_team`
+- `user_update_for_team`
 - `user_create`
 - `user_destroy`
 - `user_failed_login`
@@ -20,6 +25,7 @@ Your GitLab instance can perform HTTP POST requests on the following events:
 - `group_rename`
 - `user_add_to_group`
 - `user_remove_from_group`
+- `user_update_for_group`
 
 The triggers for most of these are self-explanatory, but `project_update` and `project_rename` deserve some clarification: `project_update` is fired any time an attribute of a project is changed (name, description, tags, etc.) *unless* the `path` attribute is also changed. In that case, a `project_rename` is triggered instead (so that, for instance, if all you care about is the repo URL, you can just listen for `project_rename`).
 
@@ -27,11 +33,9 @@ The triggers for most of these are self-explanatory, but `project_update` and `p
 
 System hooks can be used, e.g. for logging or changing information in a LDAP server.
 
-> **Note:**
->
-> We follow the same structure from Webhooks for Push and Tag events, but we never display commits.
->
-> Same deprecations from Webhooks are valid here.
+NOTE: **Note:**
+We follow the same structure and deprecations as [Webhooks](../user/project/integrations/webhooks.md)
+for Push and Tag events, but we never display commits.
 
 ## Hooks request example
 
@@ -138,7 +142,7 @@ Please refer to `group_rename` and `user_rename` for that case.
                   "created_at": "2012-07-21T07:30:56Z",
                   "updated_at": "2012-07-21T07:38:22Z",
                   "event_name": "user_add_to_team",
-              "project_access": "Maintainer",
+                "access_level": "Maintainer",
                   "project_id": 74,
                 "project_name": "StoreCloud",
                 "project_path": "storecloud",
@@ -147,7 +151,7 @@ Please refer to `group_rename` and `user_rename` for that case.
                    "user_name": "John Smith",
                "user_username": "johnsmith",
                      "user_id": 41,
-          "project_visibility": "private"
+          "project_visibility": "visibilitylevel|private"
 }
 ```
 
@@ -158,7 +162,7 @@ Please refer to `group_rename` and `user_rename` for that case.
                   "created_at": "2012-07-21T07:30:56Z",
                   "updated_at": "2012-07-21T07:38:22Z",
                   "event_name": "user_remove_from_team",
-              "project_access": "Maintainer",
+                "access_level": "Maintainer",
                   "project_id": 74,
                 "project_name": "StoreCloud",
                 "project_path": "storecloud",
@@ -167,7 +171,27 @@ Please refer to `group_rename` and `user_rename` for that case.
                    "user_name": "John Smith",
                "user_username": "johnsmith",
                      "user_id": 41,
-          "project_visibility": "private"
+          "project_visibility": "visibilitylevel|private"
+}
+```
+
+**Team Member Updated:**
+
+```json
+{
+                  "created_at": "2012-07-21T07:30:56Z",
+                  "updated_at": "2012-07-21T07:38:22Z",
+                  "event_name": "user_update_for_team",
+                "access_level": "Maintainer",
+                  "project_id": 74,
+                "project_name": "StoreCloud",
+                "project_path": "storecloud",
+ "project_path_with_namespace": "jsmith/storecloud",
+                  "user_email": "johnsmith@gmail.com",
+                   "user_name": "John Smith",
+               "user_username": "johnsmith",
+                     "user_id": 41,
+          "project_visibility": "visibilitylevel|private"
 }
 ```
 
@@ -272,7 +296,7 @@ If the user is blocked via LDAP, `state` will be `ldap_blocked`.
 }
 ```
 
-`owner_name` and `owner_email` are always `null`. Please see https://gitlab.com/gitlab-org/gitlab-ce/issues/39675.
+`owner_name` and `owner_email` are always `null`. Please see <https://gitlab.com/gitlab-org/gitlab-foss/issues/39675>.
 
 **Group removed:**
 
@@ -289,7 +313,7 @@ If the user is blocked via LDAP, `state` will be `ldap_blocked`.
 }
 ```
 
-`owner_name` and `owner_email` are always `null`. Please see https://gitlab.com/gitlab-org/gitlab-ce/issues/39675.
+`owner_name` and `owner_email` are always `null`. Please see <https://gitlab.com/gitlab-org/gitlab-foss/issues/39675>.
 
 **Group renamed:**
 
@@ -309,7 +333,7 @@ If the user is blocked via LDAP, `state` will be `ldap_blocked`.
 }
 ```
 
-`owner_name` and `owner_email` are always `null`. Please see https://gitlab.com/gitlab-org/gitlab-ce/issues/39675.
+`owner_name` and `owner_email` are always `null`. Please see <https://gitlab.com/gitlab-org/gitlab-foss/issues/39675>.
 
 **New Group Member:**
 
@@ -328,6 +352,7 @@ If the user is blocked via LDAP, `state` will be `ldap_blocked`.
        "user_id": 41
 }
 ```
+
 **Group Member Removed:**
 
 ```json
@@ -335,6 +360,24 @@ If the user is blocked via LDAP, `state` will be `ldap_blocked`.
     "created_at": "2012-07-21T07:30:56Z",
     "updated_at": "2012-07-21T07:38:22Z",
     "event_name": "user_remove_from_group",
+  "group_access": "Maintainer",
+      "group_id": 78,
+    "group_name": "StoreCloud",
+    "group_path": "storecloud",
+    "user_email": "johnsmith@gmail.com",
+     "user_name": "John Smith",
+ "user_username": "johnsmith",
+       "user_id": 41
+}
+```
+
+**Group Member Updated:**
+
+```json
+{
+    "created_at": "2012-07-21T07:30:56Z",
+    "updated_at": "2012-07-21T07:38:22Z",
+    "event_name": "user_update_for_group",
   "group_access": "Maintainer",
       "group_id": 78,
     "group_name": "StoreCloud",
@@ -640,3 +683,20 @@ X-Gitlab-Event: System Hook
   "refs":["refs/heads/master"]
 }
 ```
+
+## Local requests in system hooks
+
+[Requests to local network by system hooks](../security/webhooks.md) can be allowed
+or blocked by an administrator.
+
+<!-- ## Troubleshooting
+
+Include any troubleshooting steps that you can foresee. If you know beforehand what issues
+one might have when setting this up, or when something is changed, or on upgrading, it's
+important to describe those, too. Think of things that may go wrong and include them here.
+This is important to minimize requests for support, and to avoid doc comments with
+questions that you know someone might ask.
+
+Each scenario can be a third-level heading, e.g. `### Getting error message X`.
+If you have none to add when creating a doc, leave this section in place
+but commented out to help encourage others to add to it in the future. -->

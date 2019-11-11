@@ -1,4 +1,6 @@
-require 'rails_helper'
+# frozen_string_literal: true
+
+require 'spec_helper'
 
 describe Banzai::Filter::BlockquoteFenceFilter do
   include FilterSpecHelper
@@ -10,5 +12,9 @@ describe Banzai::Filter::BlockquoteFenceFilter do
     output = filter(content)
 
     expect(output).to eq(expected)
+  end
+
+  it 'allows trailing whitespace on blockquote fence lines' do
+    expect(filter(">>> \ntest\n>>> ")).to eq("\n> test\n")
   end
 end

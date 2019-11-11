@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module KerberosSpnegoHelper
   def allow_basic_auth?
     true # different behavior in GitLab Enterprise Edition
@@ -7,3 +9,5 @@ module KerberosSpnegoHelper
     false # different behavior in GitLab Enterprise Edition
   end
 end
+
+KerberosSpnegoHelper.prepend_if_ee('EE::KerberosSpnegoHelper')

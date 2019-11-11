@@ -8,6 +8,7 @@ resource :profile, only: [:show, :update] do
 
     put :reset_incoming_email_token
     put :reset_feed_token
+    put :reset_static_object_token
     put :update_username
   end
 
@@ -17,7 +18,11 @@ resource :profile, only: [:show, :update] do
         delete :unlink
       end
     end
-    resource :notifications, only: [:show, :update]
+
+    resource :notifications, only: [:show, :update] do
+      resources :groups, only: :update
+    end
+
     resource :password, only: [:new, :create, :edit, :update] do
       member do
         put :reset
@@ -36,6 +41,15 @@ resource :profile, only: [:show, :update] do
         put :resend_confirmation_instructions
       end
     end
+
+    Gitlab.ee do
+      resource :slack, only: [:edit] do
+        member do
+          get :slack_link
+        end
+      end
+    end
+
     resources :chat_names, only: [:index, :new, :create, :destroy] do
       collection do
         delete :deny
@@ -59,5 +73,10 @@ resource :profile, only: [:show, :update] do
     end
 
     resources :u2f_registrations, only: [:destroy]
+
+    Gitlab.ee do
+      resources :pipeline_quota, only: [:index]
+      resources :billings, only: [:index]
+    end
   end
 end

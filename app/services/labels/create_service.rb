@@ -1,7 +1,9 @@
+# frozen_string_literal: true
+
 module Labels
   class CreateService < Labels::BaseService
     def initialize(params = {})
-      @params = params.dup.with_indifferent_access
+      @params = params.to_h.dup.with_indifferent_access
     end
 
     # returns the created label
@@ -18,7 +20,7 @@ module Labels
         label.save
         label
       else
-        Rails.logger.warn("target_params should contain :project or :group or :template, actual value: #{target_params}")
+        Rails.logger.warn("target_params should contain :project or :group or :template, actual value: #{target_params}") # rubocop:disable Gitlab/RailsLogger
       end
     end
   end

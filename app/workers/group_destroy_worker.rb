@@ -1,6 +1,10 @@
+# frozen_string_literal: true
+
 class GroupDestroyWorker
   include ApplicationWorker
   include ExceptionBacktrace
+
+  feature_category :groups
 
   def perform(group_id, user_id)
     begin

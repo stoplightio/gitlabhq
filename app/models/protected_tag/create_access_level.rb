@@ -1,4 +1,6 @@
-class ProtectedTag::CreateAccessLevel < ActiveRecord::Base
+# frozen_string_literal: true
+
+class ProtectedTag::CreateAccessLevel < ApplicationRecord
   include ProtectedTagAccess
 
   def check_access(user)

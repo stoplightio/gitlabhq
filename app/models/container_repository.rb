@@ -1,4 +1,8 @@
-class ContainerRepository < ActiveRecord::Base
+# frozen_string_literal: true
+
+class ContainerRepository < ApplicationRecord
+  include Gitlab::Utils::StrongMemoize
+
   belongs_to :project
 
   validates :name, length: { minimum: 0, allow_nil: false }
@@ -6,8 +10,10 @@ class ContainerRepository < ActiveRecord::Base
 
   delegate :client, to: :registry
 
-  before_destroy :delete_tags!
+  scope :ordered, -> { order(:name) }
+  scope :with_api_entity_associations, -> { preload(:project) }
 
+  # rubocop: disable CodeReuse/ServiceClass
   def registry
     @registry ||= begin
       token = Auth::ContainerRegistryAuthenticationService.full_access_token(path)
@@ -18,6 +24,7 @@ class ContainerRepository < ActiveRecord::Base
       ContainerRegistry::Registry.new(url, token: token, path: host_port)
     end
   end
+  # rubocop: enable CodeReuse/ServiceClass
 
   def path
     @path ||= [project.full_path, name]
@@ -37,11 +44,12 @@ class ContainerRepository < ActiveRecord::Base
   end
 
   def tags
-    return @tags if defined?(@tags)
     return [] unless manifest && manifest['tags']
 
-    @tags = manifest['tags'].map do |tag|
-      ContainerRegistry::Tag.new(self, tag)
+    strong_memoize(:tags) do
+      manifest['tags'].sort.map do |tag|
+        ContainerRegistry::Tag.new(self, tag)
+      end
     end
   end
 
@@ -60,11 +68,13 @@ class ContainerRepository < ActiveRecord::Base
   def delete_tags!
     return unless has_tags?
 
-    digests = tags.map { |tag| tag.digest }.to_set
+    digests = tags.map { |tag| tag.digest }.compact.to_set
 
-    digests.all? do |digest|
-      client.delete_repository_tag(self.path, digest)
-    end
+    digests.map(&method(:delete_tag_by_digest)).all?
+  end
+
+  def delete_tag_by_digest(digest)
+    client.delete_repository_tag(self.path, digest)
   end
 
   def self.build_from_path(path)
@@ -79,4 +89,11 @@ class ContainerRepository < ActiveRecord::Base
   def self.build_root_repository(project)
     self.new(project: project, name: '')
   end
+
+  def self.find_by_path!(path)
+    self.find_by!(project: path.repository_project,
+                  name: path.repository_name)
+  end
 end
+
+ContainerRepository.prepend_if_ee('EE::ContainerRepository')

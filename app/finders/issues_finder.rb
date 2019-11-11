@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # Finders::Issues class
 #
 # Used to filter Issues collections by set of params
@@ -12,6 +14,7 @@
 #     milestone_title: string
 #     assignee_id: integer
 #     search: string
+#     in: 'title', 'description', or a string joining them with comma
 #     label_name: string
 #     sort: string
 #     my_reaction_emoji: string
@@ -29,10 +32,13 @@ class IssuesFinder < IssuableFinder
     @scalar_params ||= super + [:due_date]
   end
 
+  # rubocop: disable CodeReuse/ActiveRecord
   def klass
     Issue.includes(:author)
   end
+  # rubocop: enable CodeReuse/ActiveRecord
 
+  # rubocop: disable CodeReuse/ActiveRecord
   def with_confidentiality_access_check
     return Issue.all if user_can_see_all_confidential_issues?
     return Issue.where('issues.confidential IS NOT TRUE') if user_cannot_see_confidential_issues?
@@ -42,10 +48,11 @@ class IssuesFinder < IssuableFinder
       OR (issues.confidential = TRUE
         AND (issues.author_id = :user_id
           OR EXISTS (SELECT TRUE FROM issue_assignees WHERE user_id = :user_id AND issue_id = issues.id)
-          OR issues.project_id IN(:project_ids)))',
+          OR EXISTS (:authorizations)))',
       user_id: current_user.id,
-      project_ids: current_user.authorized_projects(CONFIDENTIAL_ACCESS_LEVEL).select(:id))
+      authorizations: current_user.authorizations_for_projects(min_access_level: CONFIDENTIAL_ACCESS_LEVEL, related_project_column: "issues.project_id"))
   end
+  # rubocop: enable CodeReuse/ActiveRecord
 
   private
 
@@ -62,7 +69,16 @@ class IssuesFinder < IssuableFinder
   end
 
   def filter_items(items)
-    by_due_date(super)
+    issues = super
+    issues = by_due_date(issues)
+    issues = by_confidential(issues)
+    issues
+  end
+
+  def by_confidential(items)
+    return items if params[:confidential].nil?
+
+    params[:confidential] ? items.confidential_only : items.public_only
   end
 
   def by_due_date(items)
@@ -114,9 +130,13 @@ class IssuesFinder < IssuableFinder
     return @user_can_see_all_confidential_issues = true if current_user.full_private_access?
 
     @user_can_see_all_confidential_issues =
-      project? &&
-      project &&
-      project.team.max_member_access(current_user.id) >= CONFIDENTIAL_ACCESS_LEVEL
+      if project? && project
+        project.team.max_member_access(current_user.id) >= CONFIDENTIAL_ACCESS_LEVEL
+      elsif group
+        group.max_member_access_for_user(current_user) >= CONFIDENTIAL_ACCESS_LEVEL
+      else
+        false
+      end
   end
 
   def user_cannot_see_confidential_issues?
@@ -124,16 +144,6 @@ class IssuesFinder < IssuableFinder
 
     current_user.blank?
   end
-
-  def by_assignee(items)
-    if assignee
-      items.assigned_to(assignee)
-    elsif no_assignee?
-      items.unassigned
-    elsif assignee_id? || assignee_username? # assignee not found
-      items.none
-    else
-      items
-    end
-  end
 end
+
+IssuesFinder.prepend_if_ee('EE::IssuesFinder')

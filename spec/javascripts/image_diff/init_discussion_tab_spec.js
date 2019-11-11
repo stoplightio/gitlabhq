@@ -1,5 +1,5 @@
 import initDiscussionTab from '~/image_diff/init_discussion_tab';
-import imageDiffHelper from '~/image_diff/helpers/index';
+import initImageDiffHelper from '~/image_diff/helpers/init_image_diff';
 
 describe('initDiscussionTab', () => {
   beforeEach(() => {
@@ -11,8 +11,8 @@ describe('initDiscussionTab', () => {
     `);
   });
 
-  it('should pass canCreateNote as false to initImageDiff', (done) => {
-    spyOn(imageDiffHelper, 'initImageDiff').and.callFake((diffFileEl, canCreateNote) => {
+  it('should pass canCreateNote as false to initImageDiff', done => {
+    spyOn(initImageDiffHelper, 'initImageDiff').and.callFake((diffFileEl, canCreateNote) => {
       expect(canCreateNote).toEqual(false);
       done();
     });
@@ -20,18 +20,21 @@ describe('initDiscussionTab', () => {
     initDiscussionTab();
   });
 
-  it('should pass renderCommentBadge as true to initImageDiff', (done) => {
-    spyOn(imageDiffHelper, 'initImageDiff').and.callFake((diffFileEl, canCreateNote, renderCommentBadge) => {
-      expect(renderCommentBadge).toEqual(true);
-      done();
-    });
+  it('should pass renderCommentBadge as true to initImageDiff', done => {
+    spyOn(initImageDiffHelper, 'initImageDiff').and.callFake(
+      (diffFileEl, canCreateNote, renderCommentBadge) => {
+        expect(renderCommentBadge).toEqual(true);
+        done();
+      },
+    );
 
     initDiscussionTab();
   });
 
   it('should call initImageDiff for each diffFileEls', () => {
-    spyOn(imageDiffHelper, 'initImageDiff').and.callFake(() => {});
+    spyOn(initImageDiffHelper, 'initImageDiff').and.callFake(() => {});
     initDiscussionTab();
-    expect(imageDiffHelper.initImageDiff.calls.count()).toEqual(2);
+
+    expect(initImageDiffHelper.initImageDiff.calls.count()).toEqual(2);
   });
 });

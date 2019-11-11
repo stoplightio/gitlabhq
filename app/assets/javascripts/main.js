@@ -2,7 +2,6 @@
 
 import jQuery from 'jquery';
 import Cookies from 'js-cookie';
-import svg4everybody from 'svg4everybody';
 
 // bootstrap webpack, common libs, polyfills, and behaviors
 import './webpack';
@@ -10,7 +9,11 @@ import './commons';
 import './behaviors';
 
 // lib/utils
-import { handleLocationHash, addSelectOnFocusBehaviour } from './lib/utils/common_utils';
+import {
+  handleLocationHash,
+  addSelectOnFocusBehaviour,
+  getCspNonceValue,
+} from './lib/utils/common_utils';
 import { localTimeAgo } from './lib/utils/datetime_utility';
 import { getLocationHash, visitUrl } from './lib/utils/url_utility';
 
@@ -25,22 +28,39 @@ import initLayoutNav from './layout_nav';
 import './feature_highlight/feature_highlight_options';
 import LazyLoader from './lazy_loader';
 import initLogoAnimation from './logo';
-import './milestone_select';
-import './projects_dropdown';
+import './frequent_items';
 import initBreadcrumbs from './breadcrumb';
-import initDispatcher from './dispatcher';
+import initUsagePingConsent from './usage_ping_consent';
+import initPerformanceBar from './performance_bar';
+import initSearchAutocomplete from './search_autocomplete';
+import GlFieldErrors from './gl_field_errors';
+import initUserPopovers from './user_popovers';
+import { initUserTracking } from './tracking';
+import { __ } from './locale';
+import initPrivacyPolicyUpdateCallout from './privacy_policy_update_callout';
+
+import 'ee_else_ce/main_ee';
 
 // expose jQuery as global (TODO: remove these)
 window.jQuery = jQuery;
 window.$ = jQuery;
+
+// Add nonce to jQuery script handler
+jQuery.ajaxSetup({
+  converters: {
+    // eslint-disable-next-line @gitlab/i18n/no-non-i18n-strings, func-names
+    'text script': function(text) {
+      jQuery.globalEval(text, { nonce: getCspNonceValue() });
+      return text;
+    },
+  },
+});
 
 // inject test utilities if necessary
 if (process.env.NODE_ENV !== 'production' && gon && gon.test_env) {
   $.fx.off = true;
   import(/* webpackMode: "eager" */ './test_utils/');
 }
-
-svg4everybody();
 
 document.addEventListener('beforeunload', () => {
   // Unbind scroll events
@@ -66,6 +86,102 @@ gl.lazyLoader = new LazyLoader({
   observerNode: '#content-body',
 });
 
+// Put all initialisations here that can also wait after everything is rendered and ready
+function deferredInitialisation() {
+  const $body = $('body');
+
+  initBreadcrumbs();
+  initImporterStatus();
+  initTodoToggle();
+  initLogoAnimation();
+  initUsagePingConsent();
+  initUserPopovers();
+  initUserTracking();
+  initPrivacyPolicyUpdateCallout();
+
+  if (document.querySelector('.search')) initSearchAutocomplete();
+
+  addSelectOnFocusBehaviour('.js-select-on-focus');
+
+  $('.remove-row').on('ajax:success', function removeRowAjaxSuccessCallback() {
+    $(this)
+      .tooltip('dispose')
+      .closest('li')
+      .fadeOut();
+  });
+
+  $('.js-remove-tr').on('ajax:before', function removeTRAjaxBeforeCallback() {
+    $(this).hide();
+  });
+
+  $('.js-remove-tr').on('ajax:success', function removeTRAjaxSuccessCallback() {
+    $(this)
+      .closest('tr')
+      .fadeOut();
+  });
+
+  // Initialize select2 selects
+  if ($('select.select2').length) {
+    import(/* webpackChunkName: 'select2' */ 'select2/select2')
+      .then(() => {
+        $('select.select2').select2({
+          width: 'resolve',
+          minimumResultsForSearch: 10,
+          dropdownAutoWidth: true,
+        });
+
+        // Close select2 on escape
+        $('.js-select2').on('select2-close', () => {
+          setTimeout(() => {
+            $('.select2-container-active').removeClass('select2-container-active');
+            $(':focus').blur();
+          }, 1);
+        });
+      })
+      .catch(() => {});
+  }
+
+  const glTooltipDelay = localStorage.getItem('gl-tooltip-delay');
+  const delay = glTooltipDelay ? JSON.parse(glTooltipDelay) : 0;
+
+  // Initialize tooltips
+  $body.tooltip({
+    selector: '.has-tooltip, [data-toggle="tooltip"]',
+    trigger: 'hover',
+    boundary: 'viewport',
+    delay,
+  });
+
+  // Initialize popovers
+  $body.popover({
+    selector: '[data-toggle="popover"]',
+    trigger: 'focus',
+    // set the viewport to the main content, excluding the navigation bar, so
+    // the navigation can't overlap the popover
+    viewport: '.layout-page',
+  });
+
+  loadAwardsHandler();
+
+  /**
+   * Toggle Canary Badge
+   *
+   * For GitLab.com only, when the user is using canary
+   * we render a Next badge and hide the option to switch
+   * to canay
+   */
+  if (Cookies.get('gitlab_canary') && Cookies.get('gitlab_canary') === 'true') {
+    const canaryBadge = document.querySelector('.js-canary-badge');
+    const canaryLink = document.querySelector('.js-canary-link');
+    if (canaryBadge) {
+      canaryBadge.classList.remove('hidden');
+    }
+    if (canaryLink) {
+      canaryLink.classList.add('hidden');
+    }
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   const $body = $('body');
   const $document = $(document);
@@ -73,11 +189,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const $sidebarGutterToggle = $('.js-sidebar-toggle');
   let bootstrapBreakpoint = bp.getBreakpointSize();
 
-  initBreadcrumbs();
+  if (document.querySelector('#js-peek')) initPerformanceBar({ container: '#js-peek' });
+
   initLayoutNav();
-  initImporterStatus();
-  initTodoToggle();
-  initLogoAnimation();
 
   // Set the default path for all cookies to GitLab's root directory
   Cookies.defaults.path = gon.relative_url_root || '/';
@@ -107,57 +221,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return true;
   });
 
-  addSelectOnFocusBehaviour('.js-select-on-focus');
-
-  $('.remove-row').on('ajax:success', function removeRowAjaxSuccessCallback() {
-    $(this)
-      .tooltip('dispose')
-      .closest('li')
-      .fadeOut();
-  });
-
-  $('.js-remove-tr').on('ajax:before', function removeTRAjaxBeforeCallback() {
-    $(this).hide();
-  });
-
-  $('.js-remove-tr').on('ajax:success', function removeTRAjaxSuccessCallback() {
-    $(this)
-      .closest('tr')
-      .fadeOut();
-  });
-
-  // Initialize select2 selects
-  $('select.select2').select2({
-    width: 'resolve',
-    dropdownAutoWidth: true,
-  });
-
-  // Close select2 on escape
-  $('.js-select2').on('select2-close', () => {
-    setTimeout(() => {
-      $('.select2-container-active').removeClass('select2-container-active');
-      $(':focus').blur();
-    }, 1);
-  });
-
-  // Initialize tooltips
-  $body.tooltip({
-    selector: '.has-tooltip, [data-toggle="tooltip"]',
-    trigger: 'hover',
-    boundary: 'viewport',
-    placement(tip, el) {
-      return $(el).data('placement') || 'bottom';
-    },
-  });
-
-  // Initialize popovers
-  $body.popover({
-    selector: '[data-toggle="popover"]',
-    trigger: 'focus',
-    // set the viewport to the main content, excluding the navigation bar, so
-    // the navigation can't overlap the popover
-    viewport: '.layout-page',
-  });
+  localTimeAgo($('abbr.timeago, .js-timeago'), true);
 
   // Form submitter
   $('.trigger-submit').on('change', function triggerSubmitCallback() {
@@ -165,8 +229,6 @@ document.addEventListener('DOMContentLoaded', () => {
       .parents('form')
       .submit();
   });
-
-  localTimeAgo($('abbr.timeago, .js-timeago'), true);
 
   // Disable form buttons while a form is submitting
   $body.on('ajax:complete, ajax:beforeSend, submit', 'form', function ajaxCompleteCallback(e) {
@@ -184,10 +246,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const ref = xhrObj.status;
 
     if (ref === 401) {
-      Flash('You need to be logged in.');
+      Flash(__('You need to be logged in.'));
     } else if (ref === 404 || ref === 500) {
-      Flash('Something went wrong on our end.');
+      Flash(__('Something went wrong on our end.'));
     }
+  });
+
+  $('.navbar-toggler').on('click', () => {
+    $('.header-content').toggleClass('menu-expanded');
   });
 
   // Commit show suppressed diff
@@ -195,11 +261,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const $container = $(this).parent();
     $container.next('table').show();
     $container.remove();
-  });
-
-  $('.navbar-toggler').on('click', () => {
-    $('.header-content').toggleClass('menu-expanded');
-    gl.lazyLoader.loadCheck();
   });
 
   // Show/hide comments on diff
@@ -246,8 +307,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   $window.on('resize.app', fitSidebarForSize);
 
-  loadAwardsHandler();
-
   $('form.filter-form').on('submit', function filterFormSubmitCallback(event) {
     const link = document.createElement('a');
     link.href = this.action;
@@ -255,6 +314,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const action = `${this.action}${link.search === '' ? '?' : '&'}`;
 
     event.preventDefault();
+    // eslint-disable-next-line no-jquery/no-serialize
     visitUrl(`${action}${$(this).serialize()}`);
   });
 
@@ -268,5 +328,8 @@ document.addEventListener('DOMContentLoaded', () => {
       });
   }
 
-  initDispatcher();
+  // initialize field errors
+  $('.gl-show-field-errors').each((i, form) => new GlFieldErrors(form));
+
+  requestIdleCallback(deferredInitialisation);
 });

@@ -1,31 +1,50 @@
 ---
+- auto_devops:auto_devops_disable
+
+- auto_merge:auto_merge_process
+
+- chaos:chaos_cpu_spin
+- chaos:chaos_db_spin
+- chaos:chaos_kill
+- chaos:chaos_leak_mem
+- chaos:chaos_sleep
+
 - cronjob:admin_email
 - cronjob:expire_build_artifacts
 - cronjob:gitlab_usage_ping
 - cronjob:import_export_project_cleanup
 - cronjob:pages_domain_verification_cron
+- cronjob:pages_domain_removal_cron
+- cronjob:pages_domain_ssl_renewal_cron
 - cronjob:pipeline_schedule
 - cronjob:prune_old_events
 - cronjob:remove_expired_group_links
 - cronjob:remove_expired_members
-- cronjob:remove_old_web_hook_logs
 - cronjob:remove_unreferenced_lfs_objects
 - cronjob:repository_archive_cache
-- cronjob:repository_check_batch
+- cronjob:repository_check_dispatch
 - cronjob:requests_profiles
-- cronjob:schedule_update_user_activity
 - cronjob:stuck_ci_jobs
 - cronjob:stuck_import_jobs
 - cronjob:stuck_merge_jobs
 - cronjob:ci_archive_traces_cron
 - cronjob:trending_projects
 - cronjob:issue_due_scheduler
+- cronjob:prune_web_hook_logs
+- cronjob:schedule_migrate_external_diffs
+- cronjob:namespaces_prune_aggregation_schedules
 
 - gcp_cluster:cluster_install_app
+- gcp_cluster:cluster_patch_app
+- gcp_cluster:cluster_upgrade_app
 - gcp_cluster:cluster_provision
 - gcp_cluster:cluster_wait_for_app_installation
 - gcp_cluster:wait_for_cluster_creation
 - gcp_cluster:cluster_wait_for_ingress_ip_address
+- gcp_cluster:cluster_configure
+- gcp_cluster:cluster_project_configure
+- gcp_cluster:clusters_applications_wait_for_uninstall_app
+- gcp_cluster:clusters_applications_uninstall
 
 - github_import_advance_stage
 - github_importer:github_import_import_diff_note
@@ -42,10 +61,14 @@
 - github_importer:github_import_stage_import_pull_requests
 - github_importer:github_import_stage_import_repository
 
+- hashed_storage:hashed_storage_migrator
+- hashed_storage:hashed_storage_rollbacker
+- hashed_storage:hashed_storage_project_migrate
+- hashed_storage:hashed_storage_project_rollback
+
 - mail_scheduler:mail_scheduler_issue_due
 - mail_scheduler:mail_scheduler_notification_service
 
-- object_storage_upload
 - object_storage:object_storage_background_move
 - object_storage:object_storage_migrate_uploads
 
@@ -62,6 +85,7 @@
 - pipeline_hooks:build_hooks
 - pipeline_hooks:pipeline_hooks
 - pipeline_processing:build_finished
+- pipeline_processing:ci_build_prepare
 - pipeline_processing:build_queue
 - pipeline_processing:build_success
 - pipeline_processing:pipeline_process
@@ -69,15 +93,40 @@
 - pipeline_processing:pipeline_update
 - pipeline_processing:stage_update
 - pipeline_processing:update_head_pipeline_for_merge_request
+- pipeline_processing:ci_build_schedule
+
+- deployment:deployments_success
+- deployment:deployments_finished
 
 - repository_check:repository_check_clear
+- repository_check:repository_check_batch
 - repository_check:repository_check_single_repository
+
+- todos_destroyer:todos_destroyer_confidential_issue
+- todos_destroyer:todos_destroyer_entity_leave
+- todos_destroyer:todos_destroyer_group_private
+- todos_destroyer:todos_destroyer_project_private
+- todos_destroyer:todos_destroyer_private_features
+
+- update_namespace_statistics:namespaces_schedule_aggregation
+- update_namespace_statistics:namespaces_root_statistics
+
+- object_pool:object_pool_create
+- object_pool:object_pool_schedule_join
+- object_pool:object_pool_join
+- object_pool:object_pool_destroy
+
+- container_repository:delete_container_repository
+- container_repository:cleanup_container_repository
+
+- notifications:new_release
 
 - default
 - mailers # ActionMailer::DeliveryJob.queue_name
 
 - authorized_projects
 - background_migration
+- chat_notification
 - create_gpg_signature
 - delete_merged_branches
 - delete_user
@@ -90,31 +139,40 @@
 - invalid_gpg_signature_update
 - irker
 - merge
+- migrate_external_diffs
 - namespaceless_project_destroy
 - new_issue
 - new_merge_request
 - new_note
 - pages
 - pages_domain_verification
+- pages_domain_ssl_renewal
 - plugin
 - post_receive
 - process_commit
 - project_cache
 - project_destroy
 - project_export
-- project_migrate_hashed_storage
 - project_service
 - propagate_service_template
 - reactive_caching
 - rebase
+- remote_mirror_notification
 - repository_fork
 - repository_import
 - repository_remove_remote
-- storage_migrator
 - system_hook_push
+- update_external_pull_requests
 - update_merge_requests
-- update_user_activity
+- update_project_statistics
 - upload_checksum
 - web_hook
 - repository_update_remote_mirror
 - create_note_diff_file
+- delete_diff_files
+- detect_repository_languages
+- repository_cleanup
+- delete_stored_files
+- import_issues_csv
+- project_daily_statistics
+- create_evidence

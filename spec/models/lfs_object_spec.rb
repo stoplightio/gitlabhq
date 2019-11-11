@@ -1,23 +1,73 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe LfsObject do
-  describe '#local_store?' do
-    it 'returns true when file_store is nil' do
-      subject.file_store = nil
-
-      expect(subject.local_store?).to eq true
+  it 'has a distinct has_many :projects relation through lfs_objects_projects' do
+    lfs_object = create(:lfs_object)
+    project = create(:project)
+    [:project, :design].each do |repository_type|
+      create(:lfs_objects_project, project: project,
+                                   lfs_object: lfs_object,
+                                   repository_type: repository_type)
     end
 
+    expect(lfs_object.lfs_objects_projects.size).to eq(2)
+    expect(lfs_object.projects.size).to eq(1)
+    expect(lfs_object.projects.to_a).to eql([project])
+  end
+
+  describe '#local_store?' do
     it 'returns true when file_store is equal to LfsObjectUploader::Store::LOCAL' do
       subject.file_store = LfsObjectUploader::Store::LOCAL
 
       expect(subject.local_store?).to eq true
     end
 
-    it 'returns false whe file_store is equal to LfsObjectUploader::Store::REMOTE' do
+    it 'returns false when file_store is equal to LfsObjectUploader::Store::REMOTE' do
       subject.file_store = LfsObjectUploader::Store::REMOTE
 
       expect(subject.local_store?).to eq false
+    end
+  end
+
+  describe '#project_allowed_access?' do
+    set(:lfs_object) { create(:lfs_objects_project).lfs_object }
+    set(:project) { create(:project) }
+
+    it 'returns true when project is linked' do
+      create(:lfs_objects_project, lfs_object: lfs_object, project: project)
+
+      expect(lfs_object.project_allowed_access?(project)).to eq(true)
+    end
+
+    it 'returns false when project is not linked' do
+      expect(lfs_object.project_allowed_access?(project)).to eq(false)
+    end
+
+    context 'when project is a member of a fork network' do
+      set(:fork_network) { create(:fork_network) }
+      set(:fork_network_root_project) { fork_network.root_project }
+      set(:fork_network_membership) { create(:fork_network_member, project: project, fork_network: fork_network) }
+
+      it 'returns true for all members when forked project is linked' do
+        create(:lfs_objects_project, lfs_object: lfs_object, project: project)
+
+        expect(lfs_object.project_allowed_access?(project)).to eq(true)
+        expect(lfs_object.project_allowed_access?(fork_network_root_project)).to eq(true)
+      end
+
+      it 'returns true for all members when root of network is linked' do
+        create(:lfs_objects_project, lfs_object: lfs_object, project: fork_network_root_project)
+
+        expect(lfs_object.project_allowed_access?(project)).to eq(true)
+        expect(lfs_object.project_allowed_access?(fork_network_root_project)).to eq(true)
+      end
+
+      it 'returns false when no member of fork network is linked' do
+        expect(lfs_object.project_allowed_access?(project)).to eq(false)
+        expect(lfs_object.project_allowed_access?(fork_network_root_project)).to eq(false)
+      end
     end
   end
 
@@ -83,19 +133,6 @@ describe LfsObject do
     describe 'file is being stored' do
       let(:lfs_object) { create(:lfs_object, :with_file) }
 
-      context 'when object has nil store' do
-        before do
-          lfs_object.update_column(:file_store, nil)
-          lfs_object.reload
-        end
-
-        it 'is stored locally' do
-          expect(lfs_object.file_store).to be(nil)
-          expect(lfs_object.file).to be_file_storage
-          expect(lfs_object.file.object_store).to eq(ObjectStorage::Store::LOCAL)
-        end
-      end
-
       context 'when existing object has local store' do
         it 'is stored locally' do
           expect(lfs_object.file_store).to be(ObjectStorage::Store::LOCAL)
@@ -117,6 +154,17 @@ describe LfsObject do
           end
         end
       end
+    end
+  end
+
+  describe ".calculate_oid" do
+    let(:lfs_object) { create(:lfs_object, :with_file) }
+
+    it 'returns SHA256 sum of the file' do
+      path = lfs_object.file.path
+      expected = Digest::SHA256.file(path).hexdigest
+
+      expect(described_class.calculate_oid(path)).to eq expected
     end
   end
 end

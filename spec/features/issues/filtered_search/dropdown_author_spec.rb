@@ -1,4 +1,6 @@
-require 'rails_helper'
+# frozen_string_literal: true
+
+require 'spec_helper'
 
 describe 'Dropdown author', :js do
   include FilteredSearchHelpers
@@ -28,9 +30,9 @@ describe 'Dropdown author', :js do
   end
 
   before do
-    project.add_master(user)
-    project.add_master(user_john)
-    project.add_master(user_jacob)
+    project.add_maintainer(user)
+    project.add_maintainer(user_john)
+    project.add_maintainer(user_jacob)
     sign_in(user)
     create(:issue, project: project)
 
@@ -45,12 +47,12 @@ describe 'Dropdown author', :js do
     end
 
     it 'closes when the search bar is unfocused' do
-      find('body').click()
+      find('body').click
 
       expect(page).to have_css(js_dropdown_author, visible: false)
     end
 
-    it 'should show loading indicator when opened' do
+    it 'shows loading indicator when opened' do
       slow_requests do
         filtered_search.set('author:')
 
@@ -58,13 +60,13 @@ describe 'Dropdown author', :js do
       end
     end
 
-    it 'should hide loading indicator when loaded' do
+    it 'hides loading indicator when loaded' do
       send_keys_to_filtered_search('author:')
 
       expect(page).not_to have_css('#js-dropdown-author .filter-dropdown-loading')
     end
 
-    it 'should load all the authors when opened' do
+    it 'loads all the authors when opened' do
       send_keys_to_filtered_search('author:')
 
       expect(dropdown_author_size).to eq(4)
@@ -195,7 +197,7 @@ describe 'Dropdown author', :js do
       expect(initial_size).to be > 0
 
       new_user = create(:user)
-      project.add_master(new_user)
+      project.add_maintainer(new_user)
       find('.filtered-search-box .clear-search').click
       filtered_search.set('author')
       send_keys_to_filtered_search(':')

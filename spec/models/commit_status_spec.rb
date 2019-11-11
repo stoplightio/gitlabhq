@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe CommitStatus do
@@ -12,6 +14,8 @@ describe CommitStatus do
   def create_status(**opts)
     create(:commit_status, pipeline: pipeline, **opts)
   end
+
+  it_behaves_like 'having unique enum values'
 
   it { is_expected.to belong_to(:pipeline) }
   it { is_expected.to belong_to(:user) }
@@ -46,6 +50,16 @@ describe CommitStatus do
       expect(ExpireJobCacheWorker).to receive(:perform_async).with(commit_status.id)
 
       commit_status.success!
+    end
+
+    describe 'transitioning to running' do
+      let(:commit_status) { create(:commit_status, :pending, started_at: nil) }
+
+      it 'records the started at time' do
+        commit_status.run!
+
+        expect(commit_status.started_at).to be_present
+      end
     end
   end
 
@@ -125,6 +139,20 @@ describe CommitStatus do
         end
 
         it { is_expected.to be_falsey }
+      end
+    end
+  end
+
+  describe '#cancel' do
+    subject { job.cancel }
+
+    context 'when status is scheduled' do
+      let(:job) { build(:commit_status, :scheduled) }
+
+      it 'updates the status' do
+        subject
+
+        expect(job).to be_canceled
       end
     end
   end
@@ -293,7 +321,7 @@ describe CommitStatus do
       end
 
       it 'returns a correct compound status' do
-        expect(described_class.all.status).to eq 'running'
+        expect(described_class.all.slow_composite_status).to eq 'running'
       end
     end
 
@@ -303,7 +331,7 @@ describe CommitStatus do
       end
 
       it 'returns status that indicates success' do
-        expect(described_class.all.status).to eq 'success'
+        expect(described_class.all.slow_composite_status).to eq 'success'
       end
     end
 
@@ -314,7 +342,7 @@ describe CommitStatus do
       end
 
       it 'returns status according to the scope' do
-        expect(described_class.latest.status).to eq 'success'
+        expect(described_class.latest.slow_composite_status).to eq 'success'
       end
     end
   end
@@ -421,7 +449,7 @@ describe CommitStatus do
       end
 
       it "lock" do
-        is_expected.to be true
+        is_expected.to be_truthy
       end
 
       it "raise exception when trying to update" do
@@ -435,7 +463,7 @@ describe CommitStatus do
       end
 
       it "do not lock" do
-        is_expected.to be false
+        is_expected.to be_falsey
       end
 
       it "save correctly" do
@@ -462,6 +490,12 @@ describe CommitStatus do
       let(:reason) { :script_failure }
 
       it { is_expected.to be_script_failure }
+    end
+
+    context 'when failure_reason is unmet_prerequisites' do
+      let(:reason) { :unmet_prerequisites }
+
+      it { is_expected.to be_unmet_prerequisites }
     end
   end
 
@@ -539,6 +573,7 @@ describe CommitStatus do
 
     before do
       allow(Time).to receive(:now).and_return(current_time)
+      expect(commit_status.any_unmet_prerequisites?).to eq false
     end
 
     shared_examples 'commit status enqueued' do
@@ -553,6 +588,12 @@ describe CommitStatus do
       it_behaves_like 'commit status enqueued'
     end
 
+    context 'when initial state is :preparing' do
+      let(:commit_status) { create(:commit_status, :preparing) }
+
+      it_behaves_like 'commit status enqueued'
+    end
+
     context 'when initial state is :skipped' do
       let(:commit_status) { create(:commit_status, :skipped) }
 
@@ -561,6 +602,12 @@ describe CommitStatus do
 
     context 'when initial state is :manual' do
       let(:commit_status) { create(:commit_status, :manual) }
+
+      it_behaves_like 'commit status enqueued'
+    end
+
+    context 'when initial state is :scheduled' do
+      let(:commit_status) { create(:commit_status, :scheduled) }
 
       it_behaves_like 'commit status enqueued'
     end

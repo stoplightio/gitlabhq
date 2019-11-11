@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module API
   class Runner < Grape::API
     helpers ::API::Helpers::Runner
@@ -13,24 +15,26 @@ module API
         optional :info, type: Hash, desc: %q(Runner's metadata)
         optional :active, type: Boolean, desc: 'Should Runner be active'
         optional :locked, type: Boolean, desc: 'Should Runner be locked for current project'
+        optional :access_level, type: String, values: Ci::Runner.access_levels.keys,
+                                desc: 'The access_level of the runner'
         optional :run_untagged, type: Boolean, desc: 'Should Runner handle untagged jobs'
         optional :tag_list, type: Array[String], desc: %q(List of Runner's tags)
         optional :maximum_timeout, type: Integer, desc: 'Maximum timeout set when this Runner will handle the job'
       end
       post '/' do
-        attributes = attributes_for_keys([:description, :active, :locked, :run_untagged, :tag_list, :maximum_timeout])
+        attributes = attributes_for_keys([:description, :active, :locked, :run_untagged, :tag_list, :access_level, :maximum_timeout])
           .merge(get_runner_details_from_request)
 
         attributes =
           if runner_registration_token_valid?
             # Create shared runner. Requires admin access
-            attributes.merge(is_shared: true, runner_type: :instance_type)
-          elsif project = Project.find_by(runners_token: params[:token])
+            attributes.merge(runner_type: :instance_type)
+          elsif project = Project.find_by_runners_token(params[:token])
             # Create a specific runner for the project
-            attributes.merge(is_shared: false, runner_type: :project_type, projects: [project])
-          elsif group = Group.find_by(runners_token: params[:token])
+            attributes.merge(runner_type: :project_type, projects: [project])
+          elsif group = Group.find_by_runners_token(params[:token])
             # Create a specific runner for the group
-            attributes.merge(is_shared: false, runner_type: :group_type, groups: [group])
+            attributes.merge(runner_type: :group_type, groups: [group])
           else
             forbidden!
           end
@@ -80,7 +84,21 @@ module API
       params do
         requires :token, type: String, desc: %q(Runner's authentication token)
         optional :last_update, type: String, desc: %q(Runner's queue last_update token)
-        optional :info, type: Hash, desc: %q(Runner's metadata)
+        optional :info, type: Hash, desc: %q(Runner's metadata) do
+          optional :name, type: String, desc: %q(Runner's name)
+          optional :version, type: String, desc: %q(Runner's version)
+          optional :revision, type: String, desc: %q(Runner's revision)
+          optional :platform, type: String, desc: %q(Runner's platform)
+          optional :architecture, type: String, desc: %q(Runner's architecture)
+          optional :executor, type: String, desc: %q(Runner's executor)
+          optional :features, type: Hash, desc: %q(Runner's features)
+        end
+        optional :session, type: Hash, desc: %q(Runner's session data) do
+          optional :url, type: String, desc: %q(Session's url)
+          optional :certificate, type: String, desc: %q(Session's certificate)
+          optional :authorization, type: String, desc: %q(Session's authorization)
+        end
+        optional :job_age, type: Integer, desc: %q(Job should be older than passed age in seconds to be ran on runner)
       end
       post '/request' do
         authenticate_runner!
@@ -90,19 +108,21 @@ module API
           break no_content!
         end
 
-        if current_runner.runner_queue_value_latest?(params[:last_update])
-          header 'X-GitLab-Last-Update', params[:last_update]
+        runner_params = declared_params(include_missing: false)
+
+        if current_runner.runner_queue_value_latest?(runner_params[:last_update])
+          header 'X-GitLab-Last-Update', runner_params[:last_update]
           Gitlab::Metrics.add_event(:build_not_found_cached)
           break no_content!
         end
 
         new_update = current_runner.ensure_runner_queue_value
-        result = ::Ci::RegisterJobService.new(current_runner).execute
+        result = ::Ci::RegisterJobService.new(current_runner).execute(runner_params)
 
         if result.valid?
           if result.build
             Gitlab::Metrics.add_event(:build_found)
-            present result.build, with: Entities::JobRequest::Response
+            present Ci::BuildRunnerPresenter.new(result.build), with: Entities::JobRequest::Response
           else
             Gitlab::Metrics.add_event(:build_not_found)
             header 'X-GitLab-Last-Update', new_update
@@ -123,8 +143,7 @@ module API
         requires :id, type: Integer, desc: %q(Job's ID)
         optional :trace, type: String, desc: %q(Job's full trace)
         optional :state, type: String, desc: %q(Job's status: success, failed)
-        optional :failure_reason, type: String, values: CommitStatus.failure_reasons.keys,
-                                  desc: %q(Job's failure_reason)
+        optional :failure_reason, type: String, desc: %q(Job's failure_reason)
       end
       put '/:id' do
         job = authenticate_job!
@@ -202,14 +221,16 @@ module API
         job = authenticate_job!
         forbidden!('Job is not running') unless job.running?
 
+        max_size = max_artifacts_size(job)
+
         if params[:filesize]
           file_size = params[:filesize].to_i
-          file_to_large! unless file_size < max_artifacts_size
+          file_too_large! unless file_size < max_size
         end
 
         status 200
         content_type Gitlab::Workhorse::INTERNAL_API_CONTENT_TYPE
-        JobArtifactUploader.workhorse_authorize(has_length: false, maximum_size: max_artifacts_size)
+        JobArtifactUploader.workhorse_authorize(has_length: false, maximum_size: max_size)
       end
 
       desc 'Upload artifacts for job' do
@@ -224,6 +245,10 @@ module API
         requires :id, type: Integer, desc: %q(Job's ID)
         optional :token, type: String, desc: %q(Job's authentication token)
         optional :expire_in, type: String, desc: %q(Specify when artifacts should expire)
+        optional :artifact_type, type: String, desc: %q(The type of artifact),
+                                 default: 'archive', values: Ci::JobArtifact.file_types.keys
+        optional :artifact_format, type: String, desc: %q(The format of artifact),
+                                   default: 'zip', values: Ci::JobArtifact.file_formats.keys
         optional 'file.path', type: String, desc: %q(path to locally stored body (generated by Workhorse))
         optional 'file.name', type: String, desc: %q(real filename as send in Content-Disposition (generated by Workhorse))
         optional 'file.type', type: String, desc: %q(real content type as send in Content-Type (generated by Workhorse))
@@ -245,31 +270,31 @@ module API
         metadata = UploadedFile.from_params(params, :metadata, JobArtifactUploader.workhorse_local_upload_path)
 
         bad_request!('Missing artifacts file!') unless artifacts
-        file_to_large! unless artifacts.size < max_artifacts_size
-
-        bad_request!("Already uploaded") if job.job_artifacts_archive
+        file_too_large! unless artifacts.size < max_artifacts_size(job)
 
         expire_in = params['expire_in'] ||
           Gitlab::CurrentSettings.current_application_settings.default_artifacts_expire_in
 
-        job.build_job_artifacts_archive(
+        job.job_artifacts.build(
           project: job.project,
           file: artifacts,
-          file_type: :archive,
+          file_type: params['artifact_type'],
+          file_format: params['artifact_format'],
           file_sha256: artifacts.sha256,
           expire_in: expire_in)
 
         if metadata
-          job.build_job_artifacts_metadata(
+          job.job_artifacts.build(
             project: job.project,
             file: metadata,
             file_type: :metadata,
+            file_format: :gzip,
             file_sha256: metadata.sha256,
             expire_in: expire_in)
         end
 
         if job.update(artifacts_expire_in: expire_in)
-          present job, with: Entities::JobRequest::Response
+          present Ci::BuildRunnerPresenter.new(job), with: Entities::JobRequest::Response
         else
           render_validation_error!(job)
         end

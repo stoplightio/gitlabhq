@@ -1,9 +1,7 @@
-class NotificationSetting < ActiveRecord::Base
-  include IgnorableColumn
+# frozen_string_literal: true
 
-  ignore_column :events
-
-  enum level: { global: 3, watch: 2, mention: 4, participating: 1, disabled: 0, custom: 5 }
+class NotificationSetting < ApplicationRecord
+  enum level: { global: 3, watch: 2, participating: 1, mention: 4, disabled: 0, custom: 5 }
 
   default_value_for :level, NotificationSetting.levels[:global]
 
@@ -27,11 +25,13 @@ class NotificationSetting < ActiveRecord::Base
   end
 
   EMAIL_EVENTS = [
+    :new_release,
     :new_note,
     :new_issue,
     :reopen_issue,
     :close_issue,
     :reassign_issue,
+    :issue_due,
     :new_merge_request,
     :push_to_merge_request,
     :reopen_merge_request,
@@ -42,14 +42,24 @@ class NotificationSetting < ActiveRecord::Base
     :success_pipeline
   ].freeze
 
-  EXCLUDED_PARTICIPATING_EVENTS = [
-    :success_pipeline
-  ].freeze
+  # Update unfound_translations.rb when events are changed
+  def self.email_events(source = nil)
+    EMAIL_EVENTS
+  end
+
+  def self.allowed_fields(source = nil)
+    NotificationSetting.email_events(source).dup + %i(level notification_email)
+  end
+
+  def email_events
+    self.class.email_events(source)
+  end
 
   EXCLUDED_WATCHER_EVENTS = [
     :push_to_merge_request,
-    :issue_due
-  ].push(*EXCLUDED_PARTICIPATING_EVENTS).freeze
+    :issue_due,
+    :success_pipeline
+  ].freeze
 
   def self.find_or_create_for(source)
     setting = find_or_initialize_by(source: source)
@@ -75,3 +85,5 @@ class NotificationSetting < ActiveRecord::Base
     respond_to?(event) && !!public_send(event) # rubocop:disable GitlabSecurity/PublicSend
   end
 end
+
+NotificationSetting.prepend_if_ee('EE::NotificationSetting')

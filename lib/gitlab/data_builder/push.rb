@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module DataBuilder
     module Push
@@ -29,7 +31,8 @@ module Gitlab
               }
             }
           ],
-          total_commits_count: 1
+          total_commits_count: 1,
+          push_options: { ci: { skip: true } }
         }.freeze
 
       # Produce a hash of post-receive data
@@ -50,10 +53,16 @@ module Gitlab
       #     homepage: String,
       #   },
       #   commits: Array,
-      #   total_commits_count: Fixnum
+      #   total_commits_count: Fixnum,
+      #   push_options: Hash
       # }
       #
-      def build(project, user, oldrev, newrev, ref, commits = [], message = nil, commits_count: nil)
+      # rubocop:disable Metrics/ParameterLists
+      def build(
+          project:, user:, ref:, oldrev: nil, newrev: nil,
+          commits: [], commits_count: nil, message: nil, push_options: {},
+          with_changed_files: true)
+
         commits = Array(commits)
 
         # Total commits count
@@ -64,10 +73,10 @@ module Gitlab
 
         # For performance purposes maximum 20 latest commits
         # will be passed as post receive hook data.
-        # n+1: https://gitlab.com/gitlab-org/gitlab-ce/issues/38259
+        # n+1: https://gitlab.com/gitlab-org/gitlab-foss/issues/38259
         commit_attrs = Gitlab::GitalyClient.allow_n_plus_1_calls do
           commits_limited.map do |commit|
-            commit.hook_attrs(with_changed_files: true)
+            commit.hook_attrs(with_changed_files: with_changed_files)
           end
         end
 
@@ -85,32 +94,48 @@ module Gitlab
           user_id: user.id,
           user_name: user.name,
           user_username: user.username,
-          user_email: user.email,
+          user_email: user.public_email,
           user_avatar: user.avatar_url(only_path: false),
           project_id: project.id,
           project: project.hook_attrs,
           commits: commit_attrs,
           total_commits_count: commits_count,
+          push_options: push_options,
           # DEPRECATED
           repository: project.hook_attrs.slice(:name, :url, :description, :homepage,
                                                :git_http_url, :git_ssh_url, :visibility_level)
         }
       end
 
-      # This method provide a sample data generated with
+      def build_bulk(action:, ref_type:, changes:)
+        {
+          action: action,
+          ref_count: changes.count,
+          ref_type: ref_type
+        }
+      end
+
+      # This method provides a sample data generated with
       # existing project and commits to test webhooks
       def build_sample(project, user)
-        ref = "#{Gitlab::Git::BRANCH_REF_PREFIX}#{project.default_branch}"
-        commits = project.repository.commits(project.default_branch.to_s, limit: 3) rescue []
+        # Use sample data if repo has no commit
+        # (expect the case of test service configuration settings)
+        return sample_data if project.empty_repo?
 
-        build(project, user, commits.last&.id, commits.first&.id, ref, commits)
+        ref = "#{Gitlab::Git::BRANCH_REF_PREFIX}#{project.default_branch}"
+        commits = project.repository.commits(project.default_branch.to_s, limit: 3)
+
+        build(project: project,
+              user: user,
+              oldrev: commits.last&.id,
+              newrev: commits.first&.id,
+              ref: ref,
+              commits: commits)
       end
 
       def sample_data
         SAMPLE_DATA
       end
-
-      private
 
       def checkout_sha(repository, newrev, ref)
         # Checkout sha is nil when we remove branch or tag

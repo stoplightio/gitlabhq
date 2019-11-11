@@ -1,14 +1,17 @@
+# frozen_string_literal: true
+
 require 'rspec/mocks'
 require 'toml-rb'
 
 module TestEnv
+  extend ActiveSupport::Concern
   extend self
 
   ComponentFailedToInstallError = Class.new(StandardError)
 
   # When developing the seed repository, comment out the branch you will modify.
   BRANCH_SHA = {
-    'signed-commits'                     => '2d1096e',
+    'signed-commits'                     => '6101e87',
     'not-merged-branch'                  => 'b83d6e3',
     'branch-merged'                      => '498214d',
     'empty-branch'                       => '7efb185',
@@ -31,6 +34,9 @@ module TestEnv
     'symlink-expand-diff'                => '81e6355',
     'expand-collapse-files'              => '025db92',
     'expand-collapse-lines'              => '238e82d',
+    'pages-deploy'                       => '7897d5b',
+    'pages-deploy-target'                => '7975be0',
+    'audio'                              => 'c3c21fd',
     'video'                              => '8879059',
     'add-balsamiq-file'                  => 'b89b56d',
     'crlf-diff'                          => '5938907',
@@ -49,7 +55,21 @@ module TestEnv
     'add-pdf-file'                       => 'e774ebd',
     'squash-large-files'                 => '54cec52',
     'add-pdf-text-binary'                => '79faa7b',
-    'add_images_and_changes'             => '010d106'
+    'add_images_and_changes'             => '010d106',
+    'update-gitlab-shell-v-6-0-1'        => '2f61d70',
+    'update-gitlab-shell-v-6-0-3'        => 'de78448',
+    'merge-commit-analyze-before'        => '1adbdef',
+    'merge-commit-analyze-side-branch'   => '8a99451',
+    'merge-commit-analyze-after'         => '646ece5',
+    '2-mb-file'                          => 'bf12d25',
+    'before-create-delete-modify-move'   => '845009f',
+    'between-create-delete-modify-move'  => '3f5f443',
+    'after-create-delete-modify-move'    => 'ba3faa7',
+    'with-codeowners'                    => '219560e',
+    'submodule_inside_folder'            => 'b491b92',
+    'png-lfs'                            => 'fe42f41',
+    'sha-starting-with-large-number'     => '8426165',
+    'invalid-utf8-diff-paths'            => '99e4853'
   }.freeze
 
   # gitlab-test-fork is a fork of gitlab-fork, but we don't necessarily
@@ -80,7 +100,6 @@ module TestEnv
 
     clean_test_path
 
-    # Setup GitLab shell for test instance
     setup_gitlab_shell
 
     setup_gitaly
@@ -90,6 +109,12 @@ module TestEnv
 
     # Create repository for FactoryBot.create(:forked_project_with_submodules)
     setup_forked_repo
+  end
+
+  included do |config|
+    config.append_before do
+      set_current_example_group
+    end
   end
 
   def disable_mailer
@@ -102,16 +127,12 @@ module TestEnv
       .and_call_original
   end
 
-  def disable_pre_receive
-    allow_any_instance_of(Gitlab::Git::Hook).to receive(:trigger).and_return([true, nil])
-  end
-
   # Clean /tmp/tests
   #
   # Keeps gitlab-shell and gitlab-test
   def clean_test_path
     Dir[TMP_TEST_PATH].each do |entry|
-      unless File.basename(entry) =~ /\A(gitaly|gitlab-(shell|test|test_bare|test-fork|test-fork_bare))\z/
+      unless test_dirs.include?(File.basename(entry))
         FileUtils.rm_rf(entry)
       end
     end
@@ -122,35 +143,23 @@ module TestEnv
     FileUtils.mkdir_p(artifacts_path)
   end
 
-  def clean_gitlab_test_path
-    Dir[TMP_TEST_PATH].each do |entry|
-      if File.basename(entry) =~ /\A(gitlab-(test|test_bare|test-fork|test-fork_bare))\z/
-        FileUtils.rm_rf(entry)
-      end
-    end
-  end
-
   def setup_gitlab_shell
-    component_timed_setup('GitLab Shell',
-      install_dir: Gitlab.config.gitlab_shell.path,
-      version: Gitlab::Shell.version_required,
-      task: 'gitlab:shell:install')
+    FileUtils.mkdir_p(Gitlab.config.gitlab_shell.path)
   end
 
   def setup_gitaly
     socket_path = Gitlab::GitalyClient.address('default').sub(/\Aunix:/, '')
     gitaly_dir = File.dirname(socket_path)
+    install_gitaly_args = [gitaly_dir, repos_path, gitaly_url].compact.join(',')
 
     component_timed_setup('Gitaly',
       install_dir: gitaly_dir,
       version: Gitlab::GitalyClient.expected_server_version,
-      task: "gitlab:gitaly:install[#{gitaly_dir}]") do
+      task: "gitlab:gitaly:install[#{install_gitaly_args}]") do
 
-      # Always re-create config, in case it's outdated. This is fast anyway.
-      Gitlab::SetupHelper.create_gitaly_configuration(gitaly_dir, force: true)
-
-      start_gitaly(gitaly_dir)
-    end
+        Gitlab::SetupHelper.create_gitaly_configuration(gitaly_dir, { 'default' => repos_path }, force: true)
+        start_gitaly(gitaly_dir)
+      end
   end
 
   def start_gitaly(gitaly_dir)
@@ -158,6 +167,8 @@ module TestEnv
       # Gitaly has been spawned outside this process already
       return
     end
+
+    FileUtils.mkdir_p("tmp/tests/second_storage") unless File.exist?("tmp/tests/second_storage")
 
     spawn_script = Rails.root.join('scripts/gitaly-test-spawn').to_s
     Bundler.with_original_env do
@@ -176,12 +187,10 @@ module TestEnv
     socket = Gitlab::GitalyClient.address('default').sub('unix:', '')
 
     Integer(sleep_time / sleep_interval).times do
-      begin
-        Socket.unix(socket)
-        return
-      rescue
-        sleep sleep_interval
-      end
+      Socket.unix(socket)
+      return
+    rescue
+      sleep sleep_interval
     end
 
     raise "could not connect to gitaly at #{socket.inspect} after #{sleep_time} seconds"
@@ -193,6 +202,10 @@ module TestEnv
     Process.kill('KILL', @gitaly_pid)
   rescue Errno::ESRCH
     # The process can already be gone if the test run was INTerrupted.
+  end
+
+  def gitaly_url
+    ENV.fetch('GITALY_REPO_URL', nil)
   end
 
   def setup_factory_repo
@@ -228,7 +241,14 @@ module TestEnv
     FileUtils.mkdir_p(target_repo_path)
     FileUtils.cp_r("#{File.expand_path(bare_repo)}/.", target_repo_path)
     FileUtils.chmod_R 0755, target_repo_path
-    set_repo_refs(target_repo_path, refs)
+  end
+
+  def create_bare_repository(path)
+    FileUtils.mkdir_p(path)
+
+    system(git_env, *%W(#{Gitlab.config.git.bin_path} -C #{path} init --bare),
+           out: '/dev/null',
+           err: '/dev/null')
   end
 
   def repos_path
@@ -274,7 +294,35 @@ module TestEnv
     FileUtils.rm_rf(path)
   end
 
+  def current_example_group
+    Thread.current[:current_example_group]
+  end
+
+  # looking for a top-level `describe`
+  def topmost_example_group
+    example_group = current_example_group
+    example_group = example_group[:parent_example_group] until example_group[:parent_example_group].nil?
+    example_group
+  end
+
   private
+
+  def set_current_example_group
+    Thread.current[:current_example_group] = ::RSpec.current_example.metadata[:example_group]
+  end
+
+  # These are directories that should be preserved at cleanup time
+  def test_dirs
+    @test_dirs ||= %w[
+      frontend
+      gitaly
+      gitlab-shell
+      gitlab-test
+      gitlab-test_bare
+      gitlab-test-fork
+      gitlab-test-fork_bare
+    ]
+  end
 
   def factory_repo_path
     @factory_repo_path ||= Rails.root.join('tmp', 'tests', factory_repo_name)
@@ -311,10 +359,7 @@ module TestEnv
     # Try to reset without fetching to avoid using the network.
     unless reset.call
       raise 'Could not fetch test seed repository.' unless system(*%W(#{Gitlab.config.git.bin_path} -C #{repo_path} fetch origin))
-
-      # Before we used Git clone's --mirror option, bare repos could end up
-      # with missing refs, clearing them and retrying should fix the issue.
-      clean_gitlab_test_path && init unless reset.call
+      raise "Could not update test seed repository, please delete #{repo_path} and try again" unless reset.call
     end
   end
 
@@ -343,7 +388,7 @@ module TestEnv
     FileUtils.rm_rf(install_dir)
     exit 1
   ensure
-    puts "    #{component} setup in #{Time.now - start} seconds...\n"
+    puts "    #{component} set up in #{Time.now - start} seconds...\n"
   end
 
   def ensure_component_dir_name_is_correct!(component, path)
@@ -370,3 +415,8 @@ module TestEnv
     true
   end
 end
+
+require_relative('../../../ee/spec/support/helpers/ee/test_env') if Gitlab.ee?
+
+::TestEnv.prepend_if_ee('::EE::TestEnv')
+::TestEnv.extend_if_ee('::EE::TestEnv')

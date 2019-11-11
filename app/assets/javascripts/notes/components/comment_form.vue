@@ -4,13 +4,16 @@ import { mapActions, mapGetters, mapState } from 'vuex';
 import _ from 'underscore';
 import Autosize from 'autosize';
 import { __, sprintf } from '~/locale';
+import TimelineEntryItem from '~/vue_shared/components/notes/timeline_entry_item.vue';
 import Flash from '../../flash';
 import Autosave from '../../autosave';
-import TaskList from '../../task_list';
 import {
   capitalizeFirstCharacter,
   convertToCamelCase,
+  splitCamelCase,
+  slugifyWithUnderscore,
 } from '../../lib/utils/text_utility';
+import { refreshUserMergeRequestCounts } from '~/commons/nav/user_merge_requests';
 import * as constants from '../constants';
 import eventHub from '../event_hub';
 import issueWarning from '../../vue_shared/components/issue/issue_warning.vue';
@@ -30,6 +33,7 @@ export default {
     markdownField,
     userAvatarLink,
     loadingButton,
+    TimelineEntryItem,
   },
   mixins: [issuableStateMixin],
   props: {
@@ -56,21 +60,21 @@ export default {
     ]),
     ...mapState(['isToggleStateButtonLoading']),
     noteableDisplayName() {
-      return this.noteableType.replace(/_/g, ' ');
+      return splitCamelCase(this.noteableType).toLowerCase();
     },
     isLoggedIn() {
       return this.getUserData.id;
     },
     commentButtonTitle() {
-      return this.noteType === constants.COMMENT
-        ? 'Comment'
-        : 'Start discussion';
+      return this.noteType === constants.COMMENT ? __('Comment') : __('Start thread');
+    },
+    startDiscussionDescription() {
+      return this.getNoteableData.noteableType === constants.MERGE_REQUEST_NOTEABLE_TYPE
+        ? __('Discuss a specific suggestion or question that needs to be resolved.')
+        : __('Discuss a specific suggestion or question.');
     },
     isOpen() {
-      return (
-        this.openState === constants.OPENED ||
-        this.openState === constants.REOPENED
-      );
+      return this.openState === constants.OPENED || this.openState === constants.REOPENED;
     },
     canCreateNote() {
       return this.getNoteableData.current_user.can_create_note;
@@ -111,11 +115,22 @@ export default {
     author() {
       return this.getUserData;
     },
-    canUpdateIssue() {
-      return this.getNoteableData.current_user.can_update;
+    canToggleIssueState() {
+      return (
+        this.getNoteableData.current_user.can_update &&
+        this.getNoteableData.state !== constants.MERGED
+      );
     },
     endpoint() {
       return this.getNoteableData.create_note_path;
+    },
+    issuableTypeTitle() {
+      return this.noteableType === constants.MERGE_REQUEST_NOTEABLE_TYPE
+        ? __('merge request')
+        : __('issue');
+    },
+    trackingLabel() {
+      return slugifyWithUnderscore(`${this.commentButtonTitle} button`);
     },
   },
   watch: {
@@ -129,13 +144,10 @@ export default {
   mounted() {
     // jQuery is needed here because it is a custom event being dispatched with jQuery.
     $(document).on('issuable:change', (e, isClosed) => {
-      this.toggleIssueLocalState(
-        isClosed ? constants.CLOSED : constants.REOPENED,
-      );
+      this.toggleIssueLocalState(isClosed ? constants.CLOSED : constants.REOPENED);
     });
 
     this.initAutoSave();
-    this.initTaskList();
   },
   methods: {
     ...mapActions([
@@ -168,6 +180,7 @@ export default {
               noteable_id: this.getNoteableData.id,
               note: this.note,
             },
+            merge_request_diff_head_sha: this.getNoteableData.diff_head_sha,
           },
         };
 
@@ -189,7 +202,7 @@ export default {
                 this.discard();
               } else {
                 Flash(
-                  'Something went wrong while adding your comment. Please try again.',
+                  __('Something went wrong while adding your comment. Please try again.'),
                   'alert',
                   this.$refs.commentForm,
                 );
@@ -205,8 +218,9 @@ export default {
           .catch(() => {
             this.enableButton();
             this.discard(false);
-            const msg = `Your comment could not be submitted!
-Please check your network connection and try again.`;
+            const msg = __(
+              'Your comment could not be submitted! Please check your network connection and try again.',
+            );
             Flash(msg, 'alert', this.$el);
             this.note = noteData.data.note.note; // Restore textarea content.
             this.removePlaceholderNotes();
@@ -221,33 +235,39 @@ Please check your network connection and try again.`;
     toggleIssueState() {
       if (this.isOpen) {
         this.closeIssue()
-          .then(() => this.enableButton())
+          .then(() => {
+            this.enableButton();
+            refreshUserMergeRequestCounts();
+          })
           .catch(() => {
             this.enableButton();
             this.toggleStateButtonLoading(false);
             Flash(
               sprintf(
-                __(
-                  'Something went wrong while closing the %{issuable}. Please try again later',
-                ),
+                __('Something went wrong while closing the %{issuable}. Please try again later'),
                 { issuable: this.noteableDisplayName },
               ),
             );
           });
       } else {
         this.reopenIssue()
-          .then(() => this.enableButton())
-          .catch(() => {
+          .then(() => {
+            this.enableButton();
+            refreshUserMergeRequestCounts();
+          })
+          .catch(({ data }) => {
             this.enableButton();
             this.toggleStateButtonLoading(false);
-            Flash(
-              sprintf(
-                __(
-                  'Something went wrong while reopening the %{issuable}. Please try again later',
-                ),
-                { issuable: this.noteableDisplayName },
-              ),
+            let errorMessage = sprintf(
+              __('Something went wrong while reopening the %{issuable}. Please try again later'),
+              { issuable: this.noteableDisplayName },
             );
+
+            if (data) {
+              errorMessage = Object.values(data).join('\n');
+            }
+
+            Flash(errorMessage);
           });
       }
     },
@@ -281,23 +301,14 @@ Please check your network connection and try again.`;
     },
     initAutoSave() {
       if (this.isLoggedIn) {
-        const noteableType = capitalizeFirstCharacter(
-          convertToCamelCase(this.noteableType),
-        );
+        const noteableType = capitalizeFirstCharacter(convertToCamelCase(this.noteableType));
 
         this.autosave = new Autosave($(this.$refs.textarea), [
-          'Note',
+          __('Note'),
           noteableType,
           this.getNoteableData.id,
         ]);
       }
-    },
-    initTaskList() {
-      return new TaskList({
-        dataType: 'note',
-        fieldName: 'note',
-        selector: '.notes',
-      });
     },
     resizeTextarea() {
       this.$nextTick(() => {
@@ -311,150 +322,137 @@ Please check your network connection and try again.`;
 <template>
   <div>
     <note-signed-out-widget v-if="!isLoggedIn" />
-    <discussion-locked-widget
-      issuable-type="issue"
-      v-else-if="isLocked(getNoteableData) && !canCreateNote"
-    />
-    <ul
-      v-else-if="canCreateNote"
-      class="notes notes-form timeline">
-      <li class="timeline-entry">
-        <div class="timeline-entry-inner">
-          <div class="flash-container error-alert timeline-content"></div>
-          <div class="timeline-icon d-none d-sm-none d-md-block">
-            <user-avatar-link
-              v-if="author"
-              :link-href="author.path"
-              :img-src="author.avatar_url"
-              :img-alt="author.name"
-              :img-size="40"
-            />
-          </div>
-          <div class="timeline-content timeline-content-form">
-            <form
-              ref="commentForm"
-              class="new-note common-note-form gfm-form js-main-target-form"
-            >
-
-              <div class="error-alert"></div>
-
-              <issue-warning
-                v-if="hasWarning(getNoteableData)"
-                :is-locked="isLocked(getNoteableData)"
-                :is-confidential="isConfidential(getNoteableData)"
-              />
-
-              <markdown-field
-                :markdown-preview-path="markdownPreviewPath"
-                :markdown-docs-path="markdownDocsPath"
-                :quick-actions-docs-path="quickActionsDocsPath"
-                :add-spacing-classes="false"
-                ref="markdownField">
-                <textarea
-                  id="note-body"
-                  name="note[note]"
-                  class="note-textarea js-vue-comment-form
-js-gfm-input js-autosize markdown-area js-vue-textarea"
-                  data-supports-quick-actions="true"
-                  aria-label="Description"
-                  v-model="note"
-                  ref="textarea"
-                  slot="textarea"
-                  :disabled="isSubmitting"
-                  placeholder="Write a comment or drag your files here..."
-                  @keydown.up="editCurrentUserLastNote()"
-                  @keydown.meta.enter="handleSave()"
-                  @keydown.ctrl.enter="handleSave()">
-                </textarea>
-              </markdown-field>
-              <div class="note-form-actions">
-                <div
-                  class="float-left btn-group
-append-right-10 comment-type-dropdown js-comment-type-dropdown droplab-dropdown">
-                  <button
-                    @click.prevent="handleSave()"
-                    :disabled="isSubmitButtonDisabled"
-                    class="btn btn-create comment-btn js-comment-button js-comment-submit-button"
-                    type="submit">
-                    {{ __(commentButtonTitle) }}
-                  </button>
-                  <button
-                    :disabled="isSubmitButtonDisabled"
-                    name="button"
-                    type="button"
-                    class="btn comment-btn note-type-toggle js-note-new-discussion dropdown-toggle"
-                    data-display="static"
-                    data-toggle="dropdown"
-                    aria-label="Open comment type dropdown">
-                    <i
-                      aria-hidden="true"
-                      class="fa fa-caret-down toggle-icon">
-                    </i>
-                  </button>
-
-                  <ul class="note-type-dropdown dropdown-open-top dropdown-menu">
-                    <li :class="{ 'droplab-item-selected': noteType === 'comment' }">
-                      <button
-                        type="button"
-                        class="btn btn-transparent"
-                        @click.prevent="setNoteType('comment')">
-                        <i
-                          aria-hidden="true"
-                          class="fa fa-check icon">
-                        </i>
-                        <div class="description">
-                          <strong>Comment</strong>
-                          <p>
-                            Add a general comment to this {{ noteableDisplayName }}.
-                          </p>
-                        </div>
-                      </button>
-                    </li>
-                    <li class="divider droplab-item-ignore"></li>
-                    <li :class="{ 'droplab-item-selected': noteType === 'discussion' }">
-                      <button
-                        type="button"
-                        class="btn btn-transparent"
-                        @click.prevent="setNoteType('discussion')">
-                        <i
-                          aria-hidden="true"
-                          class="fa fa-check icon">
-                        </i>
-                        <div class="description">
-                          <strong>Start discussion</strong>
-                          <p>
-                            Discuss a specific suggestion or question.
-                          </p>
-                        </div>
-                      </button>
-                    </li>
-                  </ul>
-                </div>
-
-                <loading-button
-                  v-if="canUpdateIssue"
-                  :loading="isToggleStateButtonLoading"
-                  @click="handleSave(true)"
-                  :container-class="[
-                    actionButtonClassNames,
-                    'btn btn-comment btn-comment-and-close js-action-button'
-                  ]"
-                  :disabled="isToggleStateButtonLoading || isSubmitting"
-                  :label="issueActionButtonTitle"
-                />
-
-                <button
-                  type="button"
-                  v-if="note.length"
-                  @click="discard"
-                  class="btn btn-cancel js-note-discard">
-                  Discard draft
-                </button>
-              </div>
-            </form>
-          </div>
+    <discussion-locked-widget v-else-if="!canCreateNote" :issuable-type="issuableTypeTitle" />
+    <ul v-else-if="canCreateNote" class="notes notes-form timeline">
+      <timeline-entry-item class="note-form">
+        <div class="flash-container error-alert timeline-content"></div>
+        <div class="timeline-icon d-none d-sm-none d-md-block">
+          <user-avatar-link
+            v-if="author"
+            :link-href="author.path"
+            :img-src="author.avatar_url"
+            :img-alt="author.name"
+            :img-size="40"
+          />
         </div>
-      </li>
+        <div class="timeline-content timeline-content-form">
+          <form ref="commentForm" class="new-note common-note-form gfm-form js-main-target-form">
+            <div class="error-alert"></div>
+
+            <issue-warning
+              v-if="hasWarning(getNoteableData)"
+              :is-locked="isLocked(getNoteableData)"
+              :is-confidential="isConfidential(getNoteableData)"
+              :locked-issue-docs-path="lockedIssueDocsPath"
+              :confidential-issue-docs-path="confidentialIssueDocsPath"
+            />
+
+            <markdown-field
+              ref="markdownField"
+              :markdown-preview-path="markdownPreviewPath"
+              :markdown-docs-path="markdownDocsPath"
+              :quick-actions-docs-path="quickActionsDocsPath"
+              :add-spacing-classes="false"
+            >
+              <textarea
+                id="note-body"
+                ref="textarea"
+                slot="textarea"
+                v-model="note"
+                dir="auto"
+                :disabled="isSubmitting"
+                name="note[note]"
+                class="note-textarea js-vue-comment-form js-note-text
+js-gfm-input js-autosize markdown-area js-vue-textarea qa-comment-input"
+                data-supports-quick-actions="true"
+                :aria-label="__('Description')"
+                :placeholder="__('Write a comment or drag your files here…')"
+                @keydown.up="editCurrentUserLastNote()"
+                @keydown.meta.enter="handleSave()"
+                @keydown.ctrl.enter="handleSave()"
+              >
+              </textarea>
+            </markdown-field>
+            <div class="note-form-actions">
+              <div
+                class="float-left btn-group
+append-right-10 comment-type-dropdown js-comment-type-dropdown droplab-dropdown"
+              >
+                <button
+                  :disabled="isSubmitButtonDisabled"
+                  class="btn btn-success js-comment-button js-comment-submit-button
+                    qa-comment-button"
+                  type="submit"
+                  :data-track-label="trackingLabel"
+                  data-track-event="click_button"
+                  @click.prevent="handleSave()"
+                >
+                  {{ commentButtonTitle }}
+                </button>
+                <button
+                  :disabled="isSubmitButtonDisabled"
+                  name="button"
+                  type="button"
+                  class="btn btn-success note-type-toggle js-note-new-discussion dropdown-toggle qa-note-dropdown"
+                  data-display="static"
+                  data-toggle="dropdown"
+                  :aria-label="__('Open comment type dropdown')"
+                >
+                  <i aria-hidden="true" class="fa fa-caret-down toggle-icon"> </i>
+                </button>
+
+                <ul class="note-type-dropdown dropdown-open-top dropdown-menu">
+                  <li :class="{ 'droplab-item-selected': noteType === 'comment' }">
+                    <button
+                      type="button"
+                      class="btn btn-transparent"
+                      @click.prevent="setNoteType('comment')"
+                    >
+                      <i aria-hidden="true" class="fa fa-check icon"> </i>
+                      <div class="description">
+                        <strong>{{ __('Comment') }}</strong>
+                        <p>
+                          {{
+                            sprintf(__('Add a general comment to this %{noteableDisplayName}.'), {
+                              noteableDisplayName,
+                            })
+                          }}
+                        </p>
+                      </div>
+                    </button>
+                  </li>
+                  <li class="divider droplab-item-ignore"></li>
+                  <li :class="{ 'droplab-item-selected': noteType === 'discussion' }">
+                    <button
+                      type="button"
+                      class="btn btn-transparent qa-discussion-option"
+                      @click.prevent="setNoteType('discussion')"
+                    >
+                      <i aria-hidden="true" class="fa fa-check icon"> </i>
+                      <div class="description">
+                        <strong>{{ __('Start thread') }}</strong>
+                        <p>{{ startDiscussionDescription }}</p>
+                      </div>
+                    </button>
+                  </li>
+                </ul>
+              </div>
+
+              <loading-button
+                v-if="canToggleIssueState"
+                :loading="isToggleStateButtonLoading"
+                :container-class="[
+                  actionButtonClassNames,
+                  'btn btn-comment btn-comment-and-close js-action-button',
+                ]"
+                :disabled="isToggleStateButtonLoading || isSubmitting"
+                :label="issueActionButtonTitle"
+                @click="handleSave(true)"
+              />
+            </div>
+          </form>
+        </div>
+      </timeline-entry-item>
     </ul>
   </div>
 </template>

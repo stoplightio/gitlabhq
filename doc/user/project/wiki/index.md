@@ -12,10 +12,6 @@ You can create Wiki pages in the web interface or
 [locally using Git](#adding-and-editing-wiki-pages-locally) since every Wiki is
 a separate Git repository.
 
->**Note:**
-A [permission level][permissions] of **Guest** is needed to view a Wiki and
-**Developer** is needed to create and edit Wiki pages.
-
 ## First time creating the Home page
 
 The first time you visit a Wiki, you will be directed to create the Home page.
@@ -28,22 +24,23 @@ message.
 
 ## Creating a new wiki page
 
-Create a new page by clicking the **New page** button that can be found
-in all wiki pages. You will be asked to fill in the page name from which GitLab
-will create the path to the page. You can specify a full path for the new file
-and any missing directories will be created automatically.
+NOTE: **Note:**
+Requires Developer [permissions](../../permissions.md).
 
-![New page modal](img/wiki_create_new_page_modal.png)
+Create a new page by clicking the **New page** button that can be found
+in all wiki pages.
+
+You will be asked to fill in a title for your new wiki page.
+
+You can specify a full path for the wiki page by using '/' in the
+title to indicate subdirectories. Any missing directories will be created
+automatically. For example, a title of `docs/my-page` will create a wiki
+page with a path `/wikis/docs/my-page`.
 
 Once you enter the page name, it's time to fill in its content. GitLab wikis
 support Markdown, RDoc and AsciiDoc. For Markdown based pages, all the
 [Markdown features](../../markdown.md) are supported and for links there is
 some [wiki specific](../../markdown.md#wiki-specific-markdown) behavior.
-
->**Note:**
-The wiki is based on a Git repository and contains only text files. Uploading
-files via the web interface will upload them in GitLab itself, and they will
-not be available if you clone the wiki repo locally.
 
 In the web interface the commit message is optional, but the GitLab Wiki is
 based on Git and needs a commit message, so one will be created for you if you
@@ -53,13 +50,27 @@ When you're ready, click the **Create page** and the new page will be created.
 
 ![New page](img/wiki_create_new_page.png)
 
+> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/issues/33475) in GitLab 11.3.
+
+Starting with GitLab 11.3, any file that is uploaded to the wiki via GitLab's
+interface will be stored in the wiki Git repository, and it will be available
+if you clone the wiki repository locally. All uploaded files prior to GitLab
+11.3 are stored in GitLab itself. If you want them to be part of the wiki's Git
+repository, you will have to upload them again.
+
 ## Editing a wiki page
+
+NOTE: **Note:**
+Requires Developer [permissions](../../permissions.md).
 
 To edit a page, simply click on the **Edit** button. From there on, you can
 change its content. When done, click **Save changes** for the changes to take
 effect.
 
 ## Deleting a wiki page
+
+NOTE: **Note:**
+Requires Maintainer [permissions](../../permissions.md).
 
 You can find the **Delete** button only when editing a page. Click on it and
 confirm you want the page to be deleted.
@@ -106,4 +117,11 @@ them like you would do with every other Git repository.
 On the right sidebar, click on **Clone repository** and follow the on-screen
 instructions.
 
-[permissions]: ../../permissions.md
+## Customizing sidebar
+
+On the project's Wiki page, there is a right side navigation that renders the full Wiki pages list by default, with hierarchy.
+
+If the Wiki repository contains a `_sidebar` page, the file of this page replaces the default side navigation.
+This custom file serves to render it's custom content, fully replacing the standard sidebar.
+
+Support for displaying a generated TOC with a custom side navigation is planned.

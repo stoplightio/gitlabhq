@@ -1,4 +1,6 @@
-require 'rails_helper'
+# frozen_string_literal: true
+
+require 'spec_helper'
 
 describe CommitsHelper do
   describe 'commit_author_link' do
@@ -21,7 +23,7 @@ describe CommitsHelper do
       expect(helper.commit_author_link(commit))
         .to include('Foo &lt;script&gt;')
       expect(helper.commit_author_link(commit, avatar: true))
-        .to include('commit-author-name', 'Foo &lt;script&gt;')
+        .to include('commit-author-name', 'js-user-link', 'Foo &lt;script&gt;')
     end
   end
 
@@ -37,7 +39,7 @@ describe CommitsHelper do
         .not_to include('onmouseover="alert(1)"')
     end
 
-    it 'escapes the commiter name' do
+    it 'escapes the committer name' do
       user = build_stubbed(:user, name: 'Foo <script>alert("XSS")</script>')
 
       commit = double(committer: user, committer_name: '', committer_email: '')

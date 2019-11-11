@@ -1,8 +1,24 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 load File.expand_path('../../bin/changelog', __dir__)
 
 describe 'bin/changelog' do
+  let(:options) { OpenStruct.new(title: 'Test title', type: 'fixed', dry_run: true) }
+
+  describe ChangelogEntry do
+    it 'truncates the file path' do
+      entry = described_class.new(options)
+
+      allow(entry).to receive(:ee?).and_return(false)
+      allow(entry).to receive(:branch_name).and_return('long-branch-' * 100)
+
+      file_path = entry.send(:file_path)
+      expect(file_path.length).to eq(99)
+    end
+  end
+
   describe ChangelogOptionParser do
     describe '.parse' do
       it 'parses --amend' do
@@ -53,20 +69,28 @@ describe 'bin/changelog' do
         end
       end
 
+      it 'parses --ee and -e' do
+        %w[--ee -e].each do |flag|
+          options = described_class.parse(%W[foo #{flag} security])
+
+          expect(options.ee).to eq true
+        end
+      end
+
       it 'parses -h' do
         expect do
           expect { described_class.parse(%w[foo -h bar]) }.to output.to_stdout
-        end.to raise_error(SystemExit)
+        end.to raise_error(ChangelogHelpers::Done)
       end
 
       it 'assigns title' do
-        options = described_class.parse(%W[foo -m 1 bar\n -u baz\r\n --amend])
+        options = described_class.parse(%W[foo -m 1 bar\n baz\r\n --amend])
 
         expect(options.title).to eq 'foo bar baz'
       end
     end
 
-    describe '.read_type'  do
+    describe '.read_type' do
       let(:type) { '1' }
 
       it 'reads type from $stdin' do
@@ -81,10 +105,12 @@ describe 'bin/changelog' do
 
         it 'shows error message and exits the program' do
           allow($stdin).to receive(:getc).and_return(type)
+
           expect do
-            expect do
-              expect { described_class.read_type }.to raise_error(SystemExit)
-            end.to output("Invalid category index, please select an index between 1 and 8\n").to_stderr
+            expect { described_class.read_type }.to raise_error(
+              ChangelogHelpers::Abort,
+              'Invalid category index, please select an index between 1 and 8'
+            )
           end.to output.to_stdout
         end
       end

@@ -25,6 +25,7 @@ If you do not provide any arguments, it will globally query and instantiate all 
   <!-- ... -->
 <ul>
 ```
+
 ```js
 const droplab = new DropLab();
 droplab.init();
@@ -45,6 +46,7 @@ You can add static list items.
   <li>Static value 2</li>
 <ul>
 ```
+
 ```js
 const droplab = new DropLab();
 droplab.init();
@@ -62,6 +64,7 @@ a non-global instance of DropLab using the `DropLab.prototype.init` method.
   <!-- ... -->
 <ul>
 ```
+
 ```js
 const trigger = document.getElementById('trigger');
 const list = document.getElementById('list');
@@ -79,6 +82,7 @@ You can also add hooks to an existing DropLab instance using `DropLab.prototype.
 <a href="#" id="trigger" data-dropdown-trigger="#list">Toggle</a>
 <ul id="list" data-dropdown><!-- ... --><ul>
 ```
+
 ```js
 const droplab = new DropLab();
 
@@ -89,7 +93,6 @@ const list = document.getElementById('list');
 
 droplab.addHook(trigger, list);
 ```
-
 
 ### Dynamic data
 
@@ -110,6 +113,7 @@ for all `data-dynamic` dropdown lists tracked by that DropLab instance.
   <li><a href="#" data-id="{{id}}">{{text}}</a></li>
 </ul>
 ```
+
 ```js
 const droplab = new DropLab();
 
@@ -123,7 +127,7 @@ droplab.init().addData([{
 ```
 
 Alternatively, you can specify a specific dropdown to add this data to but passing
-the data as the second argument and and the `id` of the trigger element as the first argument.
+the data as the second argument and the `id` of the trigger element as the first argument.
 
 ```html
 <a href="#" data-dropdown-trigger="#list" id="trigger">Toggle</a>
@@ -132,6 +136,7 @@ the data as the second argument and and the `id` of the trigger element as the f
   <li><a href="#" data-id="{{id}}">{{text}}</a></li>
 </ul>
 ```
+
 ```js
 const droplab = new DropLab();
 
@@ -161,6 +166,7 @@ dropdown lists, one of which is dynamic.
   </ul>
 </div>
 ```
+
 ```js
 const droplab = new DropLab();
 
@@ -177,28 +183,28 @@ droplab.init().addData('trigger', [{
 
 DropLab adds some CSS classes to help lower the barrier to integration.
 
-For example,
+For example:
 
-* The `droplab-item-selected` css class is added to items that have been selected
-either by a mouse click or by enter key selection.
-* The `droplab-item-active` css class is added to items that have been selected
-using arrow key navigation.
-* You can add the `droplab-item-ignore` css class to any item that you do not want to be selectable. For example,
-an `<li class="divider"></li>` list divider element that should not be interactive.
+- The `droplab-item-selected` css class is added to items that have been selected
+  either by a mouse click or by enter key selection.
+- The `droplab-item-active` css class is added to items that have been selected
+  using arrow key navigation.
+- You can add the `droplab-item-ignore` css class to any item that you do not want to be selectable. For example,
+  an `<li class="divider"></li>` list divider element that should not be interactive.
 
 ## Internal events
 
 DropLab uses some custom events to help lower the barrier to integration.
 
-For example,
+For example:
 
-* The `click.dl` event is fired when an `li` list item has been clicked. It is also
-fired when a list item has been selected with the keyboard. It is also fired when a
-`HookButton` button is clicked (a registered `button` tag or `a` tag trigger).
-* The `input.dl` event is fired when a `HookInput` (a registered `input` tag trigger) triggers an `input` event.
-* The `mousedown.dl` event is fired when a `HookInput` triggers a `mousedown` event.
-* The `keyup.dl` event is fired when a `HookInput` triggers a `keyup` event.
-* The `keydown.dl` event is fired when a `HookInput` triggers a `keydown` event.
+- The `click.dl` event is fired when an `li` list item has been clicked. It is also
+  fired when a list item has been selected with the keyboard. It is also fired when a
+  `HookButton` button is clicked (a registered `button` tag or `a` tag trigger).
+- The `input.dl` event is fired when a `HookInput` (a registered `input` tag trigger) triggers an `input` event.
+- The `mousedown.dl` event is fired when a `HookInput` triggers a `mousedown` event.
+- The `keyup.dl` event is fired when a `HookInput` triggers a `keyup` event.
+- The `keydown.dl` event is fired when a `HookInput` triggers a `keydown` event.
 
 These custom events add a `detail` object to the vanilla `Event` object that provides some potentially useful data.
 
@@ -217,6 +223,7 @@ Some plugins require configuration values, the config object can be passed as th
 <a href="#" id="trigger" data-dropdown-trigger="#list">Toggle</a>
 <ul id="list" data-dropdown><!-- ... --><ul>
 ```
+
 ```js
 const droplab = new DropLab();
 
@@ -233,9 +240,9 @@ droplab.init(trigger, list, [droplabAjax], {
 
 ### Documentation
 
-* [Ajax plugin](plugins/ajax.md)
-* [Filter plugin](plugins/filter.md)
-* [InputSetter plugin](plugins/input_setter.md)
+- [Ajax plugin](plugins/ajax.md)
+- [Filter plugin](plugins/filter.md)
+- [InputSetter plugin](plugins/input_setter.md)
 
 ### Development
 

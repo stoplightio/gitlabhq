@@ -1,6 +1,8 @@
+# frozen_string_literal: true
+
 require 'rake_helper'
 
-describe 'rake gitlab:storage:*' do
+describe 'rake gitlab:storage:*', :sidekiq do
   before do
     Rake.application.rake_require 'tasks/gitlab/storage'
 
@@ -43,48 +45,85 @@ describe 'rake gitlab:storage:*' do
     end
   end
 
-  describe 'gitlab:storage:migrate_to_hashed' do
-    let(:task) { 'gitlab:storage:migrate_to_hashed' }
-
-    context '0 legacy projects' do
+  shared_examples "make sure database is writable" do
+    context 'read-only database' do
       it 'does nothing' do
-        expect(StorageMigratorWorker).not_to receive(:perform_async)
+        expect(Gitlab::Database).to receive(:read_only?).and_return(true)
+
+        expect(Project).not_to receive(:with_unmigrated_storage)
+
+        expect { run_rake_task(task) }.to abort_execution.with_message(/This task requires database write access. Exiting./)
+      end
+    end
+  end
+
+  shared_examples "handles custom BATCH env var" do |worker_klass|
+    context 'in batches of 1' do
+      before do
+        stub_env('BATCH' => 1)
+      end
+
+      it "enqueues one #{worker_klass} per project" do
+        projects.each do |project|
+          expect(worker_klass).to receive(:perform_async).with(project.id, project.id)
+        end
 
         run_rake_task(task)
       end
     end
 
-    context '3 legacy projects' do
+    context 'in batches of 2' do
+      before do
+        stub_env('BATCH' => 2)
+      end
+
+      it "enqueues one #{worker_klass} per 2 projects" do
+        projects.map(&:id).sort.each_slice(2) do |first, last|
+          last ||= first
+          expect(worker_klass).to receive(:perform_async).with(first, last)
+        end
+
+        run_rake_task(task)
+      end
+    end
+  end
+
+  describe 'gitlab:storage:migrate_to_hashed' do
+    let(:task) { 'gitlab:storage:migrate_to_hashed' }
+
+    context 'with rollback already scheduled', :redis do
+      it 'does nothing' do
+        Sidekiq::Testing.disable! do
+          ::HashedStorage::RollbackerWorker.perform_async(1, 5)
+
+          expect(Project).not_to receive(:with_unmigrated_storage)
+
+          expect { run_rake_task(task) }.to abort_execution.with_message(/There is already a rollback operation in progress/)
+        end
+      end
+    end
+
+    context 'with 0 legacy projects' do
+      it 'does nothing' do
+        expect(::HashedStorage::MigratorWorker).not_to receive(:perform_async)
+
+        expect { run_rake_task(task) }.to abort_execution.with_message('There are no projects requiring storage migration. Nothing to do!')
+      end
+    end
+
+    context 'with 3 legacy projects' do
       let(:projects) { create_list(:project, 3, :legacy_storage) }
 
-      context 'in batches of 1' do
-        before do
-          stub_env('BATCH' => 1)
+      it 'enqueues migrations and count projects correctly' do
+        projects.map(&:id).sort.tap do |ids|
+          stub_env('ID_FROM', ids[0])
+          stub_env('ID_TO', ids[1])
         end
 
-        it 'enqueues one StorageMigratorWorker per project' do
-          projects.each do |project|
-            expect(StorageMigratorWorker).to receive(:perform_async).with(project.id, project.id)
-          end
-
-          run_rake_task(task)
-        end
+        expect { run_rake_task(task) }.to output(/Enqueuing migration of 2 projects in batches/).to_stdout
       end
 
-      context 'in batches of 2' do
-        before do
-          stub_env('BATCH' => 2)
-        end
-
-        it 'enqueues one StorageMigratorWorker per 2 projects' do
-          projects.map(&:id).sort.each_slice(2) do |first, last|
-            last ||= first
-            expect(StorageMigratorWorker).to receive(:perform_async).with(first, last)
-          end
-
-          run_rake_task(task)
-        end
-      end
+      it_behaves_like 'handles custom BATCH env var', ::HashedStorage::MigratorWorker
     end
 
     context 'with same id in range' do
@@ -92,7 +131,7 @@ describe 'rake gitlab:storage:*' do
         stub_env('ID_FROM', 99999)
         stub_env('ID_TO', 99999)
 
-        expect { run_rake_task(task) }.to output(/There are no projects requiring storage migration with ID=99999/).to_stdout
+        expect { run_rake_task(task) }.to abort_execution.with_message(/There are no projects requiring storage migration with ID=99999/)
       end
 
       it 'displays a message when project exists but its already migrated' do
@@ -100,7 +139,7 @@ describe 'rake gitlab:storage:*' do
         stub_env('ID_FROM', project.id)
         stub_env('ID_TO', project.id)
 
-        expect { run_rake_task(task) }.to output(/There are no projects requiring storage migration with ID=#{project.id}/).to_stdout
+        expect { run_rake_task(task) }.to abort_execution.with_message(/There are no projects requiring storage migration with ID=#{project.id}/)
       end
 
       it 'enqueues migration when project can be found' do
@@ -110,6 +149,47 @@ describe 'rake gitlab:storage:*' do
 
         expect { run_rake_task(task) }.to output(/Enqueueing storage migration .* \(ID=#{project.id}\)/).to_stdout
       end
+    end
+  end
+
+  describe 'gitlab:storage:rollback_to_legacy' do
+    let(:task) { 'gitlab:storage:rollback_to_legacy' }
+
+    it_behaves_like 'make sure database is writable'
+
+    context 'with migration already scheduled', :redis do
+      it 'does nothing' do
+        Sidekiq::Testing.disable! do
+          ::HashedStorage::MigratorWorker.perform_async(1, 5)
+
+          expect(Project).not_to receive(:with_unmigrated_storage)
+
+          expect { run_rake_task(task) }.to abort_execution.with_message(/There is already a migration operation in progress/)
+        end
+      end
+    end
+
+    context 'with 0 hashed projects' do
+      it 'does nothing' do
+        expect(::HashedStorage::RollbackerWorker).not_to receive(:perform_async)
+
+        expect { run_rake_task(task) }.to abort_execution.with_message('There are no projects that can have storage rolledback. Nothing to do!')
+      end
+    end
+
+    context 'with 3 hashed projects' do
+      let(:projects) { create_list(:project, 3) }
+
+      it 'enqueues migrations and count projects correctly' do
+        projects.map(&:id).sort.tap do |ids|
+          stub_env('ID_FROM', ids[0])
+          stub_env('ID_TO', ids[1])
+        end
+
+        expect { run_rake_task(task) }.to output(/Enqueuing rollback of 2 projects in batches/).to_stdout
+      end
+
+      it_behaves_like "handles custom BATCH env var", ::HashedStorage::RollbackerWorker
     end
   end
 

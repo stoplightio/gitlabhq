@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe ContainerRepository do
@@ -14,7 +16,7 @@ describe ContainerRepository do
                                    host_port: 'registry.gitlab')
 
     stub_request(:get, 'http://registry.gitlab/v2/group/test/my_image/tags/list')
-      .with(headers: { 'Accept' => 'application/vnd.docker.distribution.manifest.v2+json' })
+      .with(headers: { 'Accept' => ContainerRegistry::Client::ACCEPTED_TYPES.join(', ') })
       .to_return(
         status: 200,
         body: JSON.dump(tags: ['test_tag']),
@@ -76,7 +78,7 @@ describe ContainerRepository do
   describe '#delete_tags!' do
     let(:repository) do
       create(:container_repository, name: 'my_image',
-                                    tags: %w[latest rc1],
+                                    tags: { latest: '123', rc1: '234' },
                                     project: project)
     end
 
@@ -84,6 +86,7 @@ describe ContainerRepository do
       it 'returns status that indicates success' do
         expect(repository.client)
           .to receive(:delete_repository_tag)
+          .twice
           .and_return(true)
 
         expect(repository.delete_tags!).to be_truthy
@@ -94,6 +97,7 @@ describe ContainerRepository do
       it 'returns status that indicates failure' do
         expect(repository.client)
           .to receive(:delete_repository_tag)
+          .twice
           .and_return(false)
 
         expect(repository.delete_tags!).to be_falsey

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 shared_examples 'GET #show lists all variables' do
   it 'renders the variables as json' do
     subject
@@ -118,6 +120,18 @@ shared_examples 'PATCH #update updates variables' do
       subject
 
       expect(response).to match_response_schema('variables')
+    end
+  end
+
+  context 'for variables of type file' do
+    let(:variables_attributes) do
+      [
+        new_variable_attributes.merge(variable_type: 'file')
+      ]
+    end
+
+    it 'creates new variable of type file' do
+      expect { subject }.to change { owner.variables.file.count }.by(1)
     end
   end
 end

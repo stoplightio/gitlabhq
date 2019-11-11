@@ -1,5 +1,6 @@
 ---
 last_updated: 2017-12-13
+type: tutorial
 ---
 
 # Using SSH keys with GitLab CI/CD
@@ -24,18 +25,18 @@ with any type of [executor](https://docs.gitlab.com/runner/executors/)
 
 ## How it works
 
-1. Create a new SSH key pair locally with [ssh-keygen](http://linux.die.net/man/1/ssh-keygen)
+1. Create a new SSH key pair locally with [`ssh-keygen`](https://linux.die.net/man/1/ssh-keygen)
 1. Add the private key as a [variable](../variables/README.md) to
    your project
-1. Run the [ssh-agent](http://linux.die.net/man/1/ssh-agent) during job to load
+1. Run the [`ssh-agent`](https://linux.die.net/man/1/ssh-agent) during job to load
    the private key.
 1. Copy the public key to the servers you want to have access to (usually in
    `~/.ssh/authorized_keys`) or add it as a [deploy key](../../ssh/README.md#deploy-keys)
    if you are accessing a private GitLab repository.
 
 NOTE: **Note:**
-The private key will not be displayed in the job trace, unless you enable
-[debug tracing](../variables/README.md#debug-tracing). You might also want to
+The private key will not be displayed in the job log, unless you enable
+[debug logging](../variables/README.md#debug-logging). You might also want to
 check the [visibility of your pipelines](../../user/project/pipelines/settings.md#visibility-of-pipelines).
 
 ## SSH keys when using the Docker executor
@@ -46,54 +47,54 @@ to access it. This is where an SSH key pair comes in handy.
 
 1. You will first need to create an SSH key pair. For more information, follow
    the instructions to [generate an SSH key](../../ssh/README.md#generating-a-new-ssh-key-pair).
-   **Do not** add a passphrase to the SSH key, or the `before_script` will\
+   **Do not** add a passphrase to the SSH key, or the `before_script` will
    prompt for it.
 
-1. Create a new [variable](../variables/README.md#variables).
+1. Create a new [variable](../variables/README.md#gitlab-cicd-environment-variables).
    As **Key** enter the name `SSH_PRIVATE_KEY` and in the **Value** field paste
    the content of your _private_ key that you created earlier.
 
 1. Modify your `.gitlab-ci.yml` with a `before_script` action. In the following
    example, a Debian based image is assumed. Edit to your needs:
 
-    ```yaml
-    before_script:
-      ##
-      ## Install ssh-agent if not already installed, it is required by Docker.
-      ## (change apt-get to yum if you use an RPM-based image)
-      ##
-      - 'which ssh-agent || ( apt-get update -y && apt-get install openssh-client -y )'
+   ```yaml
+   before_script:
+     ##
+     ## Install ssh-agent if not already installed, it is required by Docker.
+     ## (change apt-get to yum if you use an RPM-based image)
+     ##
+     - 'which ssh-agent || ( apt-get update -y && apt-get install openssh-client -y )'
 
-      ##
-      ## Run ssh-agent (inside the build environment)
-      ##
-      - eval $(ssh-agent -s)
+     ##
+     ## Run ssh-agent (inside the build environment)
+     ##
+     - eval $(ssh-agent -s)
 
-      ##
-      ## Add the SSH key stored in SSH_PRIVATE_KEY variable to the agent store
-      ## We're using tr to fix line endings which makes ed25519 keys work
-      ## without extra base64 encoding.
-      ## https://gitlab.com/gitlab-examples/ssh-private-key/issues/1#note_48526556
-      ##
-      - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add - > /dev/null
+     ##
+     ## Add the SSH key stored in SSH_PRIVATE_KEY variable to the agent store
+     ## We're using tr to fix line endings which makes ed25519 keys work
+     ## without extra base64 encoding.
+     ## https://gitlab.com/gitlab-examples/ssh-private-key/issues/1#note_48526556
+     ##
+     - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
 
-      ##
-      ## Create the SSH directory and give it the right permissions
-      ##
-      - mkdir -p ~/.ssh
-      - chmod 700 ~/.ssh
+     ##
+     ## Create the SSH directory and give it the right permissions
+     ##
+     - mkdir -p ~/.ssh
+     - chmod 700 ~/.ssh
 
-      ##
-      ## Optionally, if you will be using any Git commands, set the user name and
-      ## and email.
-      ##
-      #- git config --global user.email "user@example.com"
-      #- git config --global user.name "User name"
-    ```
+     ##
+     ## Optionally, if you will be using any Git commands, set the user name and
+     ## and email.
+     ##
+     #- git config --global user.email "user@example.com"
+     #- git config --global user.name "User name"
+   ```
 
-    NOTE: **Note:**
-    The [`before_script`](../yaml/README.md#before-script) can be set globally
-    or per-job.
+   NOTE: **Note:**
+   The [`before_script`](../yaml/README.md#before_script-and-after_script) can be set globally
+   or per-job.
 
 1. Make sure the private server's [SSH host keys are verified](#verifying-the-ssh-host-keys).
 
@@ -117,9 +118,9 @@ on, and use that key for all projects that are run on this machine.
 
 1. Then from the terminal login as the `gitlab-runner` user:
 
-    ```
-    sudo su - gitlab-runner
-    ```
+   ```
+   sudo su - gitlab-runner
+   ```
 
 1. Generate the SSH key pair as described in the instructions to
    [generate an SSH key](../../ssh/README.md#generating-a-new-ssh-key-pair).
@@ -157,7 +158,7 @@ ssh-keyscan example.com
 ssh-keyscan 1.2.3.4
 ```
 
-Create a new [variable](../variables/README.md#variables) with
+Create a new [variable](../variables/README.md#gitlab-cicd-environment-variables) with
 `SSH_KNOWN_HOSTS` as "Key", and as a "Value" add the output of `ssh-keyscan`.
 
 NOTE: **Note:**
@@ -175,7 +176,7 @@ Now that the `SSH_KNOWN_HOSTS` variable is created, in addition to the
 [content of `.gitlab-ci.yml`](#ssh-keys-when-using-the-docker-executor)
 above, here's what more you need to add:
 
- ```yaml
+```yaml
 before_script:
   ##
   ## Assuming you created the SSH_KNOWN_HOSTS variable, uncomment the

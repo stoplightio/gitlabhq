@@ -1,18 +1,20 @@
+# frozen_string_literal: true
+
 require('spec_helper')
 
 describe Projects::Settings::CiCdController do
-  set(:user) { create(:user) }
-  set(:project_auto_devops) { create(:project_auto_devops) }
+  let_it_be(:user) { create(:user) }
+  let_it_be(:project_auto_devops) { create(:project_auto_devops) }
   let(:project) { project_auto_devops.project }
 
   before do
-    project.add_master(user)
+    project.add_maintainer(user)
     sign_in(user)
   end
 
   describe 'GET show' do
     it 'renders show with 200 status code' do
-      get :show, namespace_id: project.namespace, project_id: project
+      get :show, params: { namespace_id: project.namespace, project_id: project }
 
       expect(response).to have_gitlab_http_status(200)
       expect(response).to render_template(:show)
@@ -27,9 +29,9 @@ describe Projects::Settings::CiCdController do
       let!(:shared_runner) { create(:ci_runner, :instance) }
 
       it 'sets assignable project runners only' do
-        group.add_master(user)
+        group.add_maintainer(user)
 
-        get :show, namespace_id: project.namespace, project_id: project
+        get :show, params: { namespace_id: project.namespace, project_id: project }
 
         expect(assigns(:assignable_runners)).to contain_exactly(project_runner)
       end
@@ -40,12 +42,12 @@ describe Projects::Settings::CiCdController do
     before do
       sign_in(user)
 
-      project.add_master(user)
+      project.add_maintainer(user)
 
       allow(ResetProjectCacheService).to receive_message_chain(:new, :execute).and_return(true)
     end
 
-    subject { post :reset_cache, namespace_id: project.namespace, project_id: project, format: :json }
+    subject { post :reset_cache, params: { namespace_id: project.namespace, project_id: project }, format: :json }
 
     it 'calls reset project cache service' do
       expect(ResetProjectCacheService).to receive_message_chain(:new, :execute)
@@ -74,14 +76,30 @@ describe Projects::Settings::CiCdController do
     end
   end
 
+  describe 'PUT #reset_registration_token' do
+    subject { put :reset_registration_token, params: { namespace_id: project.namespace, project_id: project } }
+
+    it 'resets runner registration token' do
+      expect { subject }.to change { project.reload.runners_token }
+    end
+
+    it 'redirects the user to admin runners page' do
+      subject
+
+      expect(response).to redirect_to(namespace_project_settings_ci_cd_path)
+    end
+  end
+
   describe 'PATCH update' do
     let(:params) { { ci_config_path: '' } }
 
     subject do
       patch :update,
-            namespace_id: project.namespace.to_param,
-            project_id: project,
-            project: params
+            params: {
+              namespace_id: project.namespace.to_param,
+              project_id: project,
+              project: params
+            }
     end
 
     it 'redirects to the settings page' do
@@ -92,7 +110,7 @@ describe Projects::Settings::CiCdController do
     end
 
     context 'when updating the auto_devops settings' do
-      let(:params) { { auto_devops_attributes: { enabled: '', domain: 'mepmep.md' } } }
+      let(:params) { { auto_devops_attributes: { enabled: '' } } }
 
       context 'following the instance default' do
         let(:params) { { auto_devops_attributes: { enabled: '' } } }
@@ -172,6 +190,54 @@ describe Projects::Settings::CiCdController do
 
           project.reload
           expect(project.build_timeout).to eq(5400)
+        end
+      end
+
+      context 'when build_timeout_human_readable is invalid' do
+        let(:params) { { build_timeout_human_readable: '5m' } }
+
+        it 'set specified timeout' do
+          expect(subject).to set_flash[:alert]
+          expect(response).to redirect_to(namespace_project_settings_ci_cd_path)
+        end
+      end
+
+      context 'when default_git_depth is not specified' do
+        let(:params) { { ci_cd_settings_attributes: { default_git_depth: 10 } } }
+
+        before do
+          project.ci_cd_settings.update!(default_git_depth: nil)
+        end
+
+        it 'set specified git depth' do
+          subject
+
+          project.reload
+          expect(project.ci_default_git_depth).to eq(10)
+        end
+      end
+
+      context 'when max_artifacts_size is specified' do
+        let(:params) { { max_artifacts_size: 10 } }
+
+        context 'and user is not an admin' do
+          it 'does not set max_artifacts_size' do
+            subject
+
+            project.reload
+            expect(project.max_artifacts_size).to be_nil
+          end
+        end
+
+        context 'and user is an admin' do
+          let(:user) { create(:admin)  }
+
+          it 'sets max_artifacts_size' do
+            subject
+
+            project.reload
+            expect(project.max_artifacts_size).to eq(10)
+          end
         end
       end
     end

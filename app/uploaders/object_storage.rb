@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'fog/aws'
 require 'carrierwave/storage/fog'
 
@@ -21,7 +23,7 @@ module ObjectStorage
     end
   end
 
-  TMP_UPLOAD_PATH = 'tmp/uploads'.freeze
+  TMP_UPLOAD_PATH = 'tmp/uploads'
 
   module Store
     LOCAL = 1
@@ -33,10 +35,10 @@ module ObjectStorage
     module RecordsUploads
       extend ActiveSupport::Concern
 
-      def prepended(base)
+      prepended do |base|
         raise "#{base} must include ObjectStorage::Concern to use extensions." unless base < Concern
 
-        base.include(RecordsUploads::Concern)
+        base.include(::RecordsUploads::Concern)
       end
 
       def retrieve_from_store!(identifier)
@@ -115,7 +117,7 @@ module ObjectStorage
 
         next unless uploader
         next unless uploader.exists?
-        next unless send(:"#{mounted_as}_changed?") # rubocop:disable GitlabSecurity/PublicSend
+        next unless send(:"saved_change_to_#{mounted_as}?") # rubocop:disable GitlabSecurity/PublicSend
 
         mount
       end.keys
@@ -134,6 +136,8 @@ module ObjectStorage
 
     included do |base|
       base.include(ObjectStorage)
+
+      include_if_ee('::EE::ObjectStorage::Concern') # rubocop: disable Cop/InjectEnterpriseEditionModule
 
       after :migrate, :delete_migrated_file
     end
@@ -176,10 +180,11 @@ module ObjectStorage
       end
 
       def workhorse_authorize(has_length:, maximum_size: nil)
-        {
-          RemoteObject: workhorse_remote_upload_options(has_length: has_length, maximum_size: maximum_size),
-          TempPath: workhorse_local_upload_path
-        }.compact
+        if self.object_store_enabled? && self.direct_upload_enabled?
+          { RemoteObject: workhorse_remote_upload_options(has_length: has_length, maximum_size: maximum_size) }
+        else
+          { TempPath: workhorse_local_upload_path }
+        end
       end
 
       def workhorse_local_upload_path
@@ -276,8 +281,12 @@ module ObjectStorage
       self.class.object_store_credentials
     end
 
+    # Set ACL of uploaded objects to not-public (fog-aws)[1] or no ACL at all
+    # (fog-google).  Value is ignored by other supported backends (fog-aliyun,
+    # fog-openstack, fog-rackspace)
+    # [1]: https://github.com/fog/fog-aws/blob/daa50bb3717a462baf4d04d0e0cbfc18baacb541/lib/fog/aws/models/storage/file.rb#L152-L159
     def fog_public
-      false
+      nil
     end
 
     def delete_migrated_file(migrated_file)

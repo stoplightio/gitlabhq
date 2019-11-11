@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Projects::MergeRequests::CreationsController < Projects::MergeRequests::ApplicationController
   include DiffForPath
   include DiffHelper
@@ -10,7 +12,7 @@ class Projects::MergeRequests::CreationsController < Projects::MergeRequests::Ap
   before_action :build_merge_request, except: [:create]
 
   def new
-    # n+1: https://gitlab.com/gitlab-org/gitlab-ce/issues/40934
+    # n+1: https://gitlab.com/gitlab-org/gitlab-foss/issues/40934
     Gitlab::GitalyClient.allow_n_plus_1_calls do
       define_new_vars
     end
@@ -21,6 +23,8 @@ class Projects::MergeRequests::CreationsController < Projects::MergeRequests::Ap
     @merge_request = ::MergeRequests::CreateService.new(project, current_user, merge_request_params).execute
 
     if @merge_request.valid?
+      incr_count_webide_merge_request
+
       redirect_to(merge_request_path(@merge_request))
     else
       @source_project = @merge_request.source_project
@@ -87,7 +91,11 @@ class Projects::MergeRequests::CreationsController < Projects::MergeRequests::Ap
 
   def build_merge_request
     params[:merge_request] ||= ActionController::Parameters.new(source_project: @project)
-    @merge_request = ::MergeRequests::BuildService.new(project, current_user, merge_request_params.merge(diff_options: diff_options)).execute
+
+    # Gitaly N+1 issue: https://gitlab.com/gitlab-org/gitlab-foss/issues/58096
+    Gitlab::GitalyClient.allow_n_plus_1_calls do
+      @merge_request = ::MergeRequests::BuildService.new(project, current_user, merge_request_params.merge(diff_options: diff_options)).execute
+    end
   end
 
   def define_new_vars
@@ -101,14 +109,19 @@ class Projects::MergeRequests::CreationsController < Projects::MergeRequests::Ap
 
     @target_project = @merge_request.target_project
     @source_project = @merge_request.source_project
-    @commits = prepare_commits_for_rendering(@merge_request.commits)
+    @commits = set_commits_for_rendering(@merge_request.commits)
     @commit = @merge_request.diff_head_commit
+
+    # FIXME: We have to assign a presenter to another instance variable
+    # due to class_name checks being made with issuable classes
+    @mr_presenter = @merge_request.present(current_user: current_user)
 
     @labels = LabelsFinder.new(current_user, project_id: @project.id).execute
 
     set_pipeline_variables
   end
 
+  # rubocop: disable CodeReuse/ActiveRecord
   def selected_target_project
     if @project.id.to_s == params[:target_project_id] || !@project.forked?
       @project
@@ -119,8 +132,15 @@ class Projects::MergeRequests::CreationsController < Projects::MergeRequests::Ap
       @project.forked_from_project
     end
   end
+  # rubocop: enable CodeReuse/ActiveRecord
 
   def whitelist_query_limiting
-    Gitlab::QueryLimiting.whitelist('https://gitlab.com/gitlab-org/gitlab-ce/issues/42384')
+    Gitlab::QueryLimiting.whitelist('https://gitlab.com/gitlab-org/gitlab-foss/issues/42384')
+  end
+
+  def incr_count_webide_merge_request
+    return if params[:nav_source] != 'webide'
+
+    Gitlab::UsageDataCounters::WebIdeCounter.increment_merge_requests_count
   end
 end

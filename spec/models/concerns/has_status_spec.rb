@@ -1,12 +1,17 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe HasStatus do
-  describe '.status' do
-    subject { CommitStatus.status }
+  describe '.slow_composite_status' do
+    using RSpec::Parameterized::TableSyntax
+
+    subject { CommitStatus.slow_composite_status }
 
     shared_examples 'build status summary' do
       context 'all successful' do
         let!(:statuses) { Array.new(2) { create(type, status: :success) } }
+
         it { is_expected.to eq 'success' }
       end
 
@@ -32,6 +37,22 @@ describe HasStatus do
         end
 
         it { is_expected.to eq 'running' }
+      end
+
+      context 'all preparing' do
+        let!(:statuses) do
+          [create(type, status: :preparing), create(type, status: :preparing)]
+        end
+
+        it { is_expected.to eq 'preparing' }
+      end
+
+      context 'at least one preparing' do
+        let!(:statuses) do
+          [create(type, status: :success), create(type, status: :preparing)]
+        end
+
+        it { is_expected.to eq 'preparing' }
       end
 
       context 'success and failed but allowed to fail' do
@@ -147,16 +168,26 @@ describe HasStatus do
       end
     end
 
-    context 'ci build statuses' do
-      let(:type) { :ci_build }
-
-      it_behaves_like 'build status summary'
+    where(:ci_composite_status) do
+      [false, true]
     end
 
-    context 'generic commit statuses' do
-      let(:type) { :generic_commit_status }
+    with_them do
+      before do
+        stub_feature_flags(ci_composite_status: ci_composite_status)
+      end
 
-      it_behaves_like 'build status summary'
+      context 'ci build statuses' do
+        let(:type) { :ci_build }
+
+        it_behaves_like 'build status summary'
+      end
+
+      context 'generic commit statuses' do
+        let(:type) { :generic_commit_status }
+
+        it_behaves_like 'build status summary'
+      end
     end
   end
 
@@ -188,7 +219,7 @@ describe HasStatus do
       end
     end
 
-    %i[created running pending success
+    %i[created preparing running pending success
        failed canceled skipped].each do |status|
       it_behaves_like 'having a job', status
     end
@@ -234,11 +265,23 @@ describe HasStatus do
     describe '.alive' do
       subject { CommitStatus.alive }
 
-      %i[running pending created].each do |status|
+      %i[running pending preparing created].each do |status|
         it_behaves_like 'containing the job', status
       end
 
       %i[failed success].each do |status|
+        it_behaves_like 'not containing the job', status
+      end
+    end
+
+    describe '.alive_or_scheduled' do
+      subject { CommitStatus.alive_or_scheduled }
+
+      %i[running pending preparing created scheduled].each do |status|
+        it_behaves_like 'containing the job', status
+      end
+
+      %i[failed success canceled skipped].each do |status|
         it_behaves_like 'not containing the job', status
       end
     end
@@ -270,11 +313,11 @@ describe HasStatus do
     describe '.cancelable' do
       subject { CommitStatus.cancelable }
 
-      %i[running pending created].each do |status|
+      %i[running pending preparing created scheduled].each do |status|
         it_behaves_like 'containing the job', status
       end
 
-      %i[failed success skipped canceled].each do |status|
+      %i[failed success skipped canceled manual].each do |status|
         it_behaves_like 'not containing the job', status
       end
     end
@@ -283,6 +326,18 @@ describe HasStatus do
       subject { CommitStatus.manual }
 
       %i[manual].each do |status|
+        it_behaves_like 'containing the job', status
+      end
+
+      %i[failed success skipped canceled].each do |status|
+        it_behaves_like 'not containing the job', status
+      end
+    end
+
+    describe '.scheduled' do
+      subject { CommitStatus.scheduled }
+
+      %i[scheduled].each do |status|
         it_behaves_like 'containing the job', status
       end
 
@@ -300,7 +355,41 @@ describe HasStatus do
 
   describe '::BLOCKED_STATUS' do
     it 'is a status manual' do
-      expect(described_class::BLOCKED_STATUS).to eq 'manual'
+      expect(described_class::BLOCKED_STATUS).to eq %w[manual scheduled]
+    end
+  end
+
+  describe 'blocked?' do
+    subject { object.blocked? }
+
+    %w[ci_pipeline ci_stage ci_build generic_commit_status].each do |type|
+      let(:object) { build(type, status: status) }
+
+      context 'when status is scheduled' do
+        let(:status) { :scheduled }
+
+        it { is_expected.to be_truthy }
+      end
+
+      context 'when status is manual' do
+        let(:status) { :manual }
+
+        it { is_expected.to be_truthy }
+      end
+
+      context 'when status is created' do
+        let(:status) { :created }
+
+        it { is_expected.to be_falsy }
+      end
+    end
+  end
+
+  describe '.legacy_status_sql' do
+    subject { Ci::Build.legacy_status_sql }
+
+    it 'returns SQL' do
+      puts subject
     end
   end
 end

@@ -1,9 +1,11 @@
+# frozen_string_literal: true
+
 # Specifications for behavior common to all objects with executable attributes.
 # It can take a `default_params`.
 
 shared_examples 'new issuable record that supports quick actions' do
   let!(:project) { create(:project, :repository) }
-  let(:user) { create(:user).tap { |u| project.add_master(u) } }
+  let(:user) { create(:user).tap { |u| project.add_maintainer(u) } }
   let(:assignee) { create(:user) }
   let!(:milestone) { create(:milestone, project: project) }
   let!(:labels) { create_list(:label, 3, project: project) }
@@ -12,7 +14,7 @@ shared_examples 'new issuable record that supports quick actions' do
   let(:issuable) { described_class.new(project, user, params).execute }
 
   before do
-    project.add_master(assignee)
+    project.add_maintainer(assignee)
   end
 
   context 'with labels in command only' do

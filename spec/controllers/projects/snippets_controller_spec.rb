@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Projects::SnippetsController do
@@ -6,30 +8,22 @@ describe Projects::SnippetsController do
   let(:user2)   { create(:user) }
 
   before do
-    project.add_master(user)
-    project.add_master(user2)
+    project.add_maintainer(user)
+    project.add_maintainer(user2)
   end
 
   describe 'GET #index' do
-    context 'when page param' do
-      let(:last_page) { project.snippets.page().total_pages }
-      let!(:project_snippet) { create(:project_snippet, :public, project: project, author: user) }
-
-      it 'redirects to last_page if page number is larger than number of pages' do
-        get :index,
+    it_behaves_like 'paginated collection' do
+      let(:collection) { project.snippets }
+      let(:params) do
+        {
           namespace_id: project.namespace,
-          project_id: project, page: (last_page + 1).to_param
-
-        expect(response).to redirect_to(namespace_project_snippets_path(page: last_page))
+          project_id: project
+        }
       end
 
-      it 'redirects to specified page' do
-        get :index,
-          namespace_id: project.namespace,
-          project_id: project, page: last_page.to_param
-
-        expect(assigns(:snippets).current_page).to eq(last_page)
-        expect(response).to have_gitlab_http_status(200)
+      before do
+        create(:project_snippet, :public, project: project, author: user)
       end
     end
 
@@ -38,7 +32,7 @@ describe Projects::SnippetsController do
 
       context 'when anonymous' do
         it 'does not include the private snippet' do
-          get :index, namespace_id: project.namespace, project_id: project
+          get :index, params: { namespace_id: project.namespace, project_id: project }
 
           expect(assigns(:snippets)).not_to include(project_snippet)
           expect(response).to have_gitlab_http_status(200)
@@ -51,7 +45,7 @@ describe Projects::SnippetsController do
         end
 
         it 'renders the snippet' do
-          get :index, namespace_id: project.namespace, project_id: project
+          get :index, params: { namespace_id: project.namespace, project_id: project }
 
           expect(assigns(:snippets)).to include(project_snippet)
           expect(response).to have_gitlab_http_status(200)
@@ -64,7 +58,7 @@ describe Projects::SnippetsController do
         end
 
         it 'renders the snippet' do
-          get :index, namespace_id: project.namespace, project_id: project
+          get :index, params: { namespace_id: project.namespace, project_id: project }
 
           expect(assigns(:snippets)).to include(project_snippet)
           expect(response).to have_gitlab_http_status(200)
@@ -79,7 +73,7 @@ describe Projects::SnippetsController do
 
       project.add_developer(user)
 
-      post :create, {
+      post :create, params: {
         namespace_id: project.namespace.to_param,
         project_id: project,
         project_snippet: { title: 'Title', content: 'Content', description: 'Description' }.merge(snippet_params)
@@ -117,7 +111,7 @@ describe Projects::SnippetsController do
 
         it 'creates a spam log' do
           expect { create_snippet(project, visibility_level: Snippet::PUBLIC) }
-            .to change { SpamLog.count }.by(1)
+            .to log_spam(title: 'Title', user_id: user.id, noteable_type: 'ProjectSnippet')
         end
 
         it 'renders :new with recaptcha disabled' do
@@ -164,7 +158,7 @@ describe Projects::SnippetsController do
 
       project.add_developer(user)
 
-      put :update, {
+      put :update, params: {
         namespace_id: project.namespace.to_param,
         project_id: project,
         id: snippet.id,
@@ -198,7 +192,7 @@ describe Projects::SnippetsController do
 
         it 'creates a spam log' do
           expect { update_snippet(title: 'Foo') }
-            .to change { SpamLog.count }.by(1)
+            .to log_spam(title: 'Foo', user_id: user.id, noteable_type: 'ProjectSnippet')
         end
 
         it 'renders :edit with recaptcha disabled' do
@@ -243,7 +237,7 @@ describe Projects::SnippetsController do
 
         it 'creates a spam log' do
           expect { update_snippet(title: 'Foo', visibility_level: Snippet::PUBLIC) }
-            .to change { SpamLog.count }.by(1)
+            .to log_spam(title: 'Foo', user_id: user.id, noteable_type: 'ProjectSnippet')
         end
 
         it 'renders :edit with recaptcha disabled' do
@@ -291,13 +285,15 @@ describe Projects::SnippetsController do
     def mark_as_spam
       admin = create(:admin)
       create(:user_agent_detail, subject: snippet)
-      project.add_master(admin)
+      project.add_maintainer(admin)
       sign_in(admin)
 
       post :mark_as_spam,
-           namespace_id: project.namespace,
-           project_id: project,
-           id: snippet.id
+           params: {
+             namespace_id: project.namespace,
+             project_id: project,
+             id: snippet.id
+           }
     end
 
     it 'updates the snippet' do
@@ -314,7 +310,7 @@ describe Projects::SnippetsController do
 
         context 'when anonymous' do
           it 'responds with status 404' do
-            get action, namespace_id: project.namespace, project_id: project, id: project_snippet.to_param
+            get action, params: { namespace_id: project.namespace, project_id: project, id: project_snippet.to_param }
 
             expect(response).to have_gitlab_http_status(404)
           end
@@ -326,7 +322,7 @@ describe Projects::SnippetsController do
           end
 
           it 'renders the snippet' do
-            get action, namespace_id: project.namespace, project_id: project, id: project_snippet.to_param
+            get action, params: { namespace_id: project.namespace, project_id: project, id: project_snippet.to_param }
 
             expect(assigns(:snippet)).to eq(project_snippet)
             expect(response).to have_gitlab_http_status(200)
@@ -339,7 +335,7 @@ describe Projects::SnippetsController do
           end
 
           it 'renders the snippet' do
-            get action, namespace_id: project.namespace, project_id: project, id: project_snippet.to_param
+            get action, params: { namespace_id: project.namespace, project_id: project, id: project_snippet.to_param }
 
             expect(assigns(:snippet)).to eq(project_snippet)
             expect(response).to have_gitlab_http_status(200)
@@ -350,7 +346,7 @@ describe Projects::SnippetsController do
       context 'when the project snippet does not exist' do
         context 'when anonymous' do
           it 'responds with status 404' do
-            get action, namespace_id: project.namespace, project_id: project, id: 42
+            get action, params: { namespace_id: project.namespace, project_id: project, id: 42 }
 
             expect(response).to have_gitlab_http_status(404)
           end
@@ -362,10 +358,50 @@ describe Projects::SnippetsController do
           end
 
           it 'responds with status 404' do
-            get action, namespace_id: project.namespace, project_id: project, id: 42
+            get action, params: { namespace_id: project.namespace, project_id: project, id: 42 }
 
             expect(response).to have_gitlab_http_status(404)
           end
+        end
+      end
+    end
+  end
+
+  describe "GET #show for embeddable content" do
+    let(:project_snippet) { create(:project_snippet, snippet_permission, project: project, author: user) }
+
+    before do
+      sign_in(user)
+
+      get :show, params: { namespace_id: project.namespace, project_id: project, id: project_snippet.to_param }, format: :js
+    end
+
+    context 'when snippet is private' do
+      let(:snippet_permission) { :private }
+
+      it 'responds with status 404' do
+        expect(response).to have_gitlab_http_status(404)
+      end
+    end
+
+    context 'when snippet is public' do
+      let(:snippet_permission) { :public }
+
+      it 'responds with status 200' do
+        expect(assigns(:snippet)).to eq(project_snippet)
+        expect(response).to have_gitlab_http_status(200)
+      end
+    end
+
+    context 'when the project is private' do
+      let(:project) { create(:project_empty_repo, :private) }
+
+      context 'when snippet is public' do
+        let(:project_snippet) { create(:project_snippet, :public, project: project, author: user) }
+
+        it 'responds with status 404' do
+          expect(assigns(:snippet)).to eq(project_snippet)
+          expect(response).to have_gitlab_http_status(404)
         end
       end
     end
@@ -391,13 +427,13 @@ describe Projects::SnippetsController do
       end
 
       it 'returns LF line endings by default' do
-        get :raw, params
+        get :raw, params: params
 
         expect(response.body).to eq("first line\nsecond line\nthird line")
       end
 
       it 'does not convert line endings when parameter present' do
-        get :raw, params.merge(line_ending: :raw)
+        get :raw, params: params.merge(line_ending: :raw)
 
         expect(response.body).to eq("first line\r\nsecond line\r\nthird line")
       end

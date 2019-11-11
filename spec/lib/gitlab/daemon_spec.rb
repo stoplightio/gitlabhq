@@ -1,10 +1,12 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Gitlab::Daemon do
   subject { described_class.new }
 
   before do
-    allow(subject).to receive(:start_working)
+    allow(subject).to receive(:run_thread)
     allow(subject).to receive(:stop_working)
   end
 
@@ -32,17 +34,17 @@ describe Gitlab::Daemon do
     end
   end
 
-  describe 'when Daemon is enabled' do
+  context 'when Daemon is enabled' do
     before do
       allow(subject).to receive(:enabled?).and_return(true)
     end
 
-    describe 'when Daemon is stopped' do
+    context 'when Daemon is stopped' do
       describe '#start' do
         it 'starts the Daemon' do
           expect { subject.start.join }.to change { subject.thread? }.from(false).to(true)
 
-          expect(subject).to have_received(:start_working)
+          expect(subject).to have_received(:run_thread)
         end
       end
 
@@ -50,21 +52,35 @@ describe Gitlab::Daemon do
         it "doesn't shutdown stopped Daemon" do
           expect { subject.stop }.not_to change { subject.thread? }
 
-          expect(subject).not_to have_received(:start_working)
+          expect(subject).not_to have_received(:run_thread)
         end
       end
     end
 
-    describe 'when Daemon is running' do
+    describe '#start_working' do
+      context 'when start_working fails' do
+        before do
+          expect(subject).to receive(:start_working) { false }
+        end
+
+        it 'does not start thread' do
+          expect(subject).not_to receive(:run_thread)
+
+          expect(subject.start).to eq(nil)
+        end
+      end
+    end
+
+    context 'when Daemon is running' do
       before do
-        subject.start.join
+        subject.start
       end
 
       describe '#start' do
         it "doesn't start running Daemon" do
-          expect { subject.start.join }.not_to change { subject.thread? }
+          expect { subject.start.join }.not_to change { subject.thread }
 
-          expect(subject).to have_received(:start_working).once
+          expect(subject).to have_received(:run_thread).once
         end
       end
 
@@ -74,11 +90,29 @@ describe Gitlab::Daemon do
 
           expect(subject).to have_received(:stop_working)
         end
+
+        context 'when stop_working raises exception' do
+          before do
+            allow(subject).to receive(:run_thread) do
+              sleep(1000)
+            end
+          end
+
+          it 'shutdowns Daemon' do
+            expect(subject).to receive(:stop_working) do
+              subject.thread.raise(Interrupt)
+            end
+
+            expect(subject.thread).to be_alive
+            expect { subject.stop }.not_to raise_error
+            expect(subject.thread).to be_nil
+          end
+        end
       end
     end
   end
 
-  describe 'when Daemon is disabled' do
+  context 'when Daemon is disabled' do
     before do
       allow(subject).to receive(:enabled?).and_return(false)
     end
@@ -88,7 +122,7 @@ describe Gitlab::Daemon do
         expect(subject.start).to be_nil
         expect { subject.start }.not_to change { subject.thread? }
 
-        expect(subject).not_to have_received(:start_working)
+        expect(subject).not_to have_received(:run_thread)
       end
     end
 

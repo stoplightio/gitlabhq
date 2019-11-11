@@ -1,5 +1,16 @@
+# frozen_string_literal: true
+
 module Issuable
-  class BulkUpdateService < IssuableBaseService
+  class BulkUpdateService
+    include Gitlab::Allowable
+
+    attr_accessor :current_user, :params
+
+    def initialize(user = nil, params = {})
+      @current_user, @params = user, params.dup
+    end
+
+    # rubocop: disable CodeReuse/ActiveRecord
     def execute(type)
       model_class = type.classify.constantize
       update_class = type.classify.pluralize.constantize::UpdateService
@@ -18,7 +29,7 @@ module Issuable
       items.each do |issuable|
         next unless can?(current_user, :"update_#{type}", issuable)
 
-        update_class.new(issuable.project, current_user, params).execute(issuable)
+        update_class.new(issuable.issuing_parent, current_user, params).execute(issuable)
       end
 
       {
@@ -26,6 +37,7 @@ module Issuable
         success:  !items.count.zero?
       }
     end
+    # rubocop: enable CodeReuse/ActiveRecord
 
     private
 

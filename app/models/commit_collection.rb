@@ -3,6 +3,7 @@
 # A collection of Commit instances for a specific project and Git reference.
 class CommitCollection
   include Enumerable
+  include Gitlab::Utils::StrongMemoize
 
   attr_reader :project, :ref, :commits
 
@@ -19,15 +20,67 @@ class CommitCollection
     commits.each(&block)
   end
 
-  # Sets the pipeline status for every commit.
+  def committers
+    emails = without_merge_commits.map(&:committer_email).uniq
+
+    User.by_any_email(emails)
+  end
+
+  def without_merge_commits
+    strong_memoize(:without_merge_commits) do
+      # `#enrich!` the collection to ensure all commits contain
+      # the necessary parent data
+      enrich!.commits.reject(&:merge_commit?)
+    end
+  end
+
+  # Returns the collection with the latest pipeline for every commit pre-set.
   #
-  # Setting this status ahead of time removes the need for running a query for
-  # every commit we're displaying.
-  def with_pipeline_status
-    statuses = project.pipelines.latest_status_per_commit(map(&:id), ref)
+  # Setting the pipeline for each commit ahead of time removes the need for running
+  # a query for every commit we're displaying.
+  def with_latest_pipeline(ref = nil)
+    pipelines = project.ci_pipelines.latest_pipeline_per_commit(map(&:id), ref)
 
     each do |commit|
-      commit.set_status_for_ref(ref, statuses[commit.id])
+      commit.set_latest_pipeline_for_ref(ref, pipelines[commit.id])
+    end
+
+    self
+  end
+
+  def unenriched
+    commits.reject(&:gitaly_commit?)
+  end
+
+  def fully_enriched?
+    unenriched.empty?
+  end
+
+  # Batch load any commits that are not backed by full gitaly data, and
+  # replace them in the collection.
+  def enrich!
+    # A project is needed in order to fetch data from gitaly. Projects
+    # can be absent from commits in certain rare situations (like when
+    # viewing a MR of a deleted fork). In these cases, assume that the
+    # enriched data is not needed.
+    return self if project.blank? || fully_enriched?
+
+    # Batch load full Commits from the repository
+    # and map to a Hash of id => Commit
+    replacements = Hash[unenriched.map do |c|
+      [c.id, Commit.lazy(project, c.id)]
+    end.compact]
+
+    # Replace the commits, keeping the same order
+    @commits = @commits.map do |original_commit|
+      # Return the original instance: if it didn't need to be batchloaded, it was
+      # already enriched.
+      batch_loaded_commit = replacements.fetch(original_commit.id, original_commit)
+
+      # If batch loading the commit failed, fall back to the original commit.
+      # We need to explicitly check `.nil?` since otherwise a `BatchLoader` instance
+      # that looks like `nil` is returned.
+      batch_loaded_commit.nil? ? original_commit : batch_loaded_commit
     end
 
     self

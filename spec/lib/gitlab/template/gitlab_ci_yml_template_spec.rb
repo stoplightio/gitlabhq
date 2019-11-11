@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Gitlab::Template::GitlabCiYmlTemplate do
@@ -14,6 +16,13 @@ describe Gitlab::Template::GitlabCiYmlTemplate do
       expect(all).to include('Elixir')
       expect(all).to include('Docker')
       expect(all).to include('Ruby')
+    end
+
+    it 'ensure that the template name is used exactly once' do
+      all = subject.all.group_by(&:name)
+      duplicates = all.select { |_, templates| templates.length > 1 }
+
+      expect(duplicates).to be_empty
     end
   end
 
@@ -40,7 +49,7 @@ describe Gitlab::Template::GitlabCiYmlTemplate do
 
   describe '#content' do
     it 'loads the full file' do
-      gitignore = subject.new(Rails.root.join('vendor/gitlab-ci-yml/Ruby.gitlab-ci.yml'))
+      gitignore = subject.new(Rails.root.join('lib/gitlab/ci/templates/Ruby.gitlab-ci.yml'))
 
       expect(gitignore.name).to eq 'Ruby'
       expect(gitignore.content).to start_with('#')

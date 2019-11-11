@@ -1,21 +1,20 @@
 @import 'framework/variables';
-@import 'peek/views/rblineprof';
+@import 'framework/variables_overrides';
 
 #js-peek {
   position: fixed;
   left: 0;
   top: 0;
   width: 100%;
-  z-index: 2000;
-  overflow-x: hidden;
+  z-index: #{$zindex-modal-backdrop + 1};
 
   height: $performance-bar-height;
   background: $black;
   line-height: $performance-bar-height;
-  color: $perf-bar-text;
+  color: $gl-gray-400;
 
   select {
-    color: $perf-bar-text;
+    color: $gl-gray-400;
     width: 200px;
   }
 
@@ -54,7 +53,7 @@
     padding: 4px 6px;
     font-family: Consolas, 'Liberation Mono', Courier, monospace;
     line-height: 1;
-    color: $perf-bar-bucket-color;
+    color: $gl-gray-200;
     border-radius: 3px;
     box-shadow: 0 1px 0 $perf-bar-bucket-box-shadow-from,
       inset 0 1px 2px $perf-bar-bucket-box-shadow-to;
@@ -68,6 +67,10 @@
     }
   }
 
+  .current-host.canary {
+    color: $perf-bar-canary-text;
+  }
+
   strong {
     color: $white-light;
   }
@@ -75,14 +78,18 @@
   table {
     color: $black;
 
-    strong {
-      color: $black;
+    td {
+      vertical-align: top;
+    }
+
+    .backtrace-row {
+      display: none;
     }
   }
 
   .view {
     margin-right: 15px;
-    float: left;
+    flex-shrink: 0;
 
     &:last-child {
       margin-right: 0;
@@ -119,14 +126,4 @@
 
 #modal-peek-pg-queries-content {
   color: $black;
-}
-
-.peek-rblineprof-file {
-  pre.duration {
-    width: 280px;
-  }
-
-  .data {
-    overflow: visible;
-  }
 }

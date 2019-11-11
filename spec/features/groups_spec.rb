@@ -1,13 +1,17 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
-feature 'Group' do
+describe 'Group' do
+  let(:user) { create(:admin) }
+
   before do
-    sign_in(create(:admin))
+    sign_in(user)
   end
 
   matcher :have_namespace_error_message do
     match do |page|
-      page.has_content?("Path can contain only letters, digits, '_', '-' and '.'. Cannot start with '-' or end in '.', '.git' or '.atom'.")
+      page.has_content?("Group URL can contain only letters, digits, '_', '-' and '.'. Cannot start with '-' or end in '.', '.git' or '.atom'.")
     end
   end
 
@@ -16,9 +20,27 @@ feature 'Group' do
       visit new_group_path
     end
 
+    describe 'as a non-admin' do
+      let(:user) { create(:user) }
+
+      it 'creates a group and persists visibility radio selection', :js do
+        stub_application_setting(default_group_visibility: :private)
+
+        fill_in 'Group name', with: 'test-group'
+        find("input[name='group[visibility_level]'][value='#{Gitlab::VisibilityLevel::PUBLIC}']").click
+        click_button 'Create group'
+
+        group = Group.find_by(name: 'test-group')
+
+        expect(group.visibility_level).to eq(Gitlab::VisibilityLevel::PUBLIC)
+        expect(current_path).to eq(group_path(group))
+        expect(page).to have_selector '.visibility-icon .fa-globe'
+      end
+    end
+
     describe 'with space in group path' do
       it 'renders new group form with validation errors' do
-        fill_in 'Group path', with: 'space group'
+        fill_in 'Group URL', with: 'space group'
         click_button 'Create group'
 
         expect(current_path).to eq(groups_path)
@@ -28,7 +50,7 @@ feature 'Group' do
 
     describe 'with .atom at end of group path' do
       it 'renders new group form with validation errors' do
-        fill_in 'Group path', with: 'atom_group.atom'
+        fill_in 'Group URL', with: 'atom_group.atom'
         click_button 'Create group'
 
         expect(current_path).to eq(groups_path)
@@ -38,7 +60,7 @@ feature 'Group' do
 
     describe 'with .git at end of group path' do
       it 'renders new group form with validation errors' do
-        fill_in 'Group path', with: 'git_group.git'
+        fill_in 'Group URL', with: 'git_group.git'
         click_button 'Create group'
 
         expect(current_path).to eq(groups_path)
@@ -85,7 +107,7 @@ feature 'Group' do
     end
   end
 
-  describe 'create a nested group', :nested_groups, :js do
+  describe 'create a nested group', :js do
     let(:group) { create(:group, path: 'foo') }
 
     context 'as admin' do
@@ -94,7 +116,8 @@ feature 'Group' do
       end
 
       it 'creates a nested group' do
-        fill_in 'Group path', with: 'bar'
+        fill_in 'Group name', with: 'bar'
+        fill_in 'Group URL', with: 'bar'
         click_button 'Create group'
 
         expect(current_path).to eq(group_path('foo/bar'))
@@ -112,7 +135,8 @@ feature 'Group' do
 
         visit new_group_path(group, parent_id: group.id)
 
-        fill_in 'Group path', with: 'bar'
+        fill_in 'Group name', with: 'bar'
+        fill_in 'Group URL', with: 'bar'
         click_button 'Create group'
 
         expect(current_path).to eq(group_path('foo/bar'))
@@ -132,7 +156,7 @@ feature 'Group' do
   end
 
   describe 'group edit', :js do
-    let(:group) { create(:group) }
+    let(:group) { create(:group, :public) }
     let(:path)  { edit_group_path(group) }
     let(:new_name) { 'new-name' }
 
@@ -140,10 +164,15 @@ feature 'Group' do
       visit path
     end
 
+    it_behaves_like 'dirty submit form', [{ form: '.js-general-settings-form', input: 'input[name="group[name]"]' },
+                                          { form: '.js-general-settings-form', input: '#group_visibility_level_0' },
+                                          { form: '.js-general-permissions-form', input: '#group_request_access_enabled' },
+                                          { form: '.js-general-permissions-form', input: 'input[name="group[two_factor_grace_period]"]' }]
+
     it 'saves new settings' do
       page.within('.gs-general') do
         fill_in 'group_name', with: new_name
-        click_button 'Save group'
+        click_button 'Save changes'
       end
 
       expect(page).to have_content 'successfully updated'
@@ -152,6 +181,12 @@ feature 'Group' do
       page.within ".breadcrumbs" do
         expect(page).to have_content new_name
       end
+    end
+
+    it 'focuses confirmation field on remove group' do
+      click_button('Remove group')
+
+      expect(page).to have_selector '#confirm_name_input:focus'
     end
 
     it 'removes group' do
@@ -170,7 +205,7 @@ feature 'Group' do
 
       visit path
 
-      expect(page).to have_css('.group-home-desc > p > strong')
+      expect(page).to have_css('.home-panel-description-markdown > p > strong')
     end
 
     it 'passes through html-pipeline' do
@@ -178,7 +213,7 @@ feature 'Group' do
 
       visit path
 
-      expect(page).to have_css('.group-home-desc > p > gl-emoji')
+      expect(page).to have_css('.home-panel-description-markdown > p > gl-emoji')
     end
 
     it 'sanitizes unwanted tags' do
@@ -186,7 +221,7 @@ feature 'Group' do
 
       visit path
 
-      expect(page).not_to have_css('.group-home-desc h1')
+      expect(page).not_to have_css('.home-panel-description-markdown h1')
     end
 
     it 'permits `rel` attribute on links' do
@@ -194,17 +229,17 @@ feature 'Group' do
 
       visit path
 
-      expect(page).to have_css('.group-home-desc a[rel]')
+      expect(page).to have_css('.home-panel-description-markdown a[rel]')
     end
   end
 
-  describe 'group page with nested groups', :nested_groups, :js do
+  describe 'group page with nested groups', :js do
     let!(:group) { create(:group) }
     let!(:nested_group) { create(:group, parent: group) }
     let!(:project) { create(:project, namespace: group) }
-    let!(:path)  { group_path(group) }
+    let!(:path) { group_path(group) }
 
-    it 'it renders projects and groups on the page' do
+    it 'renders projects and groups on the page' do
       visit path
       wait_for_requests
 

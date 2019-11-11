@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 describe QA::Page::Element do
   describe '#selector' do
     it 'transforms element name into QA-specific selector' do
@@ -9,7 +11,7 @@ describe QA::Page::Element do
   describe '#selector_css' do
     it 'transforms element name into QA-specific clickable css selector' do
       expect(described_class.new(:sign_in_button).selector_css)
-        .to eq '.qa-sign-in-button'
+        .to include('.qa-sign-in-button')
     end
   end
 
@@ -46,6 +48,74 @@ describe QA::Page::Element do
 
     it 'does not match if QA selector is not there' do
       expect(subject.matches?('some_name selector')).to be false
+    end
+
+    it 'matches when element name is specified' do
+      expect(subject.matches?('data:{qa:{selector:"some_name"}}')).to be true
+    end
+  end
+
+  describe 'attributes' do
+    context 'element with no args' do
+      subject { described_class.new(:something) }
+
+      it 'defaults pattern to #selector' do
+        expect(subject.attributes[:pattern]).to eq 'qa-something'
+        expect(subject.attributes[:pattern]).to eq subject.selector
+      end
+
+      it 'is not required by default' do
+        expect(subject.required?).to be false
+      end
+    end
+
+    context 'element with a pattern' do
+      subject { described_class.new(:something, /link_to 'something'/) }
+
+      it 'has an attribute[pattern] of the pattern' do
+        expect(subject.attributes[:pattern]).to eq /link_to 'something'/
+      end
+
+      it 'is not required by default' do
+        expect(subject.required?).to be false
+      end
+    end
+
+    context 'element with requirement; no pattern' do
+      subject { described_class.new(:something, required: true) }
+
+      it 'has an attribute[pattern] of the selector' do
+        expect(subject.attributes[:pattern]).to eq 'qa-something'
+        expect(subject.attributes[:pattern]).to eq subject.selector
+      end
+
+      it 'is required' do
+        expect(subject.required?).to be true
+      end
+    end
+
+    context 'element with requirement and pattern' do
+      subject { described_class.new(:something, /link_to 'something_else_entirely'/, required: true) }
+
+      it 'has an attribute[pattern] of the passed pattern' do
+        expect(subject.attributes[:pattern]).to eq /link_to 'something_else_entirely'/
+      end
+
+      it 'is required' do
+        expect(subject.required?).to be true
+      end
+
+      it 'has a selector of the name' do
+        expect(subject.selector).to eq 'qa-something'
+      end
+    end
+  end
+
+  describe 'data-qa selectors' do
+    subject { described_class.new(:my_element) }
+
+    it 'properly translates to a data-qa-selector' do
+      expect(subject.selector_css).to include(%q([data-qa-selector="my_element"]))
     end
   end
 end

@@ -5,12 +5,29 @@ import Flash from './flash';
 import DropLab from './droplab/drop_lab';
 import ISetter from './droplab/plugins/input_setter';
 import { __, sprintf } from './locale';
+import {
+  init as initConfidentialMergeRequest,
+  isConfidentialIssue,
+  canCreateConfidentialMergeRequest,
+} from './confidential_merge_request';
+import confidentialMergeRequestState from './confidential_merge_request/state';
 
 // Todo: Remove this when fixing issue in input_setter plugin
 const InputSetter = Object.assign({}, ISetter);
 
 const CREATE_MERGE_REQUEST = 'create-mr';
 const CREATE_BRANCH = 'create-branch';
+
+function createEndpoint(projectPath, endpoint) {
+  if (canCreateConfidentialMergeRequest()) {
+    return endpoint.replace(
+      projectPath,
+      confidentialMergeRequestState.selectedProject.pathWithNamespace,
+    );
+  }
+
+  return endpoint;
+}
 
 export default class CreateMergeRequestDropdown {
   constructor(wrapperEl) {
@@ -42,6 +59,8 @@ export default class CreateMergeRequestDropdown {
     this.refIsValid = true;
     this.refsPath = this.wrapperEl.dataset.refsPath;
     this.suggestedRef = this.refInput.value;
+    this.projectPath = this.wrapperEl.dataset.projectPath;
+    this.projectId = this.wrapperEl.dataset.projectId;
 
     // These regexps are used to replace
     // a backend generated new branch name and its source (ref)
@@ -58,6 +77,14 @@ export default class CreateMergeRequestDropdown {
     };
 
     this.init();
+
+    if (isConfidentialIssue()) {
+      this.createMergeRequestButton.setAttribute(
+        'data-dropdown-trigger',
+        '#create-merge-request-dropdown',
+      );
+      initConfidentialMergeRequest();
+    }
   }
 
   available() {
@@ -66,8 +93,14 @@ export default class CreateMergeRequestDropdown {
   }
 
   bindEvents() {
-    this.createMergeRequestButton.addEventListener('click', this.onClickCreateMergeRequestButton.bind(this));
-    this.createTargetButton.addEventListener('click', this.onClickCreateMergeRequestButton.bind(this));
+    this.createMergeRequestButton.addEventListener(
+      'click',
+      this.onClickCreateMergeRequestButton.bind(this),
+    );
+    this.createTargetButton.addEventListener(
+      'click',
+      this.onClickCreateMergeRequestButton.bind(this),
+    );
     this.branchInput.addEventListener('keyup', this.onChangeInput.bind(this));
     this.dropdownToggle.addEventListener('click', this.onClickSetFocusOnBranchNameInput.bind(this));
     this.refInput.addEventListener('keyup', this.onChangeInput.bind(this));
@@ -77,7 +110,8 @@ export default class CreateMergeRequestDropdown {
   checkAbilityToCreateBranch() {
     this.setUnavailableButtonState();
 
-    axios.get(this.canCreatePath)
+    axios
+      .get(this.canCreatePath)
       .then(({ data }) => {
         this.setUnavailableButtonState(false);
 
@@ -105,23 +139,31 @@ export default class CreateMergeRequestDropdown {
   createBranch() {
     this.isCreatingBranch = true;
 
-    return axios.post(this.createBranchPath)
+    return axios
+      .post(createEndpoint(this.projectPath, this.createBranchPath), {
+        confidential_issue_project_id: canCreateConfidentialMergeRequest() ? this.projectId : null,
+      })
       .then(({ data }) => {
         this.branchCreated = true;
         window.location.href = data.url;
       })
-      .catch(() => Flash('Failed to create a branch for this issue. Please try again.'));
+      .catch(() => Flash(__('Failed to create a branch for this issue. Please try again.')));
   }
 
   createMergeRequest() {
     this.isCreatingMergeRequest = true;
 
-    return axios.post(this.createMrPath)
+    return axios
+      .post(this.createMrPath, {
+        target_project_id: canCreateConfidentialMergeRequest()
+          ? confidentialMergeRequestState.selectedProject.id
+          : null,
+      })
       .then(({ data }) => {
         this.mergeRequestCreated = true;
         window.location.href = data.url;
       })
-      .catch(() => Flash('Failed to create Merge Request. Please try again.'));
+      .catch(() => Flash(__('Failed to create Merge Request. Please try again.')));
   }
 
   disable() {
@@ -140,6 +182,8 @@ export default class CreateMergeRequestDropdown {
   }
 
   enable() {
+    if (isConfidentialIssue() && !canCreateConfidentialMergeRequest()) return;
+
     this.createMergeRequestButton.classList.remove('disabled');
     this.createMergeRequestButton.removeAttribute('disabled');
 
@@ -195,7 +239,8 @@ export default class CreateMergeRequestDropdown {
   getRef(ref, target = 'all') {
     if (!ref) return false;
 
-    return axios.get(this.refsPath + ref)
+    return axios
+      .get(`${createEndpoint(this.projectPath, this.refsPath)}${encodeURIComponent(ref)}`)
       .then(({ data }) => {
         const branches = data[Object.keys(data)[0]];
         const tags = data[Object.keys(data)[1]];
@@ -204,7 +249,8 @@ export default class CreateMergeRequestDropdown {
         if (target === 'branch') {
           result = CreateMergeRequestDropdown.findByValue(branches, ref);
         } else {
-          result = CreateMergeRequestDropdown.findByValue(branches, ref, true) ||
+          result =
+            CreateMergeRequestDropdown.findByValue(branches, ref, true) ||
             CreateMergeRequestDropdown.findByValue(tags, ref, true);
           this.suggestedRef = result;
         }
@@ -216,7 +262,7 @@ export default class CreateMergeRequestDropdown {
       .catch(() => {
         this.unavailable();
         this.disable();
-        new Flash('Failed to get ref.');
+        new Flash(__('Failed to get ref.'));
 
         this.isGettingRef = false;
 
@@ -255,11 +301,13 @@ export default class CreateMergeRequestDropdown {
   }
 
   isBusy() {
-    return this.isCreatingMergeRequest ||
+    return (
+      this.isCreatingMergeRequest ||
       this.mergeRequestCreated ||
       this.isCreatingBranch ||
       this.branchCreated ||
-      this.isGettingRef;
+      this.isGettingRef
+    );
   }
 
   onChangeInput(event) {
@@ -268,10 +316,11 @@ export default class CreateMergeRequestDropdown {
 
     if (event.target === this.branchInput) {
       target = 'branch';
-      value = this.branchInput.value;
+      ({ value } = this.branchInput);
     } else if (event.target === this.refInput) {
       target = 'ref';
-      value = event.target.value.slice(0, event.target.selectionStart) +
+      value =
+        event.target.value.slice(0, event.target.selectionStart) +
         event.target.value.slice(event.target.selectionEnd);
     } else {
       return false;
@@ -310,6 +359,12 @@ export default class CreateMergeRequestDropdown {
   onClickCreateMergeRequestButton(event) {
     let xhr = null;
     event.preventDefault();
+
+    if (isConfidentialIssue() && !event.target.classList.contains('js-create-target')) {
+      this.droplab.hooks.forEach(hook => hook.list.toggle());
+
+      return;
+    }
 
     if (this.isBusy()) {
       return;
@@ -396,7 +451,8 @@ export default class CreateMergeRequestDropdown {
 
   showNotAvailableMessage(target) {
     const { input, message } = this.getTargetData(target);
-    const text = target === 'branch' ? __('Branch is already taken') : __('Source is not available');
+    const text =
+      target === 'branch' ? __('Branch is already taken') : __('Source is not available');
 
     this.removeMessage(target);
     input.classList.add('gl-field-error-outline');
@@ -459,11 +515,15 @@ export default class CreateMergeRequestDropdown {
   // target - 'branch' or 'ref'
   // ref - string - the new value to use as branch or ref
   updateCreatePaths(target, ref) {
-    const pathReplacement = `$1${ref}`;
+    const pathReplacement = `$1${encodeURIComponent(ref)}`;
 
-    this.createBranchPath = this.createBranchPath.replace(this.regexps[target].createBranchPath,
-      pathReplacement);
-    this.createMrPath = this.createMrPath.replace(this.regexps[target].createMrPath,
-      pathReplacement);
+    this.createBranchPath = this.createBranchPath.replace(
+      this.regexps[target].createBranchPath,
+      pathReplacement,
+    );
+    this.createMrPath = this.createMrPath.replace(
+      this.regexps[target].createMrPath,
+      pathReplacement,
+    );
   }
 }

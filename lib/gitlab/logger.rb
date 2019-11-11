@@ -1,11 +1,21 @@
+# frozen_string_literal: true
+
 module Gitlab
   class Logger < ::Logger
     def self.file_name
       file_name_noext + '.log'
     end
 
+    def self.debug(message)
+      build.debug(message)
+    end
+
     def self.error(message)
       build.error(message)
+    end
+
+    def self.warn(message)
+      build.warn(message)
     end
 
     def self.info(message)
@@ -22,7 +32,7 @@ module Gitlab
     end
 
     def self.build
-      RequestStore[self.cache_key] ||= new(self.full_log_path)
+      Gitlab::SafeRequestStore[self.cache_key] ||= new(self.full_log_path)
     end
 
     def self.full_log_path
@@ -30,7 +40,7 @@ module Gitlab
     end
 
     def self.cache_key
-      'logger:'.freeze + self.full_log_path.to_s
+      'logger:' + self.full_log_path.to_s
     end
   end
 end

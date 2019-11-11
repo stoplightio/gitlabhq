@@ -1,57 +1,47 @@
+---
+type: howto, reference
+---
+
 # Command Line basic commands
+
+When [working with Git from the command line](start-using-git.md), you will need to
+use more than just the Git commands. There are several basic commands that you should
+learn, in order to make full use of the command line.
 
 ## Start working on your project
 
-In Git, when you copy a project you say you "clone" it. To work on a git project locally (from your own computer), you will need to clone it. To do this, sign in to GitLab.
+To work on a Git project locally (from your own computer), with the command line,
+first you will need to [clone (copy) it](start-using-git.md#clone-a-repository) to
+your computer.
 
-When you are on your Dashboard, click on the project that you'd like to clone.
-To work in the project, you can copy a link to the Git repository through a SSH
-or a HTTPS protocol. SSH is easier to use after it's been
-[setup](create-your-ssh-keys.md). While you are at the **Project** tab, select
-HTTPS or SSH from the dropdown menu and copy the link using the 'Copy to clipboard'
-button (you'll have to paste it on your shell in the next step).
+## Working with files on the command line
 
-![Copy the HTTPS or SSH](img/project_clone_url.png)
+This section has examples of some basic shell commands that you might find useful.
+For more information, search the web for _bash commands_.
 
-## On the command line
+Alternatively, you can edit files using your choice of editor (IDE), or the GitLab user
+interface (not locally).
 
-### Clone your project
+### Common commands
 
-Go to your computer's shell and type the following command:
+The list below is not exhaustive, but contains many of the most commonly used commands.
 
-```
-git clone PASTE HTTPS OR SSH HERE
-```
+| Command                        | Description                                 |
+|--------------------------------|---------------------------------------------|
+| `cd NAME-OF-DIRECTORY`         | Go into a directory to work in it           |
+| `cd ..`                        | Go back one directory                       |
+| `ls`                           | List what’s in the current directory        |
+| `ls a*`                        | List what’s in the current directory that starts with `a` |
+| `ls *.md`                      | List what’s in the current directory that ends with `.md` |
+| `mkdir NAME-OF-YOUR-DIRECTORY` | Create a new directory                      |
+| `cat README.md`                | Display the contents of a [text file you created previously](#create-a-text-file-in-the-current-directory) |
+| `pwd`                          | Show the current directory                  |
+| `clear`                        | Clear the shell window                      |
 
-A clone of the project will be created in your computer.
+### Create a text file in the current directory
 
->**Note:** If you clone your project via an URL that contains special characters, make sure that they are URL-encoded.
-
-### Go into a project, directory or file to work in it
-
-```
-cd NAME-OF-PROJECT-OR-FILE
-```
-
-### Go back one directory or file
-
-```
-cd ../
-```
-
-### View what’s in the directory that you are in
-
-```
-ls
-```
-
-### Create a directory
-
-```
-mkdir NAME-OF-YOUR-DIRECTORY
-```
-
-### Create a README.md or file in directory
+To create a text file from the command line, for example `README.md`, follow these
+steps:
 
 ```
 touch README.md
@@ -62,34 +52,70 @@ nano README.md
 #### Press: enter
 ```
 
-### Remove a file
+### Remove a file or directory
+
+It is easy to delete (remove) a file or directory, but be careful:
+
+DANGER: **Danger:**
+This will **permanently** delete a file.
 
 ```
 rm NAME-OF-FILE
 ```
 
-### Remove a directory and all of its contents
+DANGER: **Danger:**
+This will **permanently** delete a directory and **all** of its contents.
 
 ```
 rm -r NAME-OF-DIRECTORY
 ```
 
-### View history in the command line
+### View and Execute commands from history
+
+You can view the history of all the commands you executed from the command line,
+and then execute any of them again, if needed.
+
+First, list the commands you executed previously:
 
 ```
 history
 ```
 
+Then, choose a command from the list and check the number next to the command (`123`,
+for example) . Execute the same full command with:
+
+```
+!123
+```
+
 ### Carry out commands for which the account you are using lacks authority
 
-You will be asked for an administrator’s password.
+Not all commands can be executed from a basic user account on a computer, you may
+need administrator's rights to execute commands that affect the system, or try to access
+protected data, for example. You can use `sudo` to execute these commands, but you
+will likely be asked for an administrator password.
 
 ```
-sudo
+sudo RESTRICTED-COMMAND
 ```
 
-### Tell where you are
+CAUTION: **Caution:**
+Be careful of the commands you run with `sudo`. Certain commands may cause
+damage to your data or system.
 
-```
-pwd
-```
+## Sample Git taskflow
+
+If you are completely new to Git, looking through some [sample taskflows](https://rogerdudler.github.io/git-guide/)
+will help you understand the best practices for using these commands as you work.
+
+<!-- ## Troubleshooting
+
+Include any troubleshooting steps that you can foresee. If you know beforehand what issues
+one might have when setting this up, or when something is changed, or on upgrading, it's
+important to describe those, too. Think of things that may go wrong and include them here.
+This is important to minimize requests for support, and to avoid doc comments with
+questions that you know someone might ask.
+
+Each scenario can be a third-level heading, e.g. `### Getting error message X`.
+If you have none to add when creating a doc, leave this section in place
+but commented out to help encourage others to add to it in the future. -->

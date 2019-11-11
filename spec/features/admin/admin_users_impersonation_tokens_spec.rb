@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe 'Admin > Users > Impersonation Tokens', :js do
@@ -10,6 +12,10 @@ describe 'Admin > Users > Impersonation Tokens', :js do
 
   def no_personal_access_tokens_message
     find(".settings-message")
+  end
+
+  def created_impersonation_token
+    find("#created-personal-access-token").value
   end
 
   before do
@@ -39,6 +45,7 @@ describe 'Admin > Users > Impersonation Tokens', :js do
       expect(active_impersonation_tokens).to have_text('api')
       expect(active_impersonation_tokens).to have_text('read_user')
       expect(PersonalAccessTokensFinder.new(impersonation: true).execute.count).to equal(1)
+      expect(created_impersonation_token).not_to be_empty
     end
   end
 

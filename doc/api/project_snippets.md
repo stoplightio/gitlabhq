@@ -1,6 +1,6 @@
 # Project snippets
 
-### Snippet visibility level
+## Snippet visibility level
 
 Snippets in GitLab can be either private, internal or public.
 You can set it with the `visibility` field in the snippet.
@@ -12,6 +12,12 @@ Constants for snippet visibility levels are:
 | `private`  | The snippet is visible only the snippet creator |
 | `internal` | The snippet is visible for any logged in user |
 | `public`   | The snippet can be accessed without any authentication |
+
+NOTE: **Note:**
+From July 2019, the `Internal` visibility setting is disabled for new projects, groups,
+and snippets on GitLab.com. Existing projects, groups, and snippets using the `Internal`
+visibility setting keep this setting. You can read more about the change in the
+[relevant issue](https://gitlab.com/gitlab-org/gitlab/issues/12388).
 
 ## List snippets
 
@@ -72,8 +78,29 @@ Parameters:
 - `title` (required) - The title of a snippet
 - `file_name` (required) - The name of a snippet file
 - `description` (optional) - The description of a snippet
-- `code` (required) - The content of a snippet
+- `content` (required) - The content of a snippet
 - `visibility` (required) - The snippet's visibility
+
+Example request:
+
+```bash
+curl --request POST https://gitlab.com/api/v4/projects/:id/snippets \
+     --header "PRIVATE-TOKEN: <your access token>" \
+     --header "Content-Type: application/json" \
+     -d @snippet.json
+```
+
+`snippet.json` used in the above example request:
+
+```json
+{
+  "title" : "Example Snippet Title",
+  "description" : "More verbose snippet description",
+  "file_name" : "example.txt",
+  "content" : "source code \n with multiple lines\n",
+  "visibility" : "private"
+}
+```
 
 ## Update snippet
 
@@ -90,8 +117,29 @@ Parameters:
 - `title` (optional) - The title of a snippet
 - `file_name` (optional) - The name of a snippet file
 - `description` (optional) - The description of a snippet
-- `code` (optional) - The content of a snippet
+- `content` (optional) - The content of a snippet
 - `visibility` (optional) - The snippet's visibility
+
+Example request:
+
+```bash
+curl --request PUT https://gitlab.com/api/v4/projects/:id/snippets \
+     --header "PRIVATE-TOKEN: <your_access_token>" \
+     --header "Content-Type: application/json" \
+     -d @snippet.json
+```
+
+`snippet.json` used in the above example request:
+
+```json
+{
+  "title" : "Updated Snippet Title",
+  "description" : "More verbose snippet description",
+  "file_name" : "new_filename.txt",
+  "content" : "updated source code \n with multiple lines\n",
+  "visibility" : "private"
+}
+```
 
 ## Delete snippet
 
@@ -106,6 +154,13 @@ Parameters:
 - `id` (required) - The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) owned by the authenticated user
 - `snippet_id` (required) - The ID of a project's snippet
 
+Example request:
+
+```bash
+curl --request DELETE https://gitlab.com/api/v4/projects/:id/snippets \
+     --header "PRIVATE-TOKEN: <your_access_token>"
+```
+
 ## Snippet content
 
 Returns the raw project snippet as plain text.
@@ -119,11 +174,16 @@ Parameters:
 - `id` (required) - The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) owned by the authenticated user
 - `snippet_id` (required) - The ID of a project's snippet
 
+Example request:
+
+```bash
+curl --request GET https://gitlab.com/api/v4/projects/:id/snippets/:snippet_id/raw \
+     --header "PRIVATE-TOKEN: <your_access_token>"
+```
+
 ## Get user agent details
 
-> **Notes:**
 > [Introduced][ce-29508] in GitLab 9.4.
-
 
 Available only for admins.
 
@@ -136,8 +196,10 @@ GET /projects/:id/snippets/:snippet_id/user_agent_detail
 | `id`          | Integer | yes      | The ID of a project                  |
 | `snippet_id`  | Integer | yes      | The ID of a snippet                  |
 
+Example request:
+
 ```bash
-curl --request GET --header "PRIVATE-TOKEN: 9koXpg98eAheJpvBs5tK" https://gitlab.example.com/api/v4/projects/1/snippets/2/user_agent_detail
+curl --request GET --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/projects/1/snippets/2/user_agent_detail
 ```
 
 Example response:
@@ -150,4 +212,4 @@ Example response:
 }
 ```
 
-[ce-29508]: https://gitlab.com/gitlab-org/gitlab-ce/issues/29508
+[ce-29508]: https://gitlab.com/gitlab-org/gitlab-foss/issues/29508

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Gitlab::Ci::Status::Build::FailedAllowed do
@@ -31,7 +33,7 @@ describe Gitlab::Ci::Status::Build::FailedAllowed do
 
   describe '#group' do
     it 'returns status failed with warnings status group' do
-      expect(subject.group).to eq 'failed_with_warnings'
+      expect(subject.group).to eq 'failed-with-warnings'
     end
   end
 

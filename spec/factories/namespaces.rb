@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 FactoryBot.define do
   factory :namespace do
     sequence(:name) { |n| "namespace#{n}" }
@@ -18,6 +20,14 @@ FactoryBot.define do
         owner.username = namespace.path
         owner.namespace = namespace
       end
+    end
+
+    trait :with_aggregation_schedule do
+      association :aggregation_schedule, factory: :namespace_aggregation_schedules
+    end
+
+    trait :with_root_storage_statistics do
+      association :root_storage_statistics, factory: :namespace_root_storage_statistics
     end
   end
 end

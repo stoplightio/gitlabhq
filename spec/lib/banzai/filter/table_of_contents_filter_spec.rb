@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Banzai::Filter::TableOfContentsFilter do
@@ -58,6 +60,11 @@ describe Banzai::Filter::TableOfContentsFilter do
         expect(doc.css('h1 a').first.attr('href')).to eq '#this-header-is-filled-with-punctuation'
       end
 
+      it 'removes any leading or trailing spaces' do
+        doc = filter(header(1, " \r\n\tTitle with spaces\r\n\t "))
+        expect(doc.css('h1 a').first.attr('href')).to eq '#title-with-spaces'
+      end
+
       it 'appends a unique number to duplicates' do
         doc = filter(header(1, 'One') + header(2, 'One'))
 
@@ -75,7 +82,9 @@ describe Banzai::Filter::TableOfContentsFilter do
       it 'supports Unicode' do
         doc = filter(header(1, '한글'))
         expect(doc.css('h1 a').first.attr('id')).to eq 'user-content-한글'
-        expect(doc.css('h1 a').first.attr('href')).to eq '#한글'
+        # check that we encode the href to avoid issues with the
+        # ExternalLinkFilter (see https://gitlab.com/gitlab-org/gitlab/issues/26210)
+        expect(doc.css('h1 a').first.attr('href')).to eq "##{CGI.escape('한글')}"
       end
     end
   end
@@ -107,11 +116,11 @@ describe Banzai::Filter::TableOfContentsFilter do
     context 'table of contents nesting' do
       let(:results) do
         result(
-          header(1, 'Header 1') <<
-          header(2, 'Header 1-1') <<
-          header(3, 'Header 1-1-1') <<
-          header(2, 'Header 1-2') <<
-          header(1, 'Header 2') <<
+          header(1, 'Header 1') +
+          header(2, 'Header 1-1') +
+          header(3, 'Header 1-1-1') +
+          header(2, 'Header 1-2') +
+          header(1, 'Header 2') +
           header(2, 'Header 2-1')
         )
       end

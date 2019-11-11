@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Banzai::ReferenceParser::BaseParser do
@@ -263,11 +265,10 @@ describe Banzai::ReferenceParser::BaseParser do
       end
     end
 
-    context 'with RequestStore enabled' do
+    context 'with RequestStore enabled', :request_store do
       before do
         cache = Hash.new { |hash, key| hash[key] = {} }
 
-        allow(RequestStore).to receive(:active?).and_return(true)
         allow(subject).to receive(:collection_cache).and_return(cache)
       end
 

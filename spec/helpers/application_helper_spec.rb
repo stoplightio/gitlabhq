@@ -1,50 +1,69 @@
-# coding: utf-8
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe ApplicationHelper do
   describe 'current_controller?' do
-    it 'returns true when controller matches argument' do
+    before do
       stub_controller_name('foo')
+    end
 
-      expect(helper.current_controller?(:foo)).to eq true
+    it 'returns true when controller matches argument' do
+      expect(helper.current_controller?(:foo)).to be_truthy
     end
 
     it 'returns false when controller does not match argument' do
-      stub_controller_name('foo')
-
-      expect(helper.current_controller?(:bar)).to eq false
+      expect(helper.current_controller?(:bar)).to be_falsey
     end
 
     it 'takes any number of arguments' do
-      stub_controller_name('foo')
+      expect(helper.current_controller?(:baz, :bar)).to be_falsey
+      expect(helper.current_controller?(:baz, :bar, :foo)).to be_truthy
+    end
 
-      expect(helper.current_controller?(:baz, :bar)).to eq false
-      expect(helper.current_controller?(:baz, :bar, :foo)).to eq true
+    context 'when namespaced' do
+      before do
+        stub_controller_path('bar/foo')
+      end
+
+      it 'returns true when controller matches argument' do
+        expect(helper.current_controller?(:foo)).to be_truthy
+      end
+
+      it 'returns true when controller and namespace matches argument in path notation' do
+        expect(helper.current_controller?('bar/foo')).to be_truthy
+      end
+
+      it 'returns false when namespace doesnt match' do
+        expect(helper.current_controller?('foo/foo')).to be_falsey
+      end
     end
 
     def stub_controller_name(value)
       allow(helper.controller).to receive(:controller_name).and_return(value)
     end
+
+    def stub_controller_path(value)
+      allow(helper.controller).to receive(:controller_path).and_return(value)
+    end
   end
 
   describe 'current_action?' do
-    it 'returns true when action matches' do
+    before do
       stub_action_name('foo')
+    end
 
-      expect(helper.current_action?(:foo)).to eq true
+    it 'returns true when action matches' do
+      expect(helper.current_action?(:foo)).to be_truthy
     end
 
     it 'returns false when action does not match' do
-      stub_action_name('foo')
-
-      expect(helper.current_action?(:bar)).to eq false
+      expect(helper.current_action?(:bar)).to be_falsey
     end
 
     it 'takes any number of arguments' do
-      stub_action_name('foo')
-
-      expect(helper.current_action?(:baz, :bar)).to eq false
-      expect(helper.current_action?(:baz, :bar, :foo)).to eq true
+      expect(helper.current_action?(:baz, :bar)).to be_falsey
+      expect(helper.current_action?(:baz, :bar, :foo)).to be_truthy
     end
 
     def stub_action_name(value)
@@ -100,8 +119,7 @@ describe ApplicationHelper do
     end
 
     it 'accepts a custom html_class' do
-      expect(element(html_class: 'custom_class').attr('class'))
-        .to eq 'js-timeago custom_class'
+      expect(element(html_class: 'custom_class').attr('class')).to eq 'js-timeago custom_class'
     end
 
     it 'accepts a custom tooltip placement' do
@@ -114,6 +132,7 @@ describe ApplicationHelper do
 
     it 'add class for the short format' do
       timeago_element = element(short_format: 'short')
+
       expect(timeago_element.attr('class')).to eq 'js-short-timeago'
       expect(timeago_element.next_element).to eq nil
     end
@@ -128,11 +147,9 @@ describe ApplicationHelper do
     context 'when alternate support url is specified' do
       let(:alternate_url) { 'http://company.example.com/getting-help' }
 
-      before do
-        stub_application_setting(help_page_support_url: alternate_url)
-      end
-
       it 'returns the alternate support url' do
+        stub_application_setting(help_page_support_url: alternate_url)
+
         expect(helper.support_url).to eq(alternate_url)
       end
     end
@@ -152,14 +169,67 @@ describe ApplicationHelper do
     end
   end
 
+  describe '#client_class_list' do
+    it 'returns string containing CSS classes representing client browser and platform' do
+      class_list = helper.client_class_list
+      expect(class_list).to eq('gl-browser-generic gl-platform-other')
+    end
+  end
+
+  describe '#client_js_flags' do
+    it 'returns map containing JS flags representing client browser and platform' do
+      flags_list = helper.client_js_flags
+      expect(flags_list[:isGeneric]).to eq(true)
+      expect(flags_list[:isOther]).to eq(true)
+    end
+  end
+
   describe '#autocomplete_data_sources' do
     let(:project) { create(:project) }
     let(:noteable_type) { Issue }
+
     it 'returns paths for autocomplete_sources_controller' do
       sources = helper.autocomplete_data_sources(project, noteable_type)
-      expect(sources.keys).to match_array([:members, :issues, :mergeRequests, :labels, :milestones, :commands])
+      expect(sources.keys).to match_array([:members, :issues, :mergeRequests, :labels, :milestones, :commands, :snippets])
       sources.keys.each do |key|
         expect(sources[key]).not_to be_nil
+      end
+    end
+  end
+
+  describe '#external_storage_url_or_path' do
+    let(:project) { create(:project) }
+
+    context 'when external storage is disabled' do
+      it 'returns the passed path' do
+        expect(helper.external_storage_url_or_path('/foo/bar', project)).to eq('/foo/bar')
+      end
+    end
+
+    context 'when external storage is enabled' do
+      let(:user) { create(:user, static_object_token: 'hunter1') }
+
+      before do
+        allow_any_instance_of(ApplicationSetting).to receive(:static_objects_external_storage_url).and_return('https://cdn.gitlab.com')
+        allow(helper).to receive(:current_user).and_return(user)
+      end
+
+      it 'returns the external storage URL prepended to the path' do
+        expect(helper.external_storage_url_or_path('/foo/bar', project)).to eq("https://cdn.gitlab.com/foo/bar?token=#{user.static_object_token}")
+      end
+
+      it 'preserves the path query parameters' do
+        url = helper.external_storage_url_or_path('/foo/bar?unicode=1', project)
+
+        expect(url).to eq("https://cdn.gitlab.com/foo/bar?token=#{user.static_object_token}&unicode=1")
+      end
+
+      context 'when project is public' do
+        let(:project) { create(:project, :public) }
+
+        it 'returns does not append a token parameter' do
+          expect(helper.external_storage_url_or_path('/foo/bar', project)).to eq('https://cdn.gitlab.com/foo/bar')
+        end
       end
     end
   end

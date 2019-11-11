@@ -1,14 +1,19 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe ProjectCacheWorker do
+  include ExclusiveLeaseHelpers
+
   let(:worker) { described_class.new }
   let(:project) { create(:project, :repository) }
-  let(:statistics) { project.statistics }
+  let(:lease_key) { ["project_cache_worker", project.id, *statistics.sort].join(":") }
+  let(:lease_timeout) { ProjectCacheWorker::LEASE_TIMEOUT }
+  let(:statistics) { [] }
 
   describe '#perform' do
     before do
-      allow_any_instance_of(Gitlab::ExclusiveLease).to receive(:try_obtain)
-        .and_return(true)
+      stub_exclusive_lease(lease_key, timeout: lease_timeout)
     end
 
     context 'with a non-existing project' do
@@ -20,22 +25,20 @@ describe ProjectCacheWorker do
     end
 
     context 'with an existing project without a repository' do
-      it 'does nothing' do
+      it 'updates statistics but does not refresh the method cashes' do
         allow_any_instance_of(Repository).to receive(:exists?).and_return(false)
 
-        expect(worker).not_to receive(:update_statistics)
+        expect(worker).to receive(:update_statistics)
+        expect_any_instance_of(Repository).not_to receive(:refresh_method_caches)
 
         worker.perform(project.id)
       end
     end
 
     context 'with an existing project' do
-      it 'updates the project statistics' do
-        expect(worker).to receive(:update_statistics)
-          .with(kind_of(Project), %i(repository_size))
-          .and_call_original
-
-        worker.perform(project.id, [], %w(repository_size))
+      before do
+        lease_key = "namespace:namespaces_root_statistics:#{project.namespace_id}"
+        stub_exclusive_lease_taken(lease_key, timeout: Namespace::AggregationSchedule::DEFAULT_LEASE_TIMEOUT)
       end
 
       it 'refreshes the method caches' do
@@ -44,6 +47,28 @@ describe ProjectCacheWorker do
           .and_call_original
 
         worker.perform(project.id, %w(readme))
+      end
+
+      context 'with statistics disabled' do
+        let(:statistics) { [] }
+
+        it 'does not update the project statistics' do
+          expect(worker).not_to receive(:update_statistics)
+
+          worker.perform(project.id, [], [], false)
+        end
+      end
+
+      context 'with statistics' do
+        let(:statistics) { %w(repository_size) }
+
+        it 'updates the project statistics' do
+          expect(worker).to receive(:update_statistics)
+            .with(kind_of(Project), statistics)
+            .and_call_original
+
+          worker.perform(project.id, [], statistics)
+        end
       end
 
       context 'with plain readme' do
@@ -61,29 +86,43 @@ describe ProjectCacheWorker do
   end
 
   describe '#update_statistics' do
+    let(:statistics) { %w(repository_size) }
+
     context 'when a lease could not be obtained' do
-      it 'does not update the repository size' do
-        allow(worker).to receive(:try_obtain_lease_for)
-          .with(project.id, :update_statistics)
-          .and_return(false)
+      it 'does not update the project statistics' do
+        stub_exclusive_lease_taken(lease_key, timeout: lease_timeout)
 
-        expect(statistics).not_to receive(:refresh!)
+        expect(Projects::UpdateStatisticsService).not_to receive(:new)
 
-        worker.update_statistics(project)
+        expect(UpdateProjectStatisticsWorker).not_to receive(:perform_in)
+
+        expect(Namespaces::ScheduleAggregationWorker)
+          .not_to receive(:perform_async)
+          .with(project.namespace_id)
+
+        worker.update_statistics(project, statistics)
       end
     end
 
     context 'when a lease could be obtained' do
-      it 'updates the project statistics' do
-        allow(worker).to receive(:try_obtain_lease_for)
-          .with(project.id, :update_statistics)
-          .and_return(true)
+      it 'updates the project statistics twice' do
+        stub_exclusive_lease(lease_key, timeout: lease_timeout)
 
-        expect(statistics).to receive(:refresh!)
-          .with(only: %i(repository_size))
+        expect(Projects::UpdateStatisticsService).to receive(:new)
+          .with(project, nil, statistics: statistics)
+          .and_call_original
+          .twice
+
+        expect(UpdateProjectStatisticsWorker).to receive(:perform_in)
+          .with(lease_timeout, project.id, statistics)
           .and_call_original
 
-        worker.update_statistics(project, %i(repository_size))
+        expect(Namespaces::ScheduleAggregationWorker)
+          .to receive(:perform_async)
+          .with(project.namespace_id)
+          .twice
+
+        worker.update_statistics(project, statistics)
       end
     end
   end

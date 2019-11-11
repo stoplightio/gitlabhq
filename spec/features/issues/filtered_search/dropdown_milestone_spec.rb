@@ -1,4 +1,6 @@
-require 'rails_helper'
+# frozen_string_literal: true
+
+require 'spec_helper'
 
 describe 'Dropdown milestone', :js do
   include FilteredSearchHelpers
@@ -29,7 +31,7 @@ describe 'Dropdown milestone', :js do
   end
 
   before do
-    project.add_master(user)
+    project.add_maintainer(user)
     sign_in(user)
     create(:issue, project: project)
 
@@ -37,36 +39,36 @@ describe 'Dropdown milestone', :js do
   end
 
   describe 'behavior' do
-    it 'opens when the search bar has milestone:' do
-      filtered_search.set('milestone:')
+    context 'filters by "milestone:"' do
+      before do
+        filtered_search.set('milestone:')
+      end
 
-      expect(page).to have_css(js_dropdown_milestone, visible: true)
+      it 'opens when the search bar has milestone:' do
+        expect(page).to have_css(js_dropdown_milestone, visible: true)
+      end
+
+      it 'closes when the search bar is unfocused' do
+        find('body').click
+
+        expect(page).to have_css(js_dropdown_milestone, visible: false)
+      end
+
+      it 'hides loading indicator when loaded' do
+        expect(find(js_dropdown_milestone)).not_to have_css('.filter-dropdown-loading')
+      end
+
+      it 'loads all the milestones when opened' do
+        expect(filter_dropdown).to have_selector('.filter-dropdown .filter-dropdown-item', count: 6)
+      end
     end
 
-    it 'closes when the search bar is unfocused' do
-      find('body').click()
-
-      expect(page).to have_css(js_dropdown_milestone, visible: false)
-    end
-
-    it 'should show loading indicator when opened' do
+    it 'shows loading indicator when opened' do
       slow_requests do
         filtered_search.set('milestone:')
 
         expect(page).to have_css('#js-dropdown-milestone .filter-dropdown-loading', visible: true)
       end
-    end
-
-    it 'should hide loading indicator when loaded' do
-      filtered_search.set('milestone:')
-
-      expect(find(js_dropdown_milestone)).not_to have_css('.filter-dropdown-loading')
-    end
-
-    it 'should load all the milestones when opened' do
-      filtered_search.set('milestone:')
-
-      expect(filter_dropdown).to have_selector('.filter-dropdown .filter-dropdown-item', count: 6)
     end
   end
 
@@ -139,7 +141,7 @@ describe 'Dropdown milestone', :js do
       expect_filtered_search_input_empty
     end
 
-    it 'fills in the milestone name when the milestone is partially filled' do
+    it 'fills in the milestone name when the milestone is partially filled', :quarantine do
       filtered_search.send_keys('v')
       click_milestone(milestone.title)
 
@@ -189,10 +191,18 @@ describe 'Dropdown milestone', :js do
     end
 
     it 'selects `no milestone`' do
-      click_static_milestone('No Milestone')
+      click_static_milestone('None')
 
       expect(page).to have_css(js_dropdown_milestone, visible: false)
-      expect_tokens([milestone_token('none', false)])
+      expect_tokens([milestone_token('None', false)])
+      expect_filtered_search_input_empty
+    end
+
+    it 'selects `any milestone`' do
+      click_static_milestone('Any')
+
+      expect(page).to have_css(js_dropdown_milestone, visible: false)
+      expect_tokens([milestone_token('Any', false)])
       expect_filtered_search_input_empty
     end
 
@@ -200,7 +210,7 @@ describe 'Dropdown milestone', :js do
       click_static_milestone('Upcoming')
 
       expect(page).to have_css(js_dropdown_milestone, visible: false)
-      expect_tokens([milestone_token('upcoming', false)])
+      expect_tokens([milestone_token('Upcoming', false)])
       expect_filtered_search_input_empty
     end
 
@@ -208,7 +218,7 @@ describe 'Dropdown milestone', :js do
       click_static_milestone('Started')
 
       expect(page).to have_css(js_dropdown_milestone, visible: false)
-      expect_tokens([milestone_token('started', false)])
+      expect_tokens([milestone_token('Started', false)])
       expect_filtered_search_input_empty
     end
   end

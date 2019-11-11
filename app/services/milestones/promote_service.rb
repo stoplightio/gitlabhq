@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Milestones
   class PromoteService < Milestones::BaseService
     PromoteMilestoneError = Class.new(StandardError)
@@ -30,7 +32,7 @@ module Milestones
       @milestone_ids_for_merge ||= begin
         search_params = { title: group_milestone.title, project_ids: group_project_ids, state: 'all' }
         milestones = MilestonesFinder.new(search_params).execute
-        milestones.pluck(:id)
+        milestones.pluck_primary_key
       end
     end
 
@@ -41,7 +43,7 @@ module Milestones
     end
 
     def check_project_milestone!(milestone)
-      raise_error('Only project milestones can be promoted.') unless milestone.project_milestone?
+      raise_error(s_('PromoteMilestone|Only project milestones can be promoted.')) unless milestone.project_milestone?
     end
 
     def clone_project_milestone(milestone)
@@ -57,6 +59,7 @@ module Milestones
       milestone
     end
 
+    # rubocop: disable CodeReuse/ActiveRecord
     def update_children(group_milestone, milestone_ids)
       issues = Issue.where(project_id: group_project_ids, milestone_id: milestone_ids)
       merge_requests = MergeRequest.where(source_project_id: group_project_ids, milestone_id: milestone_ids)
@@ -65,21 +68,26 @@ module Milestones
         issuable_collection.update_all(milestone_id: group_milestone.id)
       end
     end
+    # rubocop: enable CodeReuse/ActiveRecord
 
     def group
-      @group ||= parent.group || raise_error('Project does not belong to a group.')
+      @group ||= parent.group || raise_error(s_('PromoteMilestone|Project does not belong to a group.'))
     end
 
+    # rubocop: disable CodeReuse/ActiveRecord
     def destroy_old_milestones(milestone)
-      Milestone.where(id: milestone_ids_for_merge(milestone)).destroy_all
+      Milestone.where(id: milestone_ids_for_merge(milestone)).destroy_all # rubocop: disable DestroyAll
     end
+    # rubocop: enable CodeReuse/ActiveRecord
 
     def group_project_ids
-      @group_project_ids ||= group.projects.pluck(:id)
+      group.projects.select(:id)
     end
 
     def raise_error(message)
-      raise PromoteMilestoneError, "Promotion failed - #{message}"
+      raise PromoteMilestoneError, s_("PromoteMilestone|Promotion failed - %{message}") % { message: message }
     end
   end
 end
+
+Milestones::PromoteService.prepend_if_ee('EE::Milestones::PromoteService')

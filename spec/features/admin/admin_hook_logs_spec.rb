@@ -1,6 +1,8 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
-feature 'Admin::HookLogs' do
+describe 'Admin::HookLogs' do
   let(:project) { create(:project) }
   let(:system_hook) { create(:system_hook) }
   let(:hook_log) { create(:web_hook_log, web_hook: system_hook, internal_error_message: 'some error') }
@@ -9,7 +11,7 @@ feature 'Admin::HookLogs' do
     sign_in(create(:admin))
   end
 
-  scenario 'show list of hook logs' do
+  it 'show list of hook logs' do
     hook_log
     visit edit_admin_hook_path(system_hook)
 
@@ -17,7 +19,7 @@ feature 'Admin::HookLogs' do
     expect(page).to have_content(hook_log.url)
   end
 
-  scenario 'show hook log details' do
+  it 'show hook log details' do
     hook_log
     visit edit_admin_hook_path(system_hook)
     click_link 'View details'
@@ -27,7 +29,7 @@ feature 'Admin::HookLogs' do
     expect(page).to have_content('Resend Request')
   end
 
-  scenario 'retry hook log' do
+  it 'retry hook log' do
     WebMock.stub_request(:post, system_hook.url)
 
     hook_log

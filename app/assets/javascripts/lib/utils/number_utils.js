@@ -1,4 +1,5 @@
 import { BYTES_IN_KIB } from './constants';
+import { sprintf, __ } from '~/locale';
 
 /**
  * Function that allows a number with an X amount of decimals
@@ -7,13 +8,13 @@ import { BYTES_IN_KIB } from './constants';
  * * * Show 3 digits to the right
  * * For 2 digits to the left of the decimal point and X digits to the right of it
  * * * Show 2 digits to the right
-*/
+ */
 export function formatRelevantDigits(number) {
   let digitsLeft = '';
   let relevantDigits = 0;
   let formattedNumber = '';
-  if (!isNaN(Number(number))) {
-    digitsLeft = number.toString().split('.')[0];
+  if (!Number.isNaN(Number(number))) {
+    [digitsLeft] = number.toString().split('.');
     switch (digitsLeft.length) {
       case 1:
         relevantDigits = 3;
@@ -72,11 +73,47 @@ export function bytesToGiB(number) {
  */
 export function numberToHumanSize(size) {
   if (size < BYTES_IN_KIB) {
-    return `${size} bytes`;
+    return sprintf(__('%{size} bytes'), { size });
   } else if (size < BYTES_IN_KIB * BYTES_IN_KIB) {
-    return `${bytesToKiB(size).toFixed(2)} KiB`;
+    return sprintf(__('%{size} KiB'), { size: bytesToKiB(size).toFixed(2) });
   } else if (size < BYTES_IN_KIB * BYTES_IN_KIB * BYTES_IN_KIB) {
-    return `${bytesToMiB(size).toFixed(2)} MiB`;
+    return sprintf(__('%{size} MiB'), { size: bytesToMiB(size).toFixed(2) });
   }
-  return `${bytesToGiB(size).toFixed(2)} GiB`;
+  return sprintf(__('%{size} GiB'), { size: bytesToGiB(size).toFixed(2) });
 }
+
+/**
+ * A simple method that returns the value of a + b
+ * It seems unessesary, but when combined with a reducer it
+ * adds up all the values in an array.
+ *
+ * e.g. `[1, 2, 3, 4, 5].reduce(sum) // => 15`
+ *
+ * @param {Float} a
+ * @param {Float} b
+ * @example
+ * // return 15
+ * [1, 2, 3, 4, 5].reduce(sum);
+ *
+ * // returns 6
+ * Object.values([{a: 1, b: 2, c: 3].reduce(sum);
+ * @returns {Float} The summed value
+ */
+export const sum = (a = 0, b = 0) => a + b;
+
+/**
+ * Checks if the provided number is odd
+ * @param {Int} number
+ */
+export const isOdd = (number = 0) => number % 2;
+
+/**
+ * Computes the median for a given array.
+ * @param {Array} arr An array of numbers
+ * @returns {Number} The median of the given array
+ */
+export const median = arr => {
+  const middle = Math.floor(arr.length / 2);
+  const sorted = arr.sort((a, b) => a - b);
+  return arr.length % 2 !== 0 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+};

@@ -1,16 +1,29 @@
+# frozen_string_literal: true
+
 require 'yaml'
 require 'set'
 
 module Gitlab
   module SidekiqConfig
-    # This method is called by `bin/sidekiq-cluster` in EE, which runs outside
+    QUEUE_CONFIG_PATHS = begin
+      result = %w[app/workers/all_queues.yml]
+      result << 'ee/app/workers/all_queues.yml' if Gitlab.ee?
+      result
+    end.freeze
+
+    # This method is called by `ee/bin/sidekiq-cluster` in EE, which runs outside
     # of bundler/Rails context, so we cannot use any gem or Rails methods.
     def self.worker_queues(rails_path = Rails.root.to_s)
       @worker_queues ||= {}
-      @worker_queues[rails_path] ||= YAML.load_file(File.join(rails_path, 'app/workers/all_queues.yml'))
+
+      @worker_queues[rails_path] ||= QUEUE_CONFIG_PATHS.flat_map do |path|
+        full_path = File.join(rails_path, path)
+
+        File.exist?(full_path) ? YAML.load_file(full_path) : []
+      end
     end
 
-    # This method is called by `bin/sidekiq-cluster` in EE, which runs outside
+    # This method is called by `ee/bin/sidekiq-cluster` in EE, which runs outside
     # of bundler/Rails context, so we cannot use any gem or Rails methods.
     def self.expand_queues(queues, all_queues = self.worker_queues)
       return [] if queues.empty?
@@ -39,7 +52,11 @@ module Gitlab
     end
 
     def self.workers
-      @workers ||= find_workers(Rails.root.join('app', 'workers'))
+      @workers ||= begin
+        result = find_workers(Rails.root.join('app', 'workers'))
+        result.concat(find_workers(Rails.root.join('ee', 'app', 'workers'))) if Gitlab.ee?
+        result
+      end
     end
 
     def self.find_workers(root)

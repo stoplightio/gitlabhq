@@ -1,8 +1,12 @@
+# frozen_string_literal: true
+
 # To add new service you should build a class inherited from Service
 # and implement a set of methods
-class Service < ActiveRecord::Base
+class Service < ApplicationRecord
   include Sortable
   include Importable
+  include ProjectServicesLoggable
+  include DataFields
 
   serialize :properties, JSON # rubocop:disable Cop/ActiveRecordSerialize
 
@@ -47,6 +51,7 @@ class Service < ActiveRecord::Base
   scope :job_hooks, -> { where(job_events: true, active: true) }
   scope :pipeline_hooks, -> { where(pipeline_events: true, active: true) }
   scope :wiki_page_hooks, -> { where(wiki_page_events: true, active: true) }
+  scope :deployment_hooks, -> { where(deployment_events: true, active: true) }
   scope :external_issue_trackers, -> { issue_trackers.active.without_defaults }
   scope :deployment, -> { where(category: 'deployment') }
 
@@ -102,6 +107,13 @@ class Service < ActiveRecord::Base
     []
   end
 
+  # Expose a list of fields in the JSON endpoint.
+  #
+  # This list is used in `Service#as_json(only: json_fields)`.
+  def json_fields
+    %w(active)
+  end
+
   def test_data(project, user)
     Gitlab::DataBuilder::Push.build_sample(project, user)
   end
@@ -115,7 +127,7 @@ class Service < ActiveRecord::Base
   end
 
   def self.event_names
-    self.supported_events.map { |event| "#{event}_events" }
+    self.supported_events.map { |event| ServicesHelper.service_event_field_name(event) }
   end
 
   def event_field(event)
@@ -124,7 +136,7 @@ class Service < ActiveRecord::Base
 
   def api_field_names
     fields.map { |field| field[:name] }
-      .reject { |field_name| field_name =~ /(password|token|key)/ }
+      .reject { |field_name| field_name =~ /(password|token|key|title|description)/ }
   end
 
   def global_fields
@@ -147,7 +159,7 @@ class Service < ActiveRecord::Base
   end
 
   def self.supported_events
-    %w(push tag_push issue confidential_issue merge_request wiki_page)
+    %w(commit push tag_push issue confidential_issue merge_request wiki_page)
   end
 
   def execute(data)
@@ -169,7 +181,7 @@ class Service < ActiveRecord::Base
   # Also keep track of updated properties in a similar way as ActiveModel::Dirty
   def self.prop_accessor(*args)
     args.each do |arg|
-      class_eval %{
+      class_eval <<~RUBY, __FILE__, __LINE__ + 1
         unless method_defined?(arg)
           def #{arg}
             properties['#{arg}']
@@ -193,7 +205,7 @@ class Service < ActiveRecord::Base
         def #{arg}_was
           updated_properties['#{arg}']
         end
-      }
+      RUBY
     end
   end
 
@@ -204,16 +216,12 @@ class Service < ActiveRecord::Base
     self.prop_accessor(*args)
 
     args.each do |arg|
-      class_eval %{
+      class_eval <<~RUBY, __FILE__, __LINE__ + 1
         def #{arg}?
           # '!!' is used because nil or empty string is converted to nil
-          if Gitlab.rails5?
-            !!ActiveRecord::Type::Boolean.new.cast(#{arg})
-          else
-            !!ActiveRecord::Type::Boolean.new.type_cast_from_database(#{arg})
-          end
+          !!ActiveRecord::Type::Boolean.new.cast(#{arg})
         end
-      }
+      RUBY
     end
   end
 
@@ -250,14 +258,15 @@ class Service < ActiveRecord::Base
       bugzilla
       campfire
       custom_issue_tracker
+      discord
       drone_ci
       emails_on_push
       external_wiki
       flowdock
+      hangouts_chat
       hipchat
       irker
       jira
-      kubernetes
       mattermost_slash_commands
       mattermost
       packagist
@@ -266,6 +275,7 @@ class Service < ActiveRecord::Base
       prometheus
       pushover
       redmine
+      youtrack
       slack_slash_commands
       slack
       teamcity
@@ -281,9 +291,15 @@ class Service < ActiveRecord::Base
 
   def self.build_from_template(project_id, template)
     service = template.dup
-    service.active = false unless service.valid?
+
+    if template.supports_data_fields?
+      data_fields = template.data_fields.dup
+      data_fields.service = service
+    end
+
     service.template = false
     service.project_id = project_id
+    service.active = false if service.active? && !service.valid?
     service
   end
 
@@ -297,6 +313,11 @@ class Service < ActiveRecord::Base
 
   def self.find_by_template
     find_by(template: true)
+  end
+
+  # override if needed
+  def supports_data_fields?
+    false
   end
 
   private
@@ -333,6 +354,8 @@ class Service < ActiveRecord::Base
       "Event will be triggered when a wiki page is created/updated"
     when "commit", "commit_events"
       "Event will be triggered when a commit is created/updated"
+    when "deployment"
+      "Event will be triggered when a deployment finishes"
     end
   end
 
@@ -340,3 +363,5 @@ class Service < ActiveRecord::Base
     activated? && !importing?
   end
 end
+
+Service.prepend_if_ee('EE::Service')

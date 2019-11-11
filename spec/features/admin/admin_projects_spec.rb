@@ -1,6 +1,8 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
-describe "Admin::Projects"  do
+describe "Admin::Projects" do
   include Select2Helper
 
   let(:user) { create :user }
@@ -60,6 +62,7 @@ describe "Admin::Projects"  do
       expect(page).to have_content(project.name)
       expect(page).to have_content(project.full_name)
       expect(page).to have_content(project.creator.name)
+      expect(page).to have_content(project.id)
     end
   end
 
@@ -88,7 +91,7 @@ describe "Admin::Projects"  do
 
   describe 'add admin himself to a project' do
     before do
-      project.add_master(user)
+      project.add_maintainer(user)
     end
 
     it 'adds admin a to a project as developer', :js do
@@ -110,7 +113,7 @@ describe "Admin::Projects"  do
 
   describe 'admin remove himself from a project' do
     before do
-      project.add_master(user)
+      project.add_maintainer(user)
       project.add_developer(current_user)
     end
 

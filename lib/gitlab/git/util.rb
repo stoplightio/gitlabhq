@@ -1,9 +1,11 @@
+# frozen_string_literal: true
+
 # Gitaly note: JV: no RPC's here.
 
 module Gitlab
   module Git
     module Util
-      LINE_SEP = "\n".freeze
+      LINE_SEP = "\n"
 
       def self.count_lines(string)
         case string[-1]

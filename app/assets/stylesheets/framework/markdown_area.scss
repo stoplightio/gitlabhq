@@ -50,10 +50,6 @@
   transition: opacity 200ms ease-in-out;
 }
 
-.md-area {
-  position: relative;
-}
-
 .md-header {
   .nav-links {
     a {
@@ -61,7 +57,7 @@
       padding-top: 0;
       line-height: 19px;
 
-      &.btn.btn-xs {
+      &.btn.btn-sm {
         padding: 2px 5px;
       }
 
@@ -76,6 +72,7 @@
 .md-header-tab {
   @include media-breakpoint-down(xs) {
     flex: 1;
+    flex-direction: column;
     width: 100%;
     border-bottom: 1px solid $border-color;
     text-align: center;
@@ -126,44 +123,12 @@
 .markdown-area {
   border-radius: 0;
   background: $white-light;
-  border: 1px solid $md-area-border;
+  border: 1px solid $gray-100;
   min-height: 140px;
   max-height: 500px;
   padding: 5px;
   box-shadow: none;
   width: 100%;
-}
-
-.md {
-  &.md-preview-holder {
-    // Reset ul style types since we're nested inside a ul already
-    @include bulleted-list;
-  }
-
-  // On diffs code should wrap nicely and not overflow
-  code {
-    white-space: pre-wrap;
-    word-break: keep-all;
-  }
-
-  hr {
-    // Darken 'whitesmoke' a bit to make it more visible in note bodies
-    border-color: darken($gray-normal, 8%);
-    margin: 10px 0;
-  }
-
-  // Border around images in issue and MR comments.
-  img:not(.emoji) {
-    border: 1px solid $white-normal;
-    padding: 5px;
-    margin: 5px 0;
-    // Ensure that image does not exceed viewport
-    max-height: calc(100vh - 100px);
-  }
-
-  table {
-    @include markdown-table;
-  }
 }
 
 .toolbar-btn {
@@ -176,105 +141,51 @@
   svg {
     width: 14px;
     height: 14px;
-    margin-top: 3px;
+    vertical-align: middle;
     fill: $gl-text-color-secondary;
   }
 
   &:hover,
   &:focus {
     svg {
-      fill: $gl-link-color;
+      fill: $blue-600;
     }
   }
 }
 
 .toolbar-fullscreen-btn {
-  margin-left: $gl-padding;
   margin-right: -5px;
 
   @include media-breakpoint-down(xs) {
-    margin-left: 0;
     margin-right: 0;
   }
 }
 
-.atwho-view {
-  overflow-y: auto;
-  overflow-x: hidden;
+.md-suggestion-diff {
+  display: table !important;
+  border: 1px solid $border-color !important;
+  width: 100% !important;
+  font-family: $monospace-font !important;
+}
 
-  .name,
-  small.aliases,
-  small.params {
-    float: left;
-  }
+.md-suggestion-header {
+  height: $suggestion-header-height;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: $gray-light;
+  border: 1px solid $border-color;
+  padding: $gl-padding;
+  border-radius: $border-radius-default $border-radius-default 0 0;
 
-  small.aliases,
-  small.params {
-    padding: 2px 5px;
-  }
-
-  small.description {
-    float: right;
-    padding: 3px 5px;
-  }
-
-  .avatar-inline {
-    margin-bottom: 0;
-  }
-
-  .cur {
-    .avatar {
-      @include disableAllAnimation;
-      border: 1px solid $white-light;
-    }
-  }
-
-  ul > li {
-    @include clearfix;
-    white-space: nowrap;
-  }
-
-  // TODO: fallback to global style
-  .atwho-view-ul {
-    padding: 8px 1px;
-
-    li {
-      padding: 8px 16px;
-      border: 0;
-
-      &.cur {
-        background-color: $gray-darker;
-        color: $gl-text-color;
-
-        small {
-          color: inherit;
-        }
-      }
-
-      div.avatar {
-        display: inline-flex;
-        justify-content: center;
-        align-items: center;
-
-        .center {
-          line-height: 14px;
-        }
-      }
-
-      strong {
-        color: $gl-text-color;
-      }
-    }
+  svg {
+    vertical-align: middle;
+    margin-bottom: 3px;
   }
 }
 
 @include media-breakpoint-down(xs) {
-  .atwho-view-ul {
-    width: 350px;
-  }
-
-  .atwho-view ul li {
-    overflow: hidden;
-    text-overflow: ellipsis;
+  .referenced-users {
+    margin-right: 0;
   }
 }

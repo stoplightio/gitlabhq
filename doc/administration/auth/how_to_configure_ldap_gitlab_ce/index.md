@@ -1,20 +1,14 @@
 ---
-author: Chris Wilson
-author_gitlab: MrChrisW
-level: intermediary
-article_type: admin guide
-date: 2017-05-03
+type: howto
 ---
 
 # How to configure LDAP with GitLab CE
-
-## Introduction
 
 Managing a large number of users in GitLab can become a burden for system administrators. As an organization grows so do user accounts. Keeping these user accounts in sync across multiple enterprise applications often becomes a time consuming task.
 
 In this guide we will focus on configuring GitLab with Active Directory. [Active Directory](https://en.wikipedia.org/wiki/Active_Directory) is a popular LDAP compatible directory service provided by Microsoft, included in all modern Windows Server operating systems.
 
-GitLab has supported LDAP integration since [version 2.2](https://about.gitlab.com/2012/02/22/gitlab-version-2-2/). With GitLab LDAP [group syncing](#group-syncing-ee) being added to GitLab Enterprise Edition in [version 6.0](https://about.gitlab.com/2013/08/20/gitlab-6-dot-0-released/). LDAP integration has become one of the most popular features in GitLab.
+GitLab has supported LDAP integration since [version 2.2](https://about.gitlab.com/blog/2012/02/22/gitlab-version-2-2/). With GitLab LDAP [group syncing](../how_to_configure_ldap_gitlab_ee/index.html#group-sync) being added to GitLab Enterprise Edition in [version 6.0](https://about.gitlab.com/blog/2013/08/20/gitlab-6-dot-0-released/). LDAP integration has become one of the most popular features in GitLab.
 
 ## Getting started
 
@@ -24,12 +18,12 @@ The main reason organizations choose to utilize a LDAP server is to keep the ent
 
 There are many commercial and open source [directory servers](https://en.wikipedia.org/wiki/Directory_service#LDAP_implementations) that support the LDAP protocol. Deciding on the right directory server highly depends on the existing IT environment in which the server will be integrated with.
 
-For example, [Active Directory](https://technet.microsoft.com/en-us/library/hh831484(v=ws.11).aspx) is generally favored in a primarily Windows environment, as this allows quick integration with existing services. Other popular directory services include:
+For example, [Active Directory](https://docs.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2012-R2-and-2012/hh831484(v=ws.11)) is generally favored in a primarily Windows environment, as this allows quick integration with existing services. Other popular directory services include:
 
-- [Oracle Internet Directory](http://www.oracle.com/technetwork/middleware/id-mgmt/overview/index-082035.html)
+- [Oracle Internet Directory](https://www.oracle.com/middleware/technologies/internet-directory.html)
 - [OpenLDAP](http://www.openldap.org/)
 - [389 Directory](http://directory.fedoraproject.org/)
-- [OpenDJ](https://forgerock.org/opendj/)
+- [OpenDJ (Renamed to Foregerock Directory Services)](https://www.forgerock.com/platform/directory-services)
 - [ApacheDS](https://directory.apache.org/)
 
 > GitLab uses the [Net::LDAP](https://rubygems.org/gems/net-ldap) library under the hood. This means it supports all [IETF](https://tools.ietf.org/html/rfc2251) compliant LDAPv3 servers.
@@ -38,9 +32,9 @@ For example, [Active Directory](https://technet.microsoft.com/en-us/library/hh83
 
 We won't cover the installation and configuration of Windows Server or Active Directory Domain Services in this tutorial. There are a number of resources online to guide you through this process:
 
-- Install Windows Server 2012  - (_technet.microsoft.com_) - [Installing Windows Server 2012 ](https://technet.microsoft.com/en-us/library/jj134246(v=ws.11).aspx)
+- Install Windows Server 2012  - (`technet.microsoft.com`) - [Installing Windows Server 2012](https://docs.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2012-R2-and-2012/jj134246(v=ws.11))
 
-- Install Active Directory Domain Services (AD DS) (_technet.microsoft.com_)- [Install Active Directory Domain Services](https://technet.microsoft.com/windows-server-docs/identity/ad-ds/deploy/install-active-directory-domain-services--level-100-#BKMK_PS)
+- Install Active Directory Domain Services (AD DS) (`technet.microsoft.com`)- [Install Active Directory Domain Services](https://docs.microsoft.com/en-us/windows-server/identity/ad-ds/deploy/install-active-directory-domain-services--level-100-#BKMK_PS)
 
 > **Shortcut:** You can quickly install AD DS via PowerShell using
 `Install-WindowsFeature AD-Domain-Services -IncludeManagementTools`
@@ -103,15 +97,15 @@ People Ops US     GitLab.org/GitLab INT/Global Groups/People Ops US
 Global Admins     GitLab.org/GitLab INT/Global Groups/Global Admins
 ```
 
-> See [more information](https://technet.microsoft.com/en-us/library/ff730967.aspx) on searching Active Directory with Windows PowerShell from [The Scripting Guys](https://technet.microsoft.com/en-us/scriptcenter/dd901334.aspx)
+> See [more information](https://docs.microsoft.com/en-us/previous-versions/windows/it-pro/windows-powershell-1.0/ff730967(v=technet.10)) on searching Active Directory with Windows PowerShell from [The Scripting Guys](https://devblogs.microsoft.com/scripting/)
 
 ## GitLab LDAP configuration
 
-The initial configuration of LDAP in GitLab requires changes to the `gitlab.rb` configuration file. Below is an example of a complete configuration using an Active Directory.
+The initial configuration of LDAP in GitLab requires changes to the `gitlab.rb` configuration file (`/etc/gitlab/gitlab.rb`). Below is an example of a complete configuration using an Active Directory.
 
 The two Active Directory specific values are `active_directory: true` and `uid: 'sAMAccountName'`. `sAMAccountName` is an attribute returned by Active Directory used for GitLab usernames. See the example output from `ldapsearch` for a full list of attributes a "person" object (user) has in **AD** - [`ldapsearch` example](#using-ldapsearch-unix)
 
-> Both group_base and admin_group configuration options are only available in GitLab Enterprise Edition. See [GitLab EE - LDAP Features](#gitlab-enterprise-edition---ldap-features)
+> Both group_base and admin_group configuration options are only available in GitLab Enterprise Edition. See [GitLab EE - LDAP Features](../how_to_configure_ldap_gitlab_ee/index.html#gitlab-enterprise-edition---ldap-features) **(STARTER ONLY)**
 
 ### Example `gitlab.rb` LDAP
 
@@ -145,7 +139,7 @@ Securing LDAP (enabling LDAPS) on Windows Server 2012 involves installing a vali
 
 > By default a LDAP service listens for connections on TCP and UDP port 389. LDAPS (LDAP over SSL) listens on port 636
 
-### Testing you AD server
+### Testing your AD server
 
 #### Using **AdFind** (Windows)
 
@@ -259,7 +253,7 @@ If `allow_username_or_email_login` is enabled in the LDAP configuration, GitLab 
 
 ## LDAP extended features on GitLab EE
 
-With [GitLab Enterprise Edition (EE)](https://about.gitlab.com/gitlab-ee/), besides everything we just described, you'll
+With [GitLab Enterprise Edition (EE)](https://about.gitlab.com/pricing/), besides everything we just described, you'll
 have extended functionalities with LDAP, such as:
 
 - Group sync
@@ -267,4 +261,16 @@ have extended functionalities with LDAP, such as:
 - Updating user permissions
 - Multiple LDAP servers
 
-Read through the article on [LDAP for GitLab EE](https://docs.gitlab.com/ee/administration/auth/how_to_configure_ldap_gitlab_ee/) for an overview.
+Read through the article on [LDAP for GitLab EE](../how_to_configure_ldap_gitlab_ee/index.md) **(STARTER ONLY)** for an overview.
+
+<!-- ## Troubleshooting
+
+Include any troubleshooting steps that you can foresee. If you know beforehand what issues
+one might have when setting this up, or when something is changed, or on upgrading, it's
+important to describe those, too. Think of things that may go wrong and include them here.
+This is important to minimize requests for support, and to avoid doc comments with
+questions that you know someone might ask.
+
+Each scenario can be a third-level heading, e.g. `### Getting error message X`.
+If you have none to add when creating a doc, leave this section in place
+but commented out to help encourage others to add to it in the future. -->

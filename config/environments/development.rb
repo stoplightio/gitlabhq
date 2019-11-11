@@ -7,11 +7,9 @@ Rails.application.configure do
   config.cache_classes = false
 
   # Show full error reports and disable caching
+  config.active_record.verbose_query_logs  = true
   config.consider_all_requests_local       = true
   config.action_controller.perform_caching = false
-
-  # Don't care if the mailer can't send
-  config.action_mailer.raise_delivery_errors = false
 
   # Print deprecation notices to the Rails logger
   config.active_support.deprecation = :log
@@ -37,12 +35,19 @@ Rails.application.configure do
   config.action_mailer.default_url_options = { host: 'localhost', port: 3000 }
   # Open sent mails in browser
   config.action_mailer.delivery_method = :letter_opener_web
+  # Log mail delivery errors
+  config.action_mailer.raise_delivery_errors = true
   # Don't make a mess when bootstrapping a development environment
   config.action_mailer.perform_deliveries = (ENV['BOOTSTRAP'] != '1')
-  config.action_mailer.preview_path = 'spec/mailers/previews'
+  config.action_mailer.preview_path = 'app/mailers/previews'
 
   config.eager_load = false
 
   # Do not log asset requests
   config.assets.quiet = true
+
+  config.allow_concurrency = defined?(::Puma)
+
+  # BetterErrors live shell (REPL) on every stack frame
+  BetterErrors::Middleware.allow_ip!("127.0.0.1/0")
 end

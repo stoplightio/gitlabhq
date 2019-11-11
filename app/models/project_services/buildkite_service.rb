@@ -1,9 +1,11 @@
+# frozen_string_literal: true
+
 require "addressable/uri"
 
 class BuildkiteService < CiService
   include ReactiveService
 
-  ENDPOINT = "https://buildkite.com".freeze
+  ENDPOINT = "https://buildkite.com"
 
   prop_accessor :project_url, :token
   boolean_accessor :enable_ssl_verification

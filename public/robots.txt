@@ -8,7 +8,7 @@
 # Only some crawlers respect this setting, e.g. Googlebot does not
 # Crawl-delay: 1
 
-# Based on details in https://gitlab.com/gitlab-org/gitlab-ce/blob/master/config/routes.rb, https://gitlab.com/gitlab-org/gitlab-ce/blob/master/spec/routing, and using application
+# Based on details in https://gitlab.com/gitlab-org/gitlab/blob/master/config/routes.rb, https://gitlab.com/gitlab-org/gitlab/blob/master/spec/routing, and using application
 User-Agent: *
 Disallow: /autocomplete/users
 Disallow: /search
@@ -21,6 +21,8 @@ Disallow: /groups/new
 Disallow: /groups/*/edit
 Disallow: /users
 Disallow: /help
+# Only specifically allow the Sign In page to avoid very ugly search results
+Allow: /users/sign_in
 
 # Global snippets
 User-Agent: *
@@ -68,3 +70,5 @@ Disallow: /*/*/hooks
 Disallow: /*/*/services
 Disallow: /*/*/protected_branches
 Disallow: /*/*/uploads/
+Disallow: /*/-/group_members
+Disallow: /*/project_members

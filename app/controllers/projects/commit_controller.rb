@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # Controller for a specific Commit
 #
 # Not to be confused with CommitsController, plural.
@@ -22,8 +24,10 @@ class Projects::CommitController < Projects::ApplicationController
     apply_diff_view_cookie!
 
     respond_to do |format|
-      format.html  { render }
-      format.diff  do
+      format.html do
+        render
+      end
+      format.diff do
         send_git_diff(@project.repository, @commit.diff_refs)
       end
       format.patch do
@@ -36,9 +40,10 @@ class Projects::CommitController < Projects::ApplicationController
     render_diff_for_path(@commit.diffs(diff_options))
   end
 
+  # rubocop: disable CodeReuse/ActiveRecord
   def pipelines
     @pipelines = @commit.pipelines.order(id: :desc)
-    @pipelines = @pipelines.where(ref: params[:ref]) if params[:ref]
+    @pipelines = @pipelines.where(ref: params[:ref]).page(params[:page]).per(30) if params[:ref]
 
     respond_to do |format|
       format.html
@@ -48,6 +53,7 @@ class Projects::CommitController < Projects::ApplicationController
         render json: {
           pipelines: PipelineSerializer
             .new(project: @project, current_user: @current_user)
+            .with_pagination(request, response)
             .represent(@pipelines),
           count: {
             all: @pipelines.count
@@ -56,9 +62,14 @@ class Projects::CommitController < Projects::ApplicationController
       end
     end
   end
+  # rubocop: enable CodeReuse/ActiveRecord
 
   def merge_requests
-    @merge_requests = @commit.merge_requests.map do |mr|
+    @merge_requests = MergeRequestsFinder.new(
+      current_user,
+      project_id: @project.id,
+      commit_sha: @commit.sha
+    ).execute.map do |mr|
       { iid: mr.iid, path: merge_request_path(mr), title: mr.title }
     end
 
@@ -99,7 +110,7 @@ class Projects::CommitController < Projects::ApplicationController
 
     @branch_name = create_new_branch? ? @commit.cherry_pick_branch_name : @start_branch
 
-    create_commit(Commits::CherryPickService, success_notice: "The #{@commit.change_type_title(current_user)} has been successfully cherry-picked.",
+    create_commit(Commits::CherryPickService, success_notice: "The #{@commit.change_type_title(current_user)} has been successfully cherry-picked into #{@branch_name}.",
                                               success_path: -> { successful_change_path }, failure_path: failed_change_path)
   end
 
@@ -124,7 +135,10 @@ class Projects::CommitController < Projects::ApplicationController
   end
 
   def commit
-    @noteable = @commit ||= @project.commit_by(oid: params[:id])
+    @noteable = @commit ||= @project.commit_by(oid: params[:id]).tap do |commit|
+      # preload author and their status for rendering
+      commit&.author&.status
+    end
   end
 
   def define_commit_vars
@@ -139,6 +153,7 @@ class Projects::CommitController < Projects::ApplicationController
     @environment = EnvironmentsFinder.new(@project, current_user, commit: @commit).execute.last
   end
 
+  # rubocop: disable CodeReuse/ActiveRecord
   def define_note_vars
     @noteable = @commit
     @note = @project.build_commit_note(commit)
@@ -171,6 +186,7 @@ class Projects::CommitController < Projects::ApplicationController
     @notes = (@grouped_diff_discussions.values.flatten + @discussions).flat_map(&:notes)
     @notes = prepare_notes_for_rendering(@notes, @commit)
   end
+  # rubocop: enable CodeReuse/ActiveRecord
 
   def assign_change_commit_vars
     @start_branch = params[:start_branch]

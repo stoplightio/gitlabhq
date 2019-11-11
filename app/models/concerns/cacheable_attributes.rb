@@ -1,39 +1,48 @@
+# frozen_string_literal: true
+
 module CacheableAttributes
   extend ActiveSupport::Concern
 
   included do
     after_commit { self.class.expire }
+
+    private_class_method :request_store_cache_key
   end
 
   class_methods do
     def cache_key
-      "#{name}:#{Gitlab::VERSION}:#{Gitlab.migrations_hash}:#{Rails.version}".freeze
+      "#{name}:#{Gitlab::VERSION}:#{Rails.version}"
     end
 
-    # Can be overriden
+    # Can be overridden
     def current_without_cache
       last
     end
 
-    # Can be overriden
+    # Can be overridden
     def defaults
       {}
     end
 
     def build_from_defaults(attributes = {})
-      new(defaults.merge(attributes))
+      final_attributes = defaults
+        .merge(attributes)
+        .stringify_keys
+        .slice(*column_names)
+
+      new(final_attributes)
     end
 
     def cached
-      if RequestStore.active?
-        RequestStore[:"#{name}_cached_attributes"] ||= retrieve_from_cache
-      else
-        retrieve_from_cache
-      end
+      Gitlab::SafeRequestStore[request_store_cache_key] ||= retrieve_from_cache
+    end
+
+    def request_store_cache_key
+      :"#{name}_cached_attributes"
     end
 
     def retrieve_from_cache
-      record = Rails.cache.read(cache_key)
+      record = cache_backend.read(cache_key)
       ensure_cache_setup if record.present?
 
       record
@@ -46,7 +55,7 @@ module CacheableAttributes
       current_without_cache.tap { |current_record| current_record&.cache! }
     rescue => e
       if Rails.env.production?
-        Rails.logger.warn("Cached record for #{name} couldn't be loaded, falling back to uncached record: #{e}")
+        Rails.logger.warn("Cached record for #{name} couldn't be loaded, falling back to uncached record: #{e}") # rubocop:disable Gitlab/RailsLogger
       else
         raise e
       end
@@ -55,7 +64,8 @@ module CacheableAttributes
     end
 
     def expire
-      Rails.cache.delete(cache_key)
+      Gitlab::SafeRequestStore.delete(request_store_cache_key)
+      cache_backend.delete(cache_key)
     rescue
       # Gracefully handle when Redis is not available. For example,
       # omnibus may fail here during gitlab:assets:compile.
@@ -66,9 +76,13 @@ module CacheableAttributes
       # to be loaded when read from cache: https://github.com/rails/rails/issues/27348
       define_attribute_methods
     end
+
+    def cache_backend
+      Rails.cache
+    end
   end
 
   def cache!
-    Rails.cache.write(self.class.cache_key, self)
+    self.class.cache_backend.write(self.class.cache_key, self, expires_in: 1.minute)
   end
 end

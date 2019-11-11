@@ -1,14 +1,17 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Projects::ForkService do
   include ProjectForksHelper
-  let(:gitlab_shell) { Gitlab::Shell.new }
+  include Gitlab::ShellAdapter
+
   context 'when forking a new project' do
     describe 'fork by user' do
       before do
         @from_user = create(:user)
         @from_namespace = @from_user.namespace
-        avatar = fixture_file_upload(Rails.root + "spec/fixtures/dk.png", "image/png")
+        avatar = fixture_file_upload("spec/fixtures/dk.png", "image/png")
         @from_project = create(:project,
                                :repository,
                                creator_id: @from_user.id,
@@ -31,6 +34,10 @@ describe Projects::ForkService do
 
           it { is_expected.not_to be_persisted }
           it { expect(subject.errors[:forked_from_project_id]).to eq(['is forbidden']) }
+
+          it 'does not create a fork network' do
+            expect { subject }.not_to change { @from_project.reload.fork_network }
+          end
         end
 
         describe "successfully creates project in the user namespace" do
@@ -43,10 +50,11 @@ describe Projects::ForkService do
           it { expect(to_project.star_count).to be_zero }
           it { expect(to_project.description).to eq(@from_project.description) }
           it { expect(to_project.avatar.file).to be_exists }
+          it { expect(to_project.ci_config_path).to eq(@from_project.ci_config_path) }
 
           # This test is here because we had a bug where the from-project lost its
           # avatar after being forked.
-          # https://gitlab.com/gitlab-org/gitlab-ce/issues/26158
+          # https://gitlab.com/gitlab-org/gitlab-foss/issues/26158
           it "after forking the from-project still has its avatar" do
             # If we do not fork the project first we cannot detect the bug.
             expect(to_project).to be_persisted
@@ -69,6 +77,12 @@ describe Projects::ForkService do
             expect(fork_network).not_to be_nil
             expect(fork_network.root_project).to eq(@from_project)
             expect(fork_network.projects).to contain_exactly(@from_project, to_project)
+          end
+
+          it 'imports the repository of the forked project' do
+            to_project = fork_project(@from_project, @to_user, repository: true)
+
+            expect(to_project.empty_repo?).to be_falsy
           end
         end
 
@@ -103,24 +117,35 @@ describe Projects::ForkService do
         end
       end
 
-      context 'repository already exists' do
+      context 'repository in legacy storage already exists' do
         let(:repository_storage) { 'default' }
         let(:repository_storage_path) { Gitlab.config.repositories.storages[repository_storage].legacy_disk_path }
+        let(:params) { { namespace: @to_user.namespace } }
 
         before do
-          gitlab_shell.create_repository(repository_storage, "#{@to_user.namespace.full_path}/#{@from_project.path}")
+          stub_application_setting(hashed_storage_enabled: false)
+          gitlab_shell.create_repository(repository_storage, "#{@to_user.namespace.full_path}/#{@from_project.path}", "#{@to_user.namespace.full_path}/#{@from_project.path}")
         end
 
         after do
           gitlab_shell.remove_repository(repository_storage, "#{@to_user.namespace.full_path}/#{@from_project.path}")
         end
 
-        it 'does not allow creation' do
-          to_project = fork_project(@from_project, @to_user, namespace: @to_user.namespace)
+        subject { fork_project(@from_project, @to_user, params) }
 
-          expect(to_project).not_to be_persisted
-          expect(to_project.errors.messages).to have_key(:base)
-          expect(to_project.errors.messages[:base].first).to match('There is already a repository with that name on disk')
+        it 'does not allow creation' do
+          expect(subject).not_to be_persisted
+          expect(subject.errors.messages).to have_key(:base)
+          expect(subject.errors.messages[:base].first).to match('There is already a repository with that name on disk')
+        end
+
+        context 'when repository disk validation is explicitly skipped' do
+          let(:params) { super().merge(skip_disk_validation: true) }
+
+          it 'allows fork project creation' do
+            expect(subject).to be_persisted
+            expect(subject.errors.messages).to be_empty
+          end
         end
       end
 
@@ -132,10 +157,34 @@ describe Projects::ForkService do
         end
       end
 
+      context "CI/CD settings" do
+        let(:to_project) { fork_project(@from_project, @to_user) }
+
+        context "when origin has git depth specified" do
+          before do
+            @from_project.update(ci_default_git_depth: 42)
+          end
+
+          it "inherits default_git_depth from the origin project" do
+            expect(to_project.ci_default_git_depth).to eq(42)
+          end
+        end
+
+        context "when origin does not define git depth" do
+          before do
+            @from_project.update!(ci_default_git_depth: nil)
+          end
+
+          it "the fork has git depth set to 0" do
+            expect(to_project.ci_default_git_depth).to eq(0)
+          end
+        end
+      end
+
       context "when project has restricted visibility level" do
         context "and only one visibility level is restricted" do
           before do
-            @from_project.update_attributes(visibility_level: Gitlab::VisibilityLevel::INTERNAL)
+            @from_project.update(visibility_level: Gitlab::VisibilityLevel::INTERNAL)
             stub_application_setting(restricted_visibility_levels: [Gitlab::VisibilityLevel::INTERNAL])
           end
 
@@ -167,7 +216,8 @@ describe Projects::ForkService do
         @project     = create(:project, :repository,
                               creator_id: @group_owner.id,
                               star_count: 777,
-                              description: 'Wow, such a cool project!')
+                              description: 'Wow, such a cool project!',
+                              ci_config_path: 'debian/salsa-ci.yml')
         @group = create(:group)
         @group.add_user(@group_owner, GroupMember::OWNER)
         @group.add_user(@developer,   GroupMember::DEVELOPER)
@@ -180,14 +230,15 @@ describe Projects::ForkService do
         it 'group owner successfully forks project into the group' do
           to_project = fork_project(@project, @group_owner, @opts)
 
-          expect(to_project).to             be_persisted
-          expect(to_project.errors).to      be_empty
-          expect(to_project.owner).to       eq(@group)
-          expect(to_project.namespace).to   eq(@group)
-          expect(to_project.name).to        eq(@project.name)
-          expect(to_project.path).to        eq(@project.path)
-          expect(to_project.description).to eq(@project.description)
-          expect(to_project.star_count).to  be_zero
+          expect(to_project).to                be_persisted
+          expect(to_project.errors).to         be_empty
+          expect(to_project.owner).to          eq(@group)
+          expect(to_project.namespace).to      eq(@group)
+          expect(to_project.name).to           eq(@project.name)
+          expect(to_project.path).to           eq(@project.path)
+          expect(to_project.description).to    eq(@project.description)
+          expect(to_project.ci_config_path).to eq(@project.ci_config_path)
+          expect(to_project.star_count).to     be_zero
         end
       end
 
@@ -225,6 +276,33 @@ describe Projects::ForkService do
     end
   end
 
+  context 'when forking with object pools' do
+    let(:fork_from_project) { create(:project, :public) }
+    let(:forker) { create(:user) }
+
+    before do
+      stub_feature_flags(object_pools: true)
+    end
+
+    context 'when no pool exists' do
+      it 'creates a new object pool' do
+        forked_project = fork_project(fork_from_project, forker)
+
+        expect(forked_project.pool_repository).to eq(fork_from_project.pool_repository)
+      end
+    end
+
+    context 'when a pool already exists' do
+      let!(:pool_repository) { create(:pool_repository, source_project: fork_from_project) }
+
+      it 'joins the object pool' do
+        forked_project = fork_project(fork_from_project, forker)
+
+        expect(forked_project.pool_repository).to eq(fork_from_project.pool_repository)
+      end
+    end
+  end
+
   context 'when linking fork to an existing project' do
     let(:fork_from_project) { create(:project, :public) }
     let(:fork_to_project) { create(:project, :public) }
@@ -247,10 +325,12 @@ describe Projects::ForkService do
 
     context 'if project is not forked' do
       it 'creates fork relation' do
-        expect(fork_to_project.forked?).to be false
+        expect(fork_to_project.forked?).to be_falsy
         expect(forked_from_project(fork_to_project)).to be_nil
 
         subject.execute(fork_to_project)
+
+        fork_to_project.reload
 
         expect(fork_to_project.forked?).to be true
         expect(forked_from_project(fork_to_project)).to eq fork_from_project
@@ -263,6 +343,25 @@ describe Projects::ForkService do
         subject.execute(fork_to_project)
 
         expect(fork_from_project.forks_count).to eq(1)
+      end
+
+      it 'leaves no LFS objects dangling' do
+        create(:lfs_objects_project, project: fork_to_project)
+
+        expect { subject.execute(fork_to_project) }
+          .to change { fork_to_project.lfs_objects_projects.count }
+          .to(0)
+      end
+
+      context 'if the fork is not allowed' do
+        let(:fork_from_project) { create(:project, :private) }
+
+        it 'does not delete the LFS objects' do
+          create(:lfs_objects_project, project: fork_to_project)
+
+          expect { subject.execute(fork_to_project) }
+            .not_to change { fork_to_project.lfs_objects_projects.size }
+        end
       end
     end
   end

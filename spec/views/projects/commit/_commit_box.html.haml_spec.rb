@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe 'projects/commit/_commit_box.html.haml' do
@@ -9,6 +11,7 @@ describe 'projects/commit/_commit_box.html.haml' do
     assign(:commit, project.commit)
     allow(view).to receive(:current_user).and_return(user)
     allow(view).to receive(:can_collaborate_with_project?).and_return(false)
+    project.add_developer(user)
   end
 
   it 'shows the commit SHA' do
@@ -48,7 +51,6 @@ describe 'projects/commit/_commit_box.html.haml' do
   context 'viewing a commit' do
     context 'as a developer' do
       before do
-        project.add_developer(user)
         allow(view).to receive(:can_collaborate_with_project?).and_return(true)
       end
 
@@ -60,6 +62,10 @@ describe 'projects/commit/_commit_box.html.haml' do
     end
 
     context 'as a non-developer' do
+      before do
+        project.add_guest(user)
+      end
+
       it 'does not have a link to create a new tag' do
         render
 

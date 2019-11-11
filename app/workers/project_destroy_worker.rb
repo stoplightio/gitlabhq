@@ -1,6 +1,10 @@
+# frozen_string_literal: true
+
 class ProjectDestroyWorker
   include ApplicationWorker
   include ExceptionBacktrace
+
+  feature_category :source_code_management
 
   def perform(project_id, user_id, params)
     project = Project.find(project_id)

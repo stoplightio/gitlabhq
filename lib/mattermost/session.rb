@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Mattermost
   class NoSessionError < Mattermost::Error
     def message
@@ -39,7 +41,7 @@ module Mattermost
         begin
           yield self
         rescue Errno::ECONNREFUSED => e
-          Rails.logger.error(e.message + "\n" + e.backtrace.join("\n"))
+          Rails.logger.error(e.message + "\n" + e.backtrace.join("\n")) # rubocop:disable Gitlab/RailsLogger
           raise Mattermost::NoSessionError
         ensure
           destroy
@@ -120,7 +122,7 @@ module Mattermost
 
       @oauth_uri = nil
 
-      response = get('/oauth/gitlab/login', follow_redirects: false, format: 'text/html')
+      response = get('/oauth/gitlab/login', follow_redirects: false)
       return unless (300...400) === response.code
 
       redirect_uri = response.headers['location']

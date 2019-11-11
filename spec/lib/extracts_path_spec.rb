@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe ExtractsPath do
@@ -41,6 +43,36 @@ describe ExtractsPath do
         assign_ref_vars
 
         expect(@id).to start_with('foo%20bar/')
+      end
+    end
+
+    context 'ref contains trailing space' do
+      let(:ref) { 'master ' }
+
+      it 'strips surrounding space' do
+        assign_ref_vars
+
+        expect(@ref).to eq('master')
+      end
+    end
+
+    context 'ref contains leading space' do
+      let(:ref) { ' master ' }
+
+      it 'strips surrounding space' do
+        assign_ref_vars
+
+        expect(@ref).to eq('master')
+      end
+    end
+
+    context 'ref contains space in the middle' do
+      let(:ref) { 'master plan ' }
+
+      it 'returns 404' do
+        expect(self).to receive(:render_404)
+
+        assign_ref_vars
       end
     end
 
@@ -201,6 +233,22 @@ describe ExtractsPath do
 
     it 'returns nil if there are no matching refs' do
       expect(extract_ref_without_atom('foo.atom')).to eq(nil)
+    end
+  end
+
+  describe '#lfs_blob_ids' do
+    let(:tag) { @project.repository.add_tag(@project.owner, 'my-annotated-tag', 'master', 'test tag') }
+    let(:ref) { tag.target }
+    let(:params) { { ref: ref, path: 'README.md' } }
+
+    before do
+      @project = create(:project, :repository)
+    end
+
+    it 'handles annotated tags' do
+      assign_ref_vars
+
+      expect(lfs_blob_ids).to eq([])
     end
   end
 end

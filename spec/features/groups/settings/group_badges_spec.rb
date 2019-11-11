@@ -1,12 +1,14 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
-feature 'Group Badges' do
+describe 'Group Badges' do
   include WaitForRequests
 
   let(:user) { create(:user) }
   let(:group) { create(:group) }
-  let(:badge_link_url) { 'https://gitlab.com/gitlab-org/gitlab-ee/commits/master'}
-  let(:badge_image_url) { 'https://gitlab.com/gitlab-org/gitlab-ee/badges/master/build.svg'}
+  let(:badge_link_url) { 'https://gitlab.com/gitlab-org/gitlab/commits/master'}
+  let(:badge_image_url) { 'https://gitlab.com/gitlab-org/gitlab/badges/master/build.svg'}
   let!(:badge_1) { create(:group_badge, group: group) }
   let!(:badge_2) { create(:group_badge, group: group) }
 
@@ -14,7 +16,7 @@ feature 'Group Badges' do
     group.add_owner(user)
     sign_in(user)
 
-    visit(group_settings_badges_path(group))
+    visit(edit_group_path(group))
   end
 
   it 'shows a list of badges', :js do

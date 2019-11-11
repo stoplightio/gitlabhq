@@ -1,16 +1,16 @@
 - breadcrumb_title "Repository"
-- @no_container = true
-
 - page_title @blob.path, @ref
+- signatures_path = namespace_project_signatures_path(namespace_id: @project.namespace.full_path, project_id: @project.path, id: @last_commit, limit: 1)
 
-%div{ class: container_class }
-  = render 'projects/last_push'
+.js-signature-container{ data: { 'signatures-path': signatures_path } }
 
-  #tree-holder.tree-holder
-    = render 'blob', blob: @blob
+= render 'projects/last_push'
 
-    - if can_modify_blob?(@blob)
-      = render 'projects/blob/remove'
+#tree-holder.tree-holder
+  = render 'blob', blob: @blob
 
-    - title = "Replace #{@blob.name}"
-    = render 'projects/blob/upload', title: title, placeholder: title, button_title: 'Replace file', form_path: project_update_blob_path(@project, @id), method: :put
+  - if can_modify_blob?(@blob)
+    = render 'projects/blob/remove'
+
+  - title = "Replace #{@blob.name}"
+  = render 'projects/blob/upload', title: title, placeholder: title, button_title: 'Replace file', form_path: project_update_blob_path(@project, @id), method: :put

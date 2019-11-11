@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe HipchatService do
@@ -96,12 +98,11 @@ describe HipchatService do
     context 'tag_push events' do
       let(:push_sample_data) do
         Gitlab::DataBuilder::Push.build(
-          project,
-          user,
-          Gitlab::Git::BLANK_SHA,
-          '1' * 40,
-          'refs/tags/test',
-          [])
+          project: project,
+          user: user,
+          oldrev: Gitlab::Git::BLANK_SHA,
+          newrev: '1' * 40,
+          ref: 'refs/tags/test')
       end
 
       it "calls Hipchat API for tag push events" do
@@ -300,7 +301,7 @@ describe HipchatService do
     end
 
     context 'pipeline events' do
-      let(:pipeline) { create(:ci_empty_pipeline, user: create(:user)) }
+      let(:pipeline) { create(:ci_empty_pipeline, user: project.owner) }
       let(:data) { Gitlab::DataBuilder::Pipeline.build(pipeline) }
 
       context 'for failed' do
@@ -384,6 +385,24 @@ describe HipchatService do
 
           expect(hipchat.__send__(:message_options, data)).to eq({ notify: false, color: 'red' })
         end
+      end
+    end
+  end
+
+  context 'with UrlBlocker' do
+    let(:user)    { create(:user) }
+    let(:project) { create(:project, :repository) }
+    let(:hipchat) { create(:hipchat_service, project: project, properties: { room: 'test' }) }
+    let(:push_sample_data) { Gitlab::DataBuilder::Push.build_sample(project, user) }
+
+    describe '#execute' do
+      before do
+        hipchat.server = 'http://localhost:9123'
+      end
+
+      it 'raises UrlBlocker for localhost' do
+        expect(Gitlab::UrlBlocker).to receive(:validate!).and_call_original
+        expect { hipchat.execute(push_sample_data) }.to raise_error(Gitlab::HTTP::BlockedUrlError)
       end
     end
   end

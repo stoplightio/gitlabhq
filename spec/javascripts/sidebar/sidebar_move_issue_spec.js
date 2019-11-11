@@ -1,15 +1,19 @@
 import $ from 'jquery';
-import _ from 'underscore';
-import Vue from 'vue';
+import MockAdapter from 'axios-mock-adapter';
+import axios from '~/lib/utils/axios_utils';
 import SidebarMediator from '~/sidebar/sidebar_mediator';
 import SidebarStore from '~/sidebar/stores/sidebar_store';
 import SidebarService from '~/sidebar/services/sidebar_service';
 import SidebarMoveIssue from '~/sidebar/lib/sidebar_move_issue';
 import Mock from './mock_data';
 
-describe('SidebarMoveIssue', function () {
+describe('SidebarMoveIssue', function() {
+  let mock;
+
   beforeEach(() => {
-    Vue.http.interceptors.push(Mock.sidebarMockInterceptor);
+    mock = new MockAdapter(axios);
+    const mockData = Mock.responseMap.GET['/autocomplete/projects?project_id=15'];
+    mock.onGet('/autocomplete/projects?project_id=15').reply(200, mockData);
     this.mediator = new SidebarMediator(Mock.mediator);
     this.$content = $(`
       <div class="dropdown">
@@ -37,8 +41,7 @@ describe('SidebarMoveIssue', function () {
     SidebarMediator.singleton = null;
 
     this.sidebarMoveIssue.destroy();
-
-    Vue.http.interceptors = _.without(Vue.http.interceptors, Mock.sidebarMockInterceptor);
+    mock.restore();
   });
 
   describe('init', () => {
@@ -72,11 +75,13 @@ describe('SidebarMoveIssue', function () {
       expect($.fn.glDropdown).toHaveBeenCalled();
     });
 
-    it('escapes html from project name', (done) => {
+    it('escapes html from project name', done => {
       this.$toggleButton.dropdown('toggle');
 
       setTimeout(() => {
-        expect(this.$content.find('.js-move-issue-dropdown-item')[1].innerHTML.trim()).toEqual('&lt;img src=x onerror=alert(document.domain)&gt; foo / bar');
+        expect(this.$content.find('.js-move-issue-dropdown-item')[1].innerHTML.trim()).toEqual(
+          '&lt;img src=x onerror=alert(document.domain)&gt; foo / bar',
+        );
         done();
       });
     });
@@ -94,7 +99,7 @@ describe('SidebarMoveIssue', function () {
       expect(this.$confirmButton.hasClass('is-loading')).toBe(true);
     });
 
-    it('should remove loading state from confirm button on failure', (done) => {
+    it('should remove loading state from confirm button on failure', done => {
       spyOn(window, 'Flash');
       spyOn(this.mediator, 'moveIssue').and.returnValue(Promise.reject());
       this.mediator.setMoveToProjectId(7);
@@ -121,7 +126,7 @@ describe('SidebarMoveIssue', function () {
     });
   });
 
-  it('should set moveToProjectId on dropdown item "No project" click', (done) => {
+  it('should set moveToProjectId on dropdown item "No project" click', done => {
     spyOn(this.mediator, 'setMoveToProjectId');
 
     // Open the dropdown
@@ -129,7 +134,10 @@ describe('SidebarMoveIssue', function () {
 
     // Wait for the autocomplete request to finish
     setTimeout(() => {
-      this.$content.find('.js-move-issue-dropdown-item').eq(0).trigger('click');
+      this.$content
+        .find('.js-move-issue-dropdown-item')
+        .eq(0)
+        .trigger('click');
 
       expect(this.mediator.setMoveToProjectId).toHaveBeenCalledWith(0);
       expect(this.$confirmButton.prop('disabled')).toBeTruthy();
@@ -137,7 +145,7 @@ describe('SidebarMoveIssue', function () {
     }, 0);
   });
 
-  it('should set moveToProjectId on dropdown item click', (done) => {
+  it('should set moveToProjectId on dropdown item click', done => {
     spyOn(this.mediator, 'setMoveToProjectId');
 
     // Open the dropdown
@@ -145,7 +153,10 @@ describe('SidebarMoveIssue', function () {
 
     // Wait for the autocomplete request to finish
     setTimeout(() => {
-      this.$content.find('.js-move-issue-dropdown-item').eq(1).trigger('click');
+      this.$content
+        .find('.js-move-issue-dropdown-item')
+        .eq(1)
+        .trigger('click');
 
       expect(this.mediator.setMoveToProjectId).toHaveBeenCalledWith(20);
       expect(this.$confirmButton.attr('disabled')).toBe(undefined);

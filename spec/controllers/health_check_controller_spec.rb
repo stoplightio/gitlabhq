@@ -1,9 +1,10 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe HealthCheckController do
   include StubENV
 
-  let(:json_response) { JSON.parse(response.body) }
   let(:xml_response) { Hash.from_xml(response.body)['hash'] }
   let(:token) { Gitlab::CurrentSettings.health_check_access_token }
   let(:whitelisted_ip) { '127.0.0.1' }
@@ -32,14 +33,14 @@ describe HealthCheckController do
 
           get :index
 
-          expect(response).to be_success
+          expect(response).to be_successful
           expect(response.content_type).to eq 'text/plain'
         end
 
         it 'supports passing the token in query params' do
-          get :index, token: token
+          get :index, params: { token: token }
 
-          expect(response).to be_success
+          expect(response).to be_successful
           expect(response.content_type).to eq 'text/plain'
         end
       end
@@ -53,14 +54,14 @@ describe HealthCheckController do
       it 'supports successful plaintext response' do
         get :index
 
-        expect(response).to be_success
+        expect(response).to be_successful
         expect(response.content_type).to eq 'text/plain'
       end
 
       it 'supports successful json response' do
         get :index, format: :json
 
-        expect(response).to be_success
+        expect(response).to be_successful
         expect(response.content_type).to eq 'application/json'
         expect(json_response['healthy']).to be true
       end
@@ -68,15 +69,15 @@ describe HealthCheckController do
       it 'supports successful xml response' do
         get :index, format: :xml
 
-        expect(response).to be_success
+        expect(response).to be_successful
         expect(response.content_type).to eq 'application/xml'
         expect(xml_response['healthy']).to be true
       end
 
       it 'supports successful responses for specific checks' do
-        get :index, checks: 'email', format: :json
+        get :index, params: { checks: 'email' }, format: :json
 
-        expect(response).to be_success
+        expect(response).to be_successful
         expect(response.content_type).to eq 'application/json'
         expect(json_response['healthy']).to be true
       end
@@ -124,7 +125,7 @@ describe HealthCheckController do
       end
 
       it 'supports failure responses for specific checks' do
-        get :index, checks: 'email', format: :json
+        get :index, params: { checks: 'email' }, format: :json
 
         expect(response).to have_gitlab_http_status(500)
         expect(response.content_type).to eq 'application/json'

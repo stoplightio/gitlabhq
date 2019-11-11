@@ -1,37 +1,35 @@
-- @no_container = true
-- page_title "System Info"
+- page_title _('System Info')
 
-%div{ class: container_class }
-  .prepend-top-default
-  .row
-    .col-sm-4
-      .card.bg-light.light-well
-        %h4 CPU
-        .data
-          - if @cpus
-            %h1 #{@cpus.length} cores
-          - else
-            = icon('warning', class: 'text-warning')
-            Unable to collect CPU info
-    .col-sm-4
-      .card.bg-light.light-well
-        %h4 Memory Usage
-        .data
-          - if @memory
-            %h1 #{number_to_human_size(@memory.active_bytes)} / #{number_to_human_size(@memory.total_bytes)}
-          - else
-            = icon('warning', class: 'text-warning')
-            Unable to collect memory info
-    .col-sm-4
-      .card.bg-light.light-well
-        %h4 Disk Usage
-        .data
+.prepend-top-default
+.row
+  .col-sm
+    .bg-light.light-well
+      %h4= _('CPU')
+      .data
+        - if @cpus
+          %h2= _('%{cores} cores') % { cores: @cpus.length }
+        - else
+          = icon('warning', class: 'text-warning')
+          = _('Unable to collect CPU info')
+    .bg-light.light-well.prepend-top-default
+      %h4= _('Memory Usage')
+      .data
+        - if @memory
+          %h2 #{number_to_human_size(@memory.active_bytes)} / #{number_to_human_size(@memory.total_bytes)}
+        - else
+          = icon('warning', class: 'text-warning')
+          = _('Unable to collect memory info')
+    .bg-light.light-well.prepend-top-default
+      %h4= _('Uptime')
+      .data
+        %h2= distance_of_time_in_words_to_now(Rails.application.config.booted_at)
+  .col-sm
+    .bg-light.light-well
+      %h4= _('Disk Usage')
+      .data
+        %ul
           - @disks.each do |disk|
-            %h1 #{number_to_human_size(disk[:bytes_used])} / #{number_to_human_size(disk[:bytes_total])}
-            %p= disk[:disk_name]
-            %p= disk[:mount_path]
-    .col-sm-4
-      .card.bg-light.light-well
-        %h4 Uptime
-        .data
-          %h1= distance_of_time_in_words_to_now(Rails.application.config.booted_at)
+            %li
+              %h2 #{number_to_human_size(disk[:bytes_used])} / #{number_to_human_size(disk[:bytes_total])}
+              %p= disk[:disk_name]
+              %p= disk[:mount_path]

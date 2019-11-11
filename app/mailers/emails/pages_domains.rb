@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Emails
   module PagesDomains
     def pages_domain_enabled_email(domain, recipient)
@@ -5,7 +7,7 @@ module Emails
       @project = domain.project
 
       mail(
-        to: recipient.notification_email,
+        to: recipient.notification_email_for(@project.group),
         subject: subject("GitLab Pages domain '#{domain.domain}' has been enabled")
       )
     end
@@ -15,7 +17,7 @@ module Emails
       @project = domain.project
 
       mail(
-        to: recipient.notification_email,
+        to: recipient.notification_email_for(@project.group),
         subject: subject("GitLab Pages domain '#{domain.domain}' has been disabled")
       )
     end
@@ -25,7 +27,7 @@ module Emails
       @project = domain.project
 
       mail(
-        to: recipient.notification_email,
+        to: recipient.notification_email_for(@project.group),
         subject: subject("Verification succeeded for GitLab Pages domain '#{domain.domain}'")
       )
     end
@@ -35,7 +37,7 @@ module Emails
       @project = domain.project
 
       mail(
-        to: recipient.notification_email,
+        to: recipient.notification_email_for(@project.group),
         subject: subject("ACTION REQUIRED: Verification failed for GitLab Pages domain '#{domain.domain}'")
       )
     end

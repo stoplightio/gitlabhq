@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe EnvironmentsFinder do
@@ -7,12 +9,12 @@ describe EnvironmentsFinder do
     let(:environment) { create(:environment, project: project) }
 
     before do
-      project.add_master(user)
+      project.add_maintainer(user)
     end
 
     context 'tagged deployment' do
       before do
-        create(:deployment, environment: environment, ref: 'v1.1.0', tag: true, sha: project.commit.id)
+        create(:deployment, :success, environment: environment, ref: 'v1.1.0', tag: true, sha: project.commit.id)
       end
 
       it 'returns environment when with_tags is set' do
@@ -33,7 +35,7 @@ describe EnvironmentsFinder do
 
     context 'branch deployment' do
       before do
-        create(:deployment, environment: environment, ref: 'master', sha: project.commit.id)
+        create(:deployment, :success, environment: environment, ref: 'master', sha: project.commit.id)
       end
 
       it 'returns environment when ref is set' do
@@ -59,7 +61,7 @@ describe EnvironmentsFinder do
 
     context 'commit deployment' do
       before do
-        create(:deployment, environment: environment, ref: 'master', sha: project.commit.id)
+        create(:deployment, :success, environment: environment, ref: 'master', sha: project.commit.id)
       end
 
       it 'returns environment' do
@@ -71,7 +73,7 @@ describe EnvironmentsFinder do
     context 'recently updated' do
       context 'when last deployment to environment is the most recent one' do
         before do
-          create(:deployment, environment: environment, ref: 'feature')
+          create(:deployment, :success, environment: environment, ref: 'feature')
         end
 
         it 'finds recently updated environment' do
@@ -82,8 +84,8 @@ describe EnvironmentsFinder do
 
       context 'when last deployment to environment is not the most recent' do
         before do
-          create(:deployment, environment: environment, ref: 'feature')
-          create(:deployment, environment: environment, ref: 'master')
+          create(:deployment, :success, environment: environment, ref: 'feature')
+          create(:deployment, :success, environment: environment, ref: 'master')
         end
 
         it 'does not find environment' do
@@ -96,8 +98,8 @@ describe EnvironmentsFinder do
         let(:second_environment) { create(:environment, project: project) }
 
         before do
-          create(:deployment, environment: environment, ref: 'feature')
-          create(:deployment, environment: second_environment, ref: 'feature')
+          create(:deployment, :success, environment: environment, ref: 'feature')
+          create(:deployment, :success, environment: second_environment, ref: 'feature')
         end
 
         it 'finds both environments' do

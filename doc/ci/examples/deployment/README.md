@@ -1,12 +1,14 @@
+---
+type: tutorial
+---
+
 # Using Dpl as deployment tool
 
-[Dpl](https://github.com/travis-ci/dpl) (dee-pee-ell) is a deploy tool made for
+[Dpl](https://github.com/travis-ci/dpl) (prouncounced like the letters D-P-L) is a deploy tool made for
 continuous deployment that's developed and used by Travis CI, but can also be
 used with GitLab CI.
 
->**Note:**
-We recommend to use Dpl if you're deploying to any of these of these services:
-https://github.com/travis-ci/dpl#supported-providers.
+Dpl can be used to deploy to any of the [supported providers](https://github.com/travis-ci/dpl#supported-providers).
 
 ## Requirements
 
@@ -34,7 +36,7 @@ The Dpl provides support for vast number of services, including: Heroku, Cloud F
 To use it simply define provider and any additional parameters required by the provider.
 
 For example if you want to use it to deploy your application to heroku, you need to specify `heroku` as provider, specify `api-key` and `app`.
-There's more and all possible parameters can be found here: https://github.com/travis-ci/dpl#heroku
+There's more and all possible parameters can be found here: <https://github.com/travis-ci/dpl#heroku>.
 
 ```yaml
 staging:
@@ -44,14 +46,14 @@ staging:
   - dpl --provider=heroku --app=my-app-staging --api-key=$HEROKU_STAGING_API_KEY
 ```
 
-In the above example we use Dpl to deploy `my-app-staging` to Heroku server with api-key stored in `HEROKU_STAGING_API_KEY` secure variable.
+In the above example we use Dpl to deploy `my-app-staging` to Heroku server with API key stored in `HEROKU_STAGING_API_KEY` secure variable.
 
 To use different provider take a look at long list of [Supported Providers](https://github.com/travis-ci/dpl#supported-providers).
 
 ## Using Dpl with Docker
 
-When you use GitLab Runner you most likely configured it to use your server's shell commands.
-This means that all commands are run in context of local user (ie. gitlab_runner or gitlab_ci_multi_runner).
+In most cases, you will have configured [GitLab Runner](https://docs.gitlab.com/runner/) to use your server's shell commands.
+This means that all commands are run in the context of local user (e.g. gitlab_runner or gitlab_ci_multi_runner).
 It also means that most probably in your Docker container you don't have the Ruby runtime installed.
 You will have to install it:
 
@@ -101,12 +103,12 @@ production:
 We created two deploy jobs that are executed on different events:
 
 1. `staging` is executed for all commits that were pushed to `master` branch,
-2. `production` is executed for all pushed tags.
+1. `production` is executed for all pushed tags.
 
 We also use two secure variables:
 
 1. `HEROKU_STAGING_API_KEY` - Heroku API key used to deploy staging app,
-2. `HEROKU_PRODUCTION_API_KEY` - Heroku API key used to deploy production app.
+1. `HEROKU_PRODUCTION_API_KEY` - Heroku API key used to deploy production app.
 
 ## Storing API keys
 
@@ -120,7 +122,7 @@ is hidden in the job log.
 You access added variable by prefixing it's name with `$` (on non-Windows runners)
 or `%` (for Windows Batch runners):
 
-1. `$SECRET_VARIABLE` - use it for non-Windows runners
-2. `%SECRET_VARIABLE%` - use it for Windows Batch runners
+1. `$VARIABLE` - use it for non-Windows runners
+1. `%VARIABLE%` - use it for Windows Batch runners
 
 Read more about the [CI variables](../../variables/README.md).

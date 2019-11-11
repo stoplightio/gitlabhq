@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Ci
   # Currently this is artificial object, constructed dynamically
   # We should migrate this object to actual database record in the future
@@ -12,7 +14,8 @@ module Ci
       @pipeline = pipeline
       @name = name
       @status = status
-      @warnings = warnings
+      # support ints and booleans
+      @has_warnings = ActiveRecord::Type::Boolean.new.cast(warnings)
     end
 
     def groups
@@ -28,7 +31,7 @@ module Ci
     end
 
     def status
-      @status ||= statuses.latest.status
+      @status ||= statuses.latest.slow_composite_status
     end
 
     def detailed_status(current_user)
@@ -50,11 +53,16 @@ module Ci
     end
 
     def has_warnings?
-      if @warnings.is_a?(Integer)
-        @warnings > 0
-      else
-        statuses.latest.failed_but_allowed.any?
+      # lazilly calculate the warnings
+      if @has_warnings.nil?
+        @has_warnings = statuses.latest.failed_but_allowed.any?
       end
+
+      @has_warnings
+    end
+
+    def manual_playable?
+      %[manual scheduled skipped].include?(status.to_s)
     end
   end
 end

@@ -1,8 +1,18 @@
+# frozen_string_literal: true
+
 class MemberPresenter < Gitlab::View::Presenter::Delegated
   presents :member
 
   def access_level_roles
     member.class.access_level_roles
+  end
+
+  def valid_level_roles
+    return access_level_roles unless member.highest_group_member
+
+    access_level_roles.reject do |_name, level|
+      member.highest_group_member.access_level > level
+    end
   end
 
   def can_resend_invite?
@@ -22,6 +32,11 @@ class MemberPresenter < Gitlab::View::Presenter::Delegated
     request? && can_update?
   end
 
+  # This functionality is only available in EE.
+  def can_override?
+    false
+  end
+
   private
 
   def admin_member_permission
@@ -36,3 +51,5 @@ class MemberPresenter < Gitlab::View::Presenter::Delegated
     raise NotImplementedError
   end
 end
+
+MemberPresenter.prepend_if_ee('EE::MemberPresenter')

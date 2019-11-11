@@ -30,6 +30,7 @@ describe('pager', () => {
       const href = `${gl.TEST_HOST}/some_list.json`;
       setFixtures(`<div class="content_list" data-href="${href}"></div>`);
       Pager.init();
+
       expect(Pager.url).toBe(href);
     });
 
@@ -37,12 +38,14 @@ describe('pager', () => {
       const href = `${gl.TEST_HOST}/some_list`;
       spyOnDependency(Pager, 'removeParams').and.returnValue(href);
       Pager.init();
+
       expect(Pager.url).toBe(href);
     });
 
     it('should get initial offset from query parameter', () => {
       window.history.replaceState({}, null, '?offset=100');
       Pager.init();
+
       expect(Pager.offset).toBe(100);
     });
 
@@ -51,6 +54,7 @@ describe('pager', () => {
       const href = `${gl.TEST_HOST}/some_list?filter=test`;
       const removeParams = spyOnDependency(Pager, 'removeParams').and.returnValue(href);
       Pager.init();
+
       expect(removeParams).toHaveBeenCalledWith(['limit', 'offset']);
       expect(Pager.url).toEqual(href);
     });
@@ -59,9 +63,9 @@ describe('pager', () => {
   describe('getOld', () => {
     const urlRegex = /(.*)some_list(.*)$/;
 
-    function mockSuccess() {
+    function mockSuccess(count = 0) {
       axiosMock.onGet(urlRegex).reply(200, {
-        count: 0,
+        count,
         html: '',
       });
     }
@@ -132,7 +136,24 @@ describe('pager', () => {
             offset: 100,
           },
         });
+
         expect(url).toBe('/some_list');
+
+        done();
+      });
+    });
+
+    it('disables if return count is less than limit', done => {
+      Pager.offset = 0;
+      Pager.limit = 20;
+
+      mockSuccess(1);
+      spyOn(Pager.loading, 'hide');
+      Pager.getOld();
+
+      setTimeout(() => {
+        expect(Pager.loading.hide).toHaveBeenCalled();
+        expect(Pager.disable).toBe(true);
 
         done();
       });

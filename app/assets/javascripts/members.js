@@ -7,9 +7,29 @@ export default class Members {
   }
 
   addListeners() {
-    $('.js-member-update-control').off('change').on('change', this.formSubmit.bind(this));
-    $('.js-edit-member-form').off('ajax:success').on('ajax:success', this.formSuccess.bind(this));
+    $('.js-member-update-control')
+      .off('change')
+      .on('change', this.formSubmit.bind(this));
+    $('.js-edit-member-form')
+      .off('ajax:success')
+      .on('ajax:success', this.formSuccess.bind(this));
     gl.utils.disableButtonIfEmptyField('#user_ids', 'input[name=commit]', 'change');
+  }
+
+  dropdownClicked(options) {
+    options.e.preventDefault();
+
+    this.formSubmit(null, options.$el);
+  }
+
+  // eslint-disable-next-line class-methods-use-this
+  dropdownToggleLabel(selected, $el) {
+    return $el.text();
+  }
+
+  // eslint-disable-next-line class-methods-use-this
+  dropdownIsSelectable(selected, $el) {
+    return !$el.hasClass('is-active');
   }
 
   initGLDropdown() {
@@ -18,19 +38,13 @@ export default class Members {
 
       $btn.glDropdown({
         selectable: true,
-        isSelectable(selected, $el) {
-          return !$el.hasClass('is-active');
-        },
+        isSelectable: (selected, $el) => this.dropdownIsSelectable(selected, $el),
         fieldName: $btn.data('fieldName'),
         id(selected, $el) {
           return $el.data('id');
         },
-        toggleLabel(selected, $el) {
-          return $el.text();
-        },
-        clicked: (options) => {
-          this.formSubmit(null, options.$el);
-        },
+        toggleLabel: (selected, $el) => this.dropdownToggleLabel(selected, $el, $btn),
+        clicked: options => this.dropdownClicked(options),
       });
     });
   }
@@ -51,6 +65,7 @@ export default class Members {
     $toggle.enable();
     $dateInput.enable();
   }
+
   // eslint-disable-next-line class-methods-use-this
   getMemberListItems($el) {
     const $memberListItem = $el.is('.member') ? $el : $(`#${$el.data('elId')}`);

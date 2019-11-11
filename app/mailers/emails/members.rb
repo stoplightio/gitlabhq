@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Emails
   module Members
     extend ActiveSupport::Concern
@@ -7,36 +9,32 @@ module Emails
       helper_method :member_source, :member
     end
 
-    def member_access_requested_email(member_source_type, member_id, recipient_notification_email)
+    def member_access_requested_email(member_source_type, member_id, recipient_id)
       @member_source_type = member_source_type
       @member_id = member_id
 
-      admins = member_source.members.owners_and_masters.pluck(:notification_email)
-      # A project in a group can have no explicit owners/masters, in that case
-      # we fallbacks to the group's owners/masters.
-      if admins.empty? && member_source.respond_to?(:group) && member_source.group
-        admins = member_source.group.members.owners_and_masters.pluck(:notification_email)
-      end
+      user = User.find(recipient_id)
 
-      mail(to: admins,
-           subject: subject("Request to join the #{member_source.human_name} #{member_source_type}"))
+      mail(to: user.notification_email_for(notification_group),
+           subject: subject("Request to join the #{member_source.human_name} #{member_source.model_name.singular}"))
     end
 
     def member_access_granted_email(member_source_type, member_id)
       @member_source_type = member_source_type
       @member_id = member_id
 
-      mail(to: member.user.notification_email,
-           subject: subject("Access to the #{member_source.human_name} #{member_source_type} was granted"))
+      mail(to: member.user.notification_email_for(notification_group),
+           subject: subject("Access to the #{member_source.human_name} #{member_source.model_name.singular} was granted"))
     end
 
     def member_access_denied_email(member_source_type, source_id, user_id)
       @member_source_type = member_source_type
       @member_source = member_source_class.find(source_id)
-      requester = User.find(user_id)
 
-      mail(to: requester.notification_email,
-           subject: subject("Access to the #{member_source.human_name} #{member_source_type} was denied"))
+      user = User.find(user_id)
+
+      mail(to: user.notification_email_for(notification_group),
+           subject: subject("Access to the #{member_source.human_name} #{member_source.model_name.singular} was denied"))
     end
 
     def member_invited_email(member_source_type, member_id, token)
@@ -45,7 +43,7 @@ module Emails
       @token = token
 
       mail(to: member.invite_email,
-           subject: subject("Invitation to join the #{member_source.human_name} #{member_source_type}"))
+           subject: subject("Invitation to join the #{member_source.human_name} #{member_source.model_name.singular}"))
     end
 
     def member_invite_accepted_email(member_source_type, member_id)
@@ -53,7 +51,7 @@ module Emails
       @member_id = member_id
       return unless member.created_by
 
-      mail(to: member.created_by.notification_email,
+      mail(to: member.created_by.notification_email_for(notification_group),
            subject: subject('Invitation accepted'))
     end
 
@@ -63,9 +61,10 @@ module Emails
       @member_source_type = member_source_type
       @member_source = member_source_class.find(source_id)
       @invite_email = invite_email
-      inviter = User.find(created_by_id)
 
-      mail(to: inviter.notification_email,
+      user = User.find(created_by_id)
+
+      mail(to: user.notification_email_for(notification_group),
            subject: subject('Invitation declined'))
     end
 
@@ -75,6 +74,10 @@ module Emails
 
     def member_source
       @member_source ||= member.source
+    end
+
+    def notification_group
+      @member_source_type.casecmp?('project') ? member_source.group : member_source
     end
 
     private

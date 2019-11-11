@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class ProjectHook < WebHook
   include TriggerableHooks
 
@@ -17,3 +19,5 @@ class ProjectHook < WebHook
   belongs_to :project
   validates :project, presence: true
 end
+
+ProjectHook.prepend_if_ee('EE::ProjectHook')

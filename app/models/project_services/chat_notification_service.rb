@@ -1,23 +1,43 @@
+# frozen_string_literal: true
+
 # Base class for Chat notifications services
 # This class is not meant to be used directly, but only to inherit from.
 class ChatNotificationService < Service
   include ChatMessage
+  include NotificationBranchSelection
+
+  SUPPORTED_EVENTS = %w[
+    push issue confidential_issue merge_request note confidential_note
+    tag_push pipeline wiki_page deployment
+  ].freeze
+
+  EVENT_CHANNEL = proc { |event| "#{event}_channel" }
 
   default_value_for :category, 'chat'
 
-  prop_accessor :webhook, :username, :channel
+  prop_accessor :webhook, :username, :channel, :branches_to_be_notified
+
+  # Custom serialized properties initialization
+  prop_accessor(*SUPPORTED_EVENTS.map { |event| EVENT_CHANNEL[event] })
+
   boolean_accessor :notify_only_broken_pipelines, :notify_only_default_branch
 
   validates :webhook, presence: true, public_url: true, if: :activated?
 
   def initialize_properties
-    # Custom serialized properties initialization
-    self.supported_events.each { |event| self.class.prop_accessor(event_channel_name(event)) }
-
     if properties.nil?
       self.properties = {}
       self.notify_only_broken_pipelines = true
-      self.notify_only_default_branch = true
+      self.branches_to_be_notified = "default"
+    elsif !self.notify_only_default_branch.nil?
+      # In older versions, there was only a boolean property named
+      # `notify_only_default_branch`. Now we have a string property named
+      # `branches_to_be_notified`. Instead of doing a background migration, we
+      # opted to set a value for the new property based on the old one, if
+      # users hasn't specified one already. When users edit the service and
+      # selects a value for this new property, it will override everything.
+
+      self.branches_to_be_notified ||= notify_only_default_branch? ? "default" : "all"
     end
   end
 
@@ -30,8 +50,7 @@ class ChatNotificationService < Service
   end
 
   def self.supported_events
-    %w[push issue confidential_issue merge_request note confidential_note tag_push
-       pipeline wiki_page]
+    SUPPORTED_EVENTS
   end
 
   def fields
@@ -43,7 +62,7 @@ class ChatNotificationService < Service
       { type: 'text', name: 'webhook', placeholder: "e.g. #{webhook_placeholder}", required: true },
       { type: 'text', name: 'username', placeholder: 'e.g. GitLab' },
       { type: 'checkbox', name: 'notify_only_broken_pipelines' },
-      { type: 'checkbox', name: 'notify_only_default_branch' }
+      { type: 'select', name: 'branches_to_be_notified', choices: BRANCH_CHOICES }
     ]
   end
 
@@ -120,6 +139,8 @@ class ChatNotificationService < Service
       ChatMessage::PipelineMessage.new(data) if should_pipeline_be_notified?(data)
     when "wiki_page"
       ChatMessage::WikiPageMessage.new(data)
+    when "deployment"
+      ChatMessage::DeploymentMessage.new(data)
     end
   end
 
@@ -135,7 +156,7 @@ class ChatNotificationService < Service
   end
 
   def event_channel_name(event)
-    "#{event}_channel"
+    EVENT_CHANNEL[event]
   end
 
   def project_name
@@ -155,16 +176,10 @@ class ChatNotificationService < Service
   end
 
   def notify_for_ref?(data)
+    return true if data[:object_kind] == 'tag_push'
     return true if data.dig(:object_attributes, :tag)
-    return true unless notify_only_default_branch?
 
-    ref = if data[:ref]
-            Gitlab::Git.ref_name(data[:ref])
-          else
-            data.dig(:object_attributes, :ref)
-          end
-
-    ref == project.default_branch
+    notify_for_branch?(data)
   end
 
   def notify_for_pipeline?(data)

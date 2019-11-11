@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class SlackSlashCommandsService < SlashCommandsService
   include TriggersHelper
 
@@ -18,6 +20,10 @@ class SlackSlashCommandsService < SlashCommandsService
     super.tap do |result|
       result[:text] = format(result[:text]) if result.is_a?(Hash)
     end
+  end
+
+  def chat_responder
+    ::Gitlab::Chat::Responder::Slack
   end
 
   private

@@ -2,32 +2,24 @@
 comments: false
 ---
 
-# Bisect	  	
-
-----------
-
-## Bisect
+# Bisect
 
 - Find a commit that introduced a bug
 - Works through a process of elimination
-- Specify a known good and bad revision to begin	  	
+- Specify a known good and bad revision to begin
 
-----------
-
-## Bisect
+## Bisect sample workflow
 
 1. Start the bisect process
-2. Enter the bad revision (usually latest commit)
-3. Enter a known good revision (commit/branch)
-4. Run code to see if bug still exists
-5. Tell bisect the result
-6. Repeat the previous 2 items until you find the offending commit
-
-----------
+1. Enter the bad revision (usually latest commit)
+1. Enter a known good revision (commit/branch)
+1. Run code to see if bug still exists
+1. Tell bisect the result
+1. Repeat the previous 2 items until you find the offending commit
 
 ## Setup
 
-```
+```sh
   mkdir bisect-ex
   cd bisect-ex
   touch index.html
@@ -44,9 +36,7 @@ comments: false
   vi index.html
 ```
 
-----------
-
-```
+```sh
   # Add all good 3
   git add -A
   git commit -m "fourth commit"
@@ -64,11 +54,9 @@ comments: false
   git commit -m "seventh commit"
 ```
 
-----------
-
 ## Commands
 
-```
+```sh
   git bisect start
   # Test your code
   git bisect bad

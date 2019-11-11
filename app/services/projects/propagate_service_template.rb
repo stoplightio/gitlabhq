@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Projects
   class PropagateServiceTemplate
     BATCH_SIZE = 100
@@ -13,7 +15,7 @@ module Projects
     def propagate
       return unless @template.active?
 
-      Rails.logger.info("Propagating services for template #{@template.id}")
+      Rails.logger.info("Propagating services for template #{@template.id}") # rubocop:disable Gitlab/RailsLogger
 
       propagate_projects_with_template
     end
@@ -22,7 +24,7 @@ module Projects
 
     def propagate_projects_with_template
       loop do
-        batch = project_ids_batch
+        batch = Project.uncached { project_ids_batch }
 
         bulk_create_from_template(batch) unless batch.empty?
 
@@ -77,11 +79,12 @@ module Projects
             value = value.is_a?(Hash) ? value.to_json : value
 
             service_hash[ActiveRecord::Base.connection.quote_column_name(key)] =
-              ActiveRecord::Base.sanitize(value)
+              ActiveRecord::Base.connection.quote(value)
           end
         end
     end
 
+    # rubocop: disable CodeReuse/ActiveRecord
     def run_callbacks(batch)
       if active_external_issue_tracker?
         Project.where(id: batch).update_all(has_external_issue_tracker: true)
@@ -91,6 +94,7 @@ module Projects
         Project.where(id: batch).update_all(has_external_wiki: true)
       end
     end
+    # rubocop: enable CodeReuse/ActiveRecord
 
     def active_external_issue_tracker?
       @template.issue_tracker? && !@template.default

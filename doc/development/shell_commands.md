@@ -5,9 +5,9 @@ These guidelines are meant to make your code more reliable _and_ secure.
 
 ## References
 
-- [Google Ruby Security Reviewer's Guide](https://code.google.com/p/ruby-security/wiki/Guide)
+- [Google Ruby Security Reviewer's Guide](https://code.google.com/archive/p/ruby-security/wikis/Guide.wiki)
 - [OWASP Command Injection](https://www.owasp.org/index.php/Command_Injection)
-- [Ruby on Rails Security Guide Command Line Injection](http://guides.rubyonrails.org/security.html#command-line-injection)
+- [Ruby on Rails Security Guide Command Line Injection](https://guides.rubyonrails.org/security.html#command-line-injection)
 
 ## Use File and FileUtils instead of shell commands
 
@@ -35,7 +35,7 @@ Gitlab::Popen.popen(%W(find /some/path -not -path /some/path -mmin +120 -delete)
 
 This coding style could have prevented CVE-2013-4490.
 
-## Always use the configurable git binary path for git commands
+## Always use the configurable Git binary path for Git commands
 
 ```ruby
 # Wrong
@@ -87,7 +87,7 @@ $ cat -- -l
 hello
 ```
 
-In the GitLab codebase, we avoid the option/argument ambiguity by _always_ using `--`.
+In the GitLab codebase, we avoid the option/argument ambiguity by _always_ using `--` for commands that support it.
 
 ```ruby
 # Wrong
@@ -114,7 +114,7 @@ user = `whoami`
 user, exit_status = Gitlab::Popen.popen(%W(whoami))
 ```
 
-In other repositories, such as gitlab-shell you can also use `IO.popen`.
+In other repositories, such as GitLab Shell you can also use `IO.popen`.
 
 ```ruby
 # Safe IO.popen example
@@ -190,7 +190,7 @@ A check like this could have avoided CVE-2013-4583.
 
 ## Properly anchor regular expressions to the start and end of strings
 
-When using regular expressions to validate user input that is passed as an argument to a shell command, make sure to use the `\A` and `\z` anchors that designate the start and end of the string, rather than `^` and `$`, or no anchors at all. 
+When using regular expressions to validate user input that is passed as an argument to a shell command, make sure to use the `\A` and `\z` anchors that designate the start and end of the string, rather than `^` and `$`, or no anchors at all.
 
 If you don't, an attacker could use this to execute commands with potentially harmful effect.
 
@@ -198,7 +198,7 @@ For example, when a project's `import_url` is validated like below, the user cou
 
 ```ruby
 validates :import_url, format: { with: URI.regexp(%w(ssh git http https)) }
-# URI.regexp(%w(ssh git http https)) roughly evaluates to /(ssh|git|http|https):(something_that_looks_like_a_url)/ 
+# URI.regexp(%w(ssh git http https)) roughly evaluates to /(ssh|git|http|https):(something_that_looks_like_a_url)/
 ```
 
 Suppose the user submits the following as their import URL:
@@ -210,7 +210,6 @@ file://git:/tmp/lol
 Since there are no anchors in the used regular expression, the `git:/tmp/lol` in the value would match, and the validation would pass.
 
 When importing, GitLab would execute the following command, passing the `import_url` as an argument:
-
 
 ```sh
 git clone file://git:/tmp/lol

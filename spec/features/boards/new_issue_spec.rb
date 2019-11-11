@@ -1,4 +1,6 @@
-require 'rails_helper'
+# frozen_string_literal: true
+
+require 'spec_helper'
 
 describe 'Issue Boards new issue', :js do
   let(:project) { create(:project, :public) }
@@ -8,7 +10,7 @@ describe 'Issue Boards new issue', :js do
 
   context 'authorized user' do
     before do
-      project.add_master(user)
+      project.add_maintainer(user)
 
       sign_in(user)
 
@@ -86,6 +88,27 @@ describe 'Issue Boards new issue', :js do
 
       expect(page).to have_selector('.issue-boards-sidebar')
     end
+
+    it 'successfuly loads labels to be added to newly created issue' do
+      page.within(first('.board')) do
+        find('.issue-count-badge-add-button').click
+      end
+
+      page.within(first('.board-new-issue-form')) do
+        find('.form-control').set('new issue')
+        click_button 'Submit issue'
+      end
+
+      wait_for_requests
+
+      page.within(first('.issue-boards-sidebar')) do
+        find('.labels .edit-link').click
+
+        wait_for_requests
+
+        expect(page).to have_selector('.labels .dropdown-content li a')
+      end
+    end
   end
 
   context 'unauthorized user' do
@@ -94,8 +117,54 @@ describe 'Issue Boards new issue', :js do
       wait_for_requests
     end
 
-    it 'does not display new issue button' do
-      expect(page).to have_selector('.issue-count-badge-add-button', count: 0)
+    it 'displays new issue button in open list' do
+      expect(first('.board')).to have_selector('.issue-count-badge-add-button', count: 1)
+    end
+
+    it 'does not display new issue button in label list' do
+      page.within('.board:nth-child(2)') do
+        expect(page).not_to have_selector('.issue-count-badge-add-button')
+      end
+    end
+  end
+
+  context 'group boards' do
+    set(:group) { create(:group, :public) }
+    set(:project) { create(:project, namespace: group) }
+    set(:group_board) { create(:board, group: group) }
+    set(:list) { create(:list, board: group_board, position: 0) }
+
+    context 'for unauthorized users' do
+      before do
+        sign_in(user)
+        visit group_board_path(group, group_board)
+        wait_for_requests
+      end
+
+      it 'displays new issue button in open list' do
+        expect(first('.board')).to have_selector('.issue-count-badge-add-button', count: 1)
+      end
+
+      it 'does not display new issue button in label list' do
+        page.within('.board.is-draggable') do
+          expect(page).not_to have_selector('.issue-count-badge-add-button')
+        end
+      end
+    end
+
+    context 'for authorized users' do
+      it 'display new issue button in label list' do
+        project = create(:project, namespace: group)
+        project.add_reporter(user)
+
+        sign_in(user)
+        visit group_board_path(group, group_board)
+        wait_for_requests
+
+        page.within('.board.is-draggable') do
+          expect(page).to have_selector('.issue-count-badge-add-button')
+        end
+      end
     end
   end
 end

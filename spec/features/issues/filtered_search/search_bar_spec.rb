@@ -1,4 +1,6 @@
-require 'rails_helper'
+# frozen_string_literal: true
+
+require 'spec_helper'
 
 describe 'Search bar', :js do
   include FilteredSearchHelpers
@@ -8,7 +10,7 @@ describe 'Search bar', :js do
   let(:filtered_search) { find('.filtered-search') }
 
   before do
-    project.add_master(user)
+    project.add_maintainer(user)
     sign_in(user)
     create(:issue, project: project)
 
@@ -86,7 +88,7 @@ describe 'Search bar', :js do
       expect(find('#js-dropdown-hint')).to have_selector('.filter-dropdown .filter-dropdown-item', count: original_size)
     end
 
-    it 'resets the dropdown filters' do
+    it 'resets the dropdown filters', :quarantine do
       filtered_search.click
 
       hint_offset = get_left_style(find('#js-dropdown-hint')['style'])
@@ -100,7 +102,7 @@ describe 'Search bar', :js do
       find('.filtered-search-box .clear-search').click
       filtered_search.click
 
-      expect(find('#js-dropdown-hint')).to have_selector('.filter-dropdown .filter-dropdown-item', count: 5)
+      expect(find('#js-dropdown-hint')).to have_selector('.filter-dropdown .filter-dropdown-item', count: 6)
       expect(get_left_style(find('#js-dropdown-hint')['style'])).to eq(hint_offset)
     end
   end

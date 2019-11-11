@@ -8,8 +8,8 @@ Let's say you want to swap the table "events" with "events_for_migration". In
 this case you need to follow 3 steps:
 
 1. Rename "events" to "events_temporary"
-2. Rename "events_for_migration" to "events"
-3. Rename "events_temporary" to "events_for_migration"
+1. Rename "events_for_migration" to "events"
+1. Rename "events_temporary" to "events_for_migration"
 
 Rails allows you to do this using the `rename_table` method:
 
@@ -37,14 +37,6 @@ PostgreSQL you can use the `reset_pk_sequence!` method like so:
 
 ```ruby
 reset_pk_sequence!('events')
-```
-
-For MySQL however you need to do run the following:
-
-```ruby
-amount = Event.pluck('COALESCE(MAX(id), 1)').first
-
-execute "ALTER TABLE events AUTO_INCREMENT = #{amount}"
 ```
 
 Failure to reset the primary keys will result in newly created rows starting

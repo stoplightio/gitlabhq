@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 FactoryBot.define do
   sequence(:gitaly_commit_id) { Digest::SHA1.hexdigest(Time.now.to_f.to_s) }
 
@@ -10,6 +12,7 @@ FactoryBot.define do
       Google::Protobuf::RepeatedField.new(:string, ids)
     end
     subject { "My commit" }
+
     body { subject + "\nMy body" }
     author { build(:gitaly_commit_author) }
     committer { build(:gitaly_commit_author) }

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Ci::Group do
@@ -17,6 +19,32 @@ describe Ci::Group do
   describe '#size' do
     it 'returns the number of statuses in the group' do
       expect(subject.size).to eq(1)
+    end
+  end
+
+  describe '#status' do
+    let(:jobs) do
+      [create(:ci_build, :failed)]
+    end
+
+    context 'when ci_composite_status is enabled' do
+      before do
+        stub_feature_flags(ci_composite_status: true)
+      end
+
+      it 'returns a failed status' do
+        expect(subject.status).to eq('failed')
+      end
+    end
+
+    context 'when ci_composite_status is disabled' do
+      before do
+        stub_feature_flags(ci_composite_status: false)
+      end
+
+      it 'returns a failed status' do
+        expect(subject.status).to eq('failed')
+      end
     end
   end
 

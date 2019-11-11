@@ -1,3 +1,7 @@
+---
+type: concepts, howto
+---
+
 # Repository
 
 A [repository](https://git-scm.com/book/en/v2/Git-Basics-Getting-a-Git-Repository)
@@ -29,7 +33,7 @@ You can either use the user interface (UI), or connect your local computer
 with GitLab [through the command line](../../../gitlab-basics/command-line-commands.md#start-working-on-your-project).
 
 To configure [GitLab CI/CD](../../../ci/README.md) to build, test, and deploy
-you code, add a file called [.`gitlab-ci.yml`](../../../ci/quick_start/README.md)
+you code, add a file called [`.gitlab-ci.yml`](../../../ci/quick_start/README.md)
 to your repository's root.
 
 **From the user interface:**
@@ -53,11 +57,51 @@ To get started with the command line, please read through the
 
 Use GitLab's [file finder](../../../workflow/file_finder.md) to search for files in a repository.
 
+### Supported markup languages and extensions
+
+GitLab supports a number of markup languages (sometimes called [lightweight
+markup languages](https://en.wikipedia.org/wiki/Lightweight_markup_language))
+that you can use for the content of your files in a repository. They are mostly
+used for documentation purposes.
+
+Just pick the right extension for your files and GitLab will render them
+according to the markup language.
+
+| Markup language | Extensions |
+| --------------- | ---------- |
+| Plain text | `txt` |
+| [Markdown](../../markdown.md) | `mdown`, `mkd`, `mkdn`, `md`, `markdown` |
+| [reStructuredText](http://docutils.sourceforge.net/rst.html) | `rst` |
+| [AsciiDoc](../../asciidoc.md) | `adoc`, `ad`, `asciidoc` |
+| [Textile](https://textile-lang.com/) | `textile` |
+| [rdoc](http://rdoc.sourceforge.net/doc/index.html)  | `rdoc` |
+| [Orgmode](https://orgmode.org/) | `org` |
+| [creole](http://www.wikicreole.org/) | `creole` |
+| [Mediawiki](https://www.mediawiki.org/wiki/MediaWiki) | `wiki`, `mediawiki` |
+
+### Repository README and index files
+
+When a `README` or `index` file is present in a repository, its contents will be
+automatically pre-rendered by GitLab without opening it.
+
+They can either be plain text or have an extension of a
+[supported markup language](#supported-markup-languages-and-extensions):
+
+Some things to note about precedence:
+
+1. When both a `README` and an `index` file are present, the `README` will always
+   take precedence.
+1. When more than one file is present with different extensions, they are
+   ordered alphabetically, with the exception of a file without an extension
+   which will always be last in precedence. For example, `README.adoc` will take
+   precedence over `README.md`, and `README.rst` will take precedence over
+   `README`.
+
 ### Jupyter Notebook files
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-ce/issues/2508) in GitLab 9.1
+> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/issues/2508) in GitLab 9.1
 
-[Jupyter][jupyter] Notebook (previously IPython Notebook) files are used for
+[Jupyter](https://jupyter.org) Notebook (previously IPython Notebook) files are used for
 interactive computing in many fields and contain a complete record of the
 user's sessions and include code, narrative text, equations and rich output.
 
@@ -71,32 +115,7 @@ GitLab.
 
 ## Branches
 
-When you submit changes in a new [branch](branches/index.md), you create a new version
-of that project's file tree. Your branch contains all the changes
-you are presenting, which are detected by Git line by line.
-
-To continue your workflow, once you pushed your changes to a new branch,
-you can create a [merge request](../merge_requests/index.md), perform
-inline code review, and [discuss](../../discussions/index.md)
-your implementation with your team.
-You can live preview changes submitted to a new branch with
-[Review Apps](../../../ci/review_apps/index.md).
-
-With [GitLab Starter](https://about.gitlab.com/products/), you can also request
-[approval](https://docs.gitlab.com/ee/user/project/merge_requests/merge_request_approvals.html) from your managers.
-
-To create, delete, and [branches](branches/index.md) via GitLab's UI:
-
-- [Default branches](branches/index.md#default-branch)
-- [Create a branch](web_editor.md#create-a-new-branch)
-- [Protected branches](../protected_branches.md#protected-branches)
-- [Delete merged branches](branches/index.md#delete-merged-branches)
-
-Alternatively, you can use the
-[command line](../../../gitlab-basics/start-using-git.md#create-a-branch).
-
-To learn more about branching strategies read through the
-[GitLab Flow](../../../university/training/gitlab_flow.md) documentation.
+For details, see [Branches](branches/index.md).
 
 ## Commits
 
@@ -105,15 +124,15 @@ you are introducing those changes to your branch.
 Via command line, you can commit multiple times before pushing.
 
 - **Commit message:**
-A commit message is important to identity what is being changed and,
-more importantly, why. In GitLab, you can add keywords to the commit
-message that will perform one of the actions below:
+  A commit message is important to identity what is being changed and,
+  more importantly, why. In GitLab, you can add keywords to the commit
+  message that will perform one of the actions below:
   - **Trigger a GitLab CI/CD pipeline:**
   If you have your project configured with [GitLab CI/CD](../../../ci/README.md),
   you will trigger a pipeline per push, not per commit.
   - **Skip pipelines:**
   You can add to you commit message the keyword
-  [`[ci skip]`](../../../ci/yaml/README.html#skipping-jobs)
+  [`[ci skip]`](../../../ci/yaml/README.md#skipping-jobs)
   and GitLab CI will skip that pipeline.
   - **Cross-link issues and merge requests:**
   [Cross-linking](../issues/crosslinking_issues.md#from-commit-messages)
@@ -121,22 +140,23 @@ message that will perform one of the actions below:
   If you mention an issue or a merge request in a commit message, they will be shown
   on their respective thread.
 - **Cherry-pick a commit:**
-In GitLab, you can
-[cherry-pick a commit](../merge_requests/cherry_pick_changes.md#cherry-picking-a-commit)
-right from the UI.
+  In GitLab, you can
+  [cherry-pick a commit](../merge_requests/cherry_pick_changes.md#cherry-picking-a-commit)
+  right from the UI.
 - **Revert a commit:**
-Easily [revert a commit](../merge_requests/revert_changes.md#reverting-a-commit)
-from the UI to a selected branch.
+  Easily [revert a commit](../merge_requests/revert_changes.md#reverting-a-commit)
+  from the UI to a selected branch.
 - **Sign a commit:**
-Use GPG to [sign your commits](gpg_signed_commits/index.md).
+  Use GPG to [sign your commits](gpg_signed_commits/index.md).
 
-## Repository size
+## Project and repository size
 
-On GitLab.com, your [repository size limit is 10GB](../../gitlab_com/index.md#repository-size-limit)
-(including LFS). For other instances, the repository size is limited by your
-system administrators.
+A project's size is reported on the project's **Details** page. The reported size is
+updated every 15 minutes at most, so may not reflect recent activity. The displayed files size includes repository files, artifacts, and LFS.
 
-You can also [reduce a repository size using Git](reducing_the_repo_size_using_git.md).
+The project size may differ slightly from one instance to another due to compression, housekeeping, and other factors.
+
+[Repository size limit](../../admin_area/settings/account_and_limit_settings.md) may be set by admins. GitLab.com's repository size limit [is set by GitLab](../../gitlab_com/index.md#repository-size-limit).
 
 ## Contributors
 
@@ -155,25 +175,66 @@ The repository graph displays visually the Git flow strategy used in that reposi
 
 Find it under your project's **Repository > Graph**.
 
-## Compare
+## Repository Languages
 
-Select branches to compare and view the changes inline:
+For the default branch of each repository, GitLab will determine what programming languages
+were used and display this on the projects pages. If this information is missing, it will
+be added after updating the default branch on the project. This process can take up to 5
+minutes.
 
-![compare branches](img/compare_branches.png)
+![Repository Languages bar](img/repository_languages_v12_2.gif)
 
-Find it under your project's **Repository > Compare**.
+Not all files are detected, among others; documentation,
+vendored code, and most markup languages are excluded. This behaviour can be
+adjusted by overriding the default. For example, to enable `.proto` files to be
+detected, add the following to `.gitattributes` in the root of your repository.
 
-## Locked files
+> *.proto linguist-detectable=true
 
-> Available in [GitLab Premium](https://about.gitlab.com/products/).
+## Locked files **(PREMIUM)**
 
-Lock your files to prevent any conflicting changes.
-
-[File Locking](https://docs.gitlab.com/ee/user/project/file_lock.html) is available only in
-[GitLab Premium](https://about.gitlab.com/products/).
+Use [File Locking](../file_lock.md) to
+lock your files to prevent any conflicting changes.
 
 ## Repository's API
 
 You can access your repos via [repository API](../../../api/repositories.md).
 
-[jupyter]: https://jupyter.org
+## Clone in Apple Xcode
+
+> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/issues/45820) in GitLab 11.0
+
+Projects that contain a `.xcodeproj` or `.xcworkspace` directory can now be cloned
+in Xcode using the new **Open in Xcode** button, located next to the Git URL
+used for cloning your project. The button is only shown on macOS.
+
+## Download Source Code
+
+> Support for directory download was [introduced](https://gitlab.com/gitlab-org/gitlab-foss/issues/24704) in GitLab 11.11.
+
+The source code stored in a repository can be downloaded from the UI.
+By clicking the download icon, a dropdown will open with links to download the following:
+
+![Download source code](img/download_source_code.png)
+
+- **Source code:**
+  allows users to download the source code on branch they're currently
+  viewing. Available extensions: `zip`, `tar`, `tar.gz`, and `tar.bz2`.
+- **Directory:**
+  only shows up when viewing a sub-directory. This allows users to download
+  the specific directory they're currently viewing. Also available in `zip`,
+  `tar`, `tar.gz`, and `tar.bz2`.
+- **Artifacts:**
+  allows users to download the artifacts of the latest CI build.
+
+<!-- ## Troubleshooting
+
+Include any troubleshooting steps that you can foresee. If you know beforehand what issues
+one might have when setting this up, or when something is changed, or on upgrading, it's
+important to describe those, too. Think of things that may go wrong and include them here.
+This is important to minimize requests for support, and to avoid doc comments with
+questions that you know someone might ask.
+
+Each scenario can be a third-level heading, e.g. `### Getting error message X`.
+If you have none to add when creating a doc, leave this section in place
+but commented out to help encourage others to add to it in the future. -->

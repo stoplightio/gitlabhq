@@ -10,9 +10,9 @@ require 'spec_helper'
 describe 'Import/Export attribute configuration' do
   include ConfigurationHelper
 
-  let(:config_hash) { YAML.load_file(Gitlab::ImportExport.config_file).deep_stringify_keys }
+  let(:config_hash) { Gitlab::ImportExport::Config.new.to_h.deep_stringify_keys }
   let(:relation_names) do
-    names = names_from_tree(config_hash['project_tree'])
+    names = names_from_tree(config_hash.dig('tree', 'project'))
 
     # Remove duplicated or add missing models
     # - project is not part of the tree, so it has to be added manually.
@@ -26,12 +26,13 @@ describe 'Import/Export attribute configuration' do
   it 'has no new columns' do
     relation_names.each do |relation_name|
       relation_class = relation_class_for_name(relation_name)
-      relation_attributes = relation_class.new.attributes.keys
-
-      expect(safe_model_attributes[relation_class.to_s]).not_to be_nil, "Expected exported class #{relation_class} to exist in safe_model_attributes"
+      relation_attributes = relation_class.new.attributes.keys - relation_class.encrypted_attributes.keys.map(&:to_s)
 
       current_attributes = parsed_attributes(relation_name, relation_attributes)
-      safe_attributes = safe_model_attributes[relation_class.to_s]
+      safe_attributes = safe_model_attributes[relation_class.to_s].dup || []
+
+      expect(safe_attributes).not_to be_nil, "Expected exported class #{relation_class} to exist in safe_model_attributes"
+
       new_attributes = current_attributes - safe_attributes
 
       expect(new_attributes).to be_empty, failure_message(relation_class.to_s, new_attributes)
@@ -43,7 +44,7 @@ describe 'Import/Export attribute configuration' do
       It looks like #{relation_class}, which is exported using the project Import/Export, has new attributes: #{new_attributes.join(',')}
 
       Please add the attribute(s) to SAFE_MODEL_ATTRIBUTES if you consider this can be exported.
-      Otherwise, please blacklist the attribute(s) in IMPORT_EXPORT_CONFIG by adding it to its correspondent
+      Please blacklist the attribute(s) in IMPORT_EXPORT_CONFIG by adding it to its correspondent
       model in the +excluded_attributes+ section.
 
       SAFE_MODEL_ATTRIBUTES: #{File.expand_path(safe_attributes_file)}

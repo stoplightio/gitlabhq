@@ -1,5 +1,5 @@
 import $ from 'jquery';
-import { convertPermissionToBoolean } from '../lib/utils/common_utils';
+import { parseBoolean } from '../lib/utils/common_utils';
 import { s__ } from '../locale';
 import setupToggleButtons from '../toggle_buttons';
 import CreateItemDropdown from '../create_item_dropdown';
@@ -16,18 +16,20 @@ function createEnvironmentItem(value) {
 }
 
 export default class VariableList {
-  constructor({
-    container,
-    formField,
-  }) {
+  constructor({ container, formField, maskableRegex }) {
     this.$container = $(container);
     this.formField = formField;
+    this.maskableRegex = new RegExp(maskableRegex);
     this.environmentDropdownMap = new WeakMap();
 
     this.inputMap = {
       id: {
         selector: '.js-ci-variable-input-id',
         default: '',
+      },
+      variable_type: {
+        selector: '.js-ci-variable-input-variable-type',
+        default: 'env_var',
       },
       key: {
         selector: '.js-ci-variable-input-key',
@@ -39,12 +41,20 @@ export default class VariableList {
       },
       protected: {
         selector: '.js-ci-variable-input-protected',
-        default: 'false',
+        // use `attr` instead of `data` as we don't want the value to be
+        // converted. we need the value as a string.
+        default: $('.js-ci-variable-input-protected').attr('data-default'),
+      },
+      masked: {
+        selector: '.js-ci-variable-input-masked',
+        // use `attr` instead of `data` as we don't want the value to be
+        // converted. we need the value as a string.
+        default: $('.js-ci-variable-input-masked').attr('data-default'),
       },
       environment_scope: {
         // We can't use a `.js-` class here because
         // gl_dropdown replaces the <input> and doesn't copy over the class
-        // See https://gitlab.com/gitlab-org/gitlab-ce/issues/42458
+        // See https://gitlab.com/gitlab-org/gitlab-foss/issues/42458
         selector: `input[name="${this.formField}[variables_attributes][][environment_scope]"]`,
         default: '*',
       },
@@ -71,7 +81,7 @@ export default class VariableList {
       this.initRow(rowEl);
     });
 
-    this.$container.on('click', '.js-row-remove-button', (e) => {
+    this.$container.on('click', '.js-row-remove-button', e => {
       e.preventDefault();
       this.removeRow($(e.currentTarget).closest('.js-row'));
     });
@@ -81,7 +91,7 @@ export default class VariableList {
       .join(',');
 
     // Remove any empty rows except the last row
-    this.$container.on('blur', inputSelector, (e) => {
+    this.$container.on('blur', inputSelector, e => {
       const $row = $(e.currentTarget).closest('.js-row');
 
       if ($row.is(':not(:last-child)') && !this.checkIfRowTouched($row)) {
@@ -89,13 +99,16 @@ export default class VariableList {
       }
     });
 
-    // Always make sure there is an empty last row
-    this.$container.on('input trigger-change', inputSelector, () => {
+    this.$container.on('input trigger-change', inputSelector, e => {
+      // Always make sure there is an empty last row
       const $lastRow = this.$container.find('.js-row').last();
 
       if (this.checkIfRowTouched($lastRow)) {
         this.insertRow($lastRow);
       }
+
+      // If masked, validate value against regex
+      this.validateMaskability($(e.currentTarget).closest('.js-row'));
     });
   }
 
@@ -136,7 +149,7 @@ export default class VariableList {
     $rowClone.removeAttr('data-is-persisted');
 
     // Reset the inputs to their defaults
-    Object.keys(this.inputMap).forEach((name) => {
+    Object.keys(this.inputMap).forEach(name => {
       const entry = this.inputMap[name];
       $rowClone.find(entry.selector).val(entry.default);
     });
@@ -153,7 +166,7 @@ export default class VariableList {
 
   removeRow(row) {
     const $row = $(row);
-    const isPersisted = convertPermissionToBoolean($row.attr('data-is-persisted'));
+    const isPersisted = parseBoolean($row.attr('data-is-persisted'));
 
     if (isPersisted) {
       $row.hide();
@@ -171,11 +184,31 @@ export default class VariableList {
   }
 
   checkIfRowTouched($row) {
-    return Object.keys(this.inputMap).some((name) => {
+    return Object.keys(this.inputMap).some(name => {
+      // Row should not qualify as touched if only switches have been touched
+      if (['protected', 'masked'].includes(name)) return false;
+
       const entry = this.inputMap[name];
       const $el = $row.find(entry.selector);
       return $el.length && $el.val() !== entry.default;
     });
+  }
+
+  validateMaskability($row) {
+    const invalidInputClass = 'gl-field-error-outline';
+
+    const variableValue = $row.find(this.inputMap.secret_value.selector).val();
+    const isValueMaskable = this.maskableRegex.test(variableValue) || variableValue === '';
+    const isMaskedChecked = $row.find(this.inputMap.masked.selector).val() === 'true';
+
+    // Show a validation error if the user wants to mask an unmaskable variable value
+    $row
+      .find(this.inputMap.secret_value.selector)
+      .toggleClass(invalidInputClass, isMaskedChecked && !isValueMaskable);
+    $row
+      .find('.js-secret-value-placeholder')
+      .toggleClass(invalidInputClass, isMaskedChecked && !isValueMaskable);
+    $row.find('.masking-validation-error').toggle(isMaskedChecked && !isValueMaskable);
   }
 
   toggleEnableRow(isEnabled = true) {
@@ -190,11 +223,14 @@ export default class VariableList {
   getAllData() {
     // Ignore the last empty row because we don't want to try persist
     // a blank variable and run into validation problems.
-    const validRows = this.$container.find('.js-row').toArray().slice(0, -1);
+    const validRows = this.$container
+      .find('.js-row')
+      .toArray()
+      .slice(0, -1);
 
-    return validRows.map((rowEl) => {
+    return validRows.map(rowEl => {
       const resultant = {};
-      Object.keys(this.inputMap).forEach((name) => {
+      Object.keys(this.inputMap).forEach(name => {
         const entry = this.inputMap[name];
         const $input = $(rowEl).find(entry.selector);
         if ($input.length) {
@@ -207,11 +243,16 @@ export default class VariableList {
   }
 
   getEnvironmentValues() {
-    const valueMap = this.$container.find(this.inputMap.environment_scope.selector).toArray()
-      .reduce((prevValueMap, envInput) => ({
-        ...prevValueMap,
-        [envInput.value]: envInput.value,
-      }), {});
+    const valueMap = this.$container
+      .find(this.inputMap.environment_scope.selector)
+      .toArray()
+      .reduce(
+        (prevValueMap, envInput) => ({
+          ...prevValueMap,
+          [envInput.value]: envInput.value,
+        }),
+        {},
+      );
 
     return Object.keys(valueMap).map(createEnvironmentItem);
   }

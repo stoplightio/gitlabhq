@@ -1,14 +1,16 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Gitlab::Ci::Ansi2html do
   subject { described_class }
 
   it "prints non-ansi as-is" do
-    expect(convert_html("Hello")).to eq('Hello')
+    expect(convert_html("Hello")).to eq('<span>Hello</span>')
   end
 
-  it "strips non-color-changing controll sequences" do
-    expect(convert_html("Hello \e[2Kworld")).to eq('Hello world')
+  it "strips non-color-changing control sequences" do
+    expect(convert_html("Hello \e[2Kworld")).to eq('<span>Hello world</span>')
   end
 
   it "prints simply red" do
@@ -32,7 +34,7 @@ describe Gitlab::Ci::Ansi2html do
   end
 
   it "resets colors after red on blue" do
-    expect(convert_html("\e[31;44mHello\e[0m world")).to eq('<span class="term-fg-red term-bg-blue">Hello</span> world')
+    expect(convert_html("\e[31;44mHello\e[0m world")).to eq('<span class="term-fg-red term-bg-blue">Hello</span><span> world</span>')
   end
 
   it "performs color change from red/blue to yellow/blue" do
@@ -44,11 +46,11 @@ describe Gitlab::Ci::Ansi2html do
   end
 
   it "performs color change from red/blue to reset to yellow/green" do
-    expect(convert_html("\e[31;44mHello\e[0m \e[33;42mworld")).to eq('<span class="term-fg-red term-bg-blue">Hello</span> <span class="term-fg-yellow term-bg-green">world</span>')
+    expect(convert_html("\e[31;44mHello\e[0m \e[33;42mworld")).to eq('<span class="term-fg-red term-bg-blue">Hello</span><span> </span><span class="term-fg-yellow term-bg-green">world</span>')
   end
 
   it "ignores unsupported codes" do
-    expect(convert_html("\e[51mHello\e[0m")).to eq('Hello')
+    expect(convert_html("\e[51mHello\e[0m")).to eq('<span>Hello</span>')
   end
 
   it "prints light red" do
@@ -72,8 +74,8 @@ describe Gitlab::Ci::Ansi2html do
   end
 
   it "resets bold text" do
-    expect(convert_html("\e[1mHello\e[21m world")).to eq('<span class="term-bold">Hello</span> world')
-    expect(convert_html("\e[1mHello\e[22m world")).to eq('<span class="term-bold">Hello</span> world')
+    expect(convert_html("\e[1mHello\e[21m world")).to eq('<span class="term-bold">Hello</span><span> world</span>')
+    expect(convert_html("\e[1mHello\e[22m world")).to eq('<span class="term-bold">Hello</span><span> world</span>')
   end
 
   it "prints italic text" do
@@ -81,7 +83,7 @@ describe Gitlab::Ci::Ansi2html do
   end
 
   it "resets italic text" do
-    expect(convert_html("\e[3mHello\e[23m world")).to eq('<span class="term-italic">Hello</span> world')
+    expect(convert_html("\e[3mHello\e[23m world")).to eq('<span class="term-italic">Hello</span><span> world</span>')
   end
 
   it "prints underlined text" do
@@ -89,7 +91,7 @@ describe Gitlab::Ci::Ansi2html do
   end
 
   it "resets underlined text" do
-    expect(convert_html("\e[4mHello\e[24m world")).to eq('<span class="term-underline">Hello</span> world')
+    expect(convert_html("\e[4mHello\e[24m world")).to eq('<span class="term-underline">Hello</span><span> world</span>')
   end
 
   it "prints concealed text" do
@@ -97,7 +99,7 @@ describe Gitlab::Ci::Ansi2html do
   end
 
   it "resets concealed text" do
-    expect(convert_html("\e[8mHello\e[28m world")).to eq('<span class="term-conceal">Hello</span> world')
+    expect(convert_html("\e[8mHello\e[28m world")).to eq('<span class="term-conceal">Hello</span><span> world</span>')
   end
 
   it "prints crossed-out text" do
@@ -105,7 +107,7 @@ describe Gitlab::Ci::Ansi2html do
   end
 
   it "resets crossed-out text" do
-    expect(convert_html("\e[9mHello\e[29m world")).to eq('<span class="term-cross">Hello</span> world')
+    expect(convert_html("\e[9mHello\e[29m world")).to eq('<span class="term-cross">Hello</span><span> world</span>')
   end
 
   it "can print 256 xterm fg colors" do
@@ -137,15 +139,15 @@ describe Gitlab::Ci::Ansi2html do
   end
 
   it "prints &lt;" do
-    expect(convert_html("<")).to eq('&lt;')
+    expect(convert_html("<")).to eq('<span>&lt;</span>')
   end
 
   it "replaces newlines with line break tags" do
-    expect(convert_html("\n")).to eq('<br>')
+    expect(convert_html("\n")).to eq('<span><br/></span>')
   end
 
   it "groups carriage returns with newlines" do
-    expect(convert_html("\r\n")).to eq('<br>')
+    expect(convert_html("\r\n")).to eq('<span><br/></span>')
   end
 
   describe "incremental update" do
@@ -166,14 +168,14 @@ describe Gitlab::Ci::Ansi2html do
       let(:pre_text) { "\e[1mHello" }
       let(:pre_html) { "<span class=\"term-bold\">Hello</span>" }
       let(:text) { "\e[1mWorld" }
-      let(:html) { "<span class=\"term-bold\"></span><span class=\"term-bold\">World</span>" }
+      let(:html) { "<span class=\"term-bold\">World</span>" }
 
       it_behaves_like 'stateable converter'
     end
 
     context "with split sequence" do
       let(:pre_text) { "\e[1m" }
-      let(:pre_html) { "<span class=\"term-bold\"></span>" }
+      let(:pre_html) { "" }
       let(:text) { "Hello" }
       let(:html) { "<span class=\"term-bold\">Hello</span>" }
 
@@ -182,7 +184,7 @@ describe Gitlab::Ci::Ansi2html do
 
     context "with partial sequence" do
       let(:pre_text) { "Hello\e" }
-      let(:pre_html) { "Hello" }
+      let(:pre_html) { "<span>Hello</span>" }
       let(:text) { "[1m World" }
       let(:html) { "<span class=\"term-bold\"> World</span>" }
 
@@ -191,9 +193,9 @@ describe Gitlab::Ci::Ansi2html do
 
     context 'with new line' do
       let(:pre_text) { "Hello\r" }
-      let(:pre_html) { "Hello\r" }
+      let(:pre_html) { "<span>Hello\r</span>" }
       let(:text) { "\nWorld" }
-      let(:html) { "<br>World" }
+      let(:html) { "<span><br/>World</span>" }
 
       it_behaves_like 'stateable converter'
     end
@@ -207,20 +209,20 @@ describe Gitlab::Ci::Ansi2html do
     let(:section_start) { "section_start:#{section_start_time.to_i}:#{section_name}\r\033[0K"}
     let(:section_end) { "section_end:#{section_end_time.to_i}:#{section_name}\r\033[0K"}
     let(:section_start_html) do
-      '<div class="hidden" data-action="start"'\
-      " data-timestamp=\"#{section_start_time.to_i}\" data-section=\"#{section_name}\">"\
-      "#{section_start[0...-5]}</div>"
+      '<div class="section-start"' \
+      " data-timestamp=\"#{section_start_time.to_i}\" data-section=\"#{class_name(section_name)}\"" \
+      ' role="button"></div>'
     end
     let(:section_end_html) do
-      '<div class="hidden" data-action="end"'\
-      " data-timestamp=\"#{section_end_time.to_i}\" data-section=\"#{section_name}\">"\
-      "#{section_end[0...-5]}</div>"
+      "<div class=\"section-end\" data-section=\"#{class_name(section_name)}\"></div>"
     end
 
     shared_examples 'forbidden char in section_name' do
       it 'ignores sections' do
         text = "#{section_start}Some text#{section_end}"
-        html = text.gsub("\033[0K", '').gsub('<', '&lt;')
+        class_name_start = section_start.gsub("\033[0K", '').gsub('<', '&lt;')
+        class_name_end = section_end.gsub("\033[0K", '').gsub('<', '&lt;')
+        html = %{<span>#{class_name_start}Some text#{class_name_end}</span>}
 
         expect(convert_html(text)).to eq(html)
       end
@@ -230,8 +232,11 @@ describe Gitlab::Ci::Ansi2html do
       let(:text) { "#{section_start}Some text#{section_end}" }
 
       it 'prints light red' do
-        text = "#{section_start}\e[91mHello\e[0m\n#{section_end}"
-        html = %{#{section_start_html}<span class="term-fg-l-red">Hello</span><br>#{section_end_html}}
+        text = "#{section_start}\e[91mHello\e[0m\nLine 1\nLine 2\nLine 3\n#{section_end}"
+        header = %{<span class="term-fg-l-red section section-header js-s-#{class_name(section_name)}">Hello</span>}
+        line_break = %{<span class="section section-header js-s-#{class_name(section_name)}"><br/></span>}
+        output_line = %{<span class="section line js-s-#{class_name(section_name)}">Line 1<br/>Line 2<br/>Line 3<br/></span>}
+        html = "#{section_start_html}#{header}#{line_break}#{output_line}#{section_end_html}"
 
         expect(convert_html(text)).to eq(html)
       end
@@ -293,5 +298,9 @@ describe Gitlab::Ci::Ansi2html do
   def convert_html(data)
     stream = StringIO.new(data)
     subject.convert(stream).html
+  end
+
+  def class_name(section)
+    subject::Converter.new.section_to_class_name(section)
   end
 end

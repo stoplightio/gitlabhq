@@ -1,10 +1,16 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Banzai::Filter::RelativeLinkFilter do
+  include GitHelpers
+  include RepoHelpers
+
   def filter(doc, contexts = {})
     contexts.reverse_merge!({
       commit:         commit,
       project:        project,
+      current_user:   user,
       group:          group,
       project_wiki:   project_wiki,
       ref:            ref,
@@ -23,6 +29,10 @@ describe Banzai::Filter::RelativeLinkFilter do
     %(<video src="#{path}"></video>)
   end
 
+  def audio(path)
+    %(<audio src="#{path}"></audio>)
+  end
+
   def link(path)
     %(<a href="#{path}">#{path}</a>)
   end
@@ -31,7 +41,14 @@ describe Banzai::Filter::RelativeLinkFilter do
     %(<div>#{element}</div>)
   end
 
-  let(:project)        { create(:project, :repository) }
+  def allow_gitaly_n_plus_1
+    Gitlab::GitalyClient.allow_n_plus_1_calls do
+      yield
+    end
+  end
+
+  let(:project)        { create(:project, :repository, :public) }
+  let(:user)           { create(:user) }
   let(:group)          { nil }
   let(:project_path)   { project.full_path }
   let(:ref)            { 'markdown' }
@@ -39,6 +56,19 @@ describe Banzai::Filter::RelativeLinkFilter do
   let(:project_wiki)   { nil }
   let(:requested_path) { '/' }
   let(:only_path)      { true }
+
+  it 'does not trigger a gitaly n+1', :request_store do
+    raw_doc = ""
+
+    allow_gitaly_n_plus_1 do
+      30.times do |i|
+        create_file_in_repo(project, ref, ref, "new_file_#{i}", "x" )
+        raw_doc += link("new_file_#{i}")
+      end
+    end
+
+    expect { filter(raw_doc) }.to change { Gitlab::GitalyClient.get_request_count }.by(2)
+  end
 
   shared_examples :preserve_unchanged do
     it 'does not modify any relative URL in anchor' do
@@ -55,6 +85,12 @@ describe Banzai::Filter::RelativeLinkFilter do
       doc = filter(video('files/videos/intro.mp4'), commit: project.commit('video'), ref: 'video')
 
       expect(doc.at_css('video')['src']).to eq 'files/videos/intro.mp4'
+    end
+
+    it 'does not modify any relative URL in audio' do
+      doc = filter(audio('files/audio/sample.wav'), commit: project.commit('audio'), ref: 'audio')
+
+      expect(doc.at_css('audio')['src']).to eq 'files/audio/sample.wav'
     end
   end
 
@@ -73,6 +109,11 @@ describe Banzai::Filter::RelativeLinkFilter do
     include_examples :preserve_unchanged
   end
 
+  context 'without project repository access' do
+    let(:project) { create(:project, :repository, repository_access_level: ProjectFeature::PRIVATE) }
+    include_examples :preserve_unchanged
+  end
+
   it 'does not raise an exception on invalid URIs' do
     act = link("://foo")
     expect { filter(act) }.not_to raise_error
@@ -80,6 +121,16 @@ describe Banzai::Filter::RelativeLinkFilter do
 
   it 'does not raise an exception with a garbled path' do
     act = link("open(/var/tmp/):%20/location%0Afrom:%20/test")
+    expect { filter(act) }.not_to raise_error
+  end
+
+  it 'does not explode with an escaped null byte' do
+    act = link("/%00")
+    expect { filter(act) }.not_to raise_error
+  end
+
+  it 'does not raise an exception with a space in the path' do
+    act = link("/uploads/d18213acd3732630991986120e167e3d/Landscape_8.jpg  \nBut here's some more unexpected text :smile:)")
     expect { filter(act) }.not_to raise_error
   end
 
@@ -94,6 +145,13 @@ describe Banzai::Filter::RelativeLinkFilter do
       doc = filter(link('/doc/api/README.md'))
       expect(doc.at_css('a')['href'])
         .to eq "/#{project_path}/blob/#{ref}/doc/api/README.md"
+    end
+
+    it 'does not modify relative URLs in system notes' do
+      path = "#{project_path}/merge_requests/1/diffs"
+      doc = filter(link(path), system_note: true)
+
+      expect(doc.at_css('a')['href']).to eq path
     end
 
     it 'ignores absolute URLs with two leading slashes' do
@@ -170,6 +228,13 @@ describe Banzai::Filter::RelativeLinkFilter do
         .to eq "/#{project_path}/raw/video/files/videos/intro.mp4"
     end
 
+    it 'rebuilds relative URL for audio in the repo' do
+      doc = filter(audio('files/audio/sample.wav'), commit: project.commit('audio'), ref: 'audio')
+
+      expect(doc.at_css('audio')['src'])
+        .to eq "/#{project_path}/raw/audio/files/audio/sample.wav"
+    end
+
     it 'does not modify relative URL with an anchor only' do
       doc = filter(link('#section-1'))
       expect(doc.at_css('a')['href']).to eq '#section-1'
@@ -178,6 +243,12 @@ describe Banzai::Filter::RelativeLinkFilter do
     it 'does not modify absolute URL' do
       doc = filter(link('http://example.com'))
       expect(doc.at_css('a')['href']).to eq 'http://example.com'
+    end
+
+    it 'does not call gitaly' do
+      filter(link('http://example.com'))
+
+      expect(described_class).not_to receive(:get_blob_types)
     end
 
     it 'supports Unicode filenames' do
@@ -218,16 +289,18 @@ describe Banzai::Filter::RelativeLinkFilter do
     end
 
     context 'when ref name contains special chars' do
-      let(:ref) {'mark#\'@],+;-._/#@!$&()+down'}
+      let(:ref) { 'mark#\'@],+;-._/#@!$&()+down' }
+      let(:path) { 'files/images/logo-black.png' }
 
       it 'correctly escapes the ref' do
-        # Adressable won't escape the '#', so we do this manually
+        # Addressable won't escape the '#', so we do this manually
         ref_escaped = 'mark%23\'@%5D,+;-._/%23@!$&()+down'
 
         # Stub this method so the branch doesn't actually need to be in the repo
         allow_any_instance_of(described_class).to receive(:uri_type).and_return(:raw)
+        allow_any_instance_of(described_class).to receive(:get_uri_types).and_return({ path: :tree })
 
-        doc = filter(link('files/images/logo-black.png'))
+        doc = filter(link(path))
 
         expect(doc.at_css('a')['href'])
           .to eq "/#{project_path}/raw/#{ref_escaped}/files/images/logo-black.png"
@@ -263,51 +336,63 @@ describe Banzai::Filter::RelativeLinkFilter do
     let(:relative_path) { "/#{project.full_path}#{upload_path}" }
 
     context 'to a project upload' do
-      context 'with an absolute URL' do
-        let(:absolute_path) { Gitlab.config.gitlab.url + relative_path }
-        let(:only_path) { false }
+      shared_examples 'rewrite project uploads' do
+        context 'with an absolute URL' do
+          let(:absolute_path) { Gitlab.config.gitlab.url + relative_path }
+          let(:only_path) { false }
 
-        it 'rewrites the link correctly' do
+          it 'rewrites the link correctly' do
+            doc = filter(link(upload_path))
+
+            expect(doc.at_css('a')['href']).to eq(absolute_path)
+          end
+        end
+
+        it 'rebuilds relative URL for a link' do
           doc = filter(link(upload_path))
+          expect(doc.at_css('a')['href']).to eq(relative_path)
 
-          expect(doc.at_css('a')['href']).to eq(absolute_path)
+          doc = filter(nested(link(upload_path)))
+          expect(doc.at_css('a')['href']).to eq(relative_path)
+        end
+
+        it 'rebuilds relative URL for an image' do
+          doc = filter(image(upload_path))
+          expect(doc.at_css('img')['src']).to eq(relative_path)
+
+          doc = filter(nested(image(upload_path)))
+          expect(doc.at_css('img')['src']).to eq(relative_path)
+        end
+
+        it 'does not modify absolute URL' do
+          doc = filter(link('http://example.com'))
+          expect(doc.at_css('a')['href']).to eq 'http://example.com'
+        end
+
+        it 'supports unescaped Unicode filenames' do
+          path = '/uploads/한글.png'
+          doc = filter(link(path))
+
+          expect(doc.at_css('a')['href']).to eq("/#{project.full_path}/uploads/%ED%95%9C%EA%B8%80.png")
+        end
+
+        it 'supports escaped Unicode filenames' do
+          path = '/uploads/한글.png'
+          escaped = Addressable::URI.escape(path)
+          doc = filter(image(escaped))
+
+          expect(doc.at_css('img')['src']).to eq("/#{project.full_path}/uploads/%ED%95%9C%EA%B8%80.png")
         end
       end
 
-      it 'rebuilds relative URL for a link' do
-        doc = filter(link(upload_path))
-        expect(doc.at_css('a')['href']).to eq(relative_path)
+      context 'without project repository access' do
+        let(:project) { create(:project, :repository, repository_access_level: ProjectFeature::PRIVATE) }
 
-        doc = filter(nested(link(upload_path)))
-        expect(doc.at_css('a')['href']).to eq(relative_path)
+        it_behaves_like 'rewrite project uploads'
       end
 
-      it 'rebuilds relative URL for an image' do
-        doc = filter(image(upload_path))
-        expect(doc.at_css('img')['src']).to eq(relative_path)
-
-        doc = filter(nested(image(upload_path)))
-        expect(doc.at_css('img')['src']).to eq(relative_path)
-      end
-
-      it 'does not modify absolute URL' do
-        doc = filter(link('http://example.com'))
-        expect(doc.at_css('a')['href']).to eq 'http://example.com'
-      end
-
-      it 'supports unescaped Unicode filenames' do
-        path = '/uploads/한글.png'
-        doc = filter(link(path))
-
-        expect(doc.at_css('a')['href']).to eq("/#{project.full_path}/uploads/%ED%95%9C%EA%B8%80.png")
-      end
-
-      it 'supports escaped Unicode filenames' do
-        path = '/uploads/한글.png'
-        escaped = Addressable::URI.escape(path)
-        doc = filter(image(escaped))
-
-        expect(doc.at_css('img')['src']).to eq("/#{project.full_path}/uploads/%ED%95%9C%EA%B8%80.png")
+      context 'with project repository access' do
+        it_behaves_like 'rewrite project uploads'
       end
     end
 
@@ -338,6 +423,60 @@ describe Banzai::Filter::RelativeLinkFilter do
         group.update!(parent: create(:group))
 
         doc = filter(upload_link)
+
+        expect(doc.at_css('a')['href']).to eq(relative_path)
+      end
+
+      it 'does not modify absolute URL' do
+        doc = filter(link('http://example.com'))
+
+        expect(doc.at_css('a')['href']).to eq 'http://example.com'
+      end
+    end
+
+    context 'to a personal snippet' do
+      let(:group) { nil }
+      let(:project) { nil }
+      let(:relative_path) { '/uploads/-/system/personal_snippet/6/674e4f07fbf0a7736c3439212896e51a/example.tar.gz' }
+
+      context 'with an absolute URL' do
+        let(:absolute_path) { Gitlab.config.gitlab.url + relative_path }
+        let(:only_path) { false }
+
+        it 'rewrites the link correctly' do
+          doc = filter(link(relative_path))
+
+          expect(doc.at_css('a')['href']).to eq(absolute_path)
+        end
+      end
+
+      context 'with a relative URL root' do
+        let(:gitlab_root) { '/gitlab' }
+        let(:absolute_path) { Gitlab.config.gitlab.url + gitlab_root + relative_path }
+
+        before do
+          stub_config_setting(relative_url_root: gitlab_root)
+        end
+
+        context 'with an absolute URL' do
+          let(:only_path) { false }
+
+          it 'rewrites the link correctly' do
+            doc = filter(link(relative_path))
+
+            expect(doc.at_css('a')['href']).to eq(absolute_path)
+          end
+        end
+
+        it 'rewrites the link correctly' do
+          doc = filter(link(relative_path))
+
+          expect(doc.at_css('a')['href']).to eq(gitlab_root + relative_path)
+        end
+      end
+
+      it 'rewrites the link correctly' do
+        doc = filter(link(relative_path))
 
         expect(doc.at_css('a')['href']).to eq(relative_path)
       end

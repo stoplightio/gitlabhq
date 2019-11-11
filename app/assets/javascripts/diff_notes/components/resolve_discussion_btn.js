@@ -1,60 +1,70 @@
-/* eslint-disable object-shorthand, func-names, space-before-function-paren, comma-dangle, no-else-return, quotes, max-len */
+/* eslint-disable no-else-return */
 /* global CommentsStore */
 /* global ResolveService */
 
 import Vue from 'vue';
+import { __ } from '~/locale';
 
 const ResolveDiscussionBtn = Vue.extend({
   props: {
-    discussionId: String,
-    mergeRequestId: Number,
-    canResolve: Boolean,
+    discussionId: {
+      type: String,
+      required: true,
+    },
+    mergeRequestId: {
+      type: Number,
+      required: true,
+    },
+    canResolve: {
+      type: Boolean,
+      required: true,
+    },
   },
-  data: function() {
+  data() {
     return {
       discussion: {},
     };
   },
   computed: {
-    showButton: function () {
+    showButton() {
       if (this.discussion) {
         return this.discussion.isResolvable();
       } else {
         return false;
       }
     },
-    isDiscussionResolved: function () {
+    isDiscussionResolved() {
       if (this.discussion) {
         return this.discussion.isResolved();
       } else {
         return false;
       }
     },
-    buttonText: function () {
+    buttonText() {
       if (this.isDiscussionResolved) {
-        return "Unresolve discussion";
+        return __('Unresolve discussion');
       } else {
-        return "Resolve discussion";
+        return __('Resolve discussion');
       }
     },
-    loading: function () {
+    loading() {
       if (this.discussion) {
         return this.discussion.loading;
       } else {
         return false;
       }
-    }
+    },
   },
-  methods: {
-    resolve: function () {
-      ResolveService.toggleResolveForDiscussion(this.mergeRequestId, this.discussionId);
-    }
-  },
-  created: function () {
+  created() {
     CommentsStore.createDiscussion(this.discussionId, this.canResolve);
 
     this.discussion = CommentsStore.state[this.discussionId];
-  }
+  },
+  methods: {
+    resolve() {
+      ResolveService.toggleResolveForDiscussion(this.mergeRequestId, this.discussionId);
+    },
+  },
 });
 
 Vue.component('resolve-discussion-btn', ResolveDiscussionBtn);

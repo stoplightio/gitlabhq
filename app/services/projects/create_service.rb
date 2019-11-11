@@ -1,28 +1,27 @@
+# frozen_string_literal: true
+
 module Projects
   class CreateService < BaseService
+    include ValidatesClassificationLabel
+
     def initialize(user, params)
-      @current_user, @params = user, params.dup
+      @current_user, @params  = user, params.dup
+      @skip_wiki              = @params.delete(:skip_wiki)
+      @initialize_with_readme = Gitlab::Utils.to_boolean(@params.delete(:initialize_with_readme))
+      @import_data            = @params.delete(:import_data)
+      @relations_block        = @params.delete(:relations_block)
     end
 
     def execute
-      if @params[:template_name]&.present?
+      if create_from_template?
         return ::Projects::CreateFromTemplateService.new(current_user, params).execute
       end
-
-      forked_from_project_id = params.delete(:forked_from_project_id)
-      import_data = params.delete(:import_data)
-      @skip_wiki = params.delete(:skip_wiki)
 
       @project = Project.new(params)
 
       # Make sure that the user is allowed to use the specified visibility level
-      unless Gitlab::VisibilityLevel.allowed_for?(current_user, @project.visibility_level)
-        deny_visibility_level(@project)
-        return @project
-      end
-
-      unless allowed_fork?(forked_from_project_id)
-        @project.errors.add(:forked_from_project_id, 'is forbidden')
+      if project_visibility.restricted?
+        deny_visibility_level(@project, project_visibility.visibility_level)
         return @project
       end
 
@@ -44,18 +43,17 @@ module Projects
         @project.namespace_id = current_user.namespace_id
       end
 
+      @relations_block&.call(@project)
       yield(@project) if block_given?
+
+      validate_classification_label(@project, :external_authorization_classification_label)
 
       # If the block added errors, don't try to save the project
       return @project if @project.errors.any?
 
       @project.creator = current_user
 
-      if forked_from_project_id
-        @project.build_forked_project_link(forked_from_project_id: forked_from_project_id)
-      end
-
-      save_project_and_import_data(import_data)
+      save_project_and_import_data
 
       after_create_actions if @project.persisted?
 
@@ -76,17 +74,12 @@ module Projects
       @project.errors.add(:namespace, "is not valid")
     end
 
-    def allowed_fork?(source_project_id)
-      return true if source_project_id.nil?
-
-      source_project = Project.find_by(id: source_project_id)
-      current_user.can?(:fork_project, source_project)
-    end
-
+    # rubocop: disable CodeReuse/ActiveRecord
     def allowed_namespace?(user, namespace_id)
       namespace = Namespace.find_by(id: namespace_id)
       current_user.can?(:create_projects, namespace)
     end
+    # rubocop: enable CodeReuse/ActiveRecord
 
     def after_create_actions
       log_info("#{@project.owner.name} created a new project \"#{@project.full_name}\"")
@@ -96,12 +89,16 @@ module Projects
         @project.create_wiki unless skip_wiki?
       end
 
+      @project.track_project_repository
+
       event_service.create_project(@project, current_user)
       system_hook_service.execute_hooks_for(@project, :create)
 
       setup_authorizations
 
       current_user.invalidate_personal_projects_count
+
+      create_readme if @initialize_with_readme
     end
 
     # Refresh the current user's authorizations inline (so they can access the
@@ -112,17 +109,28 @@ module Projects
         @project.group.refresh_members_authorized_projects(blocking: false)
         current_user.refresh_authorized_projects
       else
-        @project.add_master(@project.namespace.owner, current_user: current_user)
+        @project.add_maintainer(@project.namespace.owner, current_user: current_user)
       end
+    end
+
+    def create_readme
+      commit_attrs = {
+        branch_name: 'master',
+        commit_message: 'Initial commit',
+        file_path: 'README.md',
+        file_content: "# #{@project.name}\n\n#{@project.description}"
+      }
+
+      Files::CreateService.new(@project, current_user, commit_attrs).execute
     end
 
     def skip_wiki?
       !@project.feature_available?(:wiki, current_user) || @skip_wiki
     end
 
-    def save_project_and_import_data(import_data)
+    def save_project_and_import_data
       Project.transaction do
-        @project.create_or_update_import_data(data: import_data[:data], credentials: import_data[:credentials]) if import_data
+        @project.create_or_update_import_data(data: @import_data[:data], credentials: @import_data[:credentials]) if @import_data
 
         if @project.save
           unless @project.gitlab_project_import?
@@ -142,21 +150,23 @@ module Projects
       log_message = message.dup
 
       log_message << " Project ID: #{@project.id}" if @project&.id
-      Rails.logger.error(log_message)
+      Rails.logger.error(log_message) # rubocop:disable Gitlab/RailsLogger
 
-      if @project
-        @project.mark_import_as_failed(message) if @project.persisted? && @project.import?
+      if @project && @project.persisted? && @project.import_state
+        @project.import_state.mark_as_failed(message)
       end
 
       @project
     end
 
+    # rubocop: disable CodeReuse/ActiveRecord
     def create_services_from_active_templates(project)
       Service.where(template: true, active: true).each do |template|
         service = Service.build_from_template(project.id, template)
         service.save!
       end
     end
+    # rubocop: enable CodeReuse/ActiveRecord
 
     def set_project_name_from_path
       # Set project name from path
@@ -174,12 +184,24 @@ module Projects
 
     private
 
+    def create_from_template?
+      @params[:template_name].present? || @params[:template_project_id].present?
+    end
+
     def import_schedule
       if @project.errors.empty?
-        @project.import_schedule if @project.import? && !@project.bare_repository_import?
+        @project.import_state.schedule if @project.import? && !@project.bare_repository_import?
       else
         fail(error: @project.errors.full_messages.join(', '))
       end
     end
+
+    def project_visibility
+      @project_visibility ||= Gitlab::VisibilityLevelChecker
+        .new(current_user, @project, project_params: { import_data: @import_data })
+        .level_restricted?
+    end
   end
 end
+
+Projects::CreateService.prepend_if_ee('EE::Projects::CreateService')

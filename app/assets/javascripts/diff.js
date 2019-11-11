@@ -5,7 +5,7 @@ import { __ } from '~/locale';
 import { getLocationHash } from './lib/utils/url_utility';
 import FilesCommentButton from './files_comment_button';
 import SingleFileDiff from './single_file_diff';
-import imageDiffHelper from './image_diff/helpers/index';
+import initImageDiffHelper from './image_diff/helpers/init_image_diff';
 
 const UNFOLD_COUNT = 20;
 let isBound = false;
@@ -21,11 +21,14 @@ export default class Diff {
     });
 
     const tab = document.getElementById('diffs');
-    if (!tab || (tab && tab.dataset && tab.dataset.isLocked !== '')) FilesCommentButton.init($diffFile);
+    if (!tab || (tab && tab.dataset && tab.dataset.isLocked !== ''))
+      FilesCommentButton.init($diffFile);
 
-    const firstFile = $('.files').first().get(0);
+    const firstFile = $('.files')
+      .first()
+      .get(0);
     const canCreateNote = firstFile && firstFile.hasAttribute('data-can-create-note');
-    $diffFile.each((index, file) => imageDiffHelper.initImageDiff(file, canCreateNote));
+    $diffFile.each((index, file) => initImageDiffHelper.initImageDiff(file, canCreateNote));
 
     if (!isBound) {
       $(document)
@@ -73,9 +76,10 @@ export default class Diff {
     const view = file.data('view');
 
     const params = { since, to, bottom, offset, unfold, view };
-    axios.get(link, { params })
-    .then(({ data }) => $target.parent().replaceWith(data))
-    .catch(() => flash(__('An error occurred while loading diff')));
+    axios
+      .get(link, { params })
+      .then(({ data }) => $target.parent().replaceWith(data))
+      .catch(() => flash(__('An error occurred while loading diff')));
   }
 
   openAnchoredDiff(cb) {

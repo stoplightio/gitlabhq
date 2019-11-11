@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class DeviseMailer < Devise::Mailer
   default from: "#{Gitlab.config.gitlab.email_display_name} <#{Gitlab.config.gitlab.email_from}>"
   default reply_to: Gitlab.config.gitlab.email_reply_to
@@ -5,12 +7,14 @@ class DeviseMailer < Devise::Mailer
   layout 'mailer/devise'
 
   helper EmailsHelper
+  helper ApplicationHelper
 
   protected
 
   def subject_for(key)
-    subject = super
-    subject << " | #{Gitlab.config.gitlab.email_subject_suffix}" if Gitlab.config.gitlab.email_subject_suffix.present?
-    subject
+    subject = [super]
+    subject << Gitlab.config.gitlab.email_subject_suffix if Gitlab.config.gitlab.email_subject_suffix.present?
+
+    subject.join(' | ')
   end
 end

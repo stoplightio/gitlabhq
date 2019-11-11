@@ -1,30 +1,45 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
-feature 'Login' do
+describe 'Login' do
   include TermsHelper
+  include UserLoginHelper
 
-  scenario 'Successful user signin invalidates password reset token' do
-    user = create(:user)
+  before do
+    stub_authentication_activity_metrics(debug: true)
+  end
 
-    expect(user.reset_password_token).to be_nil
+  describe 'password reset token after successful sign in' do
+    it 'invalidates password reset token' do
+      expect(authentication_metrics)
+        .to increment(:user_authenticated_counter)
 
-    visit new_user_password_path
-    fill_in 'user_email', with: user.email
-    click_button 'Reset password'
+      user = create(:user)
 
-    user.reload
-    expect(user.reset_password_token).not_to be_nil
+      expect(user.reset_password_token).to be_nil
 
-    find('a[href="#login-pane"]').click
-    gitlab_sign_in(user)
-    expect(current_path).to eq root_path
+      visit new_user_password_path
+      fill_in 'user_email', with: user.email
+      click_button 'Reset password'
 
-    user.reload
-    expect(user.reset_password_token).to be_nil
+      user.reload
+      expect(user.reset_password_token).not_to be_nil
+
+      find('a[href="#login-pane"]').click
+      gitlab_sign_in(user)
+      expect(current_path).to eq root_path
+
+      user.reload
+      expect(user.reset_password_token).to be_nil
+    end
   end
 
   describe 'initial login after setup' do
     it 'allows the initial admin to create a password' do
+      expect(authentication_metrics)
+        .to increment(:user_authenticated_counter)
+
       # This behavior is dependent on there only being one user
       User.delete_all
 
@@ -56,6 +71,11 @@ feature 'Login' do
 
   describe 'with a blocked account' do
     it 'prevents the user from logging in' do
+      expect(authentication_metrics)
+        .to increment(:user_blocked_counter)
+        .and increment(:user_unauthenticated_counter)
+        .and increment(:user_session_destroyed_counter).twice
+
       user = create(:user, :blocked)
 
       gitlab_sign_in(user)
@@ -64,21 +84,71 @@ feature 'Login' do
     end
 
     it 'does not update Devise trackable attributes', :clean_gitlab_redis_shared_state do
+      expect(authentication_metrics)
+        .to increment(:user_blocked_counter)
+        .and increment(:user_unauthenticated_counter)
+        .and increment(:user_session_destroyed_counter).twice
+
       user = create(:user, :blocked)
 
       expect { gitlab_sign_in(user) }.not_to change { user.reload.sign_in_count }
     end
   end
 
+  describe 'with an unconfirmed email address' do
+    let!(:user) { create(:user, confirmed_at: nil) }
+    let(:grace_period) { 2.days }
+
+    before do
+      stub_application_setting(send_user_confirmation_email: true)
+      allow(User).to receive(:allow_unconfirmed_access_for).and_return grace_period
+    end
+
+    context 'within the grace period' do
+      it 'allows to login' do
+        expect(authentication_metrics).to increment(:user_authenticated_counter)
+
+        gitlab_sign_in(user)
+
+        expect(page).not_to have_content('You have to confirm your email address before continuing.')
+        expect(page).not_to have_link('Resend confirmation email', href: new_user_confirmation_path)
+      end
+    end
+
+    context 'when the confirmation grace period is expired' do
+      it 'prevents the user from logging in and renders a resend confirmation email link' do
+        travel_to((grace_period + 1.day).from_now) do
+          expect(authentication_metrics)
+            .to increment(:user_unauthenticated_counter)
+            .and increment(:user_session_destroyed_counter).twice
+
+          gitlab_sign_in(user)
+
+          expect(page).to have_content('You have to confirm your email address before continuing.')
+          expect(page).to have_link('Resend confirmation email', href: new_user_confirmation_path)
+        end
+      end
+    end
+  end
+
   describe 'with the ghost user' do
     it 'disallows login' do
+      expect(authentication_metrics)
+        .to increment(:user_unauthenticated_counter)
+        .and increment(:user_password_invalid_counter)
+
       gitlab_sign_in(User.ghost)
 
       expect(page).to have_content('Invalid Login or password.')
     end
 
     it 'does not update Devise trackable attributes', :clean_gitlab_redis_shared_state do
-      expect { gitlab_sign_in(User.ghost) }.not_to change { User.ghost.reload.sign_in_count }
+      expect(authentication_metrics)
+        .to increment(:user_unauthenticated_counter)
+        .and increment(:user_password_invalid_counter)
+
+      expect { gitlab_sign_in(User.ghost) }
+        .not_to change { User.ghost.reload.sign_in_count }
     end
   end
 
@@ -93,17 +163,28 @@ feature 'Login' do
 
       before do
         gitlab_sign_in(user, remember: true)
+
         expect(page).to have_content('Two-Factor Authentication')
       end
 
       it 'does not show a "You are already signed in." error message' do
+        expect(authentication_metrics)
+          .to increment(:user_authenticated_counter)
+          .and increment(:user_two_factor_authenticated_counter)
+
         enter_code(user.current_otp)
-        expect(page).not_to have_content('You are already signed in.')
+
+        expect(page).not_to have_content(I18n.t('devise.failure.already_authenticated'))
       end
 
       context 'using one-time code' do
         it 'allows login with valid code' do
+          expect(authentication_metrics)
+            .to increment(:user_authenticated_counter)
+            .and increment(:user_two_factor_authenticated_counter)
+
           enter_code(user.current_otp)
+
           expect(current_path).to eq root_path
         end
 
@@ -114,16 +195,33 @@ feature 'Login' do
         end
 
         it 'blocks login with invalid code' do
+          # TODO invalid 2FA code does not generate any events
+          # See gitlab-org/gitlab-ce#49785
+
           enter_code('foo')
+
           expect(page).to have_content('Invalid two-factor code')
         end
 
         it 'allows login with invalid code, then valid code' do
+          expect(authentication_metrics)
+            .to increment(:user_authenticated_counter)
+            .and increment(:user_two_factor_authenticated_counter)
+
           enter_code('foo')
           expect(page).to have_content('Invalid two-factor code')
 
           enter_code(user.current_otp)
           expect(current_path).to eq root_path
+        end
+
+        it 'triggers ActiveSession.cleanup for the user' do
+          expect(authentication_metrics)
+            .to increment(:user_authenticated_counter)
+            .and increment(:user_two_factor_authenticated_counter)
+          expect(ActiveSession).to receive(:cleanup).with(user).once.and_call_original
+
+          enter_code(user.current_otp)
         end
       end
 
@@ -139,16 +237,30 @@ feature 'Login' do
 
         context 'with valid code' do
           it 'allows login' do
+            expect(authentication_metrics)
+              .to increment(:user_authenticated_counter)
+              .and increment(:user_two_factor_authenticated_counter)
+
             enter_code(codes.sample)
+
             expect(current_path).to eq root_path
           end
 
           it 'invalidates the used code' do
+            expect(authentication_metrics)
+              .to increment(:user_authenticated_counter)
+              .and increment(:user_two_factor_authenticated_counter)
+
             expect { enter_code(codes.sample) }
               .to change { user.reload.otp_backup_codes.size }.by(-1)
           end
 
           it 'invalidates backup codes twice in a row' do
+            expect(authentication_metrics)
+              .to increment(:user_authenticated_counter).twice
+              .and increment(:user_two_factor_authenticated_counter).twice
+              .and increment(:user_session_destroyed_counter)
+
             random_code = codes.delete(codes.sample)
             expect { enter_code(random_code) }
               .to change { user.reload.otp_backup_codes.size }.by(-1)
@@ -159,10 +271,22 @@ feature 'Login' do
             expect { enter_code(codes.sample) }
               .to change { user.reload.otp_backup_codes.size }.by(-1)
           end
+
+          it 'triggers ActiveSession.cleanup for the user' do
+            expect(authentication_metrics)
+              .to increment(:user_authenticated_counter)
+                    .and increment(:user_two_factor_authenticated_counter)
+            expect(ActiveSession).to receive(:cleanup).with(user).once.and_call_original
+
+            enter_code(codes.sample)
+          end
         end
 
         context 'with invalid code' do
           it 'blocks login' do
+            # TODO, invalid two factor authentication does not increment
+            # metrics / counters, see gitlab-org/gitlab-ce#49785
+
             code = codes.sample
             expect(user.invalidate_otp_backup_code!(code)).to eq true
 
@@ -176,37 +300,107 @@ feature 'Login' do
       end
     end
 
-    context 'logging in via OAuth' do
-      it 'shows 2FA prompt after OAuth login' do
-        stub_omniauth_saml_config(enabled: true, auto_link_saml_user: true, allow_single_sign_on: ['saml'], providers: [mock_saml_config])
-        user = create(:omniauth_user, :two_factor, extern_uid: 'my-uid', provider: 'saml')
-        gitlab_sign_in_via('saml', user, 'my-uid')
+    context 'when logging in via OAuth' do
+      let(:user) { create(:omniauth_user, :two_factor, extern_uid: 'my-uid', provider: 'saml')}
+      let(:mock_saml_response) do
+        File.read('spec/fixtures/authentication/saml_response.xml')
+      end
 
-        expect(page).to have_content('Two-Factor Authentication')
-        enter_code(user.current_otp)
-        expect(current_path).to eq root_path
+      before do
+        stub_omniauth_saml_config(enabled: true, auto_link_saml_user: true, allow_single_sign_on: ['saml'],
+                                  providers: [mock_saml_config_with_upstream_two_factor_authn_contexts])
+      end
+
+      context 'when authn_context is worth two factors' do
+        let(:mock_saml_response) do
+          File.read('spec/fixtures/authentication/saml_response.xml')
+              .gsub('urn:oasis:names:tc:SAML:2.0:ac:classes:Password',
+                    'urn:oasis:names:tc:SAML:2.0:ac:classes:SecondFactorOTPSMS')
+        end
+
+        it 'signs user in without prompting for second factor' do
+          # TODO, OAuth authentication does not fire events,
+          # see gitlab-org/gitlab-ce#49786
+
+          expect(authentication_metrics)
+            .to increment(:user_authenticated_counter)
+          expect(ActiveSession).to receive(:cleanup).with(user).once.and_call_original
+
+          sign_in_using_saml!
+
+          expect(page).not_to have_content('Two-Factor Authentication')
+          expect(current_path).to eq root_path
+        end
+      end
+
+      context 'when two factor authentication is required' do
+        it 'shows 2FA prompt after OAuth login' do
+          expect(authentication_metrics)
+            .to increment(:user_authenticated_counter)
+            .and increment(:user_two_factor_authenticated_counter)
+          expect(ActiveSession).to receive(:cleanup).with(user).once.and_call_original
+
+          sign_in_using_saml!
+
+          expect(page).to have_content('Two-Factor Authentication')
+
+          enter_code(user.current_otp)
+
+          expect(current_path).to eq root_path
+        end
+      end
+
+      def sign_in_using_saml!
+        gitlab_sign_in_via('saml', user, 'my-uid', mock_saml_response)
       end
     end
   end
 
   describe 'without two-factor authentication' do
-    let(:user) { create(:user) }
+    context 'with correct username and password' do
+      let(:user) { create(:user) }
 
-    it 'allows basic login' do
-      gitlab_sign_in(user)
-      expect(current_path).to eq root_path
+      it 'allows basic login' do
+        expect(authentication_metrics)
+          .to increment(:user_authenticated_counter)
+
+        gitlab_sign_in(user)
+
+        expect(current_path).to eq root_path
+        expect(page).not_to have_content(I18n.t('devise.failure.already_authenticated'))
+      end
+
+      it 'does not show already signed in message when opening sign in page after login' do
+        expect(authentication_metrics)
+          .to increment(:user_authenticated_counter)
+
+        gitlab_sign_in(user)
+        visit new_user_session_path
+
+        expect(page).not_to have_content(I18n.t('devise.failure.already_authenticated'))
+      end
+
+      it 'triggers ActiveSession.cleanup for the user' do
+        expect(authentication_metrics)
+          .to increment(:user_authenticated_counter)
+        expect(ActiveSession).to receive(:cleanup).with(user).once.and_call_original
+
+        gitlab_sign_in(user)
+      end
     end
 
-    it 'does not show a "You are already signed in." error message' do
-      gitlab_sign_in(user)
-      expect(page).not_to have_content('You are already signed in.')
-    end
+    context 'with invalid username and password' do
+      let(:user) { create(:user, password: 'not-the-default') }
 
-    it 'blocks invalid login' do
-      user = create(:user, password: 'not-the-default')
+      it 'blocks invalid login' do
+        expect(authentication_metrics)
+          .to increment(:user_unauthenticated_counter)
+          .and increment(:user_password_invalid_counter)
 
-      gitlab_sign_in(user)
-      expect(page).to have_content('Invalid Login or password.')
+        gitlab_sign_in(user)
+
+        expect(page).to have_content('Invalid Login or password.')
+      end
     end
   end
 
@@ -222,18 +416,26 @@ feature 'Login' do
       context 'with grace period defined' do
         before do
           stub_application_setting(two_factor_grace_period: 48)
-          gitlab_sign_in(user)
         end
 
         context 'within the grace period' do
           it 'redirects to two-factor configuration page' do
+            expect(authentication_metrics)
+              .to increment(:user_authenticated_counter)
+
+            gitlab_sign_in(user)
+
             expect(current_path).to eq profile_two_factor_auth_path
             expect(page).to have_content('The global settings require you to enable Two-Factor Authentication for your account. You need to do this before ')
           end
 
           it 'allows skipping two-factor configuration', :js do
-            expect(current_path).to eq profile_two_factor_auth_path
+            expect(authentication_metrics)
+              .to increment(:user_authenticated_counter)
 
+            gitlab_sign_in(user)
+
+            expect(current_path).to eq profile_two_factor_auth_path
             click_link 'Configure it later'
             expect(current_path).to eq root_path
           end
@@ -243,6 +445,11 @@ feature 'Login' do
           let(:user) { create(:user, otp_grace_period_started_at: 9999.hours.ago) }
 
           it 'redirects to two-factor configuration page' do
+            expect(authentication_metrics)
+              .to increment(:user_authenticated_counter)
+
+            gitlab_sign_in(user)
+
             expect(current_path).to eq profile_two_factor_auth_path
             expect(page).to have_content(
               'The global settings require you to enable Two-Factor Authentication for your account.'
@@ -250,6 +457,11 @@ feature 'Login' do
           end
 
           it 'disallows skipping two-factor configuration', :js do
+            expect(authentication_metrics)
+              .to increment(:user_authenticated_counter)
+
+            gitlab_sign_in(user)
+
             expect(current_path).to eq profile_two_factor_auth_path
             expect(page).not_to have_link('Configure it later')
           end
@@ -259,10 +471,14 @@ feature 'Login' do
       context 'without grace period defined' do
         before do
           stub_application_setting(two_factor_grace_period: 0)
-          gitlab_sign_in(user)
         end
 
         it 'redirects to two-factor configuration page' do
+          expect(authentication_metrics)
+            .to increment(:user_authenticated_counter)
+
+          gitlab_sign_in(user)
+
           expect(current_path).to eq profile_two_factor_auth_path
           expect(page).to have_content(
             'The global settings require you to enable Two-Factor Authentication for your account.'
@@ -282,21 +498,35 @@ feature 'Login' do
       context 'with grace period defined' do
         before do
           stub_application_setting(two_factor_grace_period: 48)
-          gitlab_sign_in(user)
         end
 
         context 'within the grace period' do
           it 'redirects to two-factor configuration page' do
-            expect(current_path).to eq profile_two_factor_auth_path
-            expect(page).to have_content(
-              'The group settings for Group 1 and Group 2 require you to enable ' \
-              'Two-Factor Authentication for your account. You need to do this ' \
-              'before ')
+            Timecop.freeze do
+              expect(authentication_metrics)
+                .to increment(:user_authenticated_counter)
+
+              gitlab_sign_in(user)
+
+              expect(current_path).to eq profile_two_factor_auth_path
+              expect(page).to have_content(
+                'The group settings for Group 1 and Group 2 require you to enable '\
+                'Two-Factor Authentication for your account. '\
+                'You can leave Group 1 and leave Group 2. '\
+                'You need to do this '\
+                'before '\
+                "#{(Time.zone.now + 2.days).strftime("%a, %d %b %Y %H:%M:%S %z")}"
+              )
+            end
           end
 
           it 'allows skipping two-factor configuration', :js do
-            expect(current_path).to eq profile_two_factor_auth_path
+            expect(authentication_metrics)
+              .to increment(:user_authenticated_counter)
 
+            gitlab_sign_in(user)
+
+            expect(current_path).to eq profile_two_factor_auth_path
             click_link 'Configure it later'
             expect(current_path).to eq root_path
           end
@@ -306,6 +536,11 @@ feature 'Login' do
           let(:user) { create(:user, otp_grace_period_started_at: 9999.hours.ago) }
 
           it 'redirects to two-factor configuration page' do
+            expect(authentication_metrics)
+              .to increment(:user_authenticated_counter)
+
+            gitlab_sign_in(user)
+
             expect(current_path).to eq profile_two_factor_auth_path
             expect(page).to have_content(
               'The group settings for Group 1 and Group 2 require you to enable ' \
@@ -314,6 +549,11 @@ feature 'Login' do
           end
 
           it 'disallows skipping two-factor configuration', :js do
+            expect(authentication_metrics)
+              .to increment(:user_authenticated_counter)
+
+            gitlab_sign_in(user)
+
             expect(current_path).to eq profile_two_factor_auth_path
             expect(page).not_to have_link('Configure it later')
           end
@@ -323,14 +563,19 @@ feature 'Login' do
       context 'without grace period defined' do
         before do
           stub_application_setting(two_factor_grace_period: 0)
-          gitlab_sign_in(user)
         end
 
         it 'redirects to two-factor configuration page' do
+          expect(authentication_metrics)
+            .to increment(:user_authenticated_counter)
+
+          gitlab_sign_in(user)
+
           expect(current_path).to eq profile_two_factor_auth_path
           expect(page).to have_content(
             'The group settings for Group 1 and Group 2 require you to enable ' \
-            'Two-Factor Authentication for your account.'
+            'Two-Factor Authentication for your account. '\
+            'You can leave Group 1 and leave Group 2.'
           )
         end
       end
@@ -377,28 +622,13 @@ feature 'Login' do
         ensure_tab_pane_correctness(false)
       end
     end
+  end
 
-    def ensure_tab_pane_correctness(visit_path = true)
-      if visit_path
-        visit new_user_session_path
-      end
-
-      ensure_tab_pane_counts
-      ensure_one_active_tab
-      ensure_one_active_pane
-    end
-
-    def ensure_tab_pane_counts
-      tabs_count = page.all('[role="tab"]').size
-      expect(page).to have_selector('[role="tabpanel"]', count: tabs_count)
-    end
-
-    def ensure_one_active_tab
-      expect(page).to have_selector('ul.new-session-tabs > li > a.active', count: 1)
-    end
-
-    def ensure_one_active_pane
-      expect(page).to have_selector('.tab-pane.active', count: 1)
+  describe 'Client helper classes and flags' do
+    it 'adds client browser and platform classes to page body' do
+      visit root_path
+      expect(find('body')[:class]).to include('gl-browser-generic')
+      expect(find('body')[:class]).to include('gl-platform-other')
     end
   end
 
@@ -410,6 +640,9 @@ feature 'Login' do
     end
 
     it 'asks to accept the terms on first login' do
+      expect(authentication_metrics)
+        .to increment(:user_authenticated_counter)
+
       visit new_user_session_path
 
       fill_in 'user_login', with: user.email
@@ -422,10 +655,13 @@ feature 'Login' do
       click_button 'Accept terms'
 
       expect(current_path).to eq(root_path)
-      expect(page).not_to have_content('You are already signed in.')
+      expect(page).not_to have_content(I18n.t('devise.failure.already_authenticated'))
     end
 
     it 'does not ask for terms when the user already accepted them' do
+      expect(authentication_metrics)
+        .to increment(:user_authenticated_counter)
+
       accept_terms(user)
 
       visit new_user_session_path
@@ -446,6 +682,9 @@ feature 'Login' do
 
       context 'when the user did not enable 2FA' do
         it 'asks to set 2FA before asking to accept the terms' do
+          expect(authentication_metrics)
+            .to increment(:user_authenticated_counter)
+
           visit new_user_session_path
 
           fill_in 'user_login', with: user.email
@@ -474,6 +713,10 @@ feature 'Login' do
         end
 
         it 'asks the user to accept the terms' do
+          expect(authentication_metrics)
+            .to increment(:user_authenticated_counter)
+            .and increment(:user_two_factor_authenticated_counter)
+
           visit new_user_session_path
 
           fill_in 'user_login', with: user.email
@@ -497,6 +740,9 @@ feature 'Login' do
       end
 
       it 'asks the user to accept the terms before setting a new password' do
+        expect(authentication_metrics)
+          .to increment(:user_authenticated_counter)
+
         visit new_user_session_path
 
         fill_in 'user_login', with: user.email
@@ -525,6 +771,9 @@ feature 'Login' do
       end
 
       it 'asks the user to accept the terms before setting an email' do
+        expect(authentication_metrics)
+          .to increment(:user_authenticated_counter)
+
         gitlab_sign_in_via('saml', user, 'my-uid')
 
         expect_to_be_on_terms_page
@@ -537,6 +786,41 @@ feature 'Login' do
         click_button 'Update profile settings'
 
         expect(page).to have_content('Profile was successfully updated')
+      end
+    end
+  end
+
+  context 'when sending confirmation email and not yet confirmed' do
+    let!(:user) { create(:user, confirmed_at: nil) }
+    let(:grace_period) { 2.days }
+
+    before do
+      stub_application_setting(send_user_confirmation_email: true)
+      stub_feature_flags(soft_email_confirmation: true)
+      allow(User).to receive(:allow_unconfirmed_access_for).and_return grace_period
+    end
+
+    it 'allows login and shows a flash warning to confirm the email address' do
+      expect(authentication_metrics).to increment(:user_authenticated_counter)
+
+      gitlab_sign_in(user)
+
+      expect(current_path).to eq root_path
+      expect(page).to have_content("Please check your email (#{user.email}) to verify that you own this address.")
+    end
+
+    context "when not having confirmed within Devise's allow_unconfirmed_access_for time" do
+      it 'does not allow login and shows a flash alert to confirm the email address' do
+        travel_to((grace_period + 1.day).from_now) do
+          expect(authentication_metrics)
+            .to increment(:user_unauthenticated_counter)
+            .and increment(:user_session_destroyed_counter).twice
+
+          gitlab_sign_in(user)
+
+          expect(current_path).to eq new_user_session_path
+          expect(page).to have_content('You have to confirm your email address before continuing.')
+        end
       end
     end
   end

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class BambooService < CiService
   include ReactiveService
 
@@ -29,15 +31,15 @@ class BambooService < CiService
   end
 
   def title
-    'Atlassian Bamboo CI'
+    s_('BambooService|Atlassian Bamboo CI')
   end
 
   def description
-    'A continuous integration and build server'
+    s_('BambooService|A continuous integration and build server')
   end
 
   def help
-    'You must set up automatic revision labeling and a repository trigger in Bamboo.'
+    s_('BambooService|You must set up automatic revision labeling and a repository trigger in Bamboo.')
   end
 
   def self.to_param
@@ -47,11 +49,11 @@ class BambooService < CiService
   def fields
     [
         { type: 'text', name: 'bamboo_url',
-          placeholder: 'Bamboo root URL like https://bamboo.example.com', required: true },
+          placeholder: s_('BambooService|Bamboo root URL like https://bamboo.example.com'), required: true },
         { type: 'text', name: 'build_key',
-          placeholder: 'Bamboo build plan key like KEY', required: true },
+          placeholder: s_('BambooService|Bamboo build plan key like KEY'), required: true },
         { type: 'text', name: 'username',
-          placeholder: 'A user with API access, if applicable' },
+          placeholder: s_('BambooService|A user with API access, if applicable') },
         { type: 'password', name: 'password' }
     ]
   end
@@ -67,36 +69,55 @@ class BambooService < CiService
   def execute(data)
     return unless supported_events.include?(data[:object_kind])
 
-    get_path("updateAndBuild.action?buildKey=#{build_key}")
+    get_path("updateAndBuild.action", { buildKey: build_key })
   end
 
   def calculate_reactive_cache(sha, ref)
-    response = get_path("rest/api/latest/result?label=#{sha}")
+    response = get_path("rest/api/latest/result/byChangeset/#{sha}")
 
     { build_page: read_build_page(response), commit_status: read_commit_status(response) }
   end
 
   private
 
+  def get_build_result(response)
+    return if response.code != 200
+
+    # May be nil if no result, a single result hash, or an array if multiple results for a given changeset.
+    result = response.dig('results', 'results', 'result')
+
+    # In case of multiple results, arbitrarily assume the last one is the most relevant.
+    return result.last if result.is_a?(Array)
+
+    result
+  end
+
   def read_build_page(response)
-    if response.code != 200 || response['results']['results']['size'] == '0'
-      # If actual build link can't be determined, send user to build summary page.
-      URI.join("#{bamboo_url}/", "browse/#{build_key}").to_s
-    else
-      # If actual build link is available, go to build result page.
-      result_key = response['results']['results']['result']['planResultKey']['key']
-      URI.join("#{bamboo_url}/", "browse/#{result_key}").to_s
-    end
+    result = get_build_result(response)
+    key =
+      if result.blank?
+        # If actual build link can't be determined, send user to build summary page.
+        build_key
+      else
+        # If actual build link is available, go to build result page.
+        result.dig('planResultKey', 'key')
+      end
+
+    build_url("browse/#{key}")
   end
 
   def read_commit_status(response)
     return :error unless response.code == 200 || response.code == 404
 
-    status = if response.code == 404 || response['results']['results']['size'] == '0'
-               'Pending'
-             else
-               response['results']['results']['result']['buildState']
-             end
+    result = get_build_result(response)
+    status =
+      if result.blank?
+        'Pending'
+      else
+        result.dig('buildState')
+      end
+
+    return :error unless status.present?
 
     if status.include?('Success')
       'success'
@@ -110,21 +131,23 @@ class BambooService < CiService
   end
 
   def build_url(path)
-    URI.join("#{bamboo_url}/", path).to_s
+    Gitlab::Utils.append_path(bamboo_url, path)
   end
 
-  def get_path(path)
+  def get_path(path, query_params = {})
     url = build_url(path)
 
     if username.blank? && password.blank?
-      Gitlab::HTTP.get(url, verify: false)
+      Gitlab::HTTP.get(url, verify: false, query: query_params)
     else
-      url << '&os_authType=basic'
-      Gitlab::HTTP.get(url, verify: false,
-                            basic_auth: {
-                              username: username,
-                              password: password
-                            })
+      query_params[:os_authType] = 'basic'
+      Gitlab::HTTP.get(url,
+                       verify: false,
+                       query: query_params,
+                       basic_auth: {
+                         username: username,
+                         password: password
+                       })
     end
   end
 end

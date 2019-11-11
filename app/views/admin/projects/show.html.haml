@@ -1,6 +1,8 @@
 - add_to_breadcrumbs "Projects", admin_projects_path
 - breadcrumb_title @project.full_name
 - page_title @project.full_name, "Projects"
+- @content_class = "admin-projects"
+
 %h3.page-title
   Project: #{@project.full_name}
   = link_to edit_project_path(@project), class: "btn btn-nr float-right" do
@@ -53,6 +55,11 @@
             = @project.created_at.to_s(:medium)
 
         %li
+          %span.light ID:
+          %strong
+            = @project.id
+
+        %li
           %span.light http:
           %strong
             = link_to @project.http_url_to_repo, project_path(@project)
@@ -71,16 +78,7 @@
               = @project.repository.relative_path
 
           %li
-            %span.light Storage used:
-            %strong= storage_counter(@project.statistics.storage_size)
-            (
-            = storage_counter(@project.statistics.repository_size)
-            repository,
-            = storage_counter(@project.statistics.build_artifacts_size)
-            build artifacts,
-            = storage_counter(@project.statistics.lfs_objects_size)
-            LFS
-            )
+            = render 'shared/storage_counter_statistics', storage_size: @project.statistics&.storage_size, storage_details: @project.statistics
 
           %li
             %span.light last commit:
@@ -103,6 +101,8 @@
             %span.light archived:
             %strong project is read-only
 
+        = render_if_exists "shared_runner_status", project: @project
+
         %li
           %span.light access:
           %strong
@@ -110,13 +110,16 @@
               = visibility_level_icon(@project.visibility_level)
               = visibility_level_label(@project.visibility_level)
 
+    = render_if_exists 'admin/projects/geo_status_widget', locals: { project: @project }
+
     .card
       .card-header
         Transfer project
       .card-body
         = form_for @project, url: transfer_admin_project_path(@project), method: :put do |f|
           .form-group.row
-            = f.label :new_namespace_id, "Namespace", class: 'col-form-label col-sm-3'
+            .col-sm-3.col-form-label
+              = f.label :new_namespace_id, "Namespace"
             .col-sm-9
               .dropdown
                 = dropdown_toggle('Search for Namespace', { toggle: 'dropdown', field_name: 'new_namespace_id' }, { toggle_class: 'js-namespace-select large' })
@@ -179,7 +182,7 @@
         project members
         %span.badge.badge-pill= @project.users.size
         .float-right
-          = link_to icon('pencil-square-o', text: 'Manage access'), polymorphic_url([@project, :members]), class: "btn btn-sm"
+          = link_to icon('pencil-square-o', text: 'Manage access'), project_project_members_path(@project), class: "btn btn-sm"
       %ul.content-list.project_members.members-list
         = render partial: 'shared/members/member', collection: @project_members, as: :member, locals: { show_controls: false }
       .card-footer

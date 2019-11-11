@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Gitlab::QuickActions::CommandDefinition do
@@ -69,10 +71,40 @@ describe Gitlab::QuickActions::CommandDefinition do
         expect(subject.available?(opts)).to be true
       end
     end
+
+    context "when the command has types" do
+      before do
+        subject.types = [Issue, Commit]
+      end
+
+      context "when the command target type is allowed" do
+        it "returns true" do
+          opts[:quick_action_target] = Issue.new
+          expect(subject.available?(opts)).to be true
+        end
+      end
+
+      context "when the command target type is not allowed" do
+        it "returns true" do
+          opts[:quick_action_target] = MergeRequest.new
+          expect(subject.available?(opts)).to be false
+        end
+      end
+    end
+
+    context "when the command has no types" do
+      it "any target type is allowed" do
+        opts[:quick_action_target] = Issue.new
+        expect(subject.available?(opts)).to be true
+
+        opts[:quick_action_target] = MergeRequest.new
+        expect(subject.available?(opts)).to be true
+      end
+    end
   end
 
   describe "#execute" do
-    let(:context) { OpenStruct.new(run: false) }
+    let(:context) { OpenStruct.new(run: false, commands_executed_count: nil) }
 
     context "when the command is a noop" do
       it "doesn't execute the command" do
@@ -80,6 +112,7 @@ describe Gitlab::QuickActions::CommandDefinition do
 
         subject.execute(context, nil)
 
+        expect(context.commands_executed_count).to be_nil
         expect(context.run).to be false
       end
     end
@@ -97,6 +130,7 @@ describe Gitlab::QuickActions::CommandDefinition do
         it "doesn't execute the command" do
           subject.execute(context, nil)
 
+          expect(context.commands_executed_count).to be_nil
           expect(context.run).to be false
         end
       end
@@ -112,6 +146,7 @@ describe Gitlab::QuickActions::CommandDefinition do
               subject.execute(context, true)
 
               expect(context.run).to be true
+              expect(context.commands_executed_count).to eq(1)
             end
           end
 
@@ -120,6 +155,7 @@ describe Gitlab::QuickActions::CommandDefinition do
               subject.execute(context, nil)
 
               expect(context.run).to be true
+              expect(context.commands_executed_count).to eq(1)
             end
           end
         end
@@ -134,6 +170,7 @@ describe Gitlab::QuickActions::CommandDefinition do
               subject.execute(context, true)
 
               expect(context.run).to be true
+              expect(context.commands_executed_count).to eq(1)
             end
           end
 
@@ -184,6 +221,52 @@ describe Gitlab::QuickActions::CommandDefinition do
     end
   end
 
+  describe "#execute_message" do
+    context "when the command is a noop" do
+      it 'returns nil' do
+        expect(subject.execute_message({}, nil)).to be_nil
+      end
+    end
+
+    context "when the command is not a noop" do
+      before do
+        subject.action_block = proc { self.run = true }
+      end
+
+      context "when the command is not available" do
+        before do
+          subject.condition_block = proc { false }
+        end
+
+        it 'returns nil' do
+          expect(subject.execute_message({}, nil)).to be_nil
+        end
+      end
+
+      context "when the command is available" do
+        context 'when the execution_message is a static string' do
+          before do
+            subject.execution_message = 'Assigned jacopo'
+          end
+
+          it 'returns this static string' do
+            expect(subject.execute_message({}, nil)).to eq('Assigned jacopo')
+          end
+        end
+
+        context 'when the explanation is dynamic' do
+          before do
+            subject.execution_message = proc { |arg| "Assigned #{arg}" }
+          end
+
+          it 'invokes the proc' do
+            expect(subject.execute_message({}, 'Jacopo')).to eq('Assigned Jacopo')
+          end
+        end
+      end
+    end
+  end
+
   describe '#explain' do
     context 'when the command is not available' do
       before do
@@ -207,6 +290,19 @@ describe Gitlab::QuickActions::CommandDefinition do
         result = subject.explain({}, nil)
 
         expect(result).to eq 'Explanation'
+      end
+    end
+
+    context 'when warning is set' do
+      before do
+        subject.explanation = 'Explanation'
+        subject.warning = 'dangerous!'
+      end
+
+      it 'returns this static string' do
+        result = subject.explain({}, nil)
+
+        expect(result).to eq 'Explanation (dangerous!)'
       end
     end
 

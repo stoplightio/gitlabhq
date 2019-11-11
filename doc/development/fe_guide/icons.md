@@ -1,9 +1,9 @@
 # Icons and SVG Illustrations
 
-We manage our own Icon and Illustration library in the [gitlab-svgs][gitlab-svgs] repository.
+We manage our own Icon and Illustration library in the [`gitlab-svgs`][gitlab-svgs] repository.
 This repository is published on [npm][npm] and managed as a dependency via yarn.
 You can browse all available Icons and Illustrations [here][svg-preview].
-To upgrade to a new version run `yarn upgrade @gitlab-org/gitlab-svgs`.
+To upgrade to a new version run `yarn upgrade @gitlab/svgs`.
 
 ## Icons
 
@@ -21,10 +21,10 @@ To use a sprite Icon in HAML or Rails we use a specific helper function :
 sprite_icon(icon_name, size: nil, css_class: '')
 ```
 
--   **icon_name** Use the icon_name that you can find in the SVG Sprite
-    ([Overview is available here][svg-preview]).
--   **size (optional)** Use one of the following sizes : 16, 24, 32, 48, 72 (this will be translated into a `s16` class)
--   **css_class (optional)** If you want to add additional css classes
+- **icon_name** Use the icon_name that you can find in the SVG Sprite
+  ([Overview is available here][svg-preview]).
+- **size (optional)** Use one of the following sizes : 16, 24, 32, 48, 72 (this will be translated into a `s16` class)
+- **css_class (optional)** If you want to add additional css classes
 
 **Example**
 
@@ -59,16 +59,16 @@ export default {
 <template>
   <icon
     name="issues"
-    :size="72"
-    css-classes="icon-danger"
+    :size="24"
+    class="icon-danger"
   />
 </template>
 ```
 
--   **name** Name of the Icon in the SVG Sprite  ([Overview is available here][svg-preview]).
--   **size (optional)** Number value for the size which is then mapped to a specific CSS class
-    (Available Sizes: 8, 12, 16, 18, 24, 32, 48, 72 are mapped to `sXX` css classes)
--   **css-classes (optional)** Additional CSS Classes to add to the svg tag.
+- **name** Name of the Icon in the SVG Sprite  ([Overview is available here][svg-preview]).
+- **size (optional)** Number value for the size which is then mapped to a specific CSS class
+  (Available Sizes: 8, 12, 16, 18, 24, 32, 48, 72 are mapped to `sXX` css classes)
+- **css-classes (optional)** Additional CSS Classes to add to the svg tag.
 
 ### Usage in HTML/JS
 
@@ -111,6 +111,6 @@ export default {
 </template>
 ```
 
-[npm]: https://www.npmjs.com/package/@gitlab-org/gitlab-svgs
+[npm]: https://www.npmjs.com/package/@gitlab/svgs
 [gitlab-svgs]: https://gitlab.com/gitlab-org/gitlab-svgs
 [svg-preview]: https://gitlab-org.gitlab.io/gitlab-svgs

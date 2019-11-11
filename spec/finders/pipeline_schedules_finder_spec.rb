@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe PipelineSchedulesFinder do
@@ -12,7 +14,7 @@ describe PipelineSchedulesFinder do
     context 'when the scope is nil' do
       let(:params) { { scope: nil } }
 
-      it 'selects all pipeline pipeline schedules' do
+      it 'selects all pipeline schedules' do
         expect(subject.count).to be(2)
         expect(subject).to include(active_schedule, inactive_schedule)
       end

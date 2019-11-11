@@ -1,9 +1,12 @@
+# frozen_string_literal: true
+
 class Projects::NotesController < Projects::ApplicationController
+  include RendersNotes
   include NotesActions
   include NotesHelper
   include ToggleAwardEmoji
 
-  before_action :whitelist_query_limiting, only: [:create]
+  before_action :whitelist_query_limiting, only: [:create, :update]
   before_action :authorize_read_note!
   before_action :authorize_create_note!, only: [:create]
   before_action :authorize_resolve_note!, only: [:resolve, :unresolve]
@@ -53,7 +56,7 @@ class Projects::NotesController < Projects::ApplicationController
   private
 
   def render_json_with_notes_serializer
-    Notes::RenderService.new(current_user).execute([note])
+    prepare_notes_for_rendering([note])
 
     render json: note_serializer.represent(note)
   end
@@ -65,7 +68,7 @@ class Projects::NotesController < Projects::ApplicationController
   alias_method :awardable, :note
 
   def finder_params
-    params.merge(last_fetched_at: last_fetched_at)
+    params.merge(project: project, last_fetched_at: last_fetched_at, notes_filter: notes_filter)
   end
 
   def authorize_admin_note!
@@ -83,6 +86,6 @@ class Projects::NotesController < Projects::ApplicationController
   end
 
   def whitelist_query_limiting
-    Gitlab::QueryLimiting.whitelist('https://gitlab.com/gitlab-org/gitlab-ce/issues/42383')
+    Gitlab::QueryLimiting.whitelist('https://gitlab.com/gitlab-org/gitlab-foss/issues/42383')
   end
 end

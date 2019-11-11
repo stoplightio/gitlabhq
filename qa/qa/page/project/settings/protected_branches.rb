@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module QA
   module Page
     module Project
@@ -16,7 +18,6 @@ module QA
           end
 
           view 'app/views/projects/protected_branches/_update_protected_branch.html.haml' do
-            element :allowed_to_push
             element :allowed_to_merge
           end
 
@@ -24,8 +25,8 @@ module QA
             element :protected_branches_list
           end
 
-          view 'app/views/projects/protected_branches/shared/_protected_branch.html.haml' do
-            element :protected_branch_name
+          view 'app/views/projects/protected_branches/shared/_create_protected_branch.html.haml' do
+            element :protect_button
           end
 
           def select_branch(branch_name)
@@ -36,49 +37,36 @@ module QA
             end
           end
 
-          def allow_no_one_to_push
-            click_allow(:push, 'No one')
+          def select_allowed_to_merge(allowed)
+            select_allowed(:merge, allowed)
           end
 
-          def allow_devs_and_maintainers_to_push
-            click_allow(:push, 'Developers + Maintainers')
-          end
-
-          def allow_no_one_to_merge
-            click_allow(:merge, 'No one')
-          end
-
-          def allow_devs_and_maintainers_to_merge
-            click_allow(:merge, 'Developers + Maintainers')
+          def select_allowed_to_push(allowed)
+            select_allowed(:push, allowed)
           end
 
           def protect_branch
-            click_on 'Protect'
-          end
-
-          def last_branch_name
-            within_element(:protected_branches_list) do
-              all('.qa-protected-branch-name').last
-            end
-          end
-
-          def last_push_allowance
-            within_element(:protected_branches_list) do
-              all('.qa-allowed-to-push').last
-            end
+            click_element :protect_button
           end
 
           private
 
-          def click_allow(action, text)
+          def select_allowed(action, allowed)
             click_element :"allowed_to_#{action}_select"
 
+            allowed[:roles] = Resource::ProtectedBranch::Roles::NO_ONE unless allowed.key?(:roles)
+
             within_element(:"allowed_to_#{action}_dropdown") do
-              click_on text
+              click_on allowed[:roles]
             end
+
+            # Click the select element again to close the dropdown
+            click_element :protected_branch_select
           end
         end
       end
     end
   end
 end
+
+QA::Page::Project::Settings::ProtectedBranches.prepend_if_ee('QA::EE::Page::Project::Settings::ProtectedBranches')

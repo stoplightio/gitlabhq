@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   class ReferenceCounter
     REFERENCE_EXPIRE_TIME = 600
@@ -20,6 +22,7 @@ module Gitlab
       end
     end
 
+    # rubocop:disable Gitlab/RailsLogger
     def decrease
       redis_cmd do |redis|
         current_value = redis.decr(key)
@@ -30,6 +33,7 @@ module Gitlab
         end
       end
     end
+    # rubocop:enable Gitlab/RailsLogger
 
     private
 
@@ -37,7 +41,7 @@ module Gitlab
       Gitlab::Redis::SharedState.with { |redis| yield(redis) }
       true
     rescue => e
-      Rails.logger.warn("GitLab: An unexpected error occurred in writing to Redis: #{e}")
+      Rails.logger.warn("GitLab: An unexpected error occurred in writing to Redis: #{e}") # rubocop:disable Gitlab/RailsLogger
       false
     end
   end

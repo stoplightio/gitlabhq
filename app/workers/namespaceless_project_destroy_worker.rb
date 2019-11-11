@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # Worker to destroy projects that do not have a namespace
 #
 # It destroys everything it can without having the info about the namespace it
@@ -8,6 +10,8 @@ class NamespacelessProjectDestroyWorker
   include ApplicationWorker
   include ExceptionBacktrace
 
+  feature_category :authentication_and_authorization
+
   def perform(project_id)
     begin
       project = Project.unscoped.find(project_id)
@@ -15,7 +19,7 @@ class NamespacelessProjectDestroyWorker
       return
     end
 
-    return if project.namespace  # Reject doing anything for projects that *do* have a namespace
+    return if project.namespace # Reject doing anything for projects that *do* have a namespace
 
     project.team.truncate
 
@@ -29,8 +33,6 @@ class NamespacelessProjectDestroyWorker
   def unlink_fork(project)
     merge_requests = project.forked_from_project.merge_requests.opened.from_project(project)
 
-    merge_requests.update_all(state: 'closed')
-
-    project.forked_project_link.destroy
+    merge_requests.update_all(state_id: MergeRequest.available_states[:closed])
   end
 end

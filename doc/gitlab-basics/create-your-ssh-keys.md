@@ -1,37 +1,27 @@
-# How to create your SSH Keys
-
-1. The first thing you need to do is go to your [command line](start-using-git.md)
-   and follow the [instructions](../ssh/README.md) to generate your SSH key pair.
-
-1. Once you do that, login to GitLab with your credentials.
-1. On the upper right corner, click on your avatar and go to your **Profile settings**.
-
-    ![Profile settings dropdown](img/profile_settings.png)
-
-1. Navigate to the **SSH keys** tab.
-
-    ![SSH Keys](img/profile_settings_ssh_keys.png)
-
-3. Paste your **public** key that you generated in the first step in the 'Key'
-   box.
-
-    ![Paste SSH public key](img/profile_settings_ssh_keys_paste_pub.png)
-
-1. Optionally, give it a descriptive title so that you can recognize it in the
-   event you add multiple keys.
-
-    ![SSH key title](img/profile_settings_ssh_keys_title.png)
-
-1. Finally, click on **Add key** to add it to GitLab. You will be able to see
-   its fingerprint, its title and creation date.
-
-    ![SSH key single page](img/profile_settings_ssh_keys_single_key.png)
-
-
->**Note:**
-Once you add a key, you cannot edit it, only remove it. In case the paste
-didn't work, you will have to remove the offending key and re-add it.
-
+---
+type: howto
 ---
 
-Congratulations! You are now ready to use Git over SSH, instead of Git over HTTP!
+# Create and add your SSH public key
+
+It is best practice to use [Git over SSH instead of Git over HTTP](https://git-scm.com/book/en/v2/Git-on-the-Server-The-Protocols).
+In order to use SSH, you will need to:
+
+1. [Create an SSH key pair](#creating-your-ssh-key-pair) on your local computer.
+1. [Add the key to GitLab](#adding-your-ssh-public-key-to-gitlab).
+
+## Creating your SSH key pair
+
+1. Go to your [command line](start-using-git.md#open-a-shell).
+1. Follow the [instructions](../ssh/README.md#generating-a-new-ssh-key-pair) to generate
+   your SSH key pair.
+
+## Adding your SSH public key to GitLab
+
+To add the SSH public key to GitLab, see
+[Adding an SSH key to your GitLab account](../ssh/README.md#adding-an-ssh-key-to-your-gitlab-account).
+
+NOTE: **Note:**
+Once you add a key, you cannot edit it. If it didn't paste properly, it
+[will not work](../ssh/README.md#testing-that-everything-is-set-up-correctly), and
+you will need to remove the key from GitLab and try adding it again.

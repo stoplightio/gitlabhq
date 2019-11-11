@@ -3,6 +3,7 @@ import Ajax from '../droplab/plugins/ajax';
 import Filter from '../droplab/plugins/filter';
 import FilteredSearchDropdown from './filtered_search_dropdown';
 import DropdownUtils from './dropdown_utils';
+import { __ } from '~/locale';
 
 export default class DropdownEmoji extends FilteredSearchDropdown {
   constructor(options = {}) {
@@ -14,7 +15,7 @@ export default class DropdownEmoji extends FilteredSearchDropdown {
         loadingTemplate: this.loadingTemplate,
         onError() {
           /* eslint-disable no-new */
-          new Flash('An error occurred fetching the dropdown data.');
+          new Flash(__('An error occurred fetching the dropdown data.'));
           /* eslint-enable no-new */
         },
       },
@@ -24,8 +25,12 @@ export default class DropdownEmoji extends FilteredSearchDropdown {
     };
 
     import(/* webpackChunkName: 'emoji' */ '~/emoji')
-      .then(({ glEmojiTag }) => { this.glEmojiTag = glEmojiTag; })
-      .catch(() => { /* ignore error and leave emoji name in the search bar */ });
+      .then(({ glEmojiTag }) => {
+        this.glEmojiTag = glEmojiTag;
+      })
+      .catch(() => {
+        /* ignore error and leave emoji name in the search bar */
+      });
 
     this.unbindEvents();
     this.bindEvents();
@@ -48,7 +53,7 @@ export default class DropdownEmoji extends FilteredSearchDropdown {
   }
 
   itemClicked(e) {
-    super.itemClicked(e, (selected) => {
+    super.itemClicked(e, selected => {
       const name = selected.querySelector('.js-data-value').innerText.trim();
       return DropdownUtils.getEscapedText(name);
     });
@@ -64,16 +69,18 @@ export default class DropdownEmoji extends FilteredSearchDropdown {
 
     // Replace empty gl-emoji tag to real content
     const dropdownItems = [...this.dropdown.querySelectorAll('.filter-dropdown-item')];
-    dropdownItems.forEach((dropdownItem) => {
-      const name = dropdownItem.querySelector('.js-data-value').innerText;
-      const emojiTag = this.glEmojiTag(name);
-      const emojiElement = dropdownItem.querySelector('gl-emoji');
-      emojiElement.outerHTML = emojiTag;
+    dropdownItems.forEach(dropdownItem => {
+      const valueElement = dropdownItem.querySelector('.js-data-value');
+      if (valueElement !== null) {
+        const name = valueElement.innerText;
+        const emojiTag = this.glEmojiTag(name);
+        const emojiElement = dropdownItem.querySelector('gl-emoji');
+        emojiElement.outerHTML = emojiTag;
+      }
     });
   }
 
   init() {
-    this.droplab
-      .addHook(this.input, this.dropdown, [Ajax, Filter], this.config).init();
+    this.droplab.addHook(this.input, this.dropdown, [Ajax, Filter], this.config).init();
   }
 }

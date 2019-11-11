@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class GitlabUploader < CarrierWave::Uploader::Base
   class_attribute :options
 
@@ -61,12 +63,51 @@ class GitlabUploader < CarrierWave::Uploader::Base
     super || file&.filename
   end
 
+  def relative_path
+    return path if pathname.relative?
+
+    pathname.relative_path_from(Pathname.new(root))
+  end
+
   def model_valid?
     !!model
   end
 
   def local_url
     File.join('/', self.class.base_dir, dynamic_segment, filename)
+  end
+
+  def cached_size
+    size
+  end
+
+  def open
+    stream =
+      if file_storage?
+        File.open(path, "rb") if path
+      else
+        ::Gitlab::HttpIO.new(url, cached_size) if url
+      end
+
+    return unless stream
+    return stream unless block_given?
+
+    begin
+      yield(stream)
+    ensure
+      stream.close
+    end
+  end
+
+  # Used to replace an existing upload with another +file+ without modifying stored metadata
+  # Use this method only to repair/replace an existing upload, or to upload to a Geo secondary node
+  #
+  # @param [CarrierWave::SanitizedFile] file that will replace existing upload
+  # @return CarrierWave::SanitizedFile
+  def replace_file_without_saving!(file)
+    raise ArgumentError, 'should be a CarrierWave::SanitizedFile' unless file.is_a? CarrierWave::SanitizedFile
+
+    storage.store!(file)
   end
 
   private
@@ -90,5 +131,9 @@ class GitlabUploader < CarrierWave::Uploader::Base
     # because calling CarrierWave.clean_cache_files! will remove any files in
     # the cache directory.
     File.join(work_dir, cache_id, version_name.to_s, for_file)
+  end
+
+  def pathname
+    @pathname ||= Pathname.new(path)
   end
 end

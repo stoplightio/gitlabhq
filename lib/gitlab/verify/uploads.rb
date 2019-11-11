@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module Verify
     class Uploads < BatchVerifier
@@ -11,9 +13,11 @@ module Gitlab
 
       private
 
+      # rubocop: disable CodeReuse/ActiveRecord
       def all_relation
         Upload.all.preload(:model)
       end
+      # rubocop: enable CodeReuse/ActiveRecord
 
       def local?(upload)
         upload.local?
@@ -28,7 +32,7 @@ module Gitlab
       end
 
       def remote_object_exists?(upload)
-        upload.build_uploader.file.exists?
+        upload.retrieve_uploader.file.exists?
       end
     end
   end

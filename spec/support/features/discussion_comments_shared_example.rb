@@ -1,4 +1,6 @@
-shared_examples 'discussion comments' do |resource_name|
+# frozen_string_literal: true
+
+shared_examples 'thread comments' do |resource_name|
   let(:form_selector) { '.js-main-target-form' }
   let(:dropdown_selector) { "#{form_selector} .comment-type-dropdown" }
   let(:toggle_selector) { "#{dropdown_selector} .dropdown-toggle" }
@@ -7,7 +9,7 @@ shared_examples 'discussion comments' do |resource_name|
   let(:close_selector) { "#{form_selector} .btn-comment-and-close" }
   let(:comments_selector) { '.timeline > .note.timeline-entry' }
 
-  it 'clicking "Comment" will post a comment' do
+  it 'clicking "Comment" will post a comment', :quarantine do
     expect(page).to have_selector toggle_selector
 
     find("#{form_selector} .note-textarea").send_keys('a')
@@ -48,7 +50,7 @@ shared_examples 'discussion comments' do |resource_name|
       find(toggle_selector).click
     end
 
-    it 'has a "Comment" item (selected by default) and "Start discussion" item' do
+    it 'has a "Comment" item (selected by default) and "Start thread" item' do
       expect(page).to have_selector menu_selector
 
       find("#{menu_selector} li", match: :first)
@@ -59,7 +61,7 @@ shared_examples 'discussion comments' do |resource_name|
       expect(items.first).to have_selector '.fa-check'
       expect(items.first['class']).to match 'droplab-item-selected'
 
-      expect(items.last).to have_content 'Start discussion'
+      expect(items.last).to have_content 'Start thread'
       expect(items.last).to have_content "Discuss a specific suggestion or question#{' that needs to be resolved' if resource_name == 'merge request'}."
       expect(items.last).not_to have_selector '.fa-check'
       expect(items.last['class']).not_to match 'droplab-item-selected'
@@ -71,7 +73,7 @@ shared_examples 'discussion comments' do |resource_name|
       expect(page).not_to have_selector menu_selector
 
       find(toggle_selector).click
-      execute_script("document.querySelector('body').click()")
+      find("#{form_selector} .note-textarea").click
 
       expect(page).not_to have_selector menu_selector
     end
@@ -84,7 +86,7 @@ shared_examples 'discussion comments' do |resource_name|
       #
       # if dropdown menu is not toggled (and also not present),
       # it's "issue-type" dropdown
-      if first(menu_selector).nil?
+      if first(menu_selector, minimum: 0).nil?
         expect(find(dropdown_selector)).to have_content 'Comment'
 
         find(toggle_selector).click
@@ -103,7 +105,7 @@ shared_examples 'discussion comments' do |resource_name|
       expect(find(dropdown_selector)).to have_content 'Comment'
     end
 
-    describe 'when selecting "Start discussion"' do
+    describe 'when selecting "Start thread"' do
       before do
         find("#{menu_selector} li", match: :first)
         all("#{menu_selector} li").last.click
@@ -114,9 +116,9 @@ shared_examples 'discussion comments' do |resource_name|
 
         # on issues page, the submit input is a <button>, on other pages it is <input>
         if button.tag_name == 'button'
-          expect(find(submit_selector)).to have_content 'Start discussion'
+          expect(find(submit_selector)).to have_content 'Start thread'
         else
-          expect(find(submit_selector).value).to eq 'Start discussion'
+          expect(find(submit_selector).value).to eq 'Start thread'
         end
 
         expect(page).not_to have_selector menu_selector
@@ -124,17 +126,17 @@ shared_examples 'discussion comments' do |resource_name|
 
       if resource_name =~ /(issue|merge request)/
         it 'updates the close button text' do
-          expect(find(close_selector)).to have_content "Start discussion & close #{resource_name}"
+          expect(find(close_selector)).to have_content "Start thread & close #{resource_name}"
         end
 
         it 'typing does not change the close button text' do
           find("#{form_selector} .note-textarea").send_keys('b')
 
-          expect(find(close_selector)).to have_content "Start discussion & close #{resource_name}"
+          expect(find(close_selector)).to have_content "Start thread & close #{resource_name}"
         end
       end
 
-      describe 'creating a discussion' do
+      describe 'creating a thread' do
         before do
           find(submit_selector).click
           wait_for_requests
@@ -142,31 +144,70 @@ shared_examples 'discussion comments' do |resource_name|
           find(comments_selector, match: :first)
         end
 
-        it 'clicking "Start discussion" will post a discussion' do
+        def submit_reply(text)
+          find("#{comments_selector} .js-vue-discussion-reply").click
+          find("#{comments_selector} .note-textarea").send_keys(text)
+
+          click_button "Comment"
+          wait_for_requests
+        end
+
+        it 'clicking "Start thread" will post a thread' do
           new_comment = all(comments_selector).last
 
           expect(new_comment).to have_content 'a'
           expect(new_comment).to have_selector '.discussion'
         end
 
-        if resource_name == 'merge request'
-          let(:note_id) { find("#{comments_selector} .note", match: :first)['data-note-id'] }
+        if resource_name =~ /(issue|merge request)/
+          it 'can be replied to' do
+            submit_reply('some text')
 
-          it 'shows resolved discussion when toggled' do
-            click_button "Resolve discussion"
+            expect(page).to have_css('.discussion-notes .note', count: 2)
+            expect(page).to have_content 'Collapse replies'
+          end
+
+          it 'can be collapsed' do
+            submit_reply('another text')
+
+            find('.js-collapse-replies').click
+            expect(page).to have_css('.discussion-notes .note', count: 1)
+            expect(page).to have_content '1 reply'
+          end
+        end
+
+        if resource_name == 'merge request'
+          let(:note_id) { find("#{comments_selector} .note:first-child", match: :first)['data-note-id'] }
+          let(:reply_id) { find("#{comments_selector} .note:last-of-type", match: :first)['data-note-id'] }
+
+          it 'can be replied to after resolving' do
+            click_button "Resolve thread"
+            wait_for_requests
+
+            refresh
+            wait_for_requests
+
+            submit_reply('to reply or not reply')
+          end
+
+          it 'shows resolved thread when toggled' do
+            submit_reply('a')
+
+            click_button "Resolve thread"
+            wait_for_requests
 
             expect(page).to have_selector(".note-row-#{note_id}", visible: true)
 
             refresh
-            click_button "Toggle discussion"
+            click_button "1 reply"
 
-            expect(page).to have_selector(".note-row-#{note_id}", visible: true)
+            expect(page).to have_selector(".note-row-#{reply_id}", visible: true)
           end
         end
       end
 
       if resource_name == 'issue'
-        it "clicking 'Start discussion & close #{resource_name}' will post a discussion and close the #{resource_name}" do
+        it "clicking 'Start thread & close #{resource_name}' will post a thread and close the #{resource_name}" do
           find(close_selector).click
 
           find(comments_selector, match: :first)
@@ -185,7 +226,7 @@ shared_examples 'discussion comments' do |resource_name|
           find(toggle_selector).click
         end
 
-        it 'should have "Start discussion" selected' do
+        it 'has "Start thread" selected' do
           find("#{menu_selector} li", match: :first)
           items = all("#{menu_selector} li")
 
@@ -193,7 +234,7 @@ shared_examples 'discussion comments' do |resource_name|
           expect(items.first).not_to have_selector '.fa-check'
           expect(items.first['class']).not_to match 'droplab-item-selected'
 
-          expect(items.last).to have_content 'Start discussion'
+          expect(items.last).to have_content 'Start thread'
           expect(items.last).to have_selector '.fa-check'
           expect(items.last['class']).to match 'droplab-item-selected'
         end
@@ -228,7 +269,7 @@ shared_examples 'discussion comments' do |resource_name|
             end
           end
 
-          it 'should have "Comment" selected when opening the menu' do
+          it 'has "Comment" selected when opening the menu' do
             find(toggle_selector).click
 
             find("#{menu_selector} li", match: :first)
@@ -238,7 +279,7 @@ shared_examples 'discussion comments' do |resource_name|
             expect(items.first).to have_selector '.fa-check'
             expect(items.first['class']).to match 'droplab-item-selected'
 
-            expect(items.last).to have_content 'Start discussion'
+            expect(items.last).to have_content 'Start thread'
             expect(items.last).not_to have_selector '.fa-check'
             expect(items.last['class']).not_to match 'droplab-item-selected'
           end
@@ -260,13 +301,13 @@ shared_examples 'discussion comments' do |resource_name|
         expect(find("#{form_selector} .js-note-target-reopen")).to have_content "Comment & reopen #{resource_name}"
       end
 
-      it "should show a 'Start discussion & reopen #{resource_name}' button when 'Start discussion' is selected" do
+      it "should show a 'Start thread & reopen #{resource_name}' button when 'Start thread' is selected" do
         find(toggle_selector).click
 
         find("#{menu_selector} li", match: :first)
         all("#{menu_selector} li").last.click
 
-        expect(find("#{form_selector} .js-note-target-reopen")).to have_content "Start discussion & reopen #{resource_name}"
+        expect(find("#{form_selector} .js-note-target-reopen")).to have_content "Start thread & reopen #{resource_name}"
       end
     end
   end

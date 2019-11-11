@@ -1,8 +1,8 @@
-/* eslint-disable func-names, space-before-function-paren, object-shorthand, no-var, one-var, camelcase, one-var-declaration-per-line, comma-dangle, no-param-reassign, no-return-assign, quotes, prefer-arrow-callback, wrap-iife, consistent-return, no-unused-vars, max-len, no-cond-assign, no-else-return, max-len */
+/* eslint-disable func-names, no-var, one-var, camelcase, no-param-reassign, no-return-assign, consistent-return, no-cond-assign, no-else-return */
 import _ from 'underscore';
 
 export default {
-  parse_log: function(log) {
+  parse_log(log) {
     var by_author, by_email, data, entry, i, len, total, normalized_email;
     total = {};
     by_author = {};
@@ -25,15 +25,15 @@ export default {
     total = _.toArray(total);
     by_author = _.toArray(by_author);
     return {
-      total: total,
-      by_author: by_author
+      total,
+      by_author,
     };
   },
-  add_date: function(date, collection) {
+  add_date(date, collection) {
     collection[date] = {};
-    return collection[date].date = date;
+    return (collection[date].date = date);
   },
-  add_author: function(author, by_author, by_email) {
+  add_author(author, by_author, by_email) {
     var data, normalized_email;
     data = {};
     data.author_name = author.author_name;
@@ -43,96 +43,101 @@ export default {
     by_email[normalized_email] = data;
     return data;
   },
-  store_data: function(entry, total, by_author) {
+  store_data(entry, total, by_author) {
     this.store_commits(total, by_author);
     this.store_additions(entry, total, by_author);
     return this.store_deletions(entry, total, by_author);
   },
-  store_commits: function(total, by_author) {
-    this.add(total, "commits", 1);
-    return this.add(by_author, "commits", 1);
+  store_commits(total, by_author) {
+    this.add(total, 'commits', 1);
+    return this.add(by_author, 'commits', 1);
   },
-  add: function(collection, field, value) {
+  add(collection, field, value) {
     if (collection[field] == null) {
       collection[field] = 0;
     }
-    return collection[field] += value;
+    return (collection[field] += value);
   },
-  store_additions: function(entry, total, by_author) {
+  store_additions(entry, total, by_author) {
     if (entry.additions == null) {
       entry.additions = 0;
     }
-    this.add(total, "additions", entry.additions);
-    return this.add(by_author, "additions", entry.additions);
+    this.add(total, 'additions', entry.additions);
+    return this.add(by_author, 'additions', entry.additions);
   },
-  store_deletions: function(entry, total, by_author) {
+  store_deletions(entry, total, by_author) {
     if (entry.deletions == null) {
       entry.deletions = 0;
     }
-    this.add(total, "deletions", entry.deletions);
-    return this.add(by_author, "deletions", entry.deletions);
+    this.add(total, 'deletions', entry.deletions);
+    return this.add(by_author, 'deletions', entry.deletions);
   },
-  get_total_data: function(parsed_log, field) {
+  get_total_data(parsed_log, field) {
     var log, total_data;
     log = parsed_log.total;
     total_data = this.pick_field(log, field);
-    return _.sortBy(total_data, function(d) {
-      return d.date;
-    });
+    return _.sortBy(total_data, d => d.date);
   },
-  pick_field: function(log, field) {
+  pick_field(log, field) {
     var total_data;
     total_data = [];
-    _.each(log, function(d) {
-      return total_data.push(_.pick(d, [field, 'date']));
-    });
+    _.each(log, d => total_data.push(_.pick(d, [field, 'date'])));
     return total_data;
   },
-  get_author_data: function(parsed_log, field, date_range) {
+  get_author_data(parsed_log, field, date_range) {
     var author_data, log;
     if (date_range == null) {
       date_range = null;
     }
     log = parsed_log.by_author;
     author_data = [];
-    _.each(log, (function(_this) {
-      return function(log_entry) {
-        var parsed_log_entry;
-        parsed_log_entry = _this.parse_log_entry(log_entry, field, date_range);
-        if (!_.isEmpty(parsed_log_entry.dates)) {
-          return author_data.push(parsed_log_entry);
-        }
-      };
-    })(this));
-    return _.sortBy(author_data, function(d) {
-      return d[field];
-    }).reverse();
+    _.each(
+      log,
+      (function(_this) {
+        return function(log_entry) {
+          var parsed_log_entry;
+          parsed_log_entry = _this.parse_log_entry(log_entry, field, date_range);
+          if (!_.isEmpty(parsed_log_entry.dates)) {
+            return author_data.push(parsed_log_entry);
+          }
+        };
+      })(this),
+    );
+    return _.sortBy(author_data, d => d[field]).reverse();
   },
-  parse_log_entry: function(log_entry, field, date_range) {
+  parse_log_entry(log_entry, field, date_range) {
     var parsed_entry;
     parsed_entry = {};
+
     parsed_entry.author_name = log_entry.author_name;
     parsed_entry.author_email = log_entry.author_email;
     parsed_entry.dates = {};
-    parsed_entry.commits = parsed_entry.additions = parsed_entry.deletions = 0;
-    _.each(_.omit(log_entry, 'author_name', 'author_email'), (function(_this) {
-      return function(value, key) {
-        if (_this.in_range(value.date, date_range)) {
-          parsed_entry.dates[value.date] = value[field];
-          parsed_entry.commits += value.commits;
-          parsed_entry.additions += value.additions;
-          return parsed_entry.deletions += value.deletions;
-        }
-      };
-    })(this));
+
+    parsed_entry.commits = 0;
+    parsed_entry.additions = 0;
+    parsed_entry.deletions = 0;
+
+    _.each(
+      _.omit(log_entry, 'author_name', 'author_email'),
+      (function(_this) {
+        return function(value) {
+          if (_this.in_range(value.date, date_range)) {
+            parsed_entry.dates[value.date] = value[field];
+            parsed_entry.commits += value.commits;
+            parsed_entry.additions += value.additions;
+            return (parsed_entry.deletions += value.deletions);
+          }
+        };
+      })(this),
+    );
     return parsed_entry;
   },
-  in_range: function(date, date_range) {
+  in_range(date, date_range) {
     var ref;
     if (date_range === null || (date_range[0] <= (ref = new Date(date)) && ref <= date_range[1])) {
       return true;
     } else {
       return false;
     }
-  }
+  },
 };

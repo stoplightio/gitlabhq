@@ -1,10 +1,12 @@
+# frozen_string_literal: true
+
 module InternalRedirect
   extend ActiveSupport::Concern
 
   def safe_redirect_path(path)
     return unless path
-    # Verify that the string starts with a `/` but not a double `/`.
-    return unless path =~ %r{^/\w.*$}
+    # Verify that the string starts with a `/` and a known route character.
+    return unless path =~ %r{\A/[-\w].*\z}
 
     uri = URI(path)
     # Ignore anything path of the redirect except for the path, querystring and,
@@ -23,6 +25,10 @@ module InternalRedirect
     nil
   end
 
+  def sanitize_redirect(url_or_path)
+    safe_redirect_path(url_or_path) || safe_redirect_path_for_url(url_or_path)
+  end
+
   def host_allowed?(uri)
     uri.host == request.host &&
       uri.port == request.port
@@ -32,4 +38,12 @@ module InternalRedirect
     path_with_query = [uri.path, uri.query].compact.join('?')
     [path_with_query, uri.fragment].compact.join("#")
   end
+
+  def referer_path(request)
+    return unless request.referer.presence
+
+    URI(request.referer).path
+  end
 end
+
+InternalRedirect.prepend_if_ee('EE::InternalRedirect')

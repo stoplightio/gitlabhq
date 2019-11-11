@@ -1,9 +1,14 @@
+---
+type: tutorial
+---
+
 # Triggering pipelines through the API
 
 > **Notes**:
-- [Introduced][ci-229] in GitLab CE 7.14.
-- GitLab 8.12 has a completely redesigned job permissions system. Read all
-  about the [new model and its implications](../../user/project/new_ci_build_permissions_model.md#job-triggers).
+>
+> - [Introduced](https://about.gitlab.com/blog/2015/08/22/gitlab-7-14-released/) in GitLab 7.14.
+> - GitLab 8.12 has a completely redesigned job permissions system. Read all
+>   about the [new model and its implications](../../user/project/new_ci_build_permissions_model.md#pipeline-triggers).
 
 Triggers can be used to force a pipeline rerun of a specific `ref` (branch or
 tag) with an API call.
@@ -15,6 +20,67 @@ The following methods of authentication are supported.
 ### Trigger token
 
 A unique trigger token can be obtained when [adding a new trigger](#adding-a-new-trigger).
+
+DANGER: **Danger:**
+Passing plain text tokens in public projects is a security issue. Potential
+attackers can impersonate the user that exposed their trigger token publicly in
+their `.gitlab-ci.yml` file. Use [variables](../variables/README.md#gitlab-cicd-environment-variables)
+to protect trigger tokens.
+
+### CI job token
+
+You can use the `CI_JOB_TOKEN` [variable][predef] (used to authenticate
+with the [GitLab Container Registry][registry]) in the following cases.
+
+#### When used with multi-project pipelines
+
+> - Use of `CI_JOB_TOKEN` for multi-project pipelines was [introduced][ee-2017] in [GitLab Premium][ee] 9.3.
+> - Use of `CI_JOB_TOKEN` for multi-project pipelines was [made available](https://gitlab.com/gitlab-org/gitlab/issues/31573) in all tiers in GitLab 12.4.
+
+This way of triggering can only be used when invoked inside `.gitlab-ci.yml`,
+and it creates a dependent pipeline relation visible on the
+[pipeline graph](../multi_project_pipelines.md#overview). For example:
+
+```yaml
+build_docs:
+  stage: deploy
+  script:
+  - curl --request POST --form "token=$CI_JOB_TOKEN" --form ref=master https://gitlab.example.com/api/v4/projects/9/trigger/pipeline
+  only:
+  - tags
+```
+
+Pipelines triggered that way also expose a special variable:
+`CI_PIPELINE_SOURCE=pipeline`.
+
+Read more about the [pipelines trigger API][trigapi].
+
+#### When a pipeline depends on the artifacts of another pipeline **(PREMIUM)**
+
+> The use of `CI_JOB_TOKEN` in the artifacts download API was [introduced][ee-2346] in [GitLab Premium][ee] 9.5.
+
+With the introduction of dependencies between different projects, one of
+them may need to access artifacts created by a previous one. This process
+must be granted for authorized accesses, and it can be done using the
+`CI_JOB_TOKEN` variable that identifies a specific job. For example:
+
+```yaml
+build_submodule:
+  image: debian
+  stage: test
+  script:
+  - apt update && apt install -y unzip
+  - curl --location --output artifacts.zip "https://gitlab.example.com/api/v4/projects/1/jobs/artifacts/master/download?job=test&job_token=$CI_JOB_TOKEN"
+  - unzip artifacts.zip
+  only:
+  - tags
+```
+
+This allows you to use that for multi-project pipelines and download artifacts
+from any project to which you have access as this follows the same principles
+with the [permission model][permissions].
+
+Read more about the [jobs API](../../api/jobs.md#download-the-artifacts-archive).
 
 ## Adding a new trigger
 
@@ -29,17 +95,6 @@ overview of the time the triggers were last used.
 
 ![Triggers page overview](img/triggers_page.png)
 
-## Taking ownership of a trigger
-
-> **Note**:
-GitLab 9.0 introduced a trigger ownership to solve permission problems.
-
-Each created trigger when run will impersonate their associated user including
-their access to projects and their project permissions.
-
-You can take ownership of existing triggers by clicking *Take ownership*.
-From now on the trigger will be run as you.
-
 ## Revoking a trigger
 
 You can revoke a trigger any time by going at your project's
@@ -49,11 +104,9 @@ The action is irreversible.
 ## Triggering a pipeline
 
 > **Notes**:
-- Valid refs are only the branches and tags. If you pass a commit SHA as a ref,
-  it will not trigger a job.
-- If your project is public, passing the token in plain text is probably not the
-  wisest idea, so you might want to use a
-  [variable](../variables/README.md#variables) for that purpose.
+>
+> - Valid refs are only the branches and tags. If you pass a commit SHA as a ref,
+>   it will not trigger a job.
 
 To trigger a job you need to send a `POST` request to GitLab's API endpoint:
 
@@ -103,7 +156,7 @@ curl --request POST \
 You can also benefit by using triggers in your `.gitlab-ci.yml`. Let's say that
 you have two projects, A and B, and you want to trigger a rebuild on the `master`
 branch of project B whenever a tag on project A is created. This is the job you
-need to add in project's A `.gitlab-ci.yml`:
+need to add in project A's `.gitlab-ci.yml`:
 
 ```yaml
 build_docs:
@@ -122,11 +175,12 @@ Now, whenever a new tag is pushed on project A, the job will run and the
 ## Triggering a pipeline from a webhook
 
 > **Notes**:
-- Introduced in GitLab 8.14.
-- `ref` should be passed as part of the URL in order to take precedence over
-  `ref` from the webhook body that designates the branch ref that fired the
-  trigger in the source repository.
-- `ref` should be URL-encoded if it contains slashes.
+>
+> - Introduced in GitLab 8.14.
+> - `ref` should be passed as part of the URL in order to take precedence over
+>   `ref` from the webhook body that designates the branch ref that fired the
+>   trigger in the source repository.
+> - `ref` should be URL-encoded if it contains slashes.
 
 To trigger a job from a webhook of another project you need to add the following
 webhook URL for Push and Tag events (change the project ID, ref and token):
@@ -145,16 +199,16 @@ file. The parameter is of the form:
 variables[key]=value
 ```
 
-This information is also exposed in the UI.
+This information is also exposed in the UI. Please note that _values_ are only viewable by Owners and Maintainers.
 
 ![Job variables in UI](img/trigger_variables.png)
 
 Using trigger variables can be proven useful for a variety of reasons:
 
-* Identifiable jobs. Since the variable is exposed in the UI you can know
+- Identifiable jobs. Since the variable is exposed in the UI you can know
   why the rebuild was triggered if you pass a variable that explains the
   purpose.
-* Conditional job processing. You can have conditional jobs that run whenever
+- Conditional job processing. You can have conditional jobs that run whenever
   a certain variable is present.
 
 Consider the following `.gitlab-ci.yml` where we set three
@@ -169,6 +223,7 @@ stages:
 - package
 
 run_tests:
+  stage: test
   script:
   - make test
 
@@ -214,12 +269,13 @@ Old triggers, created before GitLab 9.0 will be marked as legacy.
 
 Triggers with the legacy label do not have an associated user and only have
 access to the current project. They are considered deprecated and will be
-removed with one of the future versions of GitLab. You are advised to
-[take ownership](#taking-ownership) of any legacy triggers.
+removed with one of the future versions of GitLab.
 
-[ee-2017]: https://gitlab.com/gitlab-org/gitlab-ee/merge_requests/2017
-[ci-229]: https://gitlab.com/gitlab-org/gitlab-ci/merge_requests/229
-[ee]: https://about.gitlab.com/products/
+[ee-2017]: https://gitlab.com/gitlab-org/gitlab/merge_requests/2017
+[ee-2346]: https://gitlab.com/gitlab-org/gitlab/merge_requests/2346
+[ee]: https://about.gitlab.com/pricing/
 [variables]: ../variables/README.md
-[predef]: ../variables/README.md#predefined-variables-environment-variables
-[registry]: ../../user/project/container_registry.md
+[predef]: ../variables/README.md#predefined-environment-variables
+[registry]: ../../user/packages/container_registry/index.md
+[permissions]: ../../user/permissions.md#job-permissions
+[trigapi]: ../../api/pipeline_triggers.md

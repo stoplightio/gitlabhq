@@ -2,60 +2,64 @@
 
 We developed a number of utilities to ease development.
 
-## [`MergeHash`](https://gitlab.com/gitlab-org/gitlab-ce/blob/master/lib/gitlab/utils/merge_hash.rb)
+## `MergeHash`
 
-* Deep merges an array of hashes:
+Refer to: <https://gitlab.com/gitlab-org/gitlab/blob/master/lib/gitlab/utils/merge_hash.rb>:
 
-    ``` ruby
-    Gitlab::Utils::MergeHash.merge(
-      [{ hello: ["world"] },
-       { hello: "Everyone" },
-       { hello: { greetings: ['Bonjour', 'Hello', 'Hallo', 'Dzien dobry'] } },
-        "Goodbye", "Hallo"]
-    )
-    ```
+- Deep merges an array of hashes:
 
-    Gives:
+  ``` ruby
+  Gitlab::Utils::MergeHash.merge(
+    [{ hello: ["world"] },
+     { hello: "Everyone" },
+     { hello: { greetings: ['Bonjour', 'Hello', 'Hallo', 'Dzien dobry'] } },
+      "Goodbye", "Hallo"]
+  )
+  ```
 
-    ``` ruby
-    [
-      {
-        hello:
-          [
-            "world",
-            "Everyone",
-            { greetings: ['Bonjour', 'Hello', 'Hallo', 'Dzien dobry'] }
-          ]
-      },
-      "Goodbye"
-    ]
-    ```
+  Gives:
 
-* Extracts all keys and values from a hash into an array:
+  ``` ruby
+  [
+    {
+      hello:
+        [
+          "world",
+          "Everyone",
+          { greetings: ['Bonjour', 'Hello', 'Hallo', 'Dzien dobry'] }
+        ]
+    },
+    "Goodbye"
+  ]
+  ```
 
-    ``` ruby
-    Gitlab::Utils::MergeHash.crush(
-      { hello: "world", this: { crushes: ["an entire", "hash"] } }
-    )
-    ```
+- Extracts all keys and values from a hash into an array:
 
-    Gives:
+  ``` ruby
+  Gitlab::Utils::MergeHash.crush(
+    { hello: "world", this: { crushes: ["an entire", "hash"] } }
+  )
+  ```
 
-    ``` ruby
-    [:hello, "world", :this, :crushes, "an entire", "hash"]
-    ```
+  Gives:
 
-## [`Override`](https://gitlab.com/gitlab-org/gitlab-ce/blob/master/lib/gitlab/utils/override.rb)
+  ``` ruby
+  [:hello, "world", :this, :crushes, "an entire", "hash"]
+  ```
 
-* This utility could help us check if a particular method would override
+## `Override`
+
+Refer to <https://gitlab.com/gitlab-org/gitlab/blob/master/lib/gitlab/utils/override.rb>:
+
+- This utility could help us check if a particular method would override
   another method or not. It has the same idea of Java's `@Override` annotation
   or Scala's `override` keyword. However we only do this check when
   `ENV['STATIC_VERIFICATION']` is set to avoid production runtime overhead.
   This is useful to check:
 
-    * If we have typos in overriding methods.
-    * If we renamed the overridden methods, making original overriding methods
-      overrides nothing.
+  - If we have typos in overriding methods.
+  - If we renamed the overridden methods, making original overriding methods
+    overrides nothing.
 
     Here's a simple example:
 
@@ -90,48 +94,93 @@ We developed a number of utilities to ease development.
     end
     ```
 
-## [`StrongMemoize`](https://gitlab.com/gitlab-org/gitlab-ce/blob/master/lib/gitlab/utils/strong_memoize.rb)
+## `StrongMemoize`
 
-* Memoize the value even if it is `nil` or `false`.
+Refer to <https://gitlab.com/gitlab-org/gitlab/blob/master/lib/gitlab/utils/strong_memoize.rb>:
 
-    We often do `@value ||= compute`, however this doesn't work well if
-    `compute` might eventually give `nil` and we don't want to compute again.
-    Instead we could use `defined?` to check if the value is set or not.
-    However it's tedious to write such pattern, and `StrongMemoize` would
-    help us use such pattern.
+- Memoize the value even if it is `nil` or `false`.
 
-    Instead of writing patterns like this:
+  We often do `@value ||= compute`, however this doesn't work well if
+  `compute` might eventually give `nil` and we don't want to compute again.
+  Instead we could use `defined?` to check if the value is set or not.
+  However it's tedious to write such pattern, and `StrongMemoize` would
+  help us use such pattern.
 
-    ``` ruby
-    class Find
-      def result
-        return @result if defined?(@result)
+  Instead of writing patterns like this:
 
-        @result = search
+  ``` ruby
+  class Find
+    def result
+      return @result if defined?(@result)
+
+      @result = search
+    end
+  end
+  ```
+
+  We could write it like:
+
+  ``` ruby
+  class Find
+    include Gitlab::Utils::StrongMemoize
+
+    def result
+      strong_memoize(:result) do
+        search
       end
     end
-    ```
+  end
+  ```
 
-    We could write it like:
+- Clear memoization
 
-    ``` ruby
-    class Find
-      include Gitlab::Utils::StrongMemoize
+  ``` ruby
+  class Find
+    include Gitlab::Utils::StrongMemoize
+  end
 
-      def result
-        strong_memoize(:result) do
-          search
-        end
-      end
-    end
-    ```
+  Find.new.clear_memoization(:result)
+  ```
 
-* Clear memoization
+## `RequestCache`
 
-    ``` ruby
-    class Find
-      include Gitlab::Utils::StrongMemoize
-    end
+Refer to <https://gitlab.com/gitlab-org/gitlab/blob/master/lib/gitlab/cache/request_cache.rb>.
 
-    Find.new.clear_memoization(:result)
-    ```
+This module provides a simple way to cache values in RequestStore,
+and the cache key would be based on the class name, method name,
+optionally customized instance level values, optionally customized
+method level values, and optional method arguments.
+
+A simple example that only uses the instance level customised values:
+
+``` ruby
+class UserAccess
+  extend Gitlab::Cache::RequestCache
+
+  request_cache_key do
+    [user&.id, project&.id]
+  end
+
+  request_cache def can_push_to_branch?(ref)
+    # ...
+  end
+end
+```
+
+This way, the result of `can_push_to_branch?` would be cached in
+`RequestStore.store` based on the cache key. If `RequestStore` is not
+currently active, then it would be stored in a hash saved in an
+instance variable, so the cache logic would be the same.
+
+We can also set different strategies for different methods:
+
+``` ruby
+class Commit
+  extend Gitlab::Cache::RequestCache
+
+  def author
+    User.find_by_any_email(author_email)
+  end
+  request_cache(:author) { author_email }
+end
+```

@@ -1,4 +1,6 @@
-require 'rails_helper'
+# frozen_string_literal: true
+
+require 'spec_helper'
 
 describe 'Merge request > User locks discussion', :js do
   let(:user) { create(:user) }
@@ -38,9 +40,9 @@ describe 'Merge request > User locks discussion', :js do
       end
 
       it 'the user can not create a comment' do
-        page.within('.issuable-discussion #notes') do
+        page.within('.js-vue-notes-event') do
           expect(page).not_to have_selector('js-main-target-form')
-          expect(page.find('.disabled-comment'))
+          expect(page.find('.issuable-note-warning'))
             .to have_content('This merge request is locked. Only project members can comment.')
         end
       end

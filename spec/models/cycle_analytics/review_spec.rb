@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe 'CycleAnalytics#review' do
@@ -6,7 +8,8 @@ describe 'CycleAnalytics#review' do
   let(:project) { create(:project, :repository) }
   let(:from_date) { 10.days.ago }
   let(:user) { create(:user, :admin) }
-  subject { CycleAnalytics.new(project, from: from_date) }
+
+  subject { CycleAnalytics::ProjectLevel.new(project, options: { from: from_date }) }
 
   generate_cycle_analytics_spec(
     phase: :review,
@@ -25,7 +28,7 @@ describe 'CycleAnalytics#review' do
     it "returns nil" do
       MergeRequests::MergeService.new(project, user).execute(create(:merge_request))
 
-      expect(subject[:review].median).to be_nil
+      expect(subject[:review].project_median).to be_nil
     end
   end
 end

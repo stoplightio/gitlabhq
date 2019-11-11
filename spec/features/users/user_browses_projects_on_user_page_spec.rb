@@ -1,22 +1,24 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe 'Users > User browses projects on user page', :js do
   let!(:user) { create :user }
   let!(:private_project) do
     create :project, :private, name: 'private', namespace: user.namespace do |project|
-      project.add_master(user)
+      project.add_maintainer(user)
     end
   end
 
   let!(:internal_project) do
     create :project, :internal, name: 'internal', namespace: user.namespace do |project|
-      project.add_master(user)
+      project.add_maintainer(user)
     end
   end
 
   let!(:public_project) do
     create :project, :public, name: 'public', namespace: user.namespace do |project|
-      project.add_master(user)
+      project.add_maintainer(user)
     end
   end
 
@@ -51,6 +53,19 @@ describe 'Users > User browses projects on user page', :js do
     click_link('Next')
 
     expect(page).to have_content(project2.name)
+  end
+
+  it 'does not have incorrectly interpolated message', :js do
+    project = create(:project, namespace: user.namespace, updated_at: 2.minutes.since)
+
+    sign_in(user)
+    visit user_path(user)
+    click_nav_link('Personal projects')
+
+    wait_for_requests
+
+    expect(page).to have_content(project.name)
+    expect(page).not_to have_content("_('Updated')")
   end
 
   context 'when not signed in' do

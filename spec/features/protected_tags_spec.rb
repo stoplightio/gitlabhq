@@ -1,6 +1,10 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
-feature 'Protected Tags', :js do
+describe 'Protected Tags', :js do
+  include ProtectedTagHelpers
+
   let(:user) { create(:user, :admin) }
   let(:project) { create(:project, :repository) }
 
@@ -8,17 +12,11 @@ feature 'Protected Tags', :js do
     sign_in(user)
   end
 
-  def set_protected_tag_name(tag_name)
-    find(".js-protected-tag-select").click
-    find(".dropdown-input-field").set(tag_name)
-    click_on("Create wildcard #{tag_name}")
-    find('.protected-tags-dropdown .dropdown-menu', visible: false)
-  end
-
   describe "explicit protected tags" do
     it "allows creating explicit protected tags" do
       visit project_protected_tags_path(project)
       set_protected_tag_name('some-tag')
+      set_allowed_to('create') if Gitlab.ee?
       click_on "Protect"
 
       within(".protected-tags-list") { expect(page).to have_content('some-tag') }
@@ -32,6 +30,7 @@ feature 'Protected Tags', :js do
 
       visit project_protected_tags_path(project)
       set_protected_tag_name('some-tag')
+      set_allowed_to('create') if Gitlab.ee?
       click_on "Protect"
 
       within(".protected-tags-list") { expect(page).to have_content(commit.id[0..7]) }
@@ -40,6 +39,7 @@ feature 'Protected Tags', :js do
     it "displays an error message if the named tag does not exist" do
       visit project_protected_tags_path(project)
       set_protected_tag_name('some-tag')
+      set_allowed_to('create') if Gitlab.ee?
       click_on "Protect"
 
       within(".protected-tags-list") { expect(page).to have_content('tag was removed') }
@@ -50,6 +50,7 @@ feature 'Protected Tags', :js do
     it "allows creating protected tags with a wildcard" do
       visit project_protected_tags_path(project)
       set_protected_tag_name('*-stable')
+      set_allowed_to('create') if Gitlab.ee?
       click_on "Protect"
 
       within(".protected-tags-list") { expect(page).to have_content('*-stable') }
@@ -63,6 +64,7 @@ feature 'Protected Tags', :js do
 
       visit project_protected_tags_path(project)
       set_protected_tag_name('*-stable')
+      set_allowed_to('create') if Gitlab.ee?
       click_on "Protect"
 
       within(".protected-tags-list") do
@@ -78,6 +80,7 @@ feature 'Protected Tags', :js do
 
       visit project_protected_tags_path(project)
       set_protected_tag_name('*-stable')
+      set_allowed_to('create') if Gitlab.ee?
       click_on "Protect"
 
       visit project_protected_tags_path(project)
@@ -92,6 +95,10 @@ feature 'Protected Tags', :js do
   end
 
   describe "access control" do
+    before do
+      stub_licensed_features(protected_refs_for_users: false)
+    end
+
     include_examples "protected tags > access control > CE"
   end
 end

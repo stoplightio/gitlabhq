@@ -1,20 +1,21 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe 'User browses commits' do
   include RepoHelpers
 
   let(:user) { create(:user) }
-  let(:project) { create(:project, :repository, namespace: user.namespace) }
+  let(:project) { create(:project, :public, :repository, namespace: user.namespace) }
 
   before do
-    project.add_master(user)
     sign_in(user)
   end
 
   it 'renders commit' do
     visit project_commit_path(project, sample_commit.id)
 
-    expect(page).to have_content(sample_commit.message)
+    expect(page).to have_content(sample_commit.message.gsub(/\s+/, ' '))
       .and have_content("Showing #{sample_commit.files_changed_count} changed files")
       .and have_content('Side-by-side')
   end
@@ -92,13 +93,13 @@ describe 'User browses commits' do
   context 'when the blob does not exist' do
     let(:commit) { create(:commit, project: project) }
 
-    it 'shows a blank label' do
+    it 'renders successfully' do
       allow_any_instance_of(Gitlab::Diff::File).to receive(:blob).and_return(nil)
-      allow_any_instance_of(Gitlab::Diff::File).to receive(:raw_binary?).and_return(true)
+      allow_any_instance_of(Gitlab::Diff::File).to receive(:binary?).and_return(true)
 
       visit(project_commit_path(project, commit))
 
-      expect(find('.diff-file-changes', visible: false)).to have_content('No file name available')
+      expect(find('.diff-file-changes', visible: false)).to have_content('files/ruby/popen.rb')
     end
   end
 
@@ -125,6 +126,26 @@ describe 'User browses commits' do
       expect(body).to have_selector('title', text: "#{project.name}:master commits")
         .and have_selector('author email', text: commit.author_email)
         .and have_selector('entry summary', text: commit.description[0..10].delete("\r\n"))
+    end
+
+    context 'when a commit links to a confidential issue' do
+      let(:confidential_issue) { create(:issue, confidential: true, title: 'Secret issue!', project: project) }
+
+      before do
+        project.repository.create_file(user, 'dummy-file', 'dummy content',
+                                       branch_name: 'feature',
+                                       message: "Linking #{confidential_issue.to_reference}")
+      end
+
+      context 'when the user cannot see confidential issues but was cached with a link', :use_clean_rails_memory_store_fragment_caching do
+        it 'does not render the confidential issue' do
+          visit project_commits_path(project, 'feature')
+          sign_in(create(:user))
+          visit project_commits_path(project, 'feature')
+
+          expect(page).not_to have_link(href: project_issue_path(project, confidential_issue))
+        end
+      end
     end
 
     context 'master branch' do
@@ -238,6 +259,5 @@ def check_author_link(email, author)
   author_link = find('.commit-author-link')
 
   expect(author_link['href']).to eq(user_path(author))
-  expect(author_link['title']).to eq(email)
   expect(find('.commit-author-name').text).to eq(author.name)
 end

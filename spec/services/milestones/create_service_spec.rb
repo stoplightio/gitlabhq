@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Milestones::CreateService do
@@ -7,7 +9,7 @@ describe Milestones::CreateService do
   describe '#execute' do
     context "valid params" do
       before do
-        project.add_master(user)
+        project.add_maintainer(user)
 
         opts = {
           title: 'v2.1.9',

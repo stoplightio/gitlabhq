@@ -17,11 +17,14 @@ export default class FilterableList {
   }
 
   getFilterEndpoint() {
-    return `${this.filterForm.getAttribute('action')}?${$(this.filterForm).serialize()}`;
+    return this.getPagePath();
   }
 
   getPagePath() {
-    return this.getFilterEndpoint();
+    const action = this.filterForm.getAttribute('action');
+    // eslint-disable-next-line no-jquery/no-serialize
+    const params = $(this.filterForm).serialize();
+    return `${action}${action.indexOf('?') > 0 ? '&' : '?'}${params}`;
   }
 
   initSearch() {
@@ -65,12 +68,15 @@ export default class FilterableList {
 
     this.isBusy = true;
 
-    return axios.get(this.getFilterEndpoint(), {
-      params,
-    }).then((res) => {
-      this.onFilterSuccess(res, params);
-      this.onFilterComplete();
-    }).catch(() => this.onFilterComplete());
+    return axios
+      .get(this.getFilterEndpoint(), {
+        params,
+      })
+      .then(res => {
+        this.onFilterSuccess(res, params);
+        this.onFilterComplete();
+      })
+      .catch(() => this.onFilterComplete());
   }
 
   onFilterSuccess(response, queryData) {
@@ -81,9 +87,13 @@ export default class FilterableList {
     // Change url so if user reload a page - search results are saved
     const currentPath = this.getPagePath(queryData);
 
-    return window.history.replaceState({
-      page: currentPath,
-    }, document.title, currentPath);
+    return window.history.replaceState(
+      {
+        page: currentPath,
+      },
+      document.title,
+      currentPath,
+    );
   }
 
   onFilterComplete() {

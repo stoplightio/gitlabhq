@@ -1,4 +1,6 @@
-require 'rails_helper'
+# frozen_string_literal: true
+
+require 'spec_helper'
 
 describe AbuseReport do
   set(:report) { create(:abuse_report) }

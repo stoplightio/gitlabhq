@@ -1,1 +1,5 @@
-This document was moved to [user/project/integrations/kubernetes.md](../user/project/integrations/kubernetes.md).
+---
+redirect_to: '../user/project/integrations/kubernetes.md'
+---
+
+This document was moved to [another location](../user/project/integrations/kubernetes.md).

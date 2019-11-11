@@ -1,4 +1,6 @@
-class Subscription < ActiveRecord::Base
+# frozen_string_literal: true
+
+class Subscription < ApplicationRecord
   belongs_to :user
   belongs_to :project
   belongs_to :subscribable, polymorphic: true # rubocop:disable Cop/PolymorphicAssociations

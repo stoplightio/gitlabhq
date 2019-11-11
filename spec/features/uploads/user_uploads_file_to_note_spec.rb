@@ -1,6 +1,8 @@
-require 'rails_helper'
+# frozen_string_literal: true
 
-feature 'User uploads file to note' do
+require 'spec_helper'
+
+describe 'User uploads file to note' do
   include DropzoneHelper
 
   let(:user) { create(:user) }
@@ -71,7 +73,7 @@ feature 'User uploads file to note' do
       expect(page).not_to have_selector('.uploading-progress-container', visible: true)
     end
 
-    scenario 'they see the attached file', :js do
+    it 'they see the attached file', :js do
       dropzone_file([Rails.root.join('spec', 'fixtures', 'dk.png')])
       click_button 'Comment'
       wait_for_requests

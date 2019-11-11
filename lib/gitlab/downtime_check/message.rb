@@ -1,10 +1,12 @@
+# frozen_string_literal: true
+
 module Gitlab
   class DowntimeCheck
     class Message
       attr_reader :path, :offline
 
-      OFFLINE = "\e[31moffline\e[0m".freeze
-      ONLINE = "\e[32monline\e[0m".freeze
+      OFFLINE = "\e[31moffline\e[0m"
+      ONLINE = "\e[32monline\e[0m"
 
       # path - The file path of the migration.
       # offline - When set to `true` the migration will require downtime.
@@ -18,13 +20,13 @@ module Gitlab
       def to_s
         label = offline ? OFFLINE : ONLINE
 
-        message = "[#{label}]: #{path}"
+        message = ["[#{label}]: #{path}"]
 
         if reason?
-          message += ":\n\n#{reason}\n\n"
+          message << ":\n\n#{reason}\n\n"
         end
 
-        message
+        message.join
       end
 
       def reason?

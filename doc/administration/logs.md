@@ -4,7 +4,7 @@ GitLab has an advanced log system where everything is logged so that you
 can analyze your instance using various system log files. In addition to
 system log files, GitLab Enterprise Edition comes with Audit Events.
 Find more about them [in Audit Events
-documentation](http://docs.gitlab.com/ee/administration/audit_events.html)
+documentation](audit_events.md)
 
 System log files are typically plain text in a standard log file format.
 This guide talks about how to read and use these system log files.
@@ -13,7 +13,7 @@ This guide talks about how to read and use these system log files.
 
 This file lives in `/var/log/gitlab/gitlab-rails/production_json.log` for
 Omnibus GitLab packages or in `/home/git/gitlab/log/production_json.log` for
-installations from source. (When Gitlab is running in an environment
+installations from source. (When GitLab is running in an environment
 other than production, the corresponding logfile is shown here.)
 
 It contains a structured log for Rails controller requests received from
@@ -23,15 +23,19 @@ requests from the API are logged to a separate file in `api_json.log`.
 Each line contains a JSON line that can be ingested by Elasticsearch, Splunk, etc. For example:
 
 ```json
-{"method":"GET","path":"/gitlab/gitlab-ce/issues/1234","format":"html","controller":"Projects::IssuesController","action":"show","status":200,"duration":229.03,"view":174.07,"db":13.24,"time":"2017-08-08T20:15:54.821Z","params":[{"key":"param_key","value":"param_value"}],"remote_ip":"18.245.0.1","user_id":1,"username":"admin","gitaly_calls":76}
+{"method":"GET","path":"/gitlab/gitlab-foss/issues/1234","format":"html","controller":"Projects::IssuesController","action":"show","status":200,"duration":229.03,"view":174.07,"db":13.24,"time":"2017-08-08T20:15:54.821Z","params":[{"key":"param_key","value":"param_value"}],"remote_ip":"18.245.0.1","user_id":1,"username":"admin","gitaly_calls":76,"gitaly_duration":7.41,"queue_duration": 112.47}
 ```
 
-In this example, you can see this was a GET request for a specific issue. Notice each line also contains performance data:
+In this example, you can see this was a GET request for a specific
+issue. Notice each line also contains performance data. All times are in
+milliseconds:
 
-1. `duration`: the total time taken to retrieve the request
-2. `view`: total time taken inside the Rails views
-3. `db`: total time to retrieve data from the database
-4. `gitaly_calls`: total number of calls made to Gitaly
+1. `duration`: total time taken to retrieve the request
+1. `queue_duration`: total time that the request was queued inside GitLab Workhorse
+1. `view`: total time taken inside the Rails views
+1. `db`: total time to retrieve data from the database
+1. `gitaly_calls`: total number of calls made to Gitaly
+1. `gitaly_duration`: total time taken by Gitaly calls
 
 User clone/fetch activity using http transport appears in this log as `action: git_upload_pack`.
 
@@ -42,7 +46,7 @@ In addition, the log contains the IP address from which the request originated
 
 This file lives in `/var/log/gitlab/gitlab-rails/production.log` for
 Omnibus GitLab packages or in `/home/git/gitlab/log/production.log` for
-installations from source. (When Gitlab is running in an environment
+installations from source. (When GitLab is running in an environment
 other than production, the corresponding logfile is shown here.)
 
 It contains information about all performed requests. You can see the
@@ -84,13 +88,15 @@ Introduced in GitLab 10.0, this file lives in
 It helps you see requests made directly to the API. For example:
 
 ```json
-{"time":"2017-10-10T12:30:11.579Z","severity":"INFO","duration":16.84,"db":1.57,"view":15.27,"status":200,"method":"POST","path":"/api/v4/internal/allowed","params":{"action":"git-upload-pack","changes":"_any","gl_repository":null,"project":"root/foobar.git","protocol":"ssh","env":"{}","key_id":"[FILTERED]","secret_token":"[FILTERED]"},"host":"127.0.0.1","ip":"127.0.0.1","ua":"Ruby"}
+{"time":"2018-10-29T12:49:42.123Z","severity":"INFO","duration":709.08,"db":14.59,"view":694.49,"status":200,"method":"GET","path":"/api/v4/projects","params":[{"key":"action","value":"git-upload-pack"},{"key":"changes","value":"_any"},{"key":"key_id","value":"secret"},{"key":"secret_token","value":"[FILTERED]"}],"host":"localhost","remote_ip":"::1","ua":"Ruby","route":"/api/:version/projects","user_id":1,"username":"root","queue_duration":100.31,"gitaly_calls":30,"gitaly_duration":5.36}
 ```
 
 This entry above shows an access to an internal endpoint to check whether an
 associated SSH key can download the project in question via a `git fetch` or
 `git clone`. In this example, we see:
 
+1. `duration`: total time in milliseconds taken to retrieve the request
+1. `queue_duration`: total time in milliseconds that the request was queued inside GitLab Workhorse
 1. `method`: The HTTP method used to make the request
 1. `path`: The relative path of the query
 1. `params`: Key-value pairs passed in a query string or HTTP body. Sensitive parameters (e.g. passwords, tokens, etc.) are filtered out.
@@ -113,11 +119,47 @@ October 07, 2014 11:25: User "Claudie Hodkiewicz" (nasir_stehr@olson.co.uk)  was
 October 07, 2014 11:25: Project "project133" was removed
 ```
 
-## `githost.log`
+## `integrations_json.log`
 
-This file lives in `/var/log/gitlab/gitlab-rails/githost.log` for
-Omnibus GitLab packages or in `/home/git/gitlab/log/githost.log` for
+This file lives in `/var/log/gitlab/gitlab-rails/integrations_json.log` for
+Omnibus GitLab packages or in `/home/git/gitlab/log/integrations_json.log` for
 installations from source.
+
+It contains information about [integrations](../user/project/integrations/project_services.md) activities such as Jira, Asana and Irker services. It uses JSON format like the example below:
+
+``` json
+{"severity":"ERROR","time":"2018-09-06T14:56:20.439Z","service_class":"JiraService","project_id":8,"project_path":"h5bp/html5-boilerplate","message":"Error sending message","client_url":"http://jira.gitlap.com:8080","error":"execution expired"}
+{"severity":"INFO","time":"2018-09-06T17:15:16.365Z","service_class":"JiraService","project_id":3,"project_path":"namespace2/project2","message":"Successfully posted","client_url":"http://jira.example.com"}
+```
+
+## `kubernetes.log`
+
+Introduced in GitLab 11.6. This file lives in
+`/var/log/gitlab/gitlab-rails/kubernetes.log` for Omnibus GitLab
+packages or in `/home/git/gitlab/log/kubernetes.log` for
+installations from source.
+
+It logs information related to the Kubernetes Integration including errors
+during installing cluster applications on your GitLab managed Kubernetes
+clusters.
+
+Each line contains a JSON line that can be ingested by Elasticsearch, Splunk,
+etc. For example:
+
+```json
+{"severity":"ERROR","time":"2018-11-23T15:14:54.652Z","exception":"Kubeclient::HttpError","error_code":401,"service":"Clusters::Applications::CheckInstallationProgressService","app_id":14,"project_ids":[1],"group_ids":[],"message":"Unauthorized"}
+{"severity":"ERROR","time":"2018-11-23T15:42:11.647Z","exception":"Kubeclient::HttpError","error_code":null,"service":"Clusters::Applications::InstallService","app_id":2,"project_ids":[19],"group_ids":[],"message":"SSL_connect returned=1 errno=0 state=error: certificate verify failed (unable to get local issuer certificate)"}
+```
+
+## `git_json.log`
+
+This file lives in `/var/log/gitlab/gitlab-rails/git_json.log` for
+Omnibus GitLab packages or in `/home/git/gitlab/log/git_json.log` for
+installations from source.
+
+NOTE: **Note:**
+After 12.2, this file was renamed from `githost.log` to
+`git_json.log` and stored in JSON format.
 
 GitLab has to interact with Git repositories but in some rare cases
 something can go wrong and in this case you will know what exactly
@@ -125,10 +167,27 @@ happened. This log file contains all failed requests from GitLab to Git
 repositories. In the majority of cases this file will be useful for developers
 only. For example:
 
+```json
+{
+   "severity":"ERROR",
+   "time":"2019-07-19T22:16:12.528Z",
+   "correlation_id":"FeGxww5Hj64",
+   "message":"Command failed [1]: /usr/bin/git --git-dir=/Users/vsizov/gitlab-development-kit/gitlab/tmp/tests/gitlab-satellites/group184/gitlabhq/.git --work-tree=/Users/vsizov/gitlab-development-kit/gitlab/tmp/tests/gitlab-satellites/group184/gitlabhq merge --no-ff -mMerge branch 'feature_conflict' into 'feature' source/feature_conflict\n\nerror: failed to push some refs to '/Users/vsizov/gitlab-development-kit/repositories/gitlabhq/gitlab_git.git'"
+}
 ```
-December 03, 2014 13:20 -> ERROR -> Command failed [1]: /usr/bin/git --git-dir=/Users/vsizov/gitlab-development-kit/gitlab/tmp/tests/gitlab-satellites/group184/gitlabhq/.git --work-tree=/Users/vsizov/gitlab-development-kit/gitlab/tmp/tests/gitlab-satellites/group184/gitlabhq merge --no-ff -mMerge branch 'feature_conflict' into 'feature' source/feature_conflict
 
-error: failed to push some refs to '/Users/vsizov/gitlab-development-kit/repositories/gitlabhq/gitlab_git.git'
+## `audit_json.log`
+
+This file lives in `/var/log/gitlab/gitlab-rails/audit_json.log` for
+Omnibus GitLab packages or in `/home/git/gitlab/log/audit_json.log` for
+installations from source.
+
+Changes to group or project settings are logged to this file. For example:
+
+```json
+{"severity":"INFO","time":"2018-10-17T17:38:22.523Z","author_id":3,"entity_id":2,"entity_type":"Project","change":"visibility","from":"Private","to":"Public","author_name":"John Doe4","target_id":2,"target_type":"Project","target_details":"namespace2/project2"}
+{"severity":"INFO","time":"2018-10-17T17:38:22.830Z","author_id":5,"entity_id":3,"entity_type":"Project","change":"name","from":"John Doe7 / project3","to":"John Doe7 / new name","author_name":"John Doe6","target_id":3,"target_type":"Project","target_details":"namespace3/project3"}
+{"severity":"INFO","time":"2018-10-17T17:38:23.175Z","author_id":7,"entity_id":4,"entity_type":"Project","change":"path","from":"","to":"namespace4/newpath","author_name":"John Doe8","target_id":4,"target_type":"Project","target_details":"namespace4/newpath"}
 ```
 
 ## `sidekiq.log`
@@ -174,7 +233,7 @@ This file lives in `/var/log/gitlab/gitlab-shell/gitlab-shell.log` for
 Omnibus GitLab packages or in `/home/git/gitlab-shell/gitlab-shell.log` for
 installations from source.
 
-GitLab shell is used by Gitlab for executing Git commands and provide
+GitLab Shell is used by GitLab for executing Git commands and provide
 SSH access to Git repositories. For example:
 
 ```
@@ -182,9 +241,9 @@ I, [2015-02-13T06:17:00.671315 #9291]  INFO -- : Adding project root/example.git
 I, [2015-02-13T06:17:00.679433 #9291]  INFO -- : Moving existing hooks directory and symlinking global hooks directory for /var/opt/gitlab/git-data/repositories/root/example.git.
 ```
 
-User clone/fetch activity using ssh transport appears in this log as `executing git command <gitaly-upload-pack...`.
+User clone/fetch activity using SSH transport appears in this log as `executing git command <gitaly-upload-pack...`.
 
-## `unicorn\_stderr.log`
+## `unicorn_stderr.log`
 
 This file lives in `/var/log/gitlab/unicorn/unicorn_stderr.log` for
 Omnibus GitLab packages or in `/home/git/gitlab/log/unicorn_stderr.log` for
@@ -193,7 +252,7 @@ installations from source.
 Unicorn is a high-performance forking Web server which is used for
 serving the GitLab application. You can look at this log if, for
 example, your application does not respond. This log contains all
-information about the state of unicorn processes at any given time.
+information about the state of Unicorn processes at any given time.
 
 ```
 I, [2015-02-13T06:14:46.680381 #9047]  INFO -- : Refreshing Gem list
@@ -219,21 +278,82 @@ installations from source.
 
 It logs information whenever a [repository check is run][repocheck] on a project.
 
+## `importer.log`
+
+Introduced in GitLab 11.3. This file lives in `/var/log/gitlab/gitlab-rails/importer.log` for
+Omnibus GitLab packages or in `/home/git/gitlab/log/importer.log` for
+installations from source.
+
+## `auth.log`
+
+Introduced in GitLab 12.0. This file lives in `/var/log/gitlab/gitlab-rails/auth.log` for
+Omnibus GitLab packages or in `/home/git/gitlab/log/auth.log` for
+installations from source.
+
+This log records:
+
+- Information whenever [Rack Attack] registers an abusive request.
+- Requests over the [Rate Limit] on raw endpoints.
+- [Protected paths] abusive requests.
+
+NOTE: **Note:**
+From [%12.1](https://gitlab.com/gitlab-org/gitlab-foss/issues/62756), user id and username are also
+recorded on this log, if available.
+
+## `graphql_json.log`
+
+> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/issues/59587) in GitLab 12.0.
+
+This file lives in `/var/log/gitlab/gitlab-rails/graphql_json.log` for
+Omnibus GitLab packages or in `/home/git/gitlab/log/graphql_json.log` for
+installations from source.
+
+GraphQL queries are recorded in that file. For example:
+
+```json
+{"query_string":"query IntrospectionQuery{__schema {queryType { name },mutationType { name }}}...(etc)","variables":{"a":1,"b":2},"complexity":181,"depth":1,"duration":7}
+```
+
+## `migrations.log`
+
+Introduced in GitLab 12.3. This file lives in `/var/log/gitlab/gitlab-rails/migrations.log` for
+Omnibus GitLab packages or in `/home/git/gitlab/log/migrations.log` for
+installations from source.
+
 ## Reconfigure Logs
 
-Reconfigure log files live in `/var/log/gitlab/reconfigure` for Omnibus GitLab 
-packages. Installations from source don't have reconfigure logs. A reconfigure log 
+Reconfigure log files live in `/var/log/gitlab/reconfigure` for Omnibus GitLab
+packages. Installations from source don't have reconfigure logs. A reconfigure log
 is populated whenever `gitlab-ctl reconfigure` is run manually or as part of an upgrade.
 
 Reconfigure logs files are named according to the UNIX timestamp of when the reconfigure
 was initiated, such as `1509705644.log`
 
-## `sidekiq_exporter.log`
+## `sidekiq_exporter.log` and `web_exporter.log`
 
 If Prometheus metrics and the Sidekiq Exporter are both enabled, Sidekiq will
-start a Web server and listen to the defined port (default: 3807). Access logs
+start a Web server and listen to the defined port (default: 8082). Access logs
 will be generated in `/var/log/gitlab/gitlab-rails/sidekiq_exporter.log` for
 Omnibus GitLab packages or in `/home/git/gitlab/log/sidekiq_exporter.log` for
 installations from source.
 
+If Prometheus metrics and the Web Exporter are both enabled, Unicorn/Puma will
+start a Web server and listen to the defined port (default: 8083). Access logs
+will be generated in `/var/log/gitlab/gitlab-rails/web_exporter.log` for
+Omnibus GitLab packages or in `/home/git/gitlab/log/web_exporter.log` for
+installations from source.
+
+## `database_load_balancing.log` **(PREMIUM ONLY)**
+
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/merge_requests/15442) in GitLab 12.3.
+
+Contains details of GitLab's [Database Load Balancing](database_load_balancing.md).
+It is stored at:
+
+- `/var/log/gitlab/gitlab-rails/database_load_balancing.log` for Omnibus GitLab packages.
+- `/home/git/gitlab/log/database_load_balancing.log` for installations from source.
+
 [repocheck]: repository_checks.md
+[Rack Attack]: ../security/rack_attack.md
+[Rate Limit]: ../user/admin_area/settings/rate_limits_on_raw_endpoints.md
+[Protected paths]: ../user/admin_area/settings/protected_paths.md

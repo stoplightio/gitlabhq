@@ -1,0 +1,16 @@
+{
+  "type": "object",
+  "required" : [
+    "status",
+    "name"
+  ],
+  "properties": {
+    "status": { "type": "string" },
+    "name": { "type": "string" },
+    "classname": { "type": "string" },
+    "execution_time": { "type": "float" },
+    "system_output": { "type": ["string", "null"] },
+    "stack_trace":  { "type": ["string", "null"] }
+  },
+  "additionalProperties": false
+}

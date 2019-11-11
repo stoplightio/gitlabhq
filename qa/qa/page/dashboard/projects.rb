@@ -1,10 +1,11 @@
+# frozen_string_literal: true
+
 module QA
   module Page
     module Dashboard
       class Projects < Page::Base
-        view 'app/views/dashboard/projects/index.html.haml'
         view 'app/views/shared/projects/_search_form.html.haml' do
-          element :form_filter_by_name, /form_tag.+id: 'project-filter-form'/
+          element :project_filter_form, required: true
         end
 
         def go_to_project(name)
@@ -13,8 +14,14 @@ module QA
           find_link(text: name).click
         end
 
+        def self.path
+          '/'
+        end
+
+        private
+
         def filter_by_name(name)
-          page.within('form#project-filter-form') do
+          within_element(:project_filter_form) do
             fill_in :name, with: name
           end
         end
@@ -22,3 +29,5 @@ module QA
     end
   end
 end
+
+QA::Page::Dashboard::Projects.prepend_if_ee('QA::EE::Page::Dashboard::Projects')

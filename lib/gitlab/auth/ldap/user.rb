@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # LDAP extension for User model
 #
 # * Find or create user from omniauth.auth data
@@ -9,13 +11,16 @@ module Gitlab
     module LDAP
       class User < Gitlab::Auth::OAuth::User
         extend ::Gitlab::Utils::Override
+        prepend_if_ee('::EE::Gitlab::Auth::LDAP::User') # rubocop: disable Cop/InjectEnterpriseEditionModule
 
         class << self
+          # rubocop: disable CodeReuse/ActiveRecord
           def find_by_uid_and_provider(uid, provider)
             identity = ::Identity.with_extern_uid(provider, uid).take
 
             identity && identity.user
           end
+          # rubocop: enable CodeReuse/ActiveRecord
         end
 
         def save

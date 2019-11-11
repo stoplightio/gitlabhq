@@ -1,8 +1,8 @@
 # Project import/export API
 
-[Introduced][ce-41899] in GitLab 10.6
+> [Introduced][ce-41899] in GitLab 10.6.
 
-[See also the project import/export documentation](../user/project/settings/import_export.md)
+See also the [project import/export documentation](../user/project/settings/import_export.md).
 
 ## Schedule an export
 
@@ -16,7 +16,7 @@ data file uploads to the final server.
 If the `upload` params is present, `upload[url]` param is required.
  (**Note:** This feature was introduced in GitLab 10.7)
 
-```http
+```text
 POST /projects/:id/export
 ```
 
@@ -28,8 +28,10 @@ POST /projects/:id/export
 | `upload[url]`      | string | yes      | The URL to upload the project |
 | `upload[http_method]`      | string | no      | The HTTP method to upload the exported project. Only `PUT` and `POST` methods allowed. Default is `PUT` |
 
-```console
-curl --request POST --header "PRIVATE-TOKEN: 9koXpg98eAheJpvBs5tK" https://gitlab.example.com/api/v4/projects/1/export --data "description=FooBar&upload[http_method]=PUT&upload[url]=https://example-bucket.s3.eu-west-3.amazonaws.com/backup?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAIMBJHN2O62W8IELQ%2F20180312%2Feu-west-3%2Fs3%2Faws4_request&X-Amz-Date=20180312T110328Z&X-Amz-Expires=900&X-Amz-SignedHeaders=host&X-Amz-Signature=8413facb20ff33a49a147a0b4abcff4c8487cc33ee1f7e450c46e8f695569dbd"
+```sh
+curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/projects/1/export \
+    --data "upload[http_method]=PUT" \
+    --data-urlencode "upload[url]=https://example-bucket.s3.eu-west-3.amazonaws.com/backup?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAIMBJHN2O62W8IELQ%2F20180312%2Feu-west-3%2Fs3%2Faws4_request&X-Amz-Date=20180312T110328Z&X-Amz-Expires=900&X-Amz-SignedHeaders=host&X-Amz-Signature=8413facb20ff33a49a147a0b4abcff4c8487cc33ee1f7e450c46e8f695569dbd"
 ```
 
 ```json
@@ -42,7 +44,7 @@ curl --request POST --header "PRIVATE-TOKEN: 9koXpg98eAheJpvBs5tK" https://gitla
 
 Get the status of export.
 
-```http
+```text
 GET /projects/:id/export
 ```
 
@@ -50,8 +52,8 @@ GET /projects/:id/export
 | --------- | -------------- | -------- | ---------------------------------------- |
 | `id`      | integer/string | yes      | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) owned by the authenticated user |
 
-```console
-curl --header "PRIVATE-TOKEN: 9koXpg98eAheJpvBs5tK" https://gitlab.example.com/api/v4/projects/1/export
+```sh
+curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/projects/1/export
 ```
 
 Status can be one of `none`, `started`, `after_export_action` or `finished`. The
@@ -83,7 +85,7 @@ to a web server, etc.
 
 Download the finished export.
 
-```http
+```text
 GET /projects/:id/export/download
 ```
 
@@ -91,24 +93,25 @@ GET /projects/:id/export/download
 | --------- | -------------- | -------- | ---------------------------------------- |
 | `id`      | integer/string | yes      | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) owned by the authenticated user |
 
-```console
-curl --header "PRIVATE-TOKEN: 9koXpg98eAheJpvBs5tK" --remote-header-name --remote-name https://gitlab.example.com/api/v4/projects/5/export/download
+```sh
+curl --header "PRIVATE-TOKEN: <your_access_token>" --remote-header-name --remote-name https://gitlab.example.com/api/v4/projects/5/export/download
 ```
 
-```console
+```sh
 ls *export.tar.gz
 2017-12-05_22-11-148_namespace_project_export.tar.gz
 ```
 
 ## Import a file
 
-```http
+```text
 POST /projects/import
 ```
 
 | Attribute | Type           | Required | Description                              |
 | --------- | -------------- | -------- | ---------------------------------------- |
 | `namespace` | integer/string | no | The ID or path of the namespace that the project will be imported to. Defaults to the current user's namespace |
+| `name` | string | no | The name of the project to be imported. Defaults to the path of the project if not provided |
 | `file` | string | yes | The file to be uploaded |
 | `path` | string | yes | Name and path for new project |
 | `overwrite` | boolean | no | If there is a project with the same path the import will overwrite it. Default to false |
@@ -121,8 +124,29 @@ cURL to post data using the header `Content-Type: multipart/form-data`.
 The `file=` parameter must point to a file on your file system and be preceded
 by `@`. For example:
 
-```console
-curl --request POST --header "PRIVATE-TOKEN: 9koXpg98eAheJpvBs5tK" --form "path=api-project" --form "file=@/path/to/file" https://gitlab.example.com/api/v4/projects/import
+```sh
+curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" --form "path=api-project" --form "file=@/path/to/file" https://gitlab.example.com/api/v4/projects/import
+```
+
+cURL doesn't support posting a file from a remote server. Importing a project from a remote server can be accomplished through something like the following:
+
+```python
+import requests
+from io import BytesIO
+
+s3_file = requests.get(presigned_url)
+
+url =  'https://gitlab.example.com/api/v4/projects/import'
+files = {'file': ('file.tar.gz', BytesIO(s3_file.content))}
+data = {
+    "path": "example-project",
+    "namespace": "example-group"
+}
+headers = {
+    'Private-Token': "<your_access_token>"
+}
+
+requests.post(url, headers=headers, data=data, files=files)
 ```
 
 ```json
@@ -142,7 +166,7 @@ curl --request POST --header "PRIVATE-TOKEN: 9koXpg98eAheJpvBs5tK" --form "path=
 
 Get the status of an import.
 
-```http
+```text
 GET /projects/:id/import
 ```
 
@@ -150,8 +174,8 @@ GET /projects/:id/import
 | --------- | -------------- | -------- | ---------------------------------------- |
 | `id`      | integer/string | yes      | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) owned by the authenticated user |
 
-```console
-curl --header "PRIVATE-TOKEN: 9koXpg98eAheJpvBs5tK" https://gitlab.example.com/api/v4/projects/1/import
+```sh
+curl --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/projects/1/import
 ```
 
 Status can be one of `none`, `scheduled`, `failed`, `started`, or `finished`.
@@ -171,4 +195,4 @@ If the status is `failed`, it will include the import error message under `impor
 }
 ```
 
-[ce-41899]: https://gitlab.com/gitlab-org/gitlab-ce/issues/41899
+[ce-41899]: https://gitlab.com/gitlab-org/gitlab-foss/issues/41899

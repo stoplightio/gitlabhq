@@ -1,51 +1,91 @@
+# frozen_string_literal: true
+
 module Gitlab
   module Kubernetes
     module Helm
-      class InstallCommand < BaseCommand
-        attr_reader :name, :chart, :version, :repository, :values
+      class InstallCommand
+        include BaseCommand
+        include ClientCommand
 
-        def initialize(name, chart:, values:, version: nil, repository: nil)
+        attr_reader :name, :files, :chart, :repository, :preinstall, :postinstall
+        attr_accessor :version
+
+        def initialize(name:, chart:, files:, rbac:, version: nil, repository: nil, preinstall: nil, postinstall: nil)
           @name = name
           @chart = chart
           @version = version
-          @values = values
+          @rbac = rbac
+          @files = files
           @repository = repository
+          @preinstall = preinstall
+          @postinstall = postinstall
         end
 
         def generate_script
           super + [
             init_command,
+            wait_for_tiller_command,
             repository_command,
-            script_command
+            repository_update_command,
+            preinstall,
+            install_command,
+            postinstall
           ].compact.join("\n")
         end
 
-        def config_map?
-          true
-        end
-
-        def config_map_resource
-          Gitlab::Kubernetes::ConfigMap.new(name, values).generate
+        def rbac?
+          @rbac
         end
 
         private
 
-        def init_command
-          'helm init --client-only >/dev/null'
+        def repository_update_command
+          'helm repo update' if repository
         end
 
-        def repository_command
-          "helm repo add #{name} #{repository}" if repository
+        # Uses `helm upgrade --install` which means we can use this for both
+        # installation and uprade of applications
+        def install_command
+          command = ['helm', 'upgrade', name, chart] +
+            install_flag +
+            reset_values_flag +
+            optional_tls_flags +
+            optional_version_flag +
+            rbac_create_flag +
+            namespace_flag +
+            value_flag
+
+          command.shelljoin
         end
 
-        def script_command
-          <<~HEREDOC
-          helm install #{chart} --name #{name}#{optional_version_flag} --namespace #{Gitlab::Kubernetes::Helm::NAMESPACE} -f /data/helm/#{name}/config/values.yaml >/dev/null
-          HEREDOC
+        def install_flag
+          ['--install']
+        end
+
+        def reset_values_flag
+          ['--reset-values']
+        end
+
+        def value_flag
+          ['-f', "/data/helm/#{name}/config/values.yaml"]
+        end
+
+        def namespace_flag
+          ['--namespace', Gitlab::Kubernetes::Helm::NAMESPACE]
+        end
+
+        def rbac_create_flag
+          if rbac?
+            %w[--set rbac.create=true,rbac.enabled=true]
+          else
+            %w[--set rbac.create=false,rbac.enabled=false]
+          end
         end
 
         def optional_version_flag
-          " --version #{version}" if version
+          return [] unless version
+
+          ['--version', version]
         end
       end
     end

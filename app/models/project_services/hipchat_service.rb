@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class HipchatService < Service
   include ActionView::Helpers::SanitizeHelper
 
@@ -71,7 +73,7 @@ class HipchatService < Service
   private
 
   def gate
-    options = { api_version: api_version.present? ? api_version : 'v2' }
+    options = { api_version: api_version.presence || 'v2' }
     options[:server_url] = server unless server.blank?
     @gate ||= HipChat::Client.new(token, options)
   end
@@ -108,7 +110,7 @@ class HipchatService < Service
     before = push[:before]
     after = push[:after]
 
-    message = ""
+    message = []
     message << "#{push[:user_name]} "
 
     if Gitlab::Git.blank_ref?(before)
@@ -132,7 +134,7 @@ class HipchatService < Service
       end
     end
 
-    message
+    message.join
   end
 
   def markdown(text, options = {})
@@ -147,7 +149,7 @@ class HipchatService < Service
 
     context.merge!(options)
 
-    html = Banzai.post_process(Banzai.render(text, context), context)
+    html = Banzai.render_and_post_process(text, context)
     sanitized_html = sanitize(html, tags: HIPCHAT_ALLOWED_TAGS, attributes: %w[href title alt])
 
     sanitized_html.truncate(200, separator: ' ', omission: '...')
@@ -159,17 +161,17 @@ class HipchatService < Service
     obj_attr = data[:object_attributes]
     obj_attr = HashWithIndifferentAccess.new(obj_attr)
     title = render_line(obj_attr[:title])
-    state = obj_attr[:state]
+    state = Issue.available_states.key(obj_attr[:state_id])
     issue_iid = obj_attr[:iid]
     issue_url = obj_attr[:url]
     description = obj_attr[:description]
 
     issue_link = "<a href=\"#{issue_url}\">issue ##{issue_iid}</a>"
-    message = "#{user_name} #{state} #{issue_link} in #{project_link}: <b>#{title}</b>"
 
+    message = ["#{user_name} #{state} #{issue_link} in #{project_link}: <b>#{title}</b>"]
     message << "<pre>#{markdown(description)}</pre>"
 
-    message
+    message.join
   end
 
   def create_merge_request_message(data)
@@ -184,12 +186,11 @@ class HipchatService < Service
 
     merge_request_url = "#{project_url}/merge_requests/#{merge_request_id}"
     merge_request_link = "<a href=\"#{merge_request_url}\">merge request !#{merge_request_id}</a>"
-    message = "#{user_name} #{state} #{merge_request_link} in " \
-      "#{project_link}: <b>#{title}</b>"
+    message = ["#{user_name} #{state} #{merge_request_link} in " \
+      "#{project_link}: <b>#{title}</b>"]
 
     message << "<pre>#{markdown(description)}</pre>"
-
-    message
+    message.join
   end
 
   def format_title(title)
@@ -235,12 +236,11 @@ class HipchatService < Service
     end
 
     subject_html = "<a href=\"#{note_url}\">#{subject_type} #{subject_desc}</a>"
-    message = "#{user_name} commented on #{subject_html} in #{project_link}: "
+    message = ["#{user_name} commented on #{subject_html} in #{project_link}: "]
     message << title
 
     message << "<pre>#{markdown(note, ref: commit_id)}</pre>"
-
-    message
+    message.join
   end
 
   def create_pipeline_message(data)
@@ -309,3 +309,5 @@ class HipchatService < Service
     end
   end
 end
+
+HipchatService.prepend_if_ee('EE::HipchatService')

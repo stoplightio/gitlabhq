@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Projects
   class BaseMoveRelationsService < BaseService
     attr_reader :source_project
@@ -7,16 +9,6 @@ module Projects
       @source_project = source_project
 
       true
-    end
-
-    private
-
-    def prepare_relation(relation, id_param = :id)
-      if Gitlab::Database.postgresql?
-        relation
-      else
-        relation.model.where("#{id_param}": relation.pluck(id_param))
-      end
     end
   end
 end

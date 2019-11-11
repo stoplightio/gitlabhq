@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "spec_helper"
 
 # The main goal of this spec is not to check whether the sorting UI works, but
@@ -6,7 +8,7 @@ require "spec_helper"
 # All those specs are moved out to this spec intentionally to keep them all in one place.
 describe "User sorts things" do
   include Spec::Support::Helpers::Features::SortingHelpers
-  include Helpers::DashboardHelper
+  include DashboardHelper
 
   set(:project) { create(:project_empty_repo, :public) }
   set(:current_user) { create(:user) } # Using `current_user` instead of just `user` because of the hardoced call in `assigned_mrs_dashboard_path` which is used below.

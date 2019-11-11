@@ -1,14 +1,16 @@
+# frozen_string_literal: true
+
 module Gitlab
   module Ci
     class YamlProcessor
       ValidationError = Class.new(StandardError)
 
-      include Gitlab::Ci::Config::Entry::LegacyValidationHelpers
+      include Gitlab::Config::Entry::LegacyValidationHelpers
 
-      attr_reader :cache, :stages, :jobs
+      attr_reader :stages, :jobs
 
       def initialize(config, opts = {})
-        @ci_config = Gitlab::Ci::Config.new(config, opts)
+        @ci_config = Gitlab::Ci::Config.new(config, **opts)
         @config = @ci_config.to_hash
 
         unless @ci_config.valid?
@@ -16,7 +18,7 @@ module Gitlab
         end
 
         initial_parsing
-      rescue Gitlab::Ci::Config::Loader::FormatError => e
+      rescue Gitlab::Ci::Config::ConfigError => e
         raise ValidationError, e.message
       end
 
@@ -31,26 +33,34 @@ module Gitlab
 
         { stage_idx: @stages.index(job[:stage]),
           stage: job[:stage],
-          commands: job[:commands],
-          tag_list: job[:tags] || [],
+          tag_list: job[:tags],
           name: job[:name].to_s,
           allow_failure: job[:ignore],
           when: job[:when] || 'on_success',
           environment: job[:environment_name],
           coverage_regex: job[:coverage],
           yaml_variables: yaml_variables(name),
+          needs_attributes: job[:needs]&.map { |need| { name: need } },
+          interruptible: job[:interruptible],
+          rules: job[:rules],
           options: {
             image: job[:image],
             services: job[:services],
             artifacts: job[:artifacts],
             cache: job[:cache],
             dependencies: job[:dependencies],
+            job_timeout: job[:timeout],
             before_script: job[:before_script],
             script: job[:script],
             after_script: job[:after_script],
             environment: job[:environment],
-            retry: job[:retry]
-          }.compact }
+            retry: job[:retry],
+            parallel: job[:parallel],
+            instance: job[:instance],
+            start_in: job[:start_in],
+            trigger: job[:trigger],
+            bridge_needs: job[:needs]
+          }.compact }.compact
       end
 
       def stage_builds_attributes(stage)
@@ -90,24 +100,20 @@ module Gitlab
         ##
         # Global config
         #
-        @before_script = @ci_config.before_script
-        @image = @ci_config.image
-        @after_script = @ci_config.after_script
-        @services = @ci_config.services
         @variables = @ci_config.variables
         @stages = @ci_config.stages
-        @cache = @ci_config.cache
 
         ##
         # Jobs
         #
-        @jobs = @ci_config.jobs
+        @jobs = Ci::Config::Normalizer.new(@ci_config.jobs).normalize_jobs
 
         @jobs.each do |name, job|
           # logical validation for job
 
           validate_job_stage!(name, job)
           validate_job_dependencies!(name, job)
+          validate_job_needs!(name, job)
           validate_job_environment!(name, job)
         end
       end
@@ -144,8 +150,26 @@ module Gitlab
         job[:dependencies].each do |dependency|
           raise ValidationError, "#{name} job: undefined dependency: #{dependency}" unless @jobs[dependency.to_sym]
 
-          unless @stages.index(@jobs[dependency.to_sym][:stage]) < stage_index
+          dependency_stage_index = @stages.index(@jobs[dependency.to_sym][:stage])
+
+          unless dependency_stage_index.present? && dependency_stage_index < stage_index
             raise ValidationError, "#{name} job: dependency #{dependency} is not defined in prior stages"
+          end
+        end
+      end
+
+      def validate_job_needs!(name, job)
+        return unless job[:needs]
+
+        stage_index = @stages.index(job[:stage])
+
+        job[:needs].each do |need|
+          raise ValidationError, "#{name} job: undefined need: #{need}" unless @jobs[need.to_sym]
+
+          needs_stage_index = @stages.index(@jobs[need.to_sym][:stage])
+
+          unless needs_stage_index.present? && needs_stage_index < stage_index
+            raise ValidationError, "#{name} job: need #{need} is not defined in prior stages"
           end
         end
       end

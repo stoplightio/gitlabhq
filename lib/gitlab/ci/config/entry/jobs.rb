@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module Ci
     class Config
@@ -5,33 +7,57 @@ module Gitlab
         ##
         # Entry that represents a set of jobs.
         #
-        class Jobs < Node
-          include Validatable
+        class Jobs < ::Gitlab::Config::Entry::Node
+          include ::Gitlab::Config::Entry::Validatable
 
           validations do
             validates :config, type: Hash
 
             validate do
+              unless has_valid_jobs?
+                errors.add(:config, 'should contain valid jobs')
+              end
+
               unless has_visible_job?
                 errors.add(:config, 'should contain at least one visible job')
               end
             end
 
+            def has_valid_jobs?
+              config.all? do |name, value|
+                Jobs.find_type(name, value)
+              end
+            end
+
             def has_visible_job?
-              config.any? { |name, _| !hidden?(name) }
+              config.any? do |name, value|
+                Jobs.find_type(name, value)&.visible?
+              end
             end
           end
 
-          def hidden?(name)
-            name.to_s.start_with?('.')
+          TYPES = [Entry::Hidden, Entry::Job].freeze
+
+          private_constant :TYPES
+
+          def self.all_types
+            TYPES
           end
 
+          def self.find_type(name, config)
+            self.all_types.find do |type|
+              type.matching?(name, config)
+            end
+          end
+
+          # rubocop: disable CodeReuse/ActiveRecord
           def compose!(deps = nil)
             super do
               @config.each do |name, config|
-                node = hidden?(name) ? Entry::Hidden : Entry::Job
+                node = self.class.find_type(name, config)
+                next unless node
 
-                factory = Entry::Factory.new(node)
+                factory = ::Gitlab::Config::Entry::Factory.new(node)
                   .value(config || {})
                   .metadata(name: name)
                   .with(key: name, parent: self,
@@ -45,8 +71,11 @@ module Gitlab
               end
             end
           end
+          # rubocop: enable CodeReuse/ActiveRecord
         end
       end
     end
   end
 end
+
+::Gitlab::Ci::Config::Entry::Jobs.prepend_if_ee('::EE::Gitlab::Ci::Config::Entry::Jobs')

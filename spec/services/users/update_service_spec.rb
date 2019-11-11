@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Users::UpdateService do
@@ -9,6 +11,15 @@ describe Users::UpdateService do
 
       expect(result).to eq(status: :success)
       expect(user.name).to eq('New Name')
+    end
+
+    it 'updates time preferences' do
+      result = update_user(user, timezone: 'Europe/Warsaw', time_display_relative: true, time_format_in_24h: false)
+
+      expect(result).to eq(status: :success)
+      expect(user.reload.timezone).to eq('Europe/Warsaw')
+      expect(user.time_display_relative).to eq(true)
+      expect(user.time_format_in_24h).to eq(false)
     end
 
     it 'returns an error result when record cannot be updated' do
@@ -28,6 +39,27 @@ describe Users::UpdateService do
       end.not_to change { user.reload.username }
       expect(result[:status]).to eq(:error)
       expect(result[:message]).to eq('Username has already been taken')
+    end
+
+    it 'updates the status if status params were given' do
+      update_user(user, status: { message: "On a call" })
+
+      expect(user.status.message).to eq("On a call")
+    end
+
+    it 'does not delete the status if no status param was passed' do
+      create(:user_status, user: user, message: 'Busy!')
+
+      update_user(user, name: 'New name')
+
+      expect(user.status.message).to eq('Busy!')
+    end
+
+    it 'includes status error messages' do
+      result = update_user(user, status: { emoji: "Moo!" })
+
+      expect(result[:status]).to eq(:error)
+      expect(result[:message]).to eq("Emoji is not included in the list")
     end
 
     def update_user(user, opts)

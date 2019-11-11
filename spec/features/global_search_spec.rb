@@ -1,12 +1,22 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
-feature 'Global search' do
+describe 'Global search' do
   let(:user) { create(:user) }
   let(:project) { create(:project, namespace: user.namespace) }
 
   before do
-    project.add_master(user)
+    project.add_maintainer(user)
     sign_in(user)
+
+    visit dashboard_projects_path
+  end
+
+  it 'increases usage ping searches counter' do
+    expect(Gitlab::UsageDataCounters::SearchCounter).to receive(:increment_navbar_searches_count)
+
+    submit_search('foobar')
   end
 
   describe 'I search through the issues and I see pagination' do
@@ -16,13 +26,22 @@ feature 'Global search' do
     end
 
     it "has a pagination" do
-      visit dashboard_projects_path
+      submit_search('initial')
+      select_search_scope('Issues')
 
-      fill_in "search", with: "initial"
-      click_button "Go"
-
-      select_filter("Issues")
       expect(page).to have_selector('.gl-pagination .next')
     end
+  end
+
+  it 'closes the dropdown on blur', :js do
+    fill_in 'search', with: "a"
+    dropdown = find('.js-dashboard-search-options')
+
+    expect(dropdown[:class]).to include 'show'
+
+    find('#search').send_keys(:backspace)
+    find('body').click
+
+    expect(dropdown[:class]).not_to include 'show'
   end
 end

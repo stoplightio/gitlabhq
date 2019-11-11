@@ -1,10 +1,17 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Projects::PipelineSchedulesController do
   include AccessMatchersForController
 
-  set(:project) { create(:project, :public, :repository) }
-  set(:pipeline_schedule) { create(:ci_pipeline_schedule, project: project) }
+  let_it_be(:user) { create(:user) }
+  let_it_be(:project) { create(:project, :public, :repository) }
+  let_it_be(:pipeline_schedule) { create(:ci_pipeline_schedule, project: project) }
+
+  before do
+    project.add_developer(user)
+  end
 
   describe 'GET #index' do
     render_views
@@ -14,6 +21,10 @@ describe Projects::PipelineSchedulesController do
       create(:ci_pipeline_schedule, :inactive, project: project)
     end
 
+    before do
+      sign_in(user)
+    end
+
     it 'renders the index view' do
       visit_pipelines_schedules
 
@@ -21,7 +32,7 @@ describe Projects::PipelineSchedulesController do
       expect(response).to render_template(:index)
     end
 
-    it 'avoids N + 1 queries' do
+    it 'avoids N + 1 queries', :request_store do
       control_count = ActiveRecord::QueryRecorder.new { visit_pipelines_schedules }.count
 
       create_list(:ci_pipeline_schedule, 2, project: project)
@@ -44,20 +55,18 @@ describe Projects::PipelineSchedulesController do
     end
 
     def visit_pipelines_schedules
-      get :index, namespace_id: project.namespace.to_param, project_id: project, scope: scope
+      get :index, params: { namespace_id: project.namespace.to_param, project_id: project, scope: scope }
     end
   end
 
   describe 'GET #new' do
-    set(:user) { create(:user) }
-
     before do
       project.add_developer(user)
       sign_in(user)
     end
 
     it 'initializes a pipeline schedule model' do
-      get :new, namespace_id: project.namespace.to_param, project_id: project
+      get :new, params: { namespace_id: project.namespace.to_param, project_id: project }
 
       expect(response).to have_gitlab_http_status(:ok)
       expect(assigns(:schedule)).to be_a_new(Ci::PipelineSchedule)
@@ -66,8 +75,6 @@ describe Projects::PipelineSchedulesController do
 
   describe 'POST #create' do
     describe 'functionality' do
-      set(:user) { create(:user) }
-
       before do
         project.add_developer(user)
         sign_in(user)
@@ -80,7 +87,7 @@ describe Projects::PipelineSchedulesController do
       context 'when variables_attributes has one variable' do
         let(:schedule) do
           basic_param.merge({
-            variables_attributes: [{ key: 'AAA', secret_value: 'AAA123' }]
+            variables_attributes: [{ key: 'AAA', secret_value: 'AAA123', variable_type: 'file' }]
           })
         end
 
@@ -94,6 +101,7 @@ describe Projects::PipelineSchedulesController do
           Ci::PipelineScheduleVariable.last.tap do |v|
             expect(v.key).to eq("AAA")
             expect(v.value).to eq("AAA123")
+            expect(v.variable_type).to eq("file")
           end
         end
       end
@@ -121,7 +129,7 @@ describe Projects::PipelineSchedulesController do
 
       it { expect { go }.to be_allowed_for(:admin) }
       it { expect { go }.to be_allowed_for(:owner).of(project) }
-      it { expect { go }.to be_allowed_for(:master).of(project) }
+      it { expect { go }.to be_allowed_for(:maintainer).of(project) }
       it { expect { go }.to be_allowed_for(:developer).of(project) }
       it { expect { go }.to be_denied_for(:reporter).of(project) }
       it { expect { go }.to be_denied_for(:guest).of(project) }
@@ -131,13 +139,12 @@ describe Projects::PipelineSchedulesController do
     end
 
     def go
-      post :create, namespace_id: project.namespace.to_param, project_id: project, schedule: schedule
+      post :create, params: { namespace_id: project.namespace.to_param, project_id: project, schedule: schedule }
     end
   end
 
   describe 'PUT #update' do
     describe 'functionality' do
-      set(:user) { create(:user) }
       let!(:pipeline_schedule) { create(:ci_pipeline_schedule, project: project, owner: user) }
 
       before do
@@ -274,7 +281,7 @@ describe Projects::PipelineSchedulesController do
 
       it { expect { go }.to be_allowed_for(:admin) }
       it { expect { go }.to be_allowed_for(:owner).of(project) }
-      it { expect { go }.to be_allowed_for(:master).of(project) }
+      it { expect { go }.to be_allowed_for(:maintainer).of(project) }
       it { expect { go }.to be_allowed_for(:developer).of(project).own(pipeline_schedule) }
       it { expect { go }.to be_denied_for(:reporter).of(project) }
       it { expect { go }.to be_denied_for(:guest).of(project) }
@@ -292,27 +299,29 @@ describe Projects::PipelineSchedulesController do
 
         it { expect { go }.to be_allowed_for(developer_1) }
         it { expect { go }.to be_denied_for(:developer).of(project) }
-        it { expect { go }.to be_allowed_for(:master).of(project) }
+        it { expect { go }.to be_allowed_for(:maintainer).of(project) }
       end
 
-      context 'when a master created a pipeline schedule' do
-        let(:master_1) { create(:user) }
-        let!(:pipeline_schedule) { create(:ci_pipeline_schedule, project: project, owner: master_1) }
+      context 'when a maintainer created a pipeline schedule' do
+        let(:maintainer_1) { create(:user) }
+        let!(:pipeline_schedule) { create(:ci_pipeline_schedule, project: project, owner: maintainer_1) }
 
         before do
-          project.add_master(master_1)
+          project.add_maintainer(maintainer_1)
         end
 
-        it { expect { go }.to be_allowed_for(master_1) }
-        it { expect { go }.to be_allowed_for(:master).of(project) }
+        it { expect { go }.to be_allowed_for(maintainer_1) }
+        it { expect { go }.to be_allowed_for(:maintainer).of(project) }
         it { expect { go }.to be_denied_for(:developer).of(project) }
       end
     end
 
     def go
-      put :update, namespace_id: project.namespace.to_param,
-                   project_id: project, id: pipeline_schedule,
-                   schedule: schedule
+      put :update, params: { namespace_id: project.namespace.to_param,
+                             project_id: project,
+                             id: pipeline_schedule,
+                             schedule: schedule },
+                   as: :html
     end
   end
 
@@ -321,12 +330,12 @@ describe Projects::PipelineSchedulesController do
       let(:user) { create(:user) }
 
       before do
-        project.add_master(user)
+        project.add_maintainer(user)
         sign_in(user)
       end
 
       it 'loads the pipeline schedule' do
-        get :edit, namespace_id: project.namespace.to_param, project_id: project, id: pipeline_schedule.id
+        get :edit, params: { namespace_id: project.namespace.to_param, project_id: project, id: pipeline_schedule.id }
 
         expect(response).to have_gitlab_http_status(:ok)
         expect(assigns(:schedule)).to eq(pipeline_schedule)
@@ -336,7 +345,7 @@ describe Projects::PipelineSchedulesController do
     describe 'security' do
       it { expect { go }.to be_allowed_for(:admin) }
       it { expect { go }.to be_allowed_for(:owner).of(project) }
-      it { expect { go }.to be_allowed_for(:master).of(project) }
+      it { expect { go }.to be_allowed_for(:maintainer).of(project) }
       it { expect { go }.to be_allowed_for(:developer).of(project).own(pipeline_schedule) }
       it { expect { go }.to be_denied_for(:reporter).of(project) }
       it { expect { go }.to be_denied_for(:guest).of(project) }
@@ -346,7 +355,7 @@ describe Projects::PipelineSchedulesController do
     end
 
     def go
-      get :edit, namespace_id: project.namespace.to_param, project_id: project, id: pipeline_schedule.id
+      get :edit, params: { namespace_id: project.namespace.to_param, project_id: project, id: pipeline_schedule.id }
     end
   end
 
@@ -354,7 +363,7 @@ describe Projects::PipelineSchedulesController do
     describe 'security' do
       it { expect { go }.to be_allowed_for(:admin) }
       it { expect { go }.to be_allowed_for(:owner).of(project) }
-      it { expect { go }.to be_allowed_for(:master).of(project) }
+      it { expect { go }.to be_allowed_for(:maintainer).of(project) }
       it { expect { go }.to be_allowed_for(:developer).of(project).own(pipeline_schedule) }
       it { expect { go }.to be_denied_for(:reporter).of(project) }
       it { expect { go }.to be_denied_for(:guest).of(project) }
@@ -364,12 +373,11 @@ describe Projects::PipelineSchedulesController do
     end
 
     def go
-      post :take_ownership, namespace_id: project.namespace.to_param, project_id: project, id: pipeline_schedule.id
+      post :take_ownership, params: { namespace_id: project.namespace.to_param, project_id: project, id: pipeline_schedule.id }
     end
   end
 
   describe 'POST #play', :clean_gitlab_redis_cache do
-    set(:user) { create(:user) }
     let(:ref) { 'master' }
 
     before do
@@ -386,7 +394,7 @@ describe Projects::PipelineSchedulesController do
       it 'does not allow pipeline to be executed' do
         expect(RunPipelineScheduleWorker).not_to receive(:perform_async)
 
-        post :play, namespace_id: project.namespace.to_param, project_id: project, id: pipeline_schedule.id
+        post :play, params: { namespace_id: project.namespace.to_param, project_id: project, id: pipeline_schedule.id }
 
         expect(response).to have_gitlab_http_status(404)
       end
@@ -396,7 +404,7 @@ describe Projects::PipelineSchedulesController do
       it 'executes a new pipeline' do
         expect(RunPipelineScheduleWorker).to receive(:perform_async).with(pipeline_schedule.id, user.id).and_return('job-123')
 
-        post :play, namespace_id: project.namespace.to_param, project_id: project, id: pipeline_schedule.id
+        post :play, params: { namespace_id: project.namespace.to_param, project_id: project, id: pipeline_schedule.id }
 
         expect(flash[:notice]).to start_with 'Successfully scheduled a pipeline to run'
         expect(response).to have_gitlab_http_status(302)
@@ -404,7 +412,7 @@ describe Projects::PipelineSchedulesController do
 
       it 'prevents users from scheduling the same pipeline repeatedly' do
         2.times do
-          post :play, namespace_id: project.namespace.to_param, project_id: project, id: pipeline_schedule.id
+          post :play, params: { namespace_id: project.namespace.to_param, project_id: project, id: pipeline_schedule.id }
         end
 
         expect(flash.to_a.size).to eq(2)
@@ -420,7 +428,7 @@ describe Projects::PipelineSchedulesController do
 
         expect(RunPipelineScheduleWorker).not_to receive(:perform_async)
 
-        post :play, namespace_id: project.namespace.to_param, project_id: project, id: protected_schedule.id
+        post :play, params: { namespace_id: project.namespace.to_param, project_id: project, id: protected_schedule.id }
 
         expect(response).to have_gitlab_http_status(404)
       end
@@ -428,14 +436,12 @@ describe Projects::PipelineSchedulesController do
   end
 
   describe 'DELETE #destroy' do
-    set(:user) { create(:user) }
-
     context 'when a developer makes the request' do
       before do
         project.add_developer(user)
         sign_in(user)
 
-        delete :destroy, namespace_id: project.namespace.to_param, project_id: project, id: pipeline_schedule.id
+        delete :destroy, params: { namespace_id: project.namespace.to_param, project_id: project, id: pipeline_schedule.id }
       end
 
       it 'does not delete the pipeline schedule' do
@@ -443,15 +449,15 @@ describe Projects::PipelineSchedulesController do
       end
     end
 
-    context 'when a master makes the request' do
+    context 'when a maintainer makes the request' do
       before do
-        project.add_master(user)
+        project.add_maintainer(user)
         sign_in(user)
       end
 
       it 'destroys the pipeline schedule' do
         expect do
-          delete :destroy, namespace_id: project.namespace.to_param, project_id: project, id: pipeline_schedule.id
+          delete :destroy, params: { namespace_id: project.namespace.to_param, project_id: project, id: pipeline_schedule.id }
         end.to change { project.pipeline_schedules.count }.by(-1)
 
         expect(response).to have_gitlab_http_status(302)

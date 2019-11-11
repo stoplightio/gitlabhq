@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 shared_context 'valid cluster create params' do
   let(:params) do
     {
@@ -7,7 +9,8 @@ shared_context 'valid cluster create params' do
         gcp_project_id: 'gcp-project',
         zone: 'us-central1-a',
         num_nodes: 1,
-        machine_type: 'machine_type-a'
+        machine_type: 'machine_type-a',
+        legacy_abac: 'true'
       }
     }
   end
@@ -44,7 +47,9 @@ shared_examples 'create cluster service success' do
     expect(subject.provider.num_nodes).to eq(1)
     expect(subject.provider.machine_type).to eq('machine_type-a')
     expect(subject.provider.access_token).to eq(access_token)
+    expect(subject.provider).to be_legacy_abac
     expect(subject.platform).to be_nil
+    expect(subject.namespace_per_environment).to eq true
   end
 end
 

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe 'Project Graph', :js do
@@ -6,7 +8,9 @@ describe 'Project Graph', :js do
   let(:branch_name) { 'master' }
 
   before do
-    project.add_master(user)
+    ::Projects::DetectRepositoryLanguagesService.new(project, user).execute
+
+    project.add_maintainer(user)
 
     sign_in(user)
   end

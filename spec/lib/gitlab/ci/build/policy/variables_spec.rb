@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Gitlab::Ci::Build::Policy::Variables do
@@ -11,10 +13,16 @@ describe Gitlab::Ci::Build::Policy::Variables do
     build(:ci_build, pipeline: pipeline, project: project, ref: 'master')
   end
 
-  let(:seed) { double('build seed', to_resource: ci_build) }
+  let(:seed) do
+    double('build seed',
+      to_resource: ci_build,
+      scoped_variables_hash: ci_build.scoped_variables_hash
+    )
+  end
 
   before do
     pipeline.variables.build(key: 'CI_PROJECT_NAME', value: '')
+    pipeline.variables.build(key: 'MY_VARIABLE', value: 'my-var')
   end
 
   describe '#satisfied_by?' do
@@ -24,7 +32,13 @@ describe Gitlab::Ci::Build::Policy::Variables do
       expect(policy).to be_satisfied_by(pipeline, seed)
     end
 
-    it 'is not satisfied by an overriden empty variable' do
+    it 'is satisfied by a matching pipeline variable' do
+      policy = described_class.new(['$MY_VARIABLE'])
+
+      expect(policy).to be_satisfied_by(pipeline, seed)
+    end
+
+    it 'is not satisfied by an overridden empty variable' do
       policy = described_class.new(['$CI_PROJECT_NAME'])
 
       expect(policy).not_to be_satisfied_by(pipeline, seed)
@@ -54,7 +68,7 @@ describe Gitlab::Ci::Build::Policy::Variables do
       expect(policy).not_to be_satisfied_by(pipeline, seed)
     end
 
-    it 'allows to evaluate regular secret variables' do
+    it 'allows to evaluate regular CI variables' do
       create(:ci_variable, project: project, key: 'SECRET', value: 'my secret')
 
       policy = described_class.new(["$SECRET == 'my secret'"])
@@ -67,6 +81,58 @@ describe Gitlab::Ci::Build::Policy::Variables do
 
       expect(pipeline).not_to be_persisted
       expect(seed.to_resource).not_to be_persisted
+    end
+
+    context 'when a bridge job is used' do
+      let(:bridge) do
+        build(:ci_bridge, pipeline: pipeline, project: project, ref: 'master')
+      end
+
+      let(:seed) do
+        double('bridge seed',
+          to_resource: bridge,
+          scoped_variables_hash: ci_build.scoped_variables_hash
+        )
+      end
+
+      it 'is satisfied by a matching expression for a bridge job' do
+        policy = described_class.new(['$MY_VARIABLE'])
+
+        expect(policy).to be_satisfied_by(pipeline, seed)
+      end
+    end
+
+    context 'when using project ci variables in environment scope' do
+      let(:ci_build) do
+        build(:ci_build, pipeline: pipeline,
+                         project: project,
+                         ref: 'master',
+                         stage: 'review',
+                         environment: 'test/$CI_JOB_STAGE/1')
+      end
+
+      before do
+        create(:ci_variable, project: project,
+                             key: 'SCOPED_VARIABLE',
+                             value: 'my-value-1')
+
+        create(:ci_variable, project: project,
+                             key: 'SCOPED_VARIABLE',
+                             value: 'my-value-2',
+                             environment_scope: 'test/review/*')
+      end
+
+      it 'is satisfied by scoped variable match' do
+        policy = described_class.new(['$SCOPED_VARIABLE == "my-value-2"'])
+
+        expect(policy).to be_satisfied_by(pipeline, seed)
+      end
+
+      it 'is not satisfied when matching against overridden variable' do
+        policy = described_class.new(['$SCOPED_VARIABLE == "my-value-1"'])
+
+        expect(policy).not_to be_satisfied_by(pipeline, seed)
+      end
     end
   end
 end

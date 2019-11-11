@@ -18,16 +18,23 @@ unless Sidekiq.server?
         .map { |k, v| { key: k, value: v } }
 
       payload = {
-        time: event.time.utc.iso8601(3),
+        time: Time.now.utc.iso8601(3),
         params: params,
         remote_ip: event.payload[:remote_ip],
         user_id: event.payload[:user_id],
-        username: event.payload[:username]
+        username: event.payload[:username],
+        ua: event.payload[:ua],
+        queue_duration: event.payload[:queue_duration]
       }
 
-      gitaly_calls = Gitlab::GitalyClient.get_request_count
-      payload[:gitaly_calls] = gitaly_calls if gitaly_calls > 0
+      ::Gitlab::InstrumentationHelper.add_instrumentation_data(payload)
+
       payload[:response] = event.payload[:response] if event.payload[:response]
+      payload[Labkit::Correlation::CorrelationId::LOG_KEY] = Labkit::Correlation::CorrelationId.current_id
+
+      if cpu_s = Gitlab::Metrics::System.thread_cpu_duration(::Gitlab::RequestContext.start_thread_cpu_time)
+        payload[:cpu_s] = cpu_s
+      end
 
       payload
     end

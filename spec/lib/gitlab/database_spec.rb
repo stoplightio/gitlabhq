@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Gitlab::Database do
@@ -15,14 +17,18 @@ describe Gitlab::Database do
     it 'returns the name of the adapter' do
       expect(described_class.adapter_name).to be_an_instance_of(String)
     end
+
+    it 'returns Unknown when using anything else' do
+      allow(described_class).to receive(:postgresql?).and_return(false)
+
+      expect(described_class.human_adapter_name).to eq('Unknown')
+    end
   end
 
-  # These are just simple smoke tests to check if the methods work (regardless
-  # of what they may return).
-  describe '.mysql?' do
-    subject { described_class.mysql? }
-
-    it { is_expected.to satisfy { |val| val == true || val == false } }
+  describe '.human_adapter_name' do
+    it 'returns PostgreSQL when using PostgreSQL' do
+      expect(described_class.human_adapter_name).to eq('PostgreSQL')
+    end
   end
 
   describe '.postgresql?' do
@@ -36,15 +42,6 @@ describe Gitlab::Database do
       described_class.instance_variable_set(:@version, nil)
       example.run
       described_class.instance_variable_set(:@version, nil)
-    end
-
-    context "on mysql" do
-      it "extracts the version number" do
-        allow(described_class).to receive(:database_version)
-          .and_return("5.7.12-standard")
-
-        expect(described_class.version).to eq '5.7.12-standard'
-      end
     end
 
     context "on postgresql" do
@@ -65,88 +62,129 @@ describe Gitlab::Database do
     end
   end
 
-  describe '.join_lateral_supported?' do
-    it 'returns false when using MySQL' do
-      allow(described_class).to receive(:postgresql?).and_return(false)
-
-      expect(described_class.join_lateral_supported?).to eq(false)
+  describe '.postgresql_9_or_less?' do
+    it 'returns true when using postgresql 8.4' do
+      allow(described_class).to receive(:version).and_return('8.4')
+      expect(described_class.postgresql_9_or_less?).to eq(true)
     end
 
-    it 'returns false when using PostgreSQL 9.2' do
-      allow(described_class).to receive(:postgresql?).and_return(true)
-      allow(described_class).to receive(:version).and_return('9.2.1')
+    it 'returns true when using PostgreSQL 9.6' do
+      allow(described_class).to receive(:version).and_return('9.6')
 
-      expect(described_class.join_lateral_supported?).to eq(false)
+      expect(described_class.postgresql_9_or_less?).to eq(true)
     end
 
-    it 'returns true when using PostgreSQL 9.3.0 or newer' do
-      allow(described_class).to receive(:postgresql?).and_return(true)
-      allow(described_class).to receive(:version).and_return('9.3.0')
+    it 'returns false when using PostgreSQL 10 or newer' do
+      allow(described_class).to receive(:version).and_return('10')
 
-      expect(described_class.join_lateral_supported?).to eq(true)
+      expect(described_class.postgresql_9_or_less?).to eq(false)
+    end
+  end
+
+  describe '.postgresql_minimum_supported_version?' do
+    it 'returns false when using PostgreSQL 9.5' do
+      allow(described_class).to receive(:version).and_return('9.5')
+
+      expect(described_class.postgresql_minimum_supported_version?).to eq(false)
+    end
+
+    it 'returns true when using PostgreSQL 9.6' do
+      allow(described_class).to receive(:version).and_return('9.6')
+
+      expect(described_class.postgresql_minimum_supported_version?).to eq(true)
+    end
+
+    it 'returns true when using PostgreSQL 10 or newer' do
+      allow(described_class).to receive(:version).and_return('10')
+
+      expect(described_class.postgresql_minimum_supported_version?).to eq(true)
     end
   end
 
   describe '.replication_slots_supported?' do
-    it 'returns false when using MySQL' do
-      allow(described_class).to receive(:postgresql?).and_return(false)
-
-      expect(described_class.replication_slots_supported?).to eq(false)
-    end
-
     it 'returns false when using PostgreSQL 9.3' do
-      allow(described_class).to receive(:postgresql?).and_return(true)
       allow(described_class).to receive(:version).and_return('9.3.1')
 
       expect(described_class.replication_slots_supported?).to eq(false)
     end
 
     it 'returns true when using PostgreSQL 9.4.0 or newer' do
-      allow(described_class).to receive(:postgresql?).and_return(true)
       allow(described_class).to receive(:version).and_return('9.4.0')
 
       expect(described_class.replication_slots_supported?).to eq(true)
     end
   end
 
-  describe '.nulls_last_order' do
-    context 'when using PostgreSQL' do
-      before do
-        expect(described_class).to receive(:postgresql?).and_return(true)
-      end
+  describe '.pg_wal_lsn_diff' do
+    it 'returns old name when using PostgreSQL 9.6' do
+      allow(described_class).to receive(:version).and_return('9.6')
 
-      it { expect(described_class.nulls_last_order('column', 'ASC')).to eq 'column ASC NULLS LAST'}
-      it { expect(described_class.nulls_last_order('column', 'DESC')).to eq 'column DESC NULLS LAST'}
+      expect(described_class.pg_wal_lsn_diff).to eq('pg_xlog_location_diff')
     end
 
-    context 'when using MySQL' do
-      before do
-        expect(described_class).to receive(:postgresql?).and_return(false)
-      end
+    it 'returns new name when using PostgreSQL 10 or newer' do
+      allow(described_class).to receive(:version).and_return('10')
 
-      it { expect(described_class.nulls_last_order('column', 'ASC')).to eq 'column IS NULL, column ASC'}
-      it { expect(described_class.nulls_last_order('column', 'DESC')).to eq 'column DESC'}
+      expect(described_class.pg_wal_lsn_diff).to eq('pg_wal_lsn_diff')
     end
   end
 
+  describe '.pg_current_wal_insert_lsn' do
+    it 'returns old name when using PostgreSQL 9.6' do
+      allow(described_class).to receive(:version).and_return('9.6')
+
+      expect(described_class.pg_current_wal_insert_lsn).to eq('pg_current_xlog_insert_location')
+    end
+
+    it 'returns new name when using PostgreSQL 10 or newer' do
+      allow(described_class).to receive(:version).and_return('10')
+
+      expect(described_class.pg_current_wal_insert_lsn).to eq('pg_current_wal_insert_lsn')
+    end
+  end
+
+  describe '.pg_last_wal_receive_lsn' do
+    it 'returns old name when using PostgreSQL 9.6' do
+      allow(described_class).to receive(:version).and_return('9.6')
+
+      expect(described_class.pg_last_wal_receive_lsn).to eq('pg_last_xlog_receive_location')
+    end
+
+    it 'returns new name when using PostgreSQL 10 or newer' do
+      allow(described_class).to receive(:version).and_return('10')
+
+      expect(described_class.pg_last_wal_receive_lsn).to eq('pg_last_wal_receive_lsn')
+    end
+  end
+
+  describe '.pg_last_wal_replay_lsn' do
+    it 'returns old name when using PostgreSQL 9.6' do
+      allow(described_class).to receive(:version).and_return('9.6')
+
+      expect(described_class.pg_last_wal_replay_lsn).to eq('pg_last_xlog_replay_location')
+    end
+
+    it 'returns new name when using PostgreSQL 10 or newer' do
+      allow(described_class).to receive(:version).and_return('10')
+
+      expect(described_class.pg_last_wal_replay_lsn).to eq('pg_last_wal_replay_lsn')
+    end
+  end
+
+  describe '.pg_last_xact_replay_timestamp' do
+    it 'returns pg_last_xact_replay_timestamp' do
+      expect(described_class.pg_last_xact_replay_timestamp).to eq('pg_last_xact_replay_timestamp')
+    end
+  end
+
+  describe '.nulls_last_order' do
+    it { expect(described_class.nulls_last_order('column', 'ASC')).to eq 'column ASC NULLS LAST'}
+    it { expect(described_class.nulls_last_order('column', 'DESC')).to eq 'column DESC NULLS LAST'}
+  end
+
   describe '.nulls_first_order' do
-    context 'when using PostgreSQL' do
-      before do
-        expect(described_class).to receive(:postgresql?).and_return(true)
-      end
-
-      it { expect(described_class.nulls_first_order('column', 'ASC')).to eq 'column ASC NULLS FIRST'}
-      it { expect(described_class.nulls_first_order('column', 'DESC')).to eq 'column DESC NULLS FIRST'}
-    end
-
-    context 'when using MySQL' do
-      before do
-        expect(described_class).to receive(:postgresql?).and_return(false)
-      end
-
-      it { expect(described_class.nulls_first_order('column', 'ASC')).to eq 'column ASC'}
-      it { expect(described_class.nulls_first_order('column', 'DESC')).to eq 'column IS NULL, column DESC'}
-    end
+    it { expect(described_class.nulls_first_order('column', 'ASC')).to eq 'column ASC NULLS FIRST'}
+    it { expect(described_class.nulls_first_order('column', 'DESC')).to eq 'column DESC NULLS FIRST'}
   end
 
   describe '.with_connection_pool' do
@@ -256,10 +294,6 @@ describe Gitlab::Database do
     end
 
     context 'when using PostgreSQL' do
-      before do
-        allow(described_class).to receive(:mysql?).and_return(false)
-      end
-
       it 'allows the returning of the IDs of the inserted rows' do
         result = double(:result, values: [['10']])
 
@@ -299,6 +333,17 @@ describe Gitlab::Database do
         pool.disconnect!
       end
     end
+
+    it 'allows setting of a custom hostname and port' do
+      pool = described_class.create_connection_pool(5, '127.0.0.1', 5432)
+
+      begin
+        expect(pool.spec.config[:host]).to eq('127.0.0.1')
+        expect(pool.spec.config[:port]).to eq(5432)
+      ensure
+        pool.disconnect!
+      end
+    end
   end
 
   describe '.cached_column_exists?' do
@@ -314,8 +359,8 @@ describe Gitlab::Database do
 
   describe '.cached_table_exists?' do
     it 'only retrieves data once per table' do
-      expect(ActiveRecord::Base.connection).to receive(:table_exists?).with(:projects).once.and_call_original
-      expect(ActiveRecord::Base.connection).to receive(:table_exists?).with(:bogus_table_name).once.and_call_original
+      expect(ActiveRecord::Base.connection).to receive(:data_source_exists?).with(:projects).once.and_call_original
+      expect(ActiveRecord::Base.connection).to receive(:data_source_exists?).with(:bogus_table_name).once.and_call_original
 
       2.times do
         expect(described_class.cached_table_exists?(:projects)).to be_truthy
@@ -325,30 +370,50 @@ describe Gitlab::Database do
   end
 
   describe '#true_value' do
-    it 'returns correct value for PostgreSQL' do
-      expect(described_class).to receive(:postgresql?).and_return(true)
-
+    it 'returns correct value' do
       expect(described_class.true_value).to eq "'t'"
-    end
-
-    it 'returns correct value for MySQL' do
-      expect(described_class).to receive(:postgresql?).and_return(false)
-
-      expect(described_class.true_value).to eq 1
     end
   end
 
   describe '#false_value' do
-    it 'returns correct value for PostgreSQL' do
-      expect(described_class).to receive(:postgresql?).and_return(true)
-
+    it 'returns correct value' do
       expect(described_class.false_value).to eq "'f'"
     end
+  end
 
-    it 'returns correct value for MySQL' do
-      expect(described_class).to receive(:postgresql?).and_return(false)
+  describe '.read_only?' do
+    it 'returns false' do
+      expect(described_class.read_only?).to be_falsey
+    end
+  end
 
-      expect(described_class.false_value).to eq 0
+  describe '.db_read_only?' do
+    before do
+      allow(ActiveRecord::Base.connection).to receive(:execute).and_call_original
+    end
+
+    it 'detects a read only database' do
+      allow(ActiveRecord::Base.connection).to receive(:execute).with('SELECT pg_is_in_recovery()').and_return([{ "pg_is_in_recovery" => "t" }])
+
+      expect(described_class.db_read_only?).to be_truthy
+    end
+
+    it 'detects a read only database' do
+      allow(ActiveRecord::Base.connection).to receive(:execute).with('SELECT pg_is_in_recovery()').and_return([{ "pg_is_in_recovery" => true }])
+
+      expect(described_class.db_read_only?).to be_truthy
+    end
+
+    it 'detects a read write database' do
+      allow(ActiveRecord::Base.connection).to receive(:execute).with('SELECT pg_is_in_recovery()').and_return([{ "pg_is_in_recovery" => "f" }])
+
+      expect(described_class.db_read_only?).to be_falsey
+    end
+
+    it 'detects a read write database' do
+      allow(ActiveRecord::Base.connection).to receive(:execute).with('SELECT pg_is_in_recovery()').and_return([{ "pg_is_in_recovery" => false }])
+
+      expect(described_class.db_read_only?).to be_falsey
     end
   end
 

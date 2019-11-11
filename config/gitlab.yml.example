@@ -7,7 +7,8 @@
 # * are being moved to ApplicationSetting model!                       #
 # If a setting requires an application restart say so in that screen.  #
 # If you change this file in a Merge Request, please also create       #
-# a MR on https://gitlab.com/gitlab-org/omnibus-gitlab/merge_requests  #
+# a MR on https://gitlab.com/gitlab-org/omnibus-gitlab/merge_requests. #
+# For more details see https://gitlab.com/gitlab-org/omnibus-gitlab/blob/0928cfb09f43993fd9454b0b14dbd1924b1407bc/doc/settings/gitlab.yml.md #
 ########################################################################
 #
 #
@@ -33,7 +34,7 @@ production: &base
     port: 80 # Set to 443 if using HTTPS, see installation.md#using-https for additional HTTPS configuration details
     https: false # Set to true if using HTTPS, see installation.md#using-https for additional HTTPS configuration details
 
-    # Uncommment this line below if your ssh host is different from HTTP/HTTPS one
+    # Uncomment this line below if your ssh host is different from HTTP/HTTPS one
     # (you'd obviously need to replace ssh.host_example.com with your own host).
     # Otherwise, ssh host will be set to the `host:` value above
     # ssh_host: ssh.host_example.com
@@ -45,6 +46,29 @@ production: &base
     # Uncomment and customize the following line to run in a non-root path
     #
     # relative_url_root: /gitlab
+
+    # Content Security Policy
+    # See https://guides.rubyonrails.org/security.html#content-security-policy
+    content_security_policy:
+      enabled: true
+      report_only: false
+      directives:
+        base_uri:
+        child_src:
+        connect_src: "'self' http://localhost:* ws://localhost:* wss://localhost:*"
+        default_src: "'self'"
+        font_src:
+        form_action:
+        frame_ancestors: "'self'"
+        frame_src: "'self' https://www.google.com/recaptcha/ https://www.recaptcha.net/ https://content.googleapis.com https://content-compute.googleapis.com https://content-cloudbilling.googleapis.com https://content-cloudresourcemanager.googleapis.com"
+        img_src: "* data: blob:"
+        manifest_src:
+        media_src:
+        object_src: "'none'"
+        script_src: "'self' 'unsafe-eval' http://localhost:* https://www.google.com/recaptcha/ https://www.recaptcha.net/ https://www.gstatic.com/recaptcha/ https://apis.google.com"
+        style_src: "'self' 'unsafe-inline'"
+        worker_src: "'self' blob:"
+        report_uri:
 
     # Trusted Proxies
     # Customize if you have GitLab behind a reverse proxy which is running on a different machine.
@@ -71,6 +95,15 @@ production: &base
     email_display_name: GitLab
     email_reply_to: noreply@example.com
     email_subject_suffix: ''
+    email_smime:
+      # Uncomment and set to true if you need to enable email S/MIME signing (default: false)
+      # enabled: false
+      # S/MIME private key file in PEM format, unencrypted
+      # Default is '.gitlab_smime_key' relative to Rails.root (i.e. root of the GitLab app).
+      # key_file: /home/git/gitlab/.gitlab_smime_key
+      # S/MIME public certificate key in PEM format, will be attached to signed messages
+      # Default is '.gitlab_smime_cert' relative to Rails.root (i.e. root of the GitLab app).
+      # cert_file: /home/git/gitlab/.gitlab_smime_cert
 
     # Email server smtp settings are in config/initializers/smtp_settings.rb.sample
 
@@ -78,15 +111,15 @@ production: &base
     # username_changing_enabled: false # default: true - User can change her username/namespace
     ## Default theme ID
     ##   1 - Indigo
-    ##   2 - Light Indigo
-    ##   3 - Blue
-    ##   4 - Light Blue
+    ##   2 - Dark
+    ##   3 - Light
+    ##   4 - Blue
     ##   5 - Green
-    ##   6 - Light Green
-    ##   7 - Red
-    ##   8 - Light Red
-    ##   9 - Dark
-    ##   10 - Light
+    ##   6 - Light Indigo
+    ##   7 - Light Blue
+    ##   8 - Light Green
+    ##   9 - Red
+    ##   10 - Light Red
     # default_theme: 1 # default: 1
 
     ## Automatic issue closing
@@ -94,7 +127,7 @@ production: &base
     # This happens when the commit is pushed or merged into the default branch of a project.
     # When not specified the default issue_closing_pattern as specified below will be used.
     # Tip: you can test your closing pattern at http://rubular.com.
-    # issue_closing_pattern: '((?:[Cc]los(?:e[sd]?|ing)|[Ff]ix(?:e[sd]|ing)?|[Rr]esolv(?:e[sd]?|ing)|[Ii]mplement(?:s|ed|ing)?)(:?) +(?:(?:issues? +)?%{issue_ref}(?:(?:, *| +and +)?)|([A-Z][A-Z0-9_]+-\d+))+)'
+    # issue_closing_pattern: '\b((?:[Cc]los(?:e[sd]?|ing)|\b[Ff]ix(?:e[sd]|ing)?|\b[Rr]esolv(?:e[sd]?|ing)|\b[Ii]mplement(?:s|ed|ing)?)(:?) +(?:(?:issues? +)?%{issue_ref}(?:(?:, *| +and +)?)|([A-Z][A-Z0-9_]+-\d+))+)'
 
     ## Default project features settings
     default_projects_features:
@@ -114,6 +147,9 @@ production: &base
     # The default is 'shared/cache/archive/' relative to the root of the Rails app.
     # repository_downloads_path: shared/cache/archive/
 
+    ## Impersonation settings
+    impersonation_enabled: true
+
   ## Reply by email
   # Allow users to comment on issues and merge requests by replying to notification emails.
   # For documentation on how to set this up, see http://doc.gitlab.com/ce/administration/reply_by_email.html
@@ -122,6 +158,7 @@ production: &base
 
     # The email address including the `%{key}` placeholder that will be replaced to reference the item being replied to.
     # The placeholder can be omitted but if present, it must appear in the "user" part of the address (before the `@`).
+    # Please be aware that a placeholder is required for the Service Desk feature to work.
     address: "gitlab-incoming+%{key}@gmail.com"
 
     # Email account username
@@ -160,6 +197,26 @@ production: &base
     #     aws_access_key_id: AWS_ACCESS_KEY_ID
     #     aws_secret_access_key: AWS_SECRET_ACCESS_KEY
     #     region: us-east-1
+    #     aws_signature_version: 4 # For creation of signed URLs. Set to 2 if provider does not support v4.
+    #     endpoint: 'https://s3.amazonaws.com' # default: nil - Useful for S3 compliant services such as DigitalOcean Spaces
+
+  ## Merge request external diff storage
+  external_diffs:
+    # If disabled (the default), the diffs are in-database. Otherwise, they can
+    # be stored on disk, or in object storage
+    enabled: false
+    # The location where external diffs are stored (default: shared/lfs-external-diffs).
+    # storage_path: shared/external-diffs
+    # object_store:
+    #   enabled: false
+    #   remote_directory: external-diffs
+    #   background_upload: false
+    #   proxy_download: false
+    #   connection:
+    #     provider: AWS
+    #     aws_access_key_id: AWS_ACCESS_KEY_ID
+    #     aws_secret_access_key: AWS_SECRET_ACCESS_KEY
+    #     region: us-east-1
 
   ## Git LFS
   lfs:
@@ -180,6 +237,7 @@ production: &base
         # Use the following options to configure an AWS compatible host
         # host: 'localhost' # default: s3.amazonaws.com
         # endpoint: 'http://127.0.0.1:9000' # default: nil
+        # aws_signature_version: 4 # For creation of signed URLs. Set to 2 if provider does not support v4.
         # path_style: true # Use 'host/bucket_name/object' instead of 'bucket_name.host/object'
 
   ## Uploads (attachments, avatars, etc...)
@@ -197,14 +255,58 @@ production: &base
         provider: AWS
         aws_access_key_id: AWS_ACCESS_KEY_ID
         aws_secret_access_key: AWS_SECRET_ACCESS_KEY
+        aws_signature_version: 4 # For creation of signed URLs. Set to 2 if provider does not support v4.
         region: us-east-1
         # host: 'localhost' # default: s3.amazonaws.com
         # endpoint: 'http://127.0.0.1:9000' # default: nil
         # path_style: true # Use 'host/bucket_name/object' instead of 'bucket_name.host/object'
 
+  ## Packages (maven repository, npm registry, etc...)
+  packages:
+    enabled: true
+    # The location where build packages are stored (default: shared/packages).
+    # storage_path: shared/packages
+    object_store:
+      enabled: false
+      remote_directory: packages # The bucket name
+      # direct_upload: false # Use Object Storage directly for uploads instead of background uploads if enabled (Default: false)
+      # background_upload: false # Temporary option to limit automatic upload (Default: true)
+      # proxy_download: false # Passthrough all downloads via GitLab instead of using Redirects to Object Storage
+      connection:
+        provider: AWS
+        aws_access_key_id: AWS_ACCESS_KEY_ID
+        aws_secret_access_key: AWS_SECRET_ACCESS_KEY
+        region: us-east-1
+        # host: 'localhost' # default: s3.amazonaws.com
+        # endpoint: 'http://127.0.0.1:9000' # default: nil
+        # aws_signature_version: 4 # For creation of signed URLs. Set to 2 if provider does not support v4.
+        # path_style: true # Use 'host/bucket_name/object' instead of 'bucket_name.host/object'
+
+  ## Dependency Proxy
+  dependency_proxy:
+    enabled: true
+    # The location where build packages are stored (default: shared/dependency_proxy).
+    # storage_path: shared/dependency_proxy
+    object_store:
+      enabled: false
+      remote_directory: dependency_proxy # The bucket name
+      # direct_upload: false # Use Object Storage directly for uploads instead of background uploads if enabled (Default: false)
+      # background_upload: false # Temporary option to limit automatic upload (Default: true)
+      # proxy_download: false # Passthrough all downloads via GitLab instead of using Redirects to Object Storage
+      connection:
+        provider: AWS
+        aws_access_key_id: AWS_ACCESS_KEY_ID
+        aws_secret_access_key: AWS_SECRET_ACCESS_KEY
+        region: us-east-1
+        # host: 'localhost' # default: s3.amazonaws.com
+        # endpoint: 'http://127.0.0.1:9000' # default: nil
+        # aws_signature_version: 4 # For creation of signed URLs. Set to 2 if provider does not support v4.
+        # path_style: true # Use 'host/bucket_name/object' instead of 'bucket_name.host/object'
+
   ## GitLab Pages
   pages:
     enabled: false
+    access_control: false
     # The location where pages are stored (default: shared/pages).
     # path: shared/pages
 
@@ -214,11 +316,13 @@ production: &base
     host: example.com
     port: 80 # Set to 443 if you serve the pages with HTTPS
     https: false # Set to true if you serve the pages with HTTPS
-    artifacts_server: true
+    artifacts_server: true # Set to false if you want to disable online view of HTML artifacts
     # external_http: ["1.1.1.1:80", "[2001::1]:80"] # If defined, enables custom domain support in GitLab Pages
     # external_https: ["1.1.1.1:443", "[2001::1]:443"] # If defined, enables custom domain and certificate support in GitLab Pages
-    admin:
-      address: unix:/home/git/gitlab/tmp/sockets/private/pages-admin.socket # TCP connections are supported too (e.g. tcp://host:port)
+
+    # File that contains the shared secret key for verifying access for gitlab-pages.
+    # Default is '.gitlab_pages_shared_secret' relative to Rails.root (i.e. root of the GitLab app).
+    # secret_file: /home/git/gitlab/.gitlab_pages_shared_secret
 
   ## Mattermost
   ## For enabling Add to Mattermost button
@@ -237,7 +341,7 @@ production: &base
 
   ## Sidekiq
   sidekiq:
-    log_format: default # (json is also supported)
+    log_format: json # (default is the original format)
 
   ## Auxiliary jobs
   # Periodically executed jobs, to self-heal GitLab, do external synchronizations, etc.
@@ -256,6 +360,9 @@ production: &base
     # once per hour you will have concurrent 'git fsck' jobs.
     repository_check_worker:
       cron: "20 * * * *"
+    # Archive live traces which have not been archived yet
+    ci_archive_traces_cron_worker:
+      cron: "17 * * * *"
     # Send admin emails once a week
     admin_email_worker:
       cron: "0 0 * * 0"
@@ -268,6 +375,57 @@ production: &base
     pages_domain_verification_cron_worker:
       cron: "*/15 * * * *"
 
+    # Periodically migrate diffs from the database to external storage
+    schedule_migrate_external_diffs_worker:
+      cron: "15 * * * *"
+
+  # GitLab EE only jobs. These jobs are automatically enabled for an EE
+  # installation, and ignored for a CE installation.
+  ee_cron_jobs:
+    # Snapshot active users statistics
+    historical_data_worker:
+      cron: "0 12 * * *"
+
+    # In addition to refreshing users when they log in,
+    # periodically refresh LDAP users membership.
+    # NOTE: This will only take effect if LDAP is enabled
+    ldap_sync_worker:
+      cron: "30 1 * * *"
+
+    # Periodically refresh LDAP groups membership.
+    # NOTE: This will only take effect if LDAP is enabled
+    ldap_group_sync_worker:
+      cron: "0 * * * *"
+
+    # GitLab Geo metrics update worker
+    # NOTE: This will only take effect if Geo is enabled
+    geo_metrics_update_worker:
+      cron: "*/1 * * * *"
+
+    # GitLab Geo prune event log worker
+    # NOTE: This will only take effect if Geo is enabled (primary node only)
+    geo_prune_event_log_worker:
+      cron: "*/5 * * * *"
+
+    # GitLab Geo repository sync worker
+    # NOTE: This will only take effect if Geo is enabled (secondary nodes only)
+    geo_repository_sync_worker:
+      cron: "*/1 * * * *"
+
+    # GitLab Geo file download dispatch worker
+    # NOTE: This will only take effect if Geo is enabled (secondary nodes only)
+    geo_file_download_dispatch_worker:
+      cron: "*/1 * * * *"
+
+    # GitLab Geo migrated local files clean up worker
+    # NOTE: This will only take effect if Geo is enabled (secondary nodes only)
+    geo_migrated_local_files_clean_up_worker:
+      cron: "15 */6 * * *"
+
+    # Export pseudonymized data in CSV format for analysis
+    pseudonymizer_worker:
+      cron: "0 * * * *"
+
   registry:
     # enabled: true
     # host: registry.example.com
@@ -276,6 +434,39 @@ production: &base
     # key: config/registry.key
     # path: shared/registry
     # issuer: gitlab-issuer
+    # notification_secret: '' # only set it when you use Geo replication feature without built-in Registry
+
+    # Add notification settings if you plan to use Geo Replication for the registry
+    # notifications:
+    # - name: geo_event
+    #   url: https://example.com/api/v4/container_registry_event/events
+    #   timeout: 2s
+    #   threshold: 5
+    #   backoff: 1s
+    #   headers:
+    #     Authorization: secret_phrase
+
+  ## Error Reporting and Logging with Sentry
+  sentry:
+    # enabled: false
+    # dsn: https://<key>@sentry.io/<project>
+    # clientside_dsn: https://<key>@sentry.io/<project>
+    # environment: 'production' # e.g. development, staging, production
+
+  ## Geo
+  # NOTE: These settings will only take effect if Geo is enabled
+  geo:
+    # This is an optional identifier which Geo nodes can use to identify themselves.
+    # For example, if external_url is the same for two secondaries, you must specify
+    # a unique Geo node name for those secondaries.
+    #
+    # If it is blank, it defaults to external_url.
+    node_name: ''
+
+    registry_replication:
+      # enabled: true
+      # primary_api_url: http://localhost:5000/ # internal address to the primary registry, will be used by GitLab to directly communicate with primary registry API
+
 
   #
   # 2. GitLab CI settings
@@ -303,6 +494,19 @@ production: &base
   #   bundle exec rake gitlab:ldap:check RAILS_ENV=production
   ldap:
     enabled: false
+
+    # This setting controls the number of seconds between LDAP permission checks
+    # for each user. After this time has expired for a given user, their next
+    # interaction with GitLab (a click in the web UI, a git pull, etc.) will be
+    # slower because the LDAP permission check is being performed. How much
+    # slower depends on your LDAP setup, but it is not uncommon for this check
+    # to add seconds of waiting time. The default value is to have a "slow
+    # click" once every 3600 seconds (i.e., once per hour).
+    #
+    # Warning: if you set this value too low, every click in GitLab will be a
+    # "slow click" for all of your LDAP users.
+    # sync_time: 3600
+
     servers:
       ##########################################################################
       #
@@ -346,24 +550,63 @@ production: &base
         # "start_tls" or "simple_tls". Defaults to true.
         verify_certificates: true
 
-        # Specifies the path to a file containing a PEM-format CA certificate,
-        # e.g. if you need to use an internal CA.
-        #
-        #   Example: '/etc/ca.pem'
-        #
-        ca_file: ''
+        # OpenSSL::SSL::SSLContext options.
+        tls_options:
+          # Specifies the path to a file containing a PEM-format CA certificate,
+          # e.g. if you need to use an internal CA.
+          #
+          #   Example: '/etc/ca.pem'
+          #
+          ca_file: ''
 
-        # Specifies the SSL version for OpenSSL to use, if the OpenSSL default
-        # is not appropriate.
-        #
-        #   Example: 'TLSv1_1'
-        #
-        ssl_version: ''
+          # Specifies the SSL version for OpenSSL to use, if the OpenSSL default
+          # is not appropriate.
+          #
+          #   Example: 'TLSv1_1'
+          #
+          ssl_version: ''
+
+          # Specific SSL ciphers to use in communication with LDAP servers.
+          #
+          # Example: 'ALL:!EXPORT:!LOW:!aNULL:!eNULL:!SSLv2'
+          ciphers: ''
+
+          # Client certificate
+          #
+          # Example:
+          #   cert: |
+          #     -----BEGIN CERTIFICATE-----
+          #     MIIDbDCCAlSgAwIBAgIGAWkJxLmKMA0GCSqGSIb3DQEBCwUAMHcxFDASBgNVBAoTC0dvb2dsZSBJ
+          #     bmMuMRYwFAYDVQQHEw1Nb3VudGFpbiBWaWV3MRQwEgYDVQQDEwtMREFQIENsaWVudDEPMA0GA1UE
+          #     CxMGR1N1aXRlMQswCQYDVQQGEwJVUzETMBEGA1UECBMKQ2FsaWZvcm5pYTAeFw0xOTAyMjAwNzE4
+          #     rntnF4d+0dd7zP3jrWkbdtoqjLDT/5D7NYRmVCD5vizV98FJ5//PIHbD1gL3a9b2MPAc6k7NV8tl
+          #     ...
+          #     4SbuJPAiJxC1LQ0t39dR6oMCAMab3hXQqhL56LrR6cRBp6Mtlphv7alu9xb/x51y2x+g2zWtsf80
+          #     Jrv/vKMsIh/sAyuogb7hqMtp55ecnKxceg==
+          #     -----END CERTIFICATE -----
+          cert: ''
+
+          # Client private key
+          #   key: |
+          #     -----BEGIN PRIVATE KEY-----
+          #     MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC3DmJtLRmJGY4xU1QtI3yjvxO6
+          #     bNuyE4z1NF6Xn7VSbcAaQtavWQ6GZi5uukMo+W5DHVtEkgDwh92ySZMuJdJogFbNvJvHAayheCdN
+          #     7mCQ2UUT9jGXIbmksUn9QMeJVXTZjgJWJzPXToeUdinx9G7+lpVa62UATEd1gaI3oyL72WmpDy/C
+          #     rntnF4d+0dd7zP3jrWkbdtoqjLDT/5D7NYRmVCD5vizV98FJ5//PIHbD1gL3a9b2MPAc6k7NV8tl
+          #     ...
+          #     +9IhSYX+XIg7BZOVDeYqlPfxRvQh8vy3qjt/KUihmEPioAjLaGiihs1Fk5ctLk9A2hIUyP+sEQv9
+          #     l6RG+a/mW+0rCWn8JAd464Ps9hE=
+          #     -----END PRIVATE KEY-----
+          key: ''
 
         # Set a timeout, in seconds, for LDAP queries. This helps avoid blocking
         # a request if the LDAP server becomes unresponsive.
         # A value of 0 means there is no timeout.
         timeout: 10
+
+        # Enable smartcard authentication against the LDAP server. Valid values
+        # are "false", "optional", and "required".
+        smartcard_auth: false
 
         # This setting specifies if LDAP server is Active Directory LDAP server.
         # For non AD servers it skips the AD specific queries.
@@ -404,6 +647,31 @@ production: &base
         #
         user_filter: ''
 
+        # Base where we can search for groups
+        #
+        #   Ex. ou=Groups,dc=gitlab,dc=example
+        #
+        group_base: ''
+
+        # LDAP group of users who should be admins in GitLab
+        #
+        #   Ex. GLAdmins
+        #
+        admin_group: ''
+
+        # LDAP group of users who should be marked as external users in GitLab
+        #
+        #   Ex. ['Contractors', 'Interns']
+        #
+        external_groups: []
+
+        # Name of attribute which holds a ssh public key of the user object.
+        # If false or nil, SSH key syncronisation will be disabled.
+        #
+        #   Ex. sshpublickey
+        #
+        sync_ssh_keys: false
+
         # LDAP attributes that GitLab will use to create an account for the LDAP user.
         # The specified attribute can either be the attribute name as a string (e.g. 'mail'),
         # or an array of attribute names to try in order (e.g. ['mail', 'email']).
@@ -435,11 +703,50 @@ production: &base
       #   host:
       #   ....
 
+  ## Smartcard authentication settings
+  smartcard:
+    # Allow smartcard authentication
+    enabled: false
+
+    # Path to a file containing a CA certificate
+    ca_file: '/etc/ssl/certs/CA.pem'
+
+    # Port where the client side certificate is requested by the webserver (NGINX/Apache)
+    # client_certificate_required_port: 3444
+
+    # Browser session with smartcard sign-in is required for Git access
+    # required_for_git_access: false
+
+    # Use X.509 SAN extensions certificates to identify GitLab users
+    # Add a subjectAltName to your certificates like: email:user
+    # san_extensions: true
+
+  ## Kerberos settings
+  kerberos:
+    # Allow the HTTP Negotiate authentication method for Git clients
+    enabled: false
+
+    # Kerberos 5 keytab file. The keytab file must be readable by the GitLab user,
+    # and should be different from other keytabs in the system.
+    # (default: use default keytab from Krb5 config)
+    # keytab: /etc/http.keytab
+
+    # The Kerberos service name to be used by GitLab.
+    # (default: accept any service name in keytab file)
+    # service_principal_name: HTTP/gitlab.example.com@EXAMPLE.COM
+
+    # Dedicated port: Git before 2.4 does not fall back to Basic authentication if Negotiate fails.
+    # To support both Basic and Negotiate methods with older versions of Git, configure
+    # nginx to proxy GitLab on an extra port (e.g. 8443) and uncomment the following lines
+    # to dedicate this port to Kerberos authentication. (default: false)
+    # use_dedicated_port: true
+    # port: 8443
+    # https: true
 
   ## OmniAuth settings
   omniauth:
     # Allow login via Twitter, Google, etc. using OmniAuth providers
-    enabled: false
+    # enabled: true
 
     # Uncomment this to automatically sign in with a specific omniauth provider's without
     # showing GitLab's sign-in page (default: show the GitLab sign-in page)
@@ -480,6 +787,14 @@ production: &base
     # Refer to the examples below for the full names of the supported providers.
     # (default: [])
     external_providers: []
+
+    # CAUTION!
+    # This allows users to login with the specified providers without two factor. Define the allowed providers
+    # using an array, e.g. ["twitter", 'google_oauth2'], or as true/false to allow all providers or none.
+    # This option should only be configured for providers which already have two factor. 
+    # This configration dose not apply to SAML.
+    # (default: false)
+    allow_bypass_two_factor: ["twitter", 'google_oauth2']
 
     ## Auth providers
     # Uncomment the following lines and fill in the data of the auth provider you want to use
@@ -532,15 +847,15 @@ production: &base
       #     app_id: 'YOUR_APP_ID',
       #     app_secret: 'YOUR_APP_SECRET' }
       # - { name: 'jwt',
-      #     app_secret: 'YOUR_APP_SECRET',
       #     args: {
-      #             algorithm: 'HS256',
-      #             uid_claim: 'email',
-      #             required_claims: ["name", "email"],
-      #             info_map: { name: "name", email: "email" },
-      #             auth_url: 'https://example.com/',
-      #             valid_within: null,
-      #           }
+      #       secret: 'YOUR_APP_SECRET',
+      #       algorithm: 'HS256', # Supported algorithms: 'RS256', 'RS384', 'RS512', 'ES256', 'ES384', 'ES512', 'HS256', 'HS384', 'HS512'
+      #       uid_claim: 'email',
+      #       required_claims: ['name', 'email'],
+      #       info_map: { name: 'name', email: 'email' },
+      #       auth_url: 'https://example.com/',
+      #       valid_within: 3600 # 1 hour
+      #     }
       #   }
       # - { name: 'saml',
       #     label: 'Our SAML Provider',
@@ -553,6 +868,8 @@ production: &base
       #             issuer: 'https://gitlab.example.com',
       #             name_identifier_format: 'urn:oasis:names:tc:SAML:2.0:nameid-format:transient'
       #           } }
+      #
+      # - { name: 'group_saml' }
       #
       # - { name: 'crowd',
       #     args: {
@@ -578,7 +895,7 @@ production: &base
   gitaly:
     # Path to the directory containing Gitaly client executables.
     client_path: /home/git/gitaly/bin
-    # Default Gitaly authentication token. Can be overriden per storage. Can
+    # Default Gitaly authentication token. Can be overridden per storage. Can
     # be left blank when Gitaly is running locally on a Unix socket, which
     # is the normal way to deploy Gitaly.
     token:
@@ -596,7 +913,7 @@ production: &base
     storages: # You must have at least a `default` storage path.
       default:
         path: /home/git/repositories/
-        gitaly_address: unix:/home/git/gitlab/tmp/sockets/private/gitaly.socket # TCP connections are supported too (e.g. tcp://host:port)
+        gitaly_address: unix:/home/git/gitlab/tmp/sockets/private/gitaly.socket # TCP connections are supported too (e.g. tcp://host:port). TLS connections are also supported using the system certificate pool (eg: tls://host:port).
         # gitaly_token: 'special token' # Optional: override global gitaly.token for this storage.
 
   ## Backup settings
@@ -619,13 +936,31 @@ production: &base
     #   multipart_chunk_size: 104857600
     #   # Turns on AWS Server-Side Encryption with Amazon S3-Managed Keys for backups, this is optional
     #   # encryption: 'AES256'
+    #   # Turns on AWS Server-Side Encryption with Amazon Customer-Provided Encryption Keys for backups, this is optional
+    #   #   This should be set to the 256-bit, base64-encoded encryption key for Amazon S3 to use to encrypt or decrypt your data.
+    #   #   'encryption' must also be set in order for this to have any effect.
+    #   # encryption_key: '<base64 key>'
     #   # Specifies Amazon S3 storage class to use for backups, this is optional
     #   # storage_class: 'STANDARD'
+
+  ## Pseudonymizer exporter
+  pseudonymizer:
+    # Tables manifest that specifies the fields to extract and pseudonymize.
+    manifest: config/pseudonymizer.yml
+    upload:
+      remote_directory: 'gitlab-elt'
+      # Fog storage connection settings, see http://fog.io/storage/ .
+      connection:
+      #   provider: AWS
+      #   region: eu-west-1
+      #   aws_access_key_id: AKIAKIAKI
+      #   aws_secret_access_key: 'secret123'
+      #   # The remote 'directory' to store the CSV files. For S3, this would be the bucket name.
 
   ## GitLab Shell settings
   gitlab_shell:
     path: /home/git/gitlab-shell/
-    hooks_path: /home/git/gitlab-shell/hooks/
+    authorized_keys_file: /home/git/.ssh/authorized_keys
 
     # File that contains the secret key for verifying access for gitlab-shell.
     # Default is '.gitlab_shell_secret' relative to Rails.root (i.e. root of the GitLab app).
@@ -645,6 +980,10 @@ production: &base
     # File that contains the secret key for verifying access for gitlab-workhorse.
     # Default is '.gitlab_workhorse_secret' relative to Rails.root (i.e. root of the GitLab app).
     # secret_file: /home/git/gitlab/.gitlab_workhorse_secret
+
+  ## GitLab Elasticsearch settings
+  elasticsearch:
+    indexer_path: /home/git/gitlab-elasticsearch-indexer/
 
   ## Git settings
   # CAUTION!
@@ -667,6 +1006,8 @@ production: &base
   monitoring:
     # Time between sampling of unicorn socket metrics, in seconds
     # unicorn_sampler_interval: 10
+    # Time between sampling of Puma metrics, in seconds
+    # puma_sampler_interval: 5
     # IP whitelist to access monitoring endpoints
     ip_whitelist:
       - 127.0.0.0/8
@@ -675,7 +1016,30 @@ production: &base
     sidekiq_exporter:
     #  enabled: true
     #  address: localhost
-    #  port: 3807
+    #  port: 8082
+
+    # Web exporter is webserver built in to Unicorn/Puma to expose Prometheus metrics
+    # It runs alongside the `/metrics` endpoints to ease the publish of metrics
+    web_exporter:
+    #  enabled: true
+    #  address: localhost
+    #  port: 8083
+    #  # blackout_seconds:
+    #  #   defines an interval to block healthcheck,
+    #  #   but continue accepting application requests
+    #  #   this allows Load Balancer to notice service
+    #  #   being shutdown and not interrupt any of the clients
+    #  blackout_seconds: 10
+
+  ## Prometheus settings
+  # Do not modify these settings here. They should be modified in /etc/gitlab/gitlab.rb
+  # if you installed GitLab via Omnibus.
+  # If you installed from source, you need to install and configure Prometheus
+  # yourself, and then update the values here.
+  # https://docs.gitlab.com/ee/administration/monitoring/prometheus/
+  prometheus:
+    # enable: true
+    # listen_address: 'localhost:9090'
 
   #
   # 5. Extra customization
@@ -709,10 +1073,41 @@ production: &base
 development:
   <<: *base
 
+  # We want to run web/sidekiq exporters for devs
+  # to catch errors from using them.
+  #
+  # We use random port to not block ability to run
+  # multiple instances of the service
+  monitoring:
+    sidekiq_exporter:
+      enabled: true
+      address: 127.0.0.1
+      port: 0
+    web_exporter:
+      enabled: true
+      address: 127.0.0.1
+      port: 0
+
 test:
   <<: *base
   gravatar:
     enabled: true
+  external_diffs:
+    enabled: false
+    # Diffs may be `always` external (the default), or they can be made external
+    # after they have become `outdated` (i.e., the MR is closed or a new version
+    # has been pushed).
+    # when: always
+    # The location where external diffs are stored (default: shared/external-diffs).
+    # storage_path: shared/external-diffs
+    object_store:
+      enabled: false
+      remote_directory: external-diffs # The bucket name
+      connection:
+        provider: AWS # Only AWS supported at the moment
+        aws_access_key_id: AWS_ACCESS_KEY_ID
+        aws_secret_access_key: AWS_SECRET_ACCESS_KEY
+        region: us-east-1
   lfs:
     enabled: false
     # The location where LFS objects are stored (default: shared/lfs-objects).
@@ -752,8 +1147,29 @@ test:
     host: localhost
     port: 80
 
-    # When you run tests we clone and setup gitlab-shell
-    # In order to setup it correctly you need to specify
+    content_security_policy:
+      enabled: true
+      report_only: false
+      directives:
+        base_uri:
+        child_src:
+        connect_src:
+        default_src: "'self'"
+        font_src:
+        form_action:
+        frame_ancestors: "'self'"
+        frame_src: "'self' https://www.google.com/recaptcha/ https://www.recaptcha.net/ https://content.googleapis.com https://content-compute.googleapis.com https://content-cloudbilling.googleapis.com https://content-cloudresourcemanager.googleapis.com"
+        img_src: "* data: blob:"
+        manifest_src:
+        media_src:
+        object_src: "'none'"
+        script_src: "'self' 'unsafe-eval' http://localhost:* https://www.google.com/recaptcha/ https://www.recaptcha.net/ https://www.gstatic.com/recaptcha/ https://apis.google.com"
+        style_src: "'self' 'unsafe-inline'"
+        worker_src: "'self' blob:"
+        report_uri:
+
+    # When you run tests we clone and set up gitlab-shell
+    # In order to set it up correctly you need to specify
     # your system username you use to run GitLab
     # user: YOUR_USERNAME
   pages:
@@ -763,18 +1179,26 @@ test:
       default:
         path: tmp/tests/repositories/
         gitaly_address: unix:tmp/tests/gitaly/gitaly.socket
-      broken:
-        path: tmp/tests/non-existent-repositories
-        gitaly_address: unix:tmp/tests/gitaly/gitaly.socket
 
   gitaly:
     client_path: tmp/tests/gitaly
     token: secret
   backup:
     path: tmp/tests/backups
+  pseudonymizer:
+    manifest: config/pseudonymizer.yml
+    upload:
+      # The remote 'directory' to store the CSV files. For S3, this would be the bucket name.
+      remote_directory: gitlab-elt.test
+      # Fog storage connection settings, see http://fog.io/storage/
+      connection:
+        provider: AWS # Only AWS supported at the moment
+        aws_access_key_id: AWS_ACCESS_KEY_ID
+        aws_secret_access_key: AWS_SECRET_ACCESS_KEY
+        region: us-east-1
   gitlab_shell:
     path: tmp/tests/gitlab-shell/
-    hooks_path: tmp/tests/gitlab-shell/hooks/
+    authorized_keys_file: tmp/tests/authorized_keys
   issues_tracker:
     redmine:
       title: "Redmine"
@@ -782,12 +1206,12 @@ test:
       issues_url: "http://redmine/:project_id/:issues_tracker_id/:id"
       new_issue_url: "http://redmine/projects/:issues_tracker_id/issues/new"
     jira:
-      title: "JIRA"
+      title: "Jira"
       url: https://sample_company.atlassian.net
       project_key: PROJECT
 
   omniauth:
-    enabled: true
+    # enabled: true
     allow_single_sign_on: true
     external_providers: []
 
@@ -842,6 +1266,10 @@ test:
           app_id: 'YOUR_CLIENT_ID',
           app_secret: 'YOUR_CLIENT_SECRET',
           args: { scope: 'aq:name email~rs address aq:push' } }
+      - { name: 'salesforce',
+          app_id: 'YOUR_CLIENT_ID',
+          app_secret: 'YOUR_CLIENT_SECRET'
+        }
   ldap:
     enabled: false
     servers:
@@ -855,6 +1283,9 @@ test:
         user_filter: ''
         group_base: 'ou=groups,dc=example,dc=com'
         admin_group: ''
+  prometheus:
+    enable: true
+    listen_address: 'localhost:9090'
 
 staging:
   <<: *base

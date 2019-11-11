@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module API
   module Helpers
     module RelatedResourcesHelpers
@@ -9,6 +11,10 @@ module API
 
       def mrs_available?(project, options)
         available?(:merge_requests, project, options[:current_user])
+      end
+
+      def expose_path(path)
+        Gitlab::Utils.append_path(Gitlab.config.gitlab.relative_url_root, path)
       end
 
       def expose_url(path)

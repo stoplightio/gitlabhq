@@ -1,6 +1,8 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
-describe 'Group Issues Calendar Feed'  do
+describe 'Group Issues Calendar Feed' do
   describe 'GET /issues' do
     let!(:user)     { create(:user, email: 'private1@example.com', public_email: 'public1@example.com') }
     let!(:assignee) { create(:user, email: 'private2@example.com', public_email: 'public2@example.com') }
@@ -66,7 +68,7 @@ describe 'Group Issues Calendar Feed'  do
 
         expect(body).to have_text("SUMMARY:test title (in #{project.full_path})")
         # line length for ics is 75 chars
-        expected_description = "DESCRIPTION:Find out more at #{issue_url(issue)}".insert(75, "\r\n")
+        expected_description = (+"DESCRIPTION:Find out more at #{issue_url(issue)}").insert(75, ' ')
         expect(body).to have_text(expected_description)
         expect(body).to have_text("DTSTART;VALUE=DATE:#{Date.tomorrow.strftime('%Y%m%d')}")
         expect(body).to have_text("URL:#{issue_url(issue)}")

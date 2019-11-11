@@ -1,4 +1,6 @@
-require 'rails_helper'
+# frozen_string_literal: true
+
+require 'spec_helper'
 
 describe 'Public Group access' do
   include AccessMatchers
@@ -14,6 +16,7 @@ describe 'Public Group access' do
   describe "Group should be public" do
     describe '#public?' do
       subject { group.public? }
+
       it { is_expected.to be_truthy }
     end
   end
@@ -23,7 +26,7 @@ describe 'Public Group access' do
 
     it { is_expected.to be_allowed_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(group) }
-    it { is_expected.to be_allowed_for(:master).of(group) }
+    it { is_expected.to be_allowed_for(:maintainer).of(group) }
     it { is_expected.to be_allowed_for(:developer).of(group) }
     it { is_expected.to be_allowed_for(:reporter).of(group) }
     it { is_expected.to be_allowed_for(:guest).of(group) }
@@ -38,7 +41,7 @@ describe 'Public Group access' do
 
     it { is_expected.to be_allowed_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(group) }
-    it { is_expected.to be_allowed_for(:master).of(group) }
+    it { is_expected.to be_allowed_for(:maintainer).of(group) }
     it { is_expected.to be_allowed_for(:developer).of(group) }
     it { is_expected.to be_allowed_for(:reporter).of(group) }
     it { is_expected.to be_allowed_for(:guest).of(group) }
@@ -54,7 +57,7 @@ describe 'Public Group access' do
 
     it { is_expected.to be_allowed_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(group) }
-    it { is_expected.to be_allowed_for(:master).of(group) }
+    it { is_expected.to be_allowed_for(:maintainer).of(group) }
     it { is_expected.to be_allowed_for(:developer).of(group) }
     it { is_expected.to be_allowed_for(:reporter).of(group) }
     it { is_expected.to be_allowed_for(:guest).of(group) }
@@ -69,7 +72,7 @@ describe 'Public Group access' do
 
     it { is_expected.to be_allowed_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(group) }
-    it { is_expected.to be_allowed_for(:master).of(group) }
+    it { is_expected.to be_allowed_for(:maintainer).of(group) }
     it { is_expected.to be_allowed_for(:developer).of(group) }
     it { is_expected.to be_allowed_for(:reporter).of(group) }
     it { is_expected.to be_allowed_for(:guest).of(group) }
@@ -84,7 +87,7 @@ describe 'Public Group access' do
 
     it { is_expected.to be_allowed_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(group) }
-    it { is_expected.to be_denied_for(:master).of(group) }
+    it { is_expected.to be_denied_for(:maintainer).of(group) }
     it { is_expected.to be_denied_for(:developer).of(group) }
     it { is_expected.to be_denied_for(:reporter).of(group) }
     it { is_expected.to be_denied_for(:guest).of(group) }

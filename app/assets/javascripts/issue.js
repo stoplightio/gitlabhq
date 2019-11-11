@@ -1,12 +1,12 @@
-/* eslint-disable func-names, space-before-function-paren, no-var, prefer-rest-params, wrap-iife, one-var, no-underscore-dangle, one-var-declaration-per-line, object-shorthand, no-unused-vars, no-new, comma-dangle, consistent-return, quotes, dot-notation, quote-props, prefer-arrow-callback, max-len */
+/* eslint-disable no-var, one-var, consistent-return */
 
 import $ from 'jquery';
 import axios from './lib/utils/axios_utils';
 import { addDelimiter } from './lib/utils/text_utility';
 import flash from './flash';
-import TaskList from './task_list';
 import CreateMergeRequestDropdown from './create_merge_request_dropdown';
 import IssuablesHelper from './helpers/issuables_helper';
+import { __ } from './locale';
 
 export default class Issue {
   constructor() {
@@ -15,8 +15,9 @@ export default class Issue {
     Issue.$btnNewBranch = $('#new-branch');
     Issue.createMrDropdownWrap = document.querySelector('.create-mr-dropdown-wrap');
 
-    Issue.initMergeRequests();
-    Issue.initRelatedBranches();
+    if (document.querySelector('#related-branches')) {
+      Issue.initRelatedBranches();
+    }
 
     this.closeButtons = $('a.btn-close');
     this.reopenButtons = $('a.btn-reopen');
@@ -28,7 +29,7 @@ export default class Issue {
     }
 
     // Listen to state changes in the Vue app
-    document.addEventListener('issuable_vue_app:change', (event) => {
+    document.addEventListener('issuable_vue_app:change', event => {
       this.updateTopState(event.detail.isClosed, event.detail.data);
     });
   }
@@ -43,7 +44,11 @@ export default class Issue {
    * @param {Array} data
    * @param {String} issueFailMessage
    */
-  updateTopState(isClosed, data, issueFailMessage = 'Unable to update this issue at this time.') {
+  updateTopState(
+    isClosed,
+    data,
+    issueFailMessage = __('Unable to update this issue at this time.'),
+  ) {
     if ('id' in data) {
       const isClosedBadge = $('div.status-box-issue-closed');
       const isOpenBadge = $('div.status-box-open');
@@ -55,7 +60,13 @@ export default class Issue {
       $(document).trigger('issuable:change', isClosed);
       this.toggleCloseReopenButton(isClosed);
 
-      let numProjectIssues = Number(projectIssuesCounter.first().text().trim().replace(/[^\d]/, ''));
+      let numProjectIssues = Number(
+        projectIssuesCounter
+          .first()
+          .text()
+          .trim()
+          .replace(/[^\d]/, ''),
+      );
       numProjectIssues = isClosed ? numProjectIssues - 1 : numProjectIssues + 1;
       projectIssuesCounter.text(addDelimiter(numProjectIssues));
 
@@ -74,31 +85,36 @@ export default class Issue {
   }
 
   initIssueBtnEventListeners() {
-    const issueFailMessage = 'Unable to update this issue at this time.';
+    const issueFailMessage = __('Unable to update this issue at this time.');
 
-    return $(document).on('click', '.js-issuable-actions a.btn-close, .js-issuable-actions a.btn-reopen', (e) => {
-      var $button, shouldSubmit, url;
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      $button = $(e.currentTarget);
-      shouldSubmit = $button.hasClass('btn-comment');
-      if (shouldSubmit) {
-        Issue.submitNoteForm($button.closest('form'));
-      }
+    return $(document).on(
+      'click',
+      '.js-issuable-actions a.btn-close, .js-issuable-actions a.btn-reopen',
+      e => {
+        var $button, shouldSubmit, url;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        $button = $(e.currentTarget);
+        shouldSubmit = $button.hasClass('btn-comment');
+        if (shouldSubmit) {
+          Issue.submitNoteForm($button.closest('form'));
+        }
 
-      this.disableCloseReopenButton($button);
+        this.disableCloseReopenButton($button);
 
-      url = $button.attr('href');
-      return axios.put(url)
-      .then(({ data }) => {
-        const isClosed = $button.hasClass('btn-close');
-        this.updateTopState(isClosed, data);
-      })
-      .catch(() => flash(issueFailMessage))
-      .then(() => {
-        this.disableCloseReopenButton($button, false);
-      });
-    });
+        url = $button.attr('href');
+        return axios
+          .put(url)
+          .then(({ data }) => {
+            const isClosed = $button.hasClass('btn-close');
+            this.updateTopState(isClosed, data);
+          })
+          .catch(() => flash(issueFailMessage))
+          .then(() => {
+            this.disableCloseReopenButton($button, false);
+          });
+      },
+    );
   }
 
   initCloseReopenReport() {
@@ -124,31 +140,22 @@ export default class Issue {
 
   static submitNoteForm(form) {
     var noteText;
-    noteText = form.find("textarea.js-note-text").val();
+    noteText = form.find('textarea.js-note-text').val();
     if (noteText && noteText.trim().length > 0) {
       return form.submit();
     }
   }
 
-  static initMergeRequests() {
-    var $container;
-    $container = $('#merge-requests');
-    return axios.get($container.data('url'))
-      .then(({ data }) => {
-        if ('html' in data) {
-          $container.html(data.html);
-        }
-      }).catch(() => flash('Failed to load referenced merge requests'));
-  }
-
   static initRelatedBranches() {
     var $container;
     $container = $('#related-branches');
-    return axios.get($container.data('url'))
+    return axios
+      .get($container.data('url'))
       .then(({ data }) => {
         if ('html' in data) {
           $container.html(data.html);
         }
-      }).catch(() => flash('Failed to load related branches'));
+      })
+      .catch(() => flash(__('Failed to load related branches')));
   }
 }

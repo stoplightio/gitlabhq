@@ -9,23 +9,23 @@ The process of solving performance problems is roughly as follows:
 
 1. Make sure there's an issue open somewhere (e.g., on the GitLab CE issue
    tracker), create one if there isn't. See [#15607][#15607] for an example.
-2. Measure the performance of the code in a production environment such as
+1. Measure the performance of the code in a production environment such as
    GitLab.com (see the [Tooling](#tooling) section below). Performance should be
    measured over a period of _at least_ 24 hours.
-3. Add your findings based on the measurement period (screenshots of graphs,
+1. Add your findings based on the measurement period (screenshots of graphs,
    timings, etc) to the issue mentioned in step 1.
-4. Solve the problem.
-5. Create a merge request, assign the "Performance" label and assign it to
+1. Solve the problem.
+1. Create a merge request, assign the "Performance" label and assign it to
    [@yorickpeterse][yorickpeterse] for reviewing.
-6. Once a change has been deployed make sure to _again_ measure for at least 24
+1. Once a change has been deployed make sure to _again_ measure for at least 24
    hours to see if your changes have any impact on the production environment.
-7. Repeat until you're done.
+1. Repeat until you're done.
 
 When providing timings make sure to provide:
 
-* The 95th percentile
-* The 99th percentile
-* The mean
+- The 95th percentile
+- The 99th percentile
+- The mean
 
 When providing screenshots of graphs, make sure that both the X and Y axes and
 the legend are clearly visible. If you happen to have access to GitLab.com's own
@@ -34,16 +34,18 @@ graphs/dashboards.
 
 ## Tooling
 
-GitLab provides built-in tools to aid the process of improving performance:
+GitLab provides built-in tools to help improve performance and availability:
 
-* [Profiling](profiling.md)
-  * [Sherlock](profiling.md#sherlock)
-* [GitLab Performance Monitoring](../administration/monitoring/performance/index.md)
-* [Request Profiling](../administration/monitoring/performance/request_profiling.md)
-* [QueryRecoder](query_recorder.md) for preventing `N+1` regressions
+- [Profiling](profiling.md).
+  - [Sherlock](profiling.md#sherlock).
+- [Distributed Tracing](distributed_tracing.md)
+- [GitLab Performance Monitoring](../administration/monitoring/performance/index.md).
+- [Request Profiling](../administration/monitoring/performance/request_profiling.md).
+- [QueryRecoder](query_recorder.md) for preventing `N+1` regressions.
+- [Chaos endpoints](chaos_endpoints.md) for testing failure scenarios. Intended mainly for testing availability.
 
 GitLab employees can use GitLab.com's performance monitoring systems located at
-<http://performance.gitlab.net>, this requires you to log in using your
+<https://dashboards.gitlab.net>, this requires you to log in using your
 `@gitlab.com` Email address. Non-GitLab employees are advised to set up their
 own InfluxDB + Grafana stack.
 
@@ -93,14 +95,14 @@ result of this should be used instead of the `Benchmark` module.
 
 In short:
 
-1. Don't trust benchmarks you find on the internet.
-2. Never make claims based on just benchmarks, always measure in production to
+- Don't trust benchmarks you find on the internet.
+- Never make claims based on just benchmarks, always measure in production to
    confirm your findings.
-3. X being N times faster than Y is meaningless if you don't know what impact it
+- X being N times faster than Y is meaningless if you don't know what impact it
    will actually have on your production environment.
-4. A production environment is the _only_ benchmark that always tells the truth
+- A production environment is the _only_ benchmark that always tells the truth
    (unless your performance monitoring systems are not set up correctly).
-5. If you must write a benchmark use the benchmark-ips Gem instead of Ruby's
+- If you must write a benchmark use the benchmark-ips Gem instead of Ruby's
    `Benchmark` module.
 
 ## Profiling
@@ -121,7 +123,7 @@ Keeping that in mind, to create a profile, identify (or create) a spec that
 exercises the troublesome code path, then run it using the `bin/rspec-stackprof`
 helper, e.g.:
 
-```
+```sh
 $ LIMIT=10 bin/rspec-stackprof spec/policies/project_policy_spec.rb
 8/8 |====== 100 ======>| Time: 00:00:18
 
@@ -155,22 +157,22 @@ it calls, were being executed.
 
 To create a graphical view of the call stack:
 
-```shell
-$ stackprof tmp/project_policy_spec.rb.dump --graphviz > project_policy_spec.dot
-$ dot -Tsvg project_policy_spec.dot > project_policy_spec.svg
+```sh
+stackprof tmp/project_policy_spec.rb.dump --graphviz > project_policy_spec.dot
+dot -Tsvg project_policy_spec.dot > project_policy_spec.svg
 ```
 
 To load the profile in [kcachegrind](https://kcachegrind.github.io/):
 
-```
-$ stackprof tmp/project_policy_spec.dump --callgrind > project_policy_spec.callgrind
-$ kcachegrind project_policy_spec.callgrind # Linux
-$ qcachegrind project_policy_spec.callgrind # Mac
+```sh
+stackprof tmp/project_policy_spec.dump --callgrind > project_policy_spec.callgrind
+kcachegrind project_policy_spec.callgrind # Linux
+qcachegrind project_policy_spec.callgrind # Mac
 ```
 
 It may be useful to zoom in on a specific method, e.g.:
 
-```
+```sh
 $ stackprof tmp/project_policy_spec.rb.dump --method warm_asset_cache
 TestEnv#warm_asset_cache (/Users/lupine/dev/gitlab.com/gitlab-org/gitlab-development-kit/gitlab/spec/support/test_env.rb:164)
   samples:     0 self (0.0%)  /   6288 total (36.9%)
@@ -223,9 +225,9 @@ may have changed over time.
 
 To activate profiling in your local environment, run the following:
 
-```
-$ export RSPEC_PROFILING=yes
-$ rake rspec_profiling:install
+```sh
+export RSPEC_PROFILING=yes
+rake rspec_profiling:install
 ```
 
 This creates an SQLite3 database in `tmp/rspec_profiling`, into which statistics
@@ -235,7 +237,7 @@ variable set.
 Ad-hoc investigation of the collected results can be performed in an interactive
 shell:
 
-```
+```sh
 $ rake rspec_profiling:console
 irb(main):001:0> results.count
 => 231
@@ -244,9 +246,40 @@ irb(main):002:0> results.last.attributes.keys
 irb(main):003:0> results.where(status: "passed").average(:time).to_s
 => "0.211340155844156"
 ```
+
 These results can also be placed into a PostgreSQL database by setting the
 `RSPEC_PROFILING_POSTGRES_URL` variable. This is used to profile the test suite
 when running in the CI environment.
+
+## Memory profiling
+
+One of the reasons of the increased memory footprint could be Ruby memory fragmentation.
+
+To diagnose it, you can visualize Ruby heap as described in [this post by Aaron Patterson](https://tenderlovemaking.com/2017/09/27/visualizing-your-ruby-heap.html).
+
+To start, you want to dump the heap of the process you are investigating to a JSON file.  
+
+You need to run the command inside the process you are exploring, you may do that with `rbtrace`.  
+`rbtrace` is already present in GitLab `Gemfile`, you just need to require it.  
+It could be achieved running webserver or Sidekiq with the environment variable set to `ENABLE_RBTRACE=1`.
+
+To get the heap dump:
+
+```ruby
+bundle exec rbtrace -p <PID> -e 'File.open("heap.json", "wb") { |t| ObjectSpace.dump_all(output: t) }'
+```
+
+Having the JSON, you finally could render a picture using the script [provided by Aaron](https://gist.github.com/tenderlove/f28373d56fdd03d8b514af7191611b88) or similar:
+
+```sh
+ruby heapviz.rb heap.json
+```
+  
+Fragmented Ruby heap snapshot could look like this:
+
+![Ruby heap fragmentation](img/memory_ruby_heap_fragmentation.png)
+
+Memory fragmentation could be reduced by tuning GC parameters as described in [this post by Nate Berkopec](https://www.speedshop.co/2017/12/04/malloc-doubles-ruby-memory.html), which should be considered as a tradeoff, as it may affect overall performance of memory allocation and GC cycles.
 
 ## Importance of Changes
 
@@ -264,15 +297,15 @@ piece of code is worth optimizing. The only two things you can do are:
 1. Think about what the code does, how it's used, how many times it's called and
    how much time is spent in it relative to the total execution time (e.g., the
    total time spent in a web request).
-2. Ask others (preferably in the form of an issue).
+1. Ask others (preferably in the form of an issue).
 
 Some examples of changes that aren't really important/worth the effort:
 
-* Replacing double quotes with single quotes.
-* Replacing usage of Array with Set when the list of values is very small.
-* Replacing library A with library B when both only take up 0.1% of the total
+- Replacing double quotes with single quotes.
+- Replacing usage of Array with Set when the list of values is very small.
+- Replacing library A with library B when both only take up 0.1% of the total
   execution time.
-* Calling `freeze` on every string (see [String Freezing](#string-freezing)).
+- Calling `freeze` on every string (see [String Freezing](#string-freezing)).
 
 ## Slow Operations & Sidekiq
 
@@ -282,10 +315,10 @@ directly in a web request as much as possible. This has numerous benefits such
 as:
 
 1. An error won't prevent the request from completing.
-2. The process being slow won't affect the loading time of a page.
-3. In case of a failure it's easy to re-try the process (Sidekiq takes care of
+1. The process being slow won't affect the loading time of a page.
+1. In case of a failure it's easy to re-try the process (Sidekiq takes care of
    this automatically).
-4. By isolating the code from a web request it will hopefully be easier to test
+1. By isolating the code from a web request it will hopefully be easier to test
    and maintain.
 
 It's especially important to use Sidekiq as much as possible when dealing with
@@ -335,7 +368,6 @@ the same method won't end up retrieving data from Redis upon every call. When
 memoizing cached data in an instance variable, make sure to also reset the
 instance variable when flushing the cache. An example:
 
-
 ```ruby
 def first_branch
   @first_branch ||= cache.fetch(:first_branch) { branches.first }
@@ -347,13 +379,7 @@ def expire_first_branch_cache
 end
 ```
 
-## Anti-Patterns
-
-This is a collection of [anti-patterns][anti-pattern] that should be avoided
-unless these changes have a measurable, significant and positive impact on
-production environments.
-
-### String Freezing
+## String Freezing
 
 In recent Ruby versions calling `freeze` on a String leads to it being allocated
 only once and re-used. For example, on Ruby 2.3 this will only allocate the
@@ -365,17 +391,40 @@ only once and re-used. For example, on Ruby 2.3 this will only allocate the
 end
 ```
 
-Blindly adding a `.freeze` call to every String is an anti-pattern that should
-be avoided unless one can prove (using production data) the call actually has a
-positive impact on performance.
+Depending on the size of the String and how frequently it would be allocated
+(before the `.freeze` call was added), this _may_ make things faster, but
+there's no guarantee it will.
 
-This feature of Ruby wasn't really meant to make things faster directly, instead
-it was meant to reduce the number of allocations. Depending on the size of the
-String and how frequently it would be allocated (before the `.freeze` call was
-added), this _may_ make things faster, but there's no guarantee it will.
+Strings will be frozen by default in Ruby 3.0. To prepare our code base for
+this eventuality, we will be adding the following header to all Ruby files:
 
-Another common flavour of this is to not only freeze a String, but also assign
-it to a constant, for example:
+```ruby
+# frozen_string_literal: true
+```
+
+This may cause test failures in the code that expects to be able to manipulate
+strings. Instead of using `dup`, use the unary plus to get an unfrozen string:
+
+```ruby
+test = +"hello"
+test += " world"
+```
+
+When adding new Ruby files, please check that you can add the above header,
+as omitting it may lead to style check failures.
+
+## Anti-Patterns
+
+This is a collection of [anti-patterns][anti-pattern] that should be avoided
+unless these changes have a measurable, significant and positive impact on
+production environments.
+
+### Moving Allocations to Constants
+
+Storing an object as a constant so you only allocate it once _may_ improve
+performance, but there's no guarantee this will. Looking up constants has an
+impact on runtime performance, and as such, using a constant instead of
+referencing an object directly may even slow code down. For example:
 
 ```ruby
 SOME_CONSTANT = 'foo'.freeze
@@ -393,13 +442,21 @@ there's nothing stopping somebody from doing this elsewhere in the code:
 SOME_CONSTANT = 'bar'
 ```
 
-### Moving Allocations to Constants
+## How to seed a database with millions of rows
 
-Storing an object as a constant so you only allocate it once _may_ improve
-performance, but there's no guarantee this will. Looking up constants has an
-impact on runtime performance, and as such, using a constant instead of
-referencing an object directly may even slow code down.
+You might want millions of project rows in your local database, for example,
+in order to compare relative query performance, or to reproduce a bug. You could
+do this by hand with SQL commands, but since you have ActiveRecord models, you
+might find using these gems more convenient:
 
-[#15607]: https://gitlab.com/gitlab-org/gitlab-ce/issues/15607
+- [BulkInsert gem](https://github.com/jamis/bulk_insert)
+- [ActiveRecord::PgGenerateSeries gem](https://github.com/ryu39/active_record-pg_generate_series)
+
+### Examples
+
+You may find some useful examples in this snippet:
+<https://gitlab.com/gitlab-org/gitlab-foss/snippets/33946>
+
+[#15607]: https://gitlab.com/gitlab-org/gitlab-foss/issues/15607
 [yorickpeterse]: https://gitlab.com/yorickpeterse
 [anti-pattern]: https://en.wikipedia.org/wiki/Anti-pattern

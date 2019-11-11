@@ -1,11 +1,13 @@
-shared_examples 'creating an issue for a discussion' do
+# frozen_string_literal: true
+
+shared_examples 'creating an issue for a thread' do
   it 'shows an issue with the title filled in' do
     title_field = page.find_field('issue[title]')
 
     expect(title_field.value).to include(merge_request.title)
   end
 
-  it 'has a mention of the discussion in the description'  do
+  it 'has a mention of the discussion in the description' do
     description_field = page.find_field('issue[description]')
 
     expect(description_field.value).to include(discussion.first_note.note)

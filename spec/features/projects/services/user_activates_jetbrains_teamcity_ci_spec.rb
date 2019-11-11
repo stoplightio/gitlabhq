@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe 'User activates JetBrains TeamCity CI' do
@@ -5,7 +7,7 @@ describe 'User activates JetBrains TeamCity CI' do
   let(:user) { create(:user) }
 
   before do
-    project.add_master(user)
+    project.add_maintainer(user)
     sign_in(user)
 
     visit(project_settings_integrations_path(project))
@@ -15,6 +17,8 @@ describe 'User activates JetBrains TeamCity CI' do
 
   it 'activates service' do
     check('Active')
+    check('Push')
+    check('Merge request')
     fill_in('Teamcity url', with: 'http://teamcity.example.com')
     fill_in('Build type', with: 'GitlabTest_Build')
     fill_in('Username', with: 'user')

@@ -4,7 +4,12 @@ With GitLab Snippets you can store and share bits of code and text with other us
 
 ![GitLab Snippet](img/gitlab_snippet.png)
 
-There are 2 types of snippets, personal snippets and project snippets.
+Snippets can be maintained using [snippets API](../api/snippets.md).
+
+There are two types of snippets:
+
+- Personal snippets.
+- Project snippets.
 
 ## Personal snippets
 
@@ -15,7 +20,7 @@ and private. See [Public access](../public_access/public_access.md) for more inf
 ## Project snippets
 
 Project snippets are always related to a specific project.
-See [Project's features](project/index.md#project-39-s-features) for more information.
+See [Project features](project/index.md#project-features) for more information.
 
 ## Discover snippets
 
@@ -28,10 +33,15 @@ overview that shows snippets you created and allows you to explore all snippets.
 
 If you want to discover snippets that belong to a specific project, you can navigate
 to the Snippets page via the left side navigation on the project page.
+Project snippets are enabled and available by default, but they can
+be disabled by navigating to your project's **Settings**, expanding
+**Visibility, project features, permissions** and scrolling down to
+**Snippets**. From there, you can toggle to disable them or select a
+different visibility level from the dropdown menu.
 
 ## Snippet comments
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-ce/issues/12910) in GitLab 9.2.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/issues/12910) in GitLab 9.2.
 
 With GitLab Snippets you engage in a conversation about that piece of code,
 facilitating the collaboration among users.
@@ -60,8 +70,8 @@ To embed a snippet, first make sure that:
 - In **Project > Settings > Permissions**, the snippets permissions are
   set to **Everyone with access**
 
-Once the above conditions are met, the "Embed" section will appear in your snippet
-where you can simply click on the "Copy to clipboard" button. This copies a one-line
+Once the above conditions are met, the "Embed" section will appear in your
+snippet where you can simply click on the "Copy" button. This copies a one-line
 script that you can add to any website or blog post.
 
 Here's how an example code looks like:
@@ -72,7 +82,7 @@ Here's how an example code looks like:
 
 Here's how an embedded snippet looks like:
 
-<script src="https://gitlab.com/gitlab-org/gitlab-ce/snippets/1717978.js"></script>
+<script src="https://gitlab.com/gitlab-org/gitlab-foss/snippets/1717978.js"></script>
 
 Embedded snippets are displayed with a header that shows the file name if defined,
 the snippet size, a link to GitLab, and the actual snippet content. Actions in

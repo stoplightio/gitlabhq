@@ -12,7 +12,6 @@ describe Gitlab::ImportExport::MembersMapper do
          "access_level" => 40,
          "source_id" => 14,
          "source_type" => "Project",
-         "user_id" => 19,
          "notification_level" => 3,
          "created_at" => "2016-03-11T10:21:44.822Z",
          "updated_at" => "2016-03-11T10:21:44.822Z",
@@ -25,7 +24,8 @@ describe Gitlab::ImportExport::MembersMapper do
              "id" => exported_user_id,
              "email" => user2.email,
              "username" => 'test'
-           }
+           },
+          "user_id" => 19
        },
        {
          "id" => 3,
@@ -73,6 +73,22 @@ describe Gitlab::ImportExport::MembersMapper do
       expect(user2.authorized_project?(project)).to be true
     end
 
+    it 'maps an owner as a maintainer' do
+      exported_members.first['access_level'] = ProjectMember::OWNER
+
+      expect(members_mapper.map[exported_user_id]).to eq(user2.id)
+      expect(ProjectMember.find_by_user_id(user2.id).access_level).to eq(ProjectMember::MAINTAINER)
+    end
+
+    it 'removes old user_id from member_hash to avoid conflict with user key' do
+      expect(ProjectMember).to receive(:create)
+        .twice
+        .with(hash_excluding('user_id'))
+        .and_call_original
+
+      members_mapper.map
+    end
+
     context 'user is not an admin' do
       let(:user) { create(:user) }
 
@@ -111,7 +127,7 @@ describe Gitlab::ImportExport::MembersMapper do
       end
 
       it 'maps the project member if it already exists' do
-        project.add_master(user2)
+        project.add_maintainer(user2)
 
         expect(members_mapper.map[exported_user_id]).to eq(user2.id)
       end
@@ -136,6 +152,16 @@ describe Gitlab::ImportExport::MembersMapper do
 
       it 'maps the group member' do
         expect(members_mapper.map[exported_user_id]).to eq(user2.id)
+      end
+    end
+
+    context 'when importer mapping fails' do
+      let(:exception_message) { 'Something went wrong' }
+
+      it 'includes importer specific error message' do
+        expect(ProjectMember).to receive(:create!).and_raise(StandardError.new(exception_message))
+
+        expect { members_mapper.map }.to raise_error(StandardError, "Error adding importer user to project members. #{exception_message}")
       end
     end
   end

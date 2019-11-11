@@ -4,25 +4,24 @@ comments: false
 
 # Configure your environment
 
-----------
 ## Install
 
 - **Windows**
-  - Install 'Git for Windows' from https://git-for-windows.github.io
+  - Install 'Git for Windows' from <https://gitforwindows.org>
 
 - **Mac**
   - Type '`git`' in the Terminal application.
   - If it's not installed, it will prompt you to install it.
 
 - **Linux**
+
   ```bash
-    sudo yum install git-all
-  ```
-  ```bash
-    sudo apt-get install git-all
+  sudo yum install git-all
   ```
 
-----------
+  ```bash
+  sudo apt-get install git-all
+  ```
 
 ## Configure Git
 
@@ -32,8 +31,6 @@ One-time configuration of the Git client
 git config --global user.name "Your Name"
 git config --global user.email you@example.com
 ```
-
-----------
 
 ## Configure SSH Key
 

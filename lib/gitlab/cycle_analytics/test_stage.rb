@@ -1,6 +1,10 @@
+# frozen_string_literal: true
+
 module Gitlab
   module CycleAnalytics
     class TestStage < BaseStage
+      include TestHelper
+
       def start_time_attrs
         @start_time_attrs ||= mr_metrics_table[:latest_build_started_at]
       end
@@ -23,14 +27,6 @@ module Gitlab
 
       def description
         _("Total test time for all commits/merges")
-      end
-
-      def stage_query(project_ids)
-        if @options[:branch]
-          super(project_ids).where(build_table[:ref].eq(@options[:branch]))
-        else
-          super(project_ids)
-        end
       end
     end
   end

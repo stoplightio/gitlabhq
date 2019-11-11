@@ -1,4 +1,6 @@
-require 'rails_helper'
+# frozen_string_literal: true
+
+require 'spec_helper'
 
 describe 'Merge request > User sees closing issues message', :js do
   let(:project) { create(:project, :public, :repository) }
@@ -18,7 +20,7 @@ describe 'Merge request > User sees closing issues message', :js do
   let(:merge_request_title) { 'Merge Request Title' }
 
   before do
-    project.add_master(user)
+    project.add_maintainer(user)
     sign_in(user)
     visit project_merge_request_path(project, merge_request)
     wait_for_requests

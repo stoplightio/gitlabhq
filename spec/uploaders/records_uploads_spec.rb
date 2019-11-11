@@ -1,4 +1,6 @@
-require 'rails_helper'
+# frozen_string_literal: true
+
+require 'spec_helper'
 
 describe RecordsUploads do
   let!(:uploader) do
@@ -16,7 +18,7 @@ describe RecordsUploads do
   end
 
   def upload_fixture(filename)
-    fixture_file_upload(Rails.root.join('spec', 'fixtures', filename))
+    fixture_file_upload(File.join('spec', 'fixtures', filename))
   end
 
   describe 'callbacks' do
@@ -71,7 +73,7 @@ describe RecordsUploads do
       expect { uploader.store!(upload_fixture('rails_sample.jpg')) }.not_to change { Upload.count }
     end
 
-    it 'it destroys Upload records at the same path before recording' do
+    it 'destroys Upload records at the same path before recording' do
       existing = Upload.create!(
         path: File.join('uploads', 'rails_sample.jpg'),
         size: 512.kilobytes,
@@ -85,13 +87,43 @@ describe RecordsUploads do
       expect { existing.reload }.to raise_error(ActiveRecord::RecordNotFound)
       expect(Upload.count).to eq(1)
     end
+
+    it 'does not affect other uploads with different model but the same path' do
+      project = create(:project)
+      other_project = create(:project)
+
+      uploader = RecordsUploadsExampleUploader.new(other_project)
+
+      upload_for_project = Upload.create!(
+        path: File.join('uploads', 'rails_sample.jpg'),
+        size: 512.kilobytes,
+        model: project,
+        uploader: uploader.class.to_s
+      )
+
+      uploader.store!(upload_fixture('rails_sample.jpg'))
+
+      upload_for_project_fresh = Upload.find(upload_for_project.id)
+
+      expect(upload_for_project).to eq(upload_for_project_fresh)
+      expect(Upload.count).to eq(2)
+    end
   end
 
   describe '#destroy_upload callback' do
-    it 'it destroys Upload records at the same path after removal' do
+    it 'destroys Upload records at the same path after removal' do
       uploader.store!(upload_fixture('rails_sample.jpg'))
 
       expect { uploader.remove! }.to change { Upload.count }.from(1).to(0)
+    end
+  end
+
+  describe '#filename' do
+    it 'gets the filename from the path recorded in the database, not CarrierWave' do
+      uploader.store!(upload_fixture('rails_sample.jpg'))
+      expect_any_instance_of(GitlabUploader).not_to receive(:filename)
+
+      expect(uploader.filename).to eq('rails_sample.jpg')
     end
   end
 end

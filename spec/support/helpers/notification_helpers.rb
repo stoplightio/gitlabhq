@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module NotificationHelpers
   extend self
 
@@ -17,11 +19,15 @@ module NotificationHelpers
 
   def create_user_with_notification(level, username, resource = project)
     user = create(:user, username: username)
+    create_notification_setting(user, resource, level)
+
+    user
+  end
+
+  def create_notification_setting(user, resource, level)
     setting = user.notification_settings_for(resource)
     setting.level = level
     setting.save
-
-    user
   end
 
   # Create custom notifications

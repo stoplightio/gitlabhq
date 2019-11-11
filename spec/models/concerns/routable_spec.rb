@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Group, 'Routable' do
@@ -12,38 +14,51 @@ describe Group, 'Routable' do
     it { is_expected.to have_many(:redirect_routes).dependent(:destroy) }
   end
 
-  describe 'GitLab read-only instance' do
-    it 'does not save route if route is not present' do
-      group.route.path = ''
-      allow(Gitlab::Database).to receive(:read_only?).and_return(true)
-      expect(group).to receive(:update_route).and_call_original
-
-      expect { group.full_path }.to change { Route.count }.by(0)
-    end
-  end
-
   describe 'Callbacks' do
-    it 'creates route record on create' do
-      expect(group.route.path).to eq(group.path)
-      expect(group.route.name).to eq(group.name)
+    context 'for a group' do
+      it 'creates route record on create' do
+        expect(group.route.path).to eq(group.path)
+        expect(group.route.name).to eq(group.name)
+      end
+
+      it 'updates route record on path change' do
+        group.update(path: 'wow', name: 'much')
+
+        expect(group.route.path).to eq('wow')
+        expect(group.route.name).to eq('much')
+      end
+
+      it 'ensure route path uniqueness across different objects' do
+        create(:group, parent: group, path: 'xyz')
+        duplicate = build(:project, namespace: group, path: 'xyz')
+
+        expect { duplicate.save! }.to raise_error(ActiveRecord::RecordInvalid, 'Validation failed: Path has already been taken')
+      end
     end
 
-    it 'updates route record on path change' do
-      group.update_attributes(path: 'wow', name: 'much')
+    context 'for a user' do
+      let(:user) { create(:user, username: 'jane', name: "Jane Doe") }
 
-      expect(group.route.path).to eq('wow')
-      expect(group.route.name).to eq('much')
-    end
+      it 'creates the route for a record on create' do
+        expect(user.namespace.name).to eq('Jane Doe')
+        expect(user.namespace.path).to eq('jane')
+      end
 
-    it 'ensure route path uniqueness across different objects' do
-      create(:group, parent: group, path: 'xyz')
-      duplicate = build(:project, namespace: group, path: 'xyz')
+      it 'updates routes and nested routes on name change' do
+        project = create(:project, path: 'work-stuff', name: 'Work stuff', namespace: user.namespace)
 
-      expect { duplicate.save! }.to raise_error(ActiveRecord::RecordInvalid, 'Validation failed: Path has already been taken')
+        user.update!(username: 'jaen', name: 'Jaen Did')
+        project.reload
+
+        expect(user.namespace.name).to eq('Jaen Did')
+        expect(user.namespace.path).to eq('jaen')
+        expect(project.full_name).to eq('Jaen Did / Work stuff')
+        expect(project.full_path).to eq('jaen/work-stuff')
+      end
     end
   end
 
-  describe '.find_by_full_path' do
+  context '.find_by_full_path' do
     let!(:nested_group) { create(:group, parent: group) }
 
     context 'without any redirect routes' do
@@ -51,6 +66,13 @@ describe Group, 'Routable' do
       it { expect(described_class.find_by_full_path(group.to_param.upcase)).to eq(group) }
       it { expect(described_class.find_by_full_path(nested_group.to_param)).to eq(nested_group) }
       it { expect(described_class.find_by_full_path('unknown')).to eq(nil) }
+
+      it 'includes route information when loading a record' do
+        path = group.to_param
+        control_count = ActiveRecord::QueryRecorder.new { described_class.find_by_full_path(path) }.count
+
+        expect { described_class.find_by_full_path(path).route }.not_to exceed_all_query_limit(control_count)
+      end
     end
 
     context 'with redirect routes' do
@@ -131,29 +153,6 @@ describe Group, 'Routable' do
 
     it { expect(group.full_path).to eq(group.path) }
     it { expect(nested_group.full_path).to eq("#{group.full_path}/#{nested_group.path}") }
-
-    context 'with RequestStore active', :request_store do
-      it 'does not load the route table more than once' do
-        group.expires_full_path_cache
-        expect(group).to receive(:uncached_full_path).once.and_call_original
-
-        3.times { group.full_path }
-        expect(group.full_path).to eq(group.path)
-      end
-    end
-  end
-
-  describe '#expires_full_path_cache' do
-    context 'with RequestStore active', :request_store do
-      it 'expires the full_path cache' do
-        expect(group.full_path).to eq('foo')
-
-        group.route.update(path: 'bar', name: 'bar')
-        group.expires_full_path_cache
-
-        expect(group.full_path).to eq('bar')
-      end
-    end
   end
 
   describe '#full_name' do

@@ -1,20 +1,23 @@
+# frozen_string_literal: true
+
 module Gitlab
   module SidekiqLogging
     class StructuredLogger
       START_TIMESTAMP_FIELDS = %w[created_at enqueued_at].freeze
       DONE_TIMESTAMP_FIELDS = %w[started_at retried_at failed_at completed_at].freeze
+      MAXIMUM_JOB_ARGUMENTS_LENGTH = 10.kilobytes
 
       def call(job, queue)
-        started_at = current_time
+        started_time = get_time
         base_payload = parse_job(job)
 
-        Sidekiq.logger.info log_job_start(started_at, base_payload)
+        Sidekiq.logger.info log_job_start(base_payload)
 
         yield
 
-        Sidekiq.logger.info log_job_done(started_at, base_payload)
+        Sidekiq.logger.info log_job_done(job, started_time, base_payload)
       rescue => job_exception
-        Sidekiq.logger.warn log_job_done(started_at, base_payload, job_exception)
+        Sidekiq.logger.warn log_job_done(job, started_time, base_payload, job_exception)
 
         raise
       end
@@ -25,17 +28,29 @@ module Gitlab
         "#{payload['class']} JID-#{payload['jid']}"
       end
 
-      def log_job_start(started_at, payload)
+      def add_instrumentation_keys!(job, output_payload)
+        output_payload.merge!(job.slice(*::Gitlab::InstrumentationHelper::KEYS))
+      end
+
+      def log_job_start(payload)
         payload['message'] = "#{base_message(payload)}: start"
         payload['job_status'] = 'start'
+
+        # Old gitlab-shell messages don't provide enqueued_at/created_at attributes
+        enqueued_at = payload['enqueued_at'] || payload['created_at']
+        if enqueued_at
+          payload['scheduling_latency_s'] = elapsed_by_absolute_time(Time.iso8601(enqueued_at))
+        end
 
         payload
       end
 
-      def log_job_done(started_at, payload, job_exception = nil)
+      def log_job_done(job, started_time, payload, job_exception = nil)
         payload = payload.dup
-        payload['duration'] = elapsed(started_at)
-        payload['completed_at'] = Time.now.utc
+        add_instrumentation_keys!(job, payload)
+
+        elapsed_time = elapsed(started_time)
+        add_time_keys!(elapsed_time, payload)
 
         message = base_message(payload)
 
@@ -43,8 +58,7 @@ module Gitlab
           payload['message'] = "#{message}: fail: #{payload['duration']} sec"
           payload['job_status'] = 'fail'
           payload['error_message'] = job_exception.message
-          payload['error'] = job_exception.class
-          payload['error_backtrace'] = backtrace_cleaner.clean(job_exception.backtrace)
+          payload['error_class'] = job_exception.class.name
         else
           payload['message'] = "#{message}: done: #{payload['duration']} sec"
           payload['job_status'] = 'done'
@@ -55,6 +69,15 @@ module Gitlab
         payload
       end
 
+      def add_time_keys!(time, payload)
+        payload['duration'] = time[:duration].round(6)
+
+        # ignore `cpu_s` if the platform does not support Process::CLOCK_THREAD_CPUTIME_ID (time[:cputime] == 0)
+        # supported OS version can be found at: https://www.rubydoc.info/stdlib/core/2.1.6/Process:clock_gettime
+        payload['cpu_s'] = time[:cputime].round(6) if time[:cputime] > 0
+        payload['completed_at'] = Time.now.utc
+      end
+
       def parse_job(job)
         job = job.dup
 
@@ -62,6 +85,7 @@ module Gitlab
         job['pid'] = ::Process.pid
 
         job.delete('args') unless ENV['SIDEKIQ_LOG_ARGUMENTS']
+        job['args'] = limited_job_args(job['args']) if job['args']
 
         convert_to_iso8601(job, START_TIMESTAMP_FIELDS)
 
@@ -74,22 +98,48 @@ module Gitlab
         end
       end
 
-      def elapsed(start)
-        (current_time - start).round(3)
+      def elapsed_by_absolute_time(start)
+        (Time.now.utc - start).to_f.round(6)
+      end
+
+      def elapsed(t0)
+        t1 = get_time
+        {
+          duration: t1[:now] - t0[:now],
+          cputime: t1[:thread_cputime] - t0[:thread_cputime]
+        }
+      end
+
+      def get_time
+        {
+          now: current_time,
+          thread_cputime: defined?(Process::CLOCK_THREAD_CPUTIME_ID) ? Process.clock_gettime(Process::CLOCK_THREAD_CPUTIME_ID) : 0
+        }
       end
 
       def current_time
         Gitlab::Metrics::System.monotonic_time
       end
 
-      def backtrace_cleaner
-        @backtrace_cleaner ||= ActiveSupport::BacktraceCleaner.new
-      end
-
       def format_time(timestamp)
         return timestamp if timestamp.is_a?(String)
 
-        Time.at(timestamp).utc.iso8601(3)
+        Time.at(timestamp).utc.iso8601(6)
+      end
+
+      def limited_job_args(args)
+        return unless args.is_a?(Array)
+
+        total_length = 0
+        limited_args = args.take_while do |arg|
+          total_length += arg.to_json.length
+
+          total_length <= MAXIMUM_JOB_ARGUMENTS_LENGTH
+        end
+
+        limited_args.push('...') if total_length > MAXIMUM_JOB_ARGUMENTS_LENGTH
+
+        limited_args
       end
     end
   end

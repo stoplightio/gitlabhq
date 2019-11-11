@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module RoutableActions
   extend ActiveSupport::Concern
 
@@ -7,17 +9,29 @@ module RoutableActions
       ensure_canonical_path(routable, requested_full_path)
       routable
     else
-      handle_not_found_or_authorized(routable)
+      perform_not_found_actions(routable, not_found_actions)
+
+      route_not_found unless performed?
+
       nil
     end
   end
 
-  # This is overridden in gitlab-ee.
-  def handle_not_found_or_authorized(_routable)
-    route_not_found
+  def not_found_actions
+    [ProjectUnauthorized::ControllerActions.on_routable_not_found]
+  end
+
+  def perform_not_found_actions(routable, actions)
+    actions.each do |action|
+      break if performed?
+
+      instance_exec(routable, &action)
+    end
   end
 
   def routable_authorized?(routable, extra_authorization_proc)
+    return false unless routable
+
     action = :"read_#{routable.class.to_s.underscore}"
     return false unless can?(current_user, action, routable)
 
@@ -41,3 +55,5 @@ module RoutableActions
     end
   end
 end
+
+RoutableActions.prepend_if_ee('EE::RoutableActions')

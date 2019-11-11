@@ -1,4 +1,4 @@
-/* eslint-disable func-names, space-before-function-paren, wrap-iife, prefer-arrow-callback, no-unused-vars, consistent-return, camelcase, comma-dangle, max-len, class-methods-use-this */
+/* eslint-disable func-names, consistent-return, camelcase, class-methods-use-this */
 
 // Zen Mode (full screen) textarea
 //
@@ -39,25 +39,35 @@ export default class ZenMode {
   constructor() {
     this.active_backdrop = null;
     this.active_textarea = null;
-    $(document).on('click', '.js-zen-enter', function(e) {
+    $(document).on('click', '.js-zen-enter', e => {
       e.preventDefault();
       return $(e.currentTarget).trigger('zen_mode:enter');
     });
-    $(document).on('click', '.js-zen-leave', function(e) {
+    $(document).on('click', '.js-zen-leave', e => {
       e.preventDefault();
       return $(e.currentTarget).trigger('zen_mode:leave');
     });
-    $(document).on('zen_mode:enter', (function(_this) {
-      return function(e) {
-        return _this.enter($(e.target).closest('.md-area').find('.zen-backdrop'));
-      };
-    })(this));
-    $(document).on('zen_mode:leave', (function(_this) {
-      return function(e) {
-        return _this.exit();
-      };
-    })(this));
-    $(document).on('keydown', function(e) {
+    $(document).on(
+      'zen_mode:enter',
+      (function(_this) {
+        return function(e) {
+          return _this.enter(
+            $(e.target)
+              .closest('.md-area')
+              .find('.zen-backdrop'),
+          );
+        };
+      })(this),
+    );
+    $(document).on(
+      'zen_mode:leave',
+      (function(_this) {
+        return function() {
+          return _this.exit();
+        };
+      })(this),
+    );
+    $(document).on('keydown', e => {
       // Esc
       if (e.keyCode === 27) {
         e.preventDefault();
@@ -93,7 +103,7 @@ export default class ZenMode {
 
   scrollTo(zen_area) {
     return $.scrollTo(zen_area, 0, {
-      offset: -150
+      offset: -150,
     });
   }
 }

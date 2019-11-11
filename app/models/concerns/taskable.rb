@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'task_list'
 require 'task_list/filter'
 
@@ -7,15 +9,18 @@ require 'task_list/filter'
 #
 # Used by MergeRequest and Issue
 module Taskable
-  COMPLETED    = 'completed'.freeze
-  INCOMPLETE   = 'incomplete'.freeze
-  ITEM_PATTERN = %r{
+  COMPLETED          = 'completed'
+  INCOMPLETE         = 'incomplete'
+  COMPLETE_PATTERN   = /(\[[xX]\])/.freeze
+  INCOMPLETE_PATTERN = /(\[[\s]\])/.freeze
+  ITEM_PATTERN       = %r{
     ^
-    \s*(?:[-+*]|(?:\d+\.)) # list prefix required - task item has to be always in a list
+    (?:(?:>\s{0,4})*)         # optional blockquote characters
+    \s*(?:[-+*]|(?:\d+\.))    # list prefix required - task item has to be always in a list
     \s+                       # whitespace prefix has to be always presented for a list item
     (\[\s\]|\[[xX]\])         # checkbox
     (\s.+)                    # followed by whitespace and some text.
-  }x
+  }x.freeze
 
   def self.get_tasks(content)
     content.to_s.scan(ITEM_PATTERN).map do |checkbox, label|
@@ -70,5 +75,12 @@ module Taskable
   # task list items -- for small screens
   def task_status_short
     task_status(short: true)
+  end
+
+  def task_completion_status
+    @task_completion_status ||= {
+        count: tasks.summary.item_count,
+        completed_count: tasks.summary.complete_count
+    }
   end
 end

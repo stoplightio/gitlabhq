@@ -1,6 +1,8 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
-feature 'Blob button line permalinks (BlobLinePermalinkUpdater)', :js do
+describe 'Blob button line permalinks (BlobLinePermalinkUpdater)', :js do
   include TreeHelper
 
   let(:project) { create(:project, :public, :repository) }

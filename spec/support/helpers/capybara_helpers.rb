@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module CapybaraHelpers
   # Execute a block a certain number of times before considering it a failure
   #
@@ -39,5 +41,9 @@ module CapybaraHelpers
   # Simulate a browser restart by clearing the session cookie.
   def clear_browser_session
     page.driver.browser.manage.delete_cookie('_gitlab_session')
+  end
+
+  def javascript_test?
+    Capybara.current_driver == Capybara.javascript_driver
   end
 end

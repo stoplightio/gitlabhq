@@ -1,4 +1,6 @@
-require 'rails_helper'
+# frozen_string_literal: true
+
+require 'spec_helper'
 
 describe 'Merge requests > User merges immediately', :js do
   let(:project) { create(:project, :public, :repository) }
@@ -19,12 +21,14 @@ describe 'Merge requests > User merges immediately', :js do
   context 'when there is active pipeline for merge request' do
     before do
       create(:ci_build, pipeline: pipeline)
-      project.add_master(user)
+      project.add_maintainer(user)
       sign_in(user)
       visit project_merge_request_path(project, merge_request)
     end
 
     it 'enables merge immediately' do
+      wait_for_requests
+
       page.within '.mr-widget-body' do
         find('.dropdown-toggle').click
 

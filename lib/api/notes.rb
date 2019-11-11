@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module API
   class Notes < Grape::API
     include PaginationParams
@@ -5,18 +7,14 @@ module API
 
     before { authenticate! }
 
-    NOTEABLE_TYPES = [Issue, MergeRequest, Snippet].freeze
-
-    NOTEABLE_TYPES.each do |noteable_type|
+    Helpers::NotesHelpers.noteable_types.each do |noteable_type|
       parent_type = noteable_type.parent_class.to_s.underscore
       noteables_str = noteable_type.to_s.underscore.pluralize
 
       params do
         requires :id, type: String, desc: "The ID of a #{parent_type}"
       end
-      resource parent_type.pluralize.to_sym, requirements: API::PROJECT_ENDPOINT_REQUIREMENTS do
-        noteables_str = noteable_type.to_s.underscore.pluralize
-
+      resource parent_type.pluralize.to_sym, requirements: API::NAMESPACE_OR_PROJECT_REQUIREMENTS do
         desc "Get a list of #{noteable_type.to_s.downcase} notes" do
           success Entities::Note
         end
@@ -28,23 +26,26 @@ module API
                           desc: 'Return notes sorted in `asc` or `desc` order.'
           use :pagination
         end
+        # rubocop: disable CodeReuse/ActiveRecord
         get ":id/#{noteables_str}/:noteable_id/notes" do
-          noteable = find_noteable(parent_type, noteables_str, params[:noteable_id])
+          noteable = find_noteable(parent_type, params[:id], noteable_type, params[:noteable_id])
 
           # We exclude notes that are cross-references and that cannot be viewed
           # by the current user. By doing this exclusion at this level and not
           # at the DB query level (which we cannot in that case), the current
           # page can have less elements than :per_page even if
           # there's more than one page.
-          raw_notes = noteable.notes.with_metadata.reorder(params[:order_by] => params[:sort])
-          notes =
-            # paginate() only works with a relation. This could lead to a
-            # mismatch between the pagination headers info and the actual notes
-            # array returned, but this is really a edge-case.
-            paginate(raw_notes)
-            .reject { |n| n.cross_reference_not_visible_for?(current_user) }
+          raw_notes = noteable.notes.with_metadata.reorder(order_options_with_tie_breaker)
+
+          # paginate() only works with a relation. This could lead to a
+          # mismatch between the pagination headers info and the actual notes
+          # array returned, but this is really a edge-case.
+          notes = paginate(raw_notes)
+          notes = prepare_notes_for_rendering(notes)
+          notes = notes.select { |note| note.visible_for?(current_user) }
           present notes, with: Entities::Note
         end
+        # rubocop: enable CodeReuse/ActiveRecord
 
         desc "Get a single #{noteable_type.to_s.downcase} note" do
           success Entities::Note
@@ -54,7 +55,7 @@ module API
           requires :noteable_id, type: Integer, desc: 'The ID of the noteable'
         end
         get ":id/#{noteables_str}/:noteable_id/notes/:note_id" do
-          noteable = find_noteable(parent_type, noteables_str, params[:noteable_id])
+          noteable = find_noteable(parent_type, params[:id], noteable_type, params[:noteable_id])
           get_note(noteable, params[:note_id])
         end
 
@@ -67,7 +68,7 @@ module API
           optional :created_at, type: String, desc: 'The creation date of the note'
         end
         post ":id/#{noteables_str}/:noteable_id/notes" do
-          noteable = find_noteable(parent_type, noteables_str, params[:noteable_id])
+          noteable = find_noteable(parent_type, params[:id], noteable_type, params[:noteable_id])
 
           opts = {
             note: params[:body],
@@ -79,7 +80,7 @@ module API
           note = create_note(noteable, opts)
 
           if note.valid?
-            present note, with: Entities.const_get(note.class.name)
+            present note, with: Entities.const_get(note.class.name, false)
           else
             bad_request!("Note #{note.errors.messages}")
           end
@@ -94,7 +95,7 @@ module API
           requires :body, type: String, desc: 'The content of a note'
         end
         put ":id/#{noteables_str}/:noteable_id/notes/:note_id" do
-          noteable = find_noteable(parent_type, noteables_str, params[:noteable_id])
+          noteable = find_noteable(parent_type, params[:id], noteable_type, params[:noteable_id])
 
           update_note(noteable, params[:note_id])
         end
@@ -107,7 +108,7 @@ module API
           requires :note_id, type: Integer, desc: 'The ID of a note'
         end
         delete ":id/#{noteables_str}/:noteable_id/notes/:note_id" do
-          noteable = find_noteable(parent_type, noteables_str, params[:noteable_id])
+          noteable = find_noteable(parent_type, params[:id], noteable_type, params[:noteable_id])
 
           delete_note(noteable, params[:note_id])
         end

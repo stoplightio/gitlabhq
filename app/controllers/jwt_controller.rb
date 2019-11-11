@@ -1,4 +1,7 @@
+# frozen_string_literal: true
+
 class JwtController < ApplicationController
+  skip_around_action :set_session_storage
   skip_before_action :authenticate_user!
   skip_before_action :verify_authenticity_token
   before_action :authenticate_project_or_user
@@ -20,7 +23,7 @@ class JwtController < ApplicationController
   private
 
   def authenticate_project_or_user
-    @authentication_result = Gitlab::Auth::Result.new(nil, nil, :none, Gitlab::Auth.read_authentication_abilities)
+    @authentication_result = Gitlab::Auth::Result.new(nil, nil, :none, Gitlab::Auth.read_only_authentication_abilities)
 
     authenticate_with_http_basic do |login, password|
       @authentication_result = Gitlab::Auth.find_for_git_client(login, password, project: nil, ip: request.ip)
@@ -37,11 +40,11 @@ class JwtController < ApplicationController
     render json: {
       errors: [
         { code: 'UNAUTHORIZED',
-          message: "HTTP Basic: Access denied\n" \
-                   "You must use a personal access token with 'api' scope for Git over HTTP.\n" \
-                   "You can generate one at #{profile_personal_access_tokens_url}" }
+          message: _('HTTP Basic: Access denied\n' \
+                   'You must use a personal access token with \'api\' scope for Git over HTTP.\n' \
+                   'You can generate one at %{profile_personal_access_tokens_url}') % { profile_personal_access_tokens_url: profile_personal_access_tokens_url } }
       ]
-    }, status: 401
+    }, status: :unauthorized
   end
 
   def render_unauthorized
@@ -50,10 +53,26 @@ class JwtController < ApplicationController
         { code: 'UNAUTHORIZED',
           message: 'HTTP Basic: Access denied' }
       ]
-    }, status: 401
+    }, status: :unauthorized
   end
 
   def auth_params
-    params.permit(:service, :scope, :account, :client_id)
+    params.permit(:service, :account, :client_id)
+          .merge(additional_params)
+  end
+
+  def additional_params
+    { scopes: scopes_param }.compact
+  end
+
+  # We have to parse scope here, because Docker Client does not send an array of scopes,
+  # but rather a flat list and we loose second scope when being processed by Rails:
+  # scope=scopeA&scope=scopeB
+  #
+  # This method makes to always return an array of scopes
+  def scopes_param
+    return unless params[:scope].present?
+
+    Array(Rack::Utils.parse_query(request.query_string)['scope'])
   end
 end

@@ -42,7 +42,15 @@ describe Gitlab::HookData::IssuableBuilder do
               [{ id: 1, title: 'foo' }],
               [{ id: 1, title: 'foo' }, { id: 2, title: 'bar' }]
             ],
-            total_time_spent: [1, 2]
+            total_time_spent: [1, 2],
+            assignees: [
+              [],
+              [{
+                name: "Foo Bar",
+                username: "foobar",
+                avatar_url: "http://www.example.com/my-avatar.jpg"
+              }]
+            ]
           }
         end
         let(:data) { builder.build(user: user, changes: changes) }
@@ -58,6 +66,14 @@ describe Gitlab::HookData::IssuableBuilder do
             total_time_spent: {
               previous: 1,
               current: 2
+            },
+            assignees: {
+              previous: [],
+                current: [{
+                  name: "Foo Bar",
+                  username: "foobar",
+                  avatar_url: "http://www.example.com/my-avatar.jpg"
+                }]
             }
           }))
         end
@@ -97,13 +113,13 @@ describe Gitlab::HookData::IssuableBuilder do
     end
 
     context 'merge_request is assigned' do
-      let(:merge_request) { create(:merge_request, assignee: user) }
+      let(:merge_request) { create(:merge_request, assignees: [user]) }
       let(:data) { described_class.new(merge_request).build(user: user) }
 
       it 'returns correct hook data' do
         expect(data[:object_attributes]['assignee_id']).to eq(user.id)
-        expect(data[:assignee]).to eq(user.hook_attrs)
-        expect(data).not_to have_key(:assignees)
+        expect(data[:assignees].first).to eq(user.hook_attrs)
+        expect(data).not_to have_key(:assignee)
       end
     end
   end

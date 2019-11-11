@@ -1,7 +1,9 @@
+# frozen_string_literal: true
+
 module Spammable
   extend ActiveSupport::Concern
 
-  module ClassMethods
+  class_methods do
     def attr_spammable(attr, options = {})
       spammable_attrs << [attr.to_s, options]
     end
@@ -77,5 +79,10 @@ module Spammable
   # Override in Spammable if further checks are necessary
   def check_for_spam?
     true
+  end
+
+  # Override in Spammable if differs
+  def allow_possible_spam?
+    Feature.enabled?(:allow_possible_spam, project)
   end
 end

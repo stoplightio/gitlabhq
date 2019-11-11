@@ -1,5 +1,8 @@
+# frozen_string_literal: true
+
 class DroneCiService < CiService
   include ReactiveService
+  include ServicePushDataValidations
 
   prop_accessor :drone_url, :token
   boolean_accessor :enable_ssl_verification
@@ -37,15 +40,13 @@ class DroneCiService < CiService
   end
 
   def commit_status_path(sha, ref)
-    url = [drone_url,
-           "gitlab/#{project.full_path}/commits/#{sha}",
-           "?branch=#{URI.encode(ref.to_s)}&access_token=#{token}"]
-
-    URI.join(*url).to_s
+    Gitlab::Utils.append_path(
+      drone_url,
+      "gitlab/#{project.full_path}/commits/#{sha}?branch=#{URI.encode(ref.to_s)}&access_token=#{token}")
   end
 
   def commit_status(sha, ref)
-    with_reactive_cache(sha, ref) {|cached| cached[:commit_status] }
+    with_reactive_cache(sha, ref) { |cached| cached[:commit_status] }
   end
 
   def calculate_reactive_cache(sha, ref)
@@ -67,16 +68,14 @@ class DroneCiService < CiService
       end
 
     { commit_status: status }
-  rescue Errno::ECONNREFUSED
+  rescue *Gitlab::HTTP::HTTP_ERRORS
     { commit_status: :error }
   end
 
   def build_page(sha, ref)
-    url = [drone_url,
-           "gitlab/#{project.full_path}/redirect/commits/#{sha}",
-           "?branch=#{URI.encode(ref.to_s)}"]
-
-    URI.join(*url).to_s
+    Gitlab::Utils.append_path(
+      drone_url,
+      "gitlab/#{project.full_path}/redirect/commits/#{sha}?branch=#{URI.encode(ref.to_s)}")
   end
 
   def title
@@ -97,24 +96,5 @@ class DroneCiService < CiService
       { type: 'text', name: 'drone_url', placeholder: 'http://drone.example.com', required: true },
       { type: 'checkbox', name: 'enable_ssl_verification', title: "Enable SSL verification" }
     ]
-  end
-
-  private
-
-  def tag_push_valid?(data)
-    data[:total_commits_count] > 0 && !Gitlab::Git.blank_ref?(data[:after])
-  end
-
-  def push_valid?(data)
-    opened_merge_requests = project.merge_requests.opened.where(source_project_id: project.id,
-                                                                source_branch: Gitlab::Git.ref_name(data[:ref]))
-
-    opened_merge_requests.empty? && data[:total_commits_count] > 0 &&
-      !Gitlab::Git.blank_ref?(data[:after])
-  end
-
-  def merge_request_valid?(data)
-    data[:object_attributes][:state] == 'opened' &&
-      MergeRequest.state_machines[:merge_status].check_state?(data[:object_attributes][:merge_status])
   end
 end

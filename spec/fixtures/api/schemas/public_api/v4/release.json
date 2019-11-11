@@ -1,12 +1,49 @@
 {
   "type": "object",
-  "required" : [
-    "tag_name",
-    "description"
-  ],
-  "properties" : {
-    "tag_name": { "type": ["string", "null"] },
-    "description": { "type": "string" }
+  "required": ["name", "tag_name", "commit", "released_at"],
+  "properties": {
+    "name": { "type": "string" },
+    "tag_name": { "type": "string" },
+    "description": { "type": "string" },
+    "description_html": { "type": "string" },
+    "created_at": { "type": "date" },
+    "released_at": { "type": "date" },
+    "upcoming_release": { "type": "boolean" },
+    "commit": {
+      "oneOf": [{ "type": "null" }, { "$ref": "commit/basic.json" }]
+    },
+    "author": {
+      "oneOf": [{ "type": "null" }, { "$ref": "user/basic.json" }]
+    },
+    "milestones": {
+      "type": "array",
+      "items": { "$ref": "milestone.json" }
+    },
+    "commit_path": { "type": "string" },
+    "tag_path": { "type": "string" },
+    "name": { "type": "string" },
+    "assets": {
+      "required": ["count", "links", "sources"],
+      "properties": {
+        "count": { "type": "integer" },
+        "links": { "$ref": "../../release/links.json" },
+        "sources": {
+          "type": "array",
+          "items": {
+            "format": "zip",
+            "url": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "_links": {
+      "required": ["merge_requests_url", "issues_url"],
+      "properties": {
+        "merge_requests_url": { "type": "string" },
+        "issues_url": { "type": "string" }
+      }
+    }
   },
   "additionalProperties": false
 }

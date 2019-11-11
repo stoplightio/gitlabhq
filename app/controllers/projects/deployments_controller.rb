@@ -1,7 +1,10 @@
+# frozen_string_literal: true
+
 class Projects::DeploymentsController < Projects::ApplicationController
   before_action :authorize_read_environment!
   before_action :authorize_read_deployment!
 
+  # rubocop: disable CodeReuse/ActiveRecord
   def index
     deployments = environment.deployments.reorder(created_at: :desc)
     deployments = deployments.where('created_at > ?', params[:after].to_time) if params[:after]&.to_time
@@ -9,26 +12,25 @@ class Projects::DeploymentsController < Projects::ApplicationController
     render json: { deployments: DeploymentSerializer.new(project: project)
                                   .represent_concise(deployments) }
   end
+  # rubocop: enable CodeReuse/ActiveRecord
 
   def metrics
-    return render_404 unless deployment.has_metrics?
+    return render_404 unless deployment_metrics.has_metrics?
 
-    @metrics = deployment.metrics
+    @metrics = deployment_metrics.metrics
     if @metrics&.any?
       render json: @metrics, status: :ok
     else
       head :no_content
     end
-  rescue NotImplementedError
-    render_404
   end
 
   def additional_metrics
-    return render_404 unless deployment.has_metrics?
+    return render_404 unless deployment_metrics.has_metrics?
 
     respond_to do |format|
       format.json do
-        metrics = deployment.additional_metrics
+        metrics = deployment_metrics.additional_metrics
 
         if metrics.any?
           render json: metrics
@@ -41,8 +43,12 @@ class Projects::DeploymentsController < Projects::ApplicationController
 
   private
 
+  def deployment_metrics
+    @deployment_metrics ||= DeploymentMetrics.new(deployment.project, deployment)
+  end
+
   def deployment
-    @deployment ||= environment.deployments.find_by(iid: params[:id])
+    @deployment ||= environment.deployments.find_successful_deployment!(params[:id])
   end
 
   def environment

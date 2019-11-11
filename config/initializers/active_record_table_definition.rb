@@ -1,5 +1,5 @@
 # ActiveRecord custom method definitions with timezone information.
-# See https://gitlab.com/gitlab-org/gitlab-ce/merge_requests/11229
+# See https://gitlab.com/gitlab-org/gitlab-foss/merge_requests/11229
 
 require 'active_record/connection_adapters/abstract/schema_definitions'
 
@@ -28,6 +28,11 @@ module ActiveRecord
       # end
       def datetime_with_timezone(column_name, **options)
         column(column_name, :datetime_with_timezone, options)
+      end
+
+      # Disable timestamp alias to datetime
+      def aliased_types(name, fallback)
+        fallback
       end
     end
   end

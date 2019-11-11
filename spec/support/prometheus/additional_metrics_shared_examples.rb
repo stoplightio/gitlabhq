@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 RSpec.shared_examples 'additional metrics query' do
   include Prometheus::MetricBuilders
 
@@ -25,7 +27,7 @@ RSpec.shared_examples 'additional metrics query' do
 
     shared_examples 'query context containing environment slug and filter' do
       it 'contains ci_environment_slug' do
-        expect(subject).to receive(:query_metrics).with(project, hash_including(ci_environment_slug: environment.slug))
+        expect(subject).to receive(:query_metrics).with(project, environment, hash_including(ci_environment_slug: environment.slug))
 
         subject.query(*query_params)
       end
@@ -33,6 +35,7 @@ RSpec.shared_examples 'additional metrics query' do
       it 'contains environment filter' do
         expect(subject).to receive(:query_metrics).with(
           project,
+          environment,
           hash_including(
             environment_filter: "container_name!=\"POD\",environment=\"#{environment.slug}\""
           )
@@ -43,30 +46,19 @@ RSpec.shared_examples 'additional metrics query' do
     end
 
     describe 'project has Kubernetes service' do
-      shared_examples 'same behavior between KubernetesService and Platform::Kubernetes' do
+      context 'when user configured kubernetes from CI/CD > Clusters' do
+        let!(:cluster) { create(:cluster, :project, :provided_by_gcp) }
+        let(:project) { cluster.project }
         let(:environment) { create(:environment, slug: 'environment-slug', project: project) }
-        let(:kube_namespace) { project.deployment_platform.actual_namespace }
+        let(:kube_namespace) { environment.deployment_namespace }
 
         it_behaves_like 'query context containing environment slug and filter'
 
         it 'query context contains kube_namespace' do
-          expect(subject).to receive(:query_metrics).with(project, hash_including(kube_namespace: kube_namespace))
+          expect(subject).to receive(:query_metrics).with(project, environment, hash_including(kube_namespace: kube_namespace))
 
           subject.query(*query_params)
         end
-      end
-
-      context 'when user configured kubernetes from Integration > Kubernetes' do
-        let(:project) { create(:kubernetes_project) }
-
-        it_behaves_like 'same behavior between KubernetesService and Platform::Kubernetes'
-      end
-
-      context 'when user configured kubernetes from CI/CD > Clusters' do
-        let!(:cluster) { create(:cluster, :project, :provided_by_gcp) }
-        let(:project) { cluster.project }
-
-        it_behaves_like 'same behavior between KubernetesService and Platform::Kubernetes'
       end
     end
 
@@ -74,7 +66,7 @@ RSpec.shared_examples 'additional metrics query' do
       it_behaves_like 'query context containing environment slug and filter'
 
       it 'query context contains empty kube_namespace' do
-        expect(subject).to receive(:query_metrics).with(project, hash_including(kube_namespace: ''))
+        expect(subject).to receive(:query_metrics).with(project, environment, hash_including(kube_namespace: ''))
 
         subject.query(*query_params)
       end

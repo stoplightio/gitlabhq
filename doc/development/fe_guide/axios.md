@@ -1,15 +1,18 @@
 # Axios
+
 We use [axios][axios] to communicate with the server in Vue applications and most new code.
 
 In order to guarantee all defaults are set you *should not use `axios` directly*, you should import `axios` from `axios_utils`.
 
 ## CSRF token
+
 All our request require a CSRF token.
 To guarantee this token is set, we are importing [axios][axios], setting the token, and exporting `axios` .
 
 This exported module should be used instead of directly using `axios` to ensure the token is set.
 
 ## Usage
+
 ```javascript
   import axios from './lib/utils/axios_utils';
 
@@ -35,7 +38,7 @@ Advantages over [`spyOn()`]:
 
 - no need to create response objects
 - does not allow call through (which we want to avoid)
-- simple API to test error cases 
+- simple API to test error cases
 - provides `replyOnce()` to allow for different responses
 
 We have also decided against using [axios interceptors] because they are not suitable for mocking.

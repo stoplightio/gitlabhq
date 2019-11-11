@@ -1,7 +1,11 @@
+# frozen_string_literal: true
+
 module Gitlab
   module Auth
     module LDAP
       class Person
+        prepend_if_ee('::EE::Gitlab::Auth::LDAP::Person') # rubocop: disable Cop/InjectEnterpriseEditionModule
+
         # Active Directory-specific LDAP filter that checks if bit 2 of the
         # userAccountControl attribute is set.
         # Source: http://ctogonewild.com/2009/09/03/bitmask-searches-in-ldap/
@@ -43,7 +47,7 @@ module Gitlab
         def self.normalize_dn(dn)
           ::Gitlab::Auth::LDAP::DN.new(dn).to_normalized_s
         rescue ::Gitlab::Auth::LDAP::DN::FormatError => e
-          Rails.logger.info("Returning original DN \"#{dn}\" due to error during normalization attempt: #{e.message}")
+          Rails.logger.info("Returning original DN \"#{dn}\" due to error during normalization attempt: #{e.message}") # rubocop:disable Gitlab/RailsLogger
 
           dn
         end
@@ -55,19 +59,19 @@ module Gitlab
         def self.normalize_uid(uid)
           ::Gitlab::Auth::LDAP::DN.normalize_value(uid)
         rescue ::Gitlab::Auth::LDAP::DN::FormatError => e
-          Rails.logger.info("Returning original UID \"#{uid}\" due to error during normalization attempt: #{e.message}")
+          Rails.logger.info("Returning original UID \"#{uid}\" due to error during normalization attempt: #{e.message}") # rubocop:disable Gitlab/RailsLogger
 
           uid
         end
 
         def initialize(entry, provider)
-          Rails.logger.debug { "Instantiating #{self.class.name} with LDIF:\n#{entry.to_ldif}" }
+          Rails.logger.debug { "Instantiating #{self.class.name} with LDIF:\n#{entry.to_ldif}" } # rubocop:disable Gitlab/RailsLogger
           @entry = entry
           @provider = provider
         end
 
         def name
-          attribute_value(:name).first
+          attribute_value(:name)&.first
         end
 
         def uid
@@ -96,9 +100,7 @@ module Gitlab
 
         private
 
-        def entry
-          @entry
-        end
+        attr_reader :entry
 
         def config
           @config ||= Gitlab::Auth::LDAP::Config.new(provider)
@@ -112,7 +114,7 @@ module Gitlab
           attributes = Array(config.attributes[attribute.to_s])
           selected_attr = attributes.find { |attr| entry.respond_to?(attr) }
 
-          return nil unless selected_attr
+          return unless selected_attr
 
           entry.public_send(selected_attr) # rubocop:disable GitlabSecurity/PublicSend
         end

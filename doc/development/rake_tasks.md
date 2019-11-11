@@ -1,6 +1,6 @@
 # Rake tasks for developers
 
-## Setup db with developer seeds
+## Set up db with developer seeds
 
 Note that if your db user does not have advanced privileges you must create the db manually before running this command.
 
@@ -9,8 +9,42 @@ bundle exec rake setup
 ```
 
 The `setup` task is an alias for `gitlab:setup`.
-This tasks calls `db:reset` to create the database, calls `add_limits_mysql` that adds limits to the database schema in case of a MySQL database and finally it calls `db:seed_fu` to seed the database.
+This tasks calls `db:reset` to create the database, and calls `db:seed_fu` to seed the database.
 Note: `db:setup` calls `db:seed` but this does nothing.
+
+### Seeding issues for all or a given project
+
+You can seed issues for all or a given project with the `gitlab:seed:issues`
+task:
+
+```shell
+# All projects
+bin/rake gitlab:seed:issues
+
+# A specific project
+bin/rake "gitlab:seed:issues[group-path/project-path]"
+```
+
+By default, this seeds an average of 2 issues per week for the last 5 weeks per
+project.
+
+#### Seeding issues for Insights charts **(ULTIMATE)**
+
+You can seed issues specifically for working with the
+[Insights charts](../user/group/insights/index.md) with the
+`gitlab:seed:insights:issues` task:
+
+```shell
+# All projects
+bin/rake gitlab:seed:insights:issues
+
+# A specific project
+bin/rake "gitlab:seed:insights:issues[group-path/project-path]"
+```
+
+By default, this seeds an average of 10 issues per week for the last 52 weeks
+per project. All issues will also be randomly labeled with team, type, severity,
+and priority.
 
 ### Automation
 
@@ -38,38 +72,25 @@ Note that since you can't see the questions from stdout, you might just want
 to `echo 'yes'` to keep it running. It would still print the errors on stderr
 so no worries about missing errors.
 
-### Notes for MySQL
+### Extra Project seed options
 
-Since the seeds would contain various UTF-8 characters, such as emojis or so,
-we'll need to make sure that we're using `utf8mb4` for all the encoding
-settings and `utf8mb4_unicode_ci` for collation. Please check
-[MySQL utf8mb4 support](../install/database_mysql.md#mysql-utf8mb4-support)
+There are a few environment flags you can pass to change how projects are seeded
 
-Make sure that `config/database.yml` has `encoding: utf8mb4`, too.
-
-Next, we'll need to update the schema to make the indices fit:
-
-``` shell
-sed -i 's/limit: 255/limit: 191/g' db/schema.rb
-```
-
-Then run the setup script:
-
-``` shell
-bundle exec rake setup
-```
-
-To make sure that indices still fit. You could find great details in:
-[How to support full Unicode in MySQL databases](https://mathiasbynens.be/notes/mysql-utf8mb4)
+- `SIZE`: defaults to `8`, max: `32`. Amount of projects to create.
+- `LARGE_PROJECTS`: defaults to false. If set will clone 6 large projects to help with testing.
+- `FORK`: defaults to false. If set to `true` will fork `torvalds/linux` five times. Can also be set to an existing project full_path and it will fork that instead.
 
 ## Run tests
 
 In order to run the test you can use the following commands:
-- `rake spec` to run the rspec suite
-- `rake karma` to run the karma test suite
-- `rake gitlab:test` to run all the tests
 
-Note: `rake spec` takes significant time to pass.
+- `bin/rake spec` to run the rspec suite
+- `bin/rake spec:unit` to run the only the unit tests
+- `bin/rake spec:integration` to run the only the integration tests
+- `bin/rake spec:system` to run the only the system tests
+- `bin/rake karma` to run the karma test suite
+
+Note: `bin/rake spec` takes significant time to pass.
 Instead of running full test suite locally you can save a lot of time by running
 a single test or directory related to your changes. After you submit merge request
 CI will run full test suite for you. Green CI status in the merge request means
@@ -77,6 +98,9 @@ full test suite is passed.
 
 Note: You can't run `rspec .` since this will try to run all the `_spec.rb`
 files it can find, also the ones in `/tmp`
+
+Note: You can pass RSpec command line options to the `spec:unit`,
+`spec:integration`, and `spec:system` tasks, e.g. `bin/rake "spec:unit[--tag ~geo --dry-run]"`.
 
 To run a single test file you can use:
 
@@ -119,12 +143,6 @@ This will compile and minify all JavaScript and CSS assets and copy them along
 with all other frontend assets (images, fonts, etc) into `/public/assets` where
 they can be easily inspected.
 
-## Generate API documentation for project services (e.g. Slack)
-
-```
-bundle exec rake services:doc
-```
-
 ## Updating Emoji Aliases
 
 To update the Emoji aliases file (used for Emoji autocomplete) you must run the
@@ -142,7 +160,6 @@ following:
 ```
 bundle exec rake gemojione:digests
 ```
-
 
 This will update the file `fixtures/emojis/digests.json` based on the currently
 available Emoji.
@@ -193,3 +210,36 @@ bundle exec rake routes
 
 Since these take some time to create, it's often helpful to save the output to
 a file for quick reference.
+
+## Show obsolete `ignored_columns`
+
+To see a list of all obsolete `ignored_columns` run:
+
+```
+bundle exec rake db:obsolete_ignored_columns
+```
+
+Feel free to remove their definitions from their `ignored_columns` definitions.
+
+## Update GraphQL Documentation
+
+To generate GraphQL documentation based on the GitLab schema, run:
+
+```shell
+bundle exec rake gitlab:graphql:compile_docs
+```
+
+In its current state, the rake task:
+
+- Generates output for GraphQL objects.
+- Places the output at `doc/api/graphql/reference/index.md`.
+
+This uses some features from `graphql-docs` gem like its schema parser and helper methods.
+The docs generator code comes from our side giving us more flexibility, like using Haml templates and generating Markdown files.
+
+To edit the template used, please take a look at `lib/gitlab/graphql/docs/templates/default.md.haml`.
+The actual renderer is at `Gitlab::Graphql::Docs::Renderer`.
+
+`@parsed_schema` is an instance variable that the `graphql-docs` gem expects to have available.
+`Gitlab::Graphql::Docs::Helper` defines the `object` method we currently use. This is also where you
+should implement any new methods for new types you'd like to display.

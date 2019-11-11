@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe DeployToken do
@@ -6,8 +8,17 @@ describe DeployToken do
   it { is_expected.to have_many :project_deploy_tokens }
   it { is_expected.to have_many(:projects).through(:project_deploy_tokens) }
 
+  describe 'validations' do
+    let(:username_format_message) { "can contain only letters, digits, '_', '-', '+', and '.'" }
+
+    it { is_expected.to validate_length_of(:username).is_at_most(255) }
+    it { is_expected.to allow_value('GitLab+deploy_token-3.14').for(:username) }
+    it { is_expected.not_to allow_value('<script>').for(:username).with_message(username_format_message) }
+    it { is_expected.not_to allow_value('').for(:username).with_message(username_format_message) }
+  end
+
   describe '#ensure_token' do
-    it 'should ensure a token' do
+    it 'ensures a token' do
       deploy_token.token = nil
       deploy_token.save
 
@@ -17,13 +28,13 @@ describe DeployToken do
 
   describe '#ensure_at_least_one_scope' do
     context 'with at least one scope' do
-      it 'should be valid' do
+      it 'is valid' do
         is_expected.to be_valid
       end
     end
 
     context 'with no scopes' do
-      it 'should be invalid' do
+      it 'is invalid' do
         deploy_token = build(:deploy_token, read_repository: false, read_registry: false)
 
         expect(deploy_token).not_to be_valid
@@ -34,13 +45,13 @@ describe DeployToken do
 
   describe '#scopes' do
     context 'with all the scopes' do
-      it 'should return scopes assigned to DeployToken' do
+      it 'returns scopes assigned to DeployToken' do
         expect(deploy_token.scopes).to eq([:read_repository, :read_registry])
       end
     end
 
     context 'with only one scope' do
-      it 'should return scopes assigned to DeployToken' do
+      it 'returns scopes assigned to DeployToken' do
         deploy_token = create(:deploy_token, read_registry: false)
         expect(deploy_token.scopes).to eq([:read_repository])
       end
@@ -48,7 +59,7 @@ describe DeployToken do
   end
 
   describe '#revoke!' do
-    it 'should update revoke attribute' do
+    it 'updates revoke attribute' do
       deploy_token.revoke!
       expect(deploy_token.revoked?).to be_truthy
     end
@@ -56,22 +67,59 @@ describe DeployToken do
 
   describe "#active?" do
     context "when it has been revoked" do
-      it 'should return false' do
+      it 'returns false' do
         deploy_token.revoke!
         expect(deploy_token.active?).to be_falsy
       end
     end
 
-    context "when it hasn't been revoked" do
-      it 'should return true' do
+    context "when it hasn't been revoked and is not expired" do
+      it 'returns true' do
+        expect(deploy_token.active?).to be_truthy
+      end
+    end
+
+    context "when it hasn't been revoked and is expired" do
+      it 'returns true' do
+        deploy_token.update_attribute(:expires_at, Date.today - 5.days)
+        expect(deploy_token.active?).to be_falsy
+      end
+    end
+
+    context "when it hasn't been revoked and has no expiry" do
+      let(:deploy_token) { create(:deploy_token, expires_at: nil) }
+
+      it 'returns true' do
         expect(deploy_token.active?).to be_truthy
       end
     end
   end
 
   describe '#username' do
-    it 'returns a harcoded username' do
-      expect(deploy_token.username).to eq("gitlab+deploy-token-#{deploy_token.id}")
+    context 'persisted records' do
+      it 'returns a default username if none is set' do
+        expect(deploy_token.username).to eq("gitlab+deploy-token-#{deploy_token.id}")
+      end
+
+      it 'returns the username provided if one is set' do
+        deploy_token = create(:deploy_token, username: 'deployer')
+
+        expect(deploy_token.username).to eq('deployer')
+      end
+    end
+
+    context 'new records' do
+      it 'returns nil if no username is set' do
+        deploy_token = build(:deploy_token)
+
+        expect(deploy_token.username).to be_nil
+      end
+
+      it 'returns the username provided if one is set' do
+        deploy_token = build(:deploy_token, username: 'deployer')
+
+        expect(deploy_token.username).to eq('deployer')
+      end
     end
   end
 
@@ -109,7 +157,7 @@ describe DeployToken do
     context 'when using Forever.date' do
       let(:deploy_token) { create(:deploy_token, expires_at: nil) }
 
-      it 'should return nil' do
+      it 'returns nil' do
         expect(deploy_token.expires_at).to be_nil
       end
     end
@@ -118,7 +166,7 @@ describe DeployToken do
       let(:expires_at) { Date.today + 5.months }
       let(:deploy_token) { create(:deploy_token, expires_at: expires_at) }
 
-      it 'should return the personalized date' do
+      it 'returns the personalized date' do
         expect(deploy_token.expires_at).to eq(expires_at)
       end
     end
@@ -128,7 +176,7 @@ describe DeployToken do
     context 'when passing nil' do
       let(:deploy_token) { create(:deploy_token, expires_at: nil) }
 
-      it 'should assign Forever.date' do
+      it 'assigns Forever.date' do
         expect(deploy_token.read_attribute(:expires_at)).to eq(Forever.date)
       end
     end
@@ -137,7 +185,7 @@ describe DeployToken do
       let(:expires_at) { Date.today + 5.months }
       let(:deploy_token) { create(:deploy_token, expires_at: expires_at) }
 
-      it 'should respect the value' do
+      it 'respects the value' do
         expect(deploy_token.read_attribute(:expires_at)).to eq(expires_at)
       end
     end
@@ -149,14 +197,14 @@ describe DeployToken do
     subject { project.deploy_tokens.gitlab_deploy_token }
 
     context 'with a gitlab deploy token associated' do
-      it 'should return the gitlab deploy token' do
+      it 'returns the gitlab deploy token' do
         deploy_token = create(:deploy_token, :gitlab_deploy_token, projects: [project])
         is_expected.to eq(deploy_token)
       end
     end
 
     context 'with no gitlab deploy token associated' do
-      it 'should return nil' do
+      it 'returns nil' do
         is_expected.to be_nil
       end
     end

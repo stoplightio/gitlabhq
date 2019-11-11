@@ -1,8 +1,10 @@
 import $ from 'jquery';
+import '~/gl_dropdown';
 
 class RefSelectDropdown {
   constructor($dropdownButton, availableRefs) {
-    const availableRefsValue = availableRefs || JSON.parse(document.getElementById('availableRefs').innerHTML);
+    const availableRefsValue =
+      availableRefs || JSON.parse(document.getElementById('availableRefs').innerHTML);
     $dropdownButton.glDropdown({
       data: availableRefsValue,
       filterable: true,
@@ -29,7 +31,7 @@ class RefSelectDropdown {
     const $fieldInput = $(`input[name="${$dropdownButton.data('fieldName')}"]`, $dropdownContainer);
     const $filterInput = $('input[type="search"]', $dropdownContainer);
 
-    $filterInput.on('keyup', (e) => {
+    $filterInput.on('keyup', e => {
       const keyCode = e.keyCode || e.which;
       if (keyCode !== 13) return;
 

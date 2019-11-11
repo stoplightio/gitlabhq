@@ -1,7 +1,7 @@
 # GitLab.com settings
 
 In this page you will find information about the settings that are used on
-[GitLab.com](https://about.gitlab.com/pricing).
+[GitLab.com](https://about.gitlab.com/pricing/).
 
 ## SSH host keys fingerprints
 
@@ -41,17 +41,19 @@ Host gitlab.com
 
 ## GitLab Pages
 
-Below are the settings for [GitLab Pages].
+Below are the settings for [GitLab Pages](https://about.gitlab.com/product/pages/).
 
-| Setting                 | GitLab.com        | Default       |
-| ----------------------- | ----------------  | ------------- |
-| Domain name             | `gitlab.io`       | -             |
-| IP address              | `52.167.214.135`  | -             |
-| Custom domains support  | yes               | no            |
-| TLS certificates support| yes               | no            |
+| Setting                     | GitLab.com        | Default       |
+| --------------------------- | ----------------  | ------------- |
+| Domain name                 | `gitlab.io`       | -             |
+| IP address                  | `35.185.44.232`   | -             |
+| Custom domains support      | yes               | no            |
+| TLS certificates support    | yes               | no            |
+| Maximum size (uncompressed) | 1G                | 100M          |
 
+NOTE: **Note:**
 The maximum size of your Pages site is regulated by the artifacts maximum size
-which is part of [GitLab CI/CD](#gitlab-ci-cd).
+which is part of [GitLab CI/CD](#gitlab-cicd).
 
 ## GitLab CI/CD
 
@@ -59,36 +61,39 @@ Below are the current settings regarding [GitLab CI/CD](../../ci/README.md).
 
 | Setting                 | GitLab.com        | Default       |
 | -----------             | ----------------- | ------------- |
-| Artifacts maximum size  | 1G                | 100M          |
-| Artifacts [expiry time](../../ci/yaml/README.md#artifacts-expire_in)   | kept forever           | deleted after 30 days unless otherwise specified    |
+| Artifacts maximum size (uncompressed) | 1G                | 100M          |
+| Artifacts [expiry time](../../ci/yaml/README.md#artifactsexpire_in)   | kept forever           | deleted after 30 days unless otherwise specified    |
 
 ## Repository size limit
 
-The maximum size your Git repository is allowed to be including LFS.
+The maximum size your Git repository is allowed to be, including LFS. If you are near
+or over the size limit, you can [reduce your repository size with Git](../project/repository/reducing_the_repo_size_using_git.md).
 
 | Setting                 | GitLab.com        | Default       |
 | -----------             | ----------------- | ------------- |
 | Repository size including LFS | 10G         | Unlimited     |
 
+## IP range
+
+GitLab.com, CI/CD, and related services are deployed into Google Cloud Platform (GCP). Any
+IP based firewall can be configured by looking up all
+[IP address ranges or CIDR blocks for GCP](https://cloud.google.com/compute/docs/faq#where_can_i_find_product_name_short_ip_ranges).
+
+[Static endpoints](https://gitlab.com/gitlab-com/gl-infra/infrastructure/issues/5071) are being considered.
+
 ## Shared Runners
 
-Shared Runners on GitLab.com run in [autoscale mode] and powered by
-Google Cloud Platform and DigitalOcean. Autoscaling means reduced
-waiting times to spin up CI/CD jobs, and isolated VMs for each project,
-thus maximizing security.
-They're free to use for public open source projects and limited to 2000 CI
-minutes per month per group for private projects. Read about all
-[GitLab.com plans](https://about.gitlab.com/pricing/).
+Shared Runners on GitLab.com run in [autoscale mode] and powered by Google Cloud Platform.
+Autoscaling means reduced waiting times to spin up CI/CD jobs, and isolated VMs for each project,
+thus maximizing security. They're free to use for public open source projects and limited
+to 2000 CI minutes per month per group for private projects. More minutes
+[can be purchased](../../subscriptions/index.md#extra-shared-runners-pipeline-minutes), if
+needed. Read about all [GitLab.com plans](https://about.gitlab.com/pricing/).
 
-In case of DigitalOcean based Runners, all your CI/CD jobs run on ephemeral
-instances with 2GB of RAM, CoreOS and the latest Docker Engine installed.
-Instances provide 2 vCPUs and 60GB of SSD disk space. The default region of the
-VMs is NYC1.
-
-In case of Google Cloud Platform based Runners, all your CI/CD jobs run on
-ephemeral instances with 3.75GB of RAM, CoreOS and the latest Docker Engine
+All your CI/CD jobs run on [n1-standard-1 instances](https://cloud.google.com/compute/docs/machine-types) with 3.75GB of RAM, CoreOS and the latest Docker Engine
 installed. Instances provide 1 vCPU and 25GB of HDD disk space. The default
 region of the VMs is US East1.
+Each instance is used only for one job, this ensures any sensitive data left on the system can't be accessed by other people their CI jobs.
 
 Jobs handled by the shared Runners on GitLab.com (`shared-runners-manager-X.gitlab.com`),
 **will be timed out after 3 hours**, regardless of the timeout configured in a
@@ -98,67 +103,14 @@ Below are the shared Runners settings.
 
 | Setting                               | GitLab.com                                        | Default    |
 | -----------                           | -----------------                                 | ---------- |
-| [GitLab Runner]                       | [Runner versions dashboard][ci_version_dashboard] | -          |
+| [GitLab Runner]                       | [Runner versions dashboard](https://dashboards.gitlab.com/d/000000159/ci?from=now-1h&to=now&refresh=5m&orgId=1&panelId=12&fullscreen&theme=light) | - |
 | Executor                              | `docker+machine`                                  | -          |
 | Default Docker image                  | `ruby:2.5`                                        | -          |
 | `privileged` (run [Docker in Docker]) | `true`                                            | `false`    |
 
-[ci_version_dashboard]: https://monitor.gitlab.net/dashboard/db/ci?from=now-1h&to=now&refresh=5m&orgId=1&panelId=12&fullscreen&theme=light
-
 ### `config.toml`
 
 The full contents of our `config.toml` are:
-
-**DigitalOcean**
-
-```toml
-concurrent = X
-check_interval = 1
-metrics_server = "X"
-sentry_dsn = "X"
-
-[[runners]]
-  name = "docker-auto-scale"
-  request_concurrency = X
-  url = "https://gitlab.com/"
-  token = "SHARED_RUNNER_TOKEN"
-  executor = "docker+machine"
-  environment = [
-    "DOCKER_DRIVER=overlay2"
-  ]
-  limit = X
-  [runners.docker]
-    image = "ruby:2.5"
-    privileged = true
-  [runners.machine]
-    IdleCount = 20
-    IdleTime = 1800
-    OffPeakPeriods = ["* * * * * sat,sun *"]
-    OffPeakTimezone = "UTC"
-    OffPeakIdleCount = 5
-    OffPeakIdleTime = 1800
-    MaxBuilds = 1
-    MachineName = "srm-%s"
-    MachineDriver = "digitalocean"
-    MachineOptions = [
-      "digitalocean-image=X",
-      "digitalocean-ssh-user=core",
-      "digitalocean-region=nyc1",
-      "digitalocean-size=s-2vcpu-2gb",
-      "digitalocean-private-networking",
-      "digitalocean-tags=shared_runners,gitlab_com",
-      "engine-registry-mirror=http://INTERNAL_IP_OF_OUR_REGISTRY_MIRROR",
-      "digitalocean-access-token=DIGITAL_OCEAN_ACCESS_TOKEN",
-    ]
-  [runners.cache]
-    Type = "s3"
-    BucketName = "runner"
-    Insecure = true
-    Shared = true
-    ServerAddress = "INTERNAL_IP_OF_OUR_CACHE_SERVER"
-    AccessKey = "ACCESS_KEY"
-    SecretKey = "ACCESS_SECRET_KEY"
-```
 
 **Google Cloud Platform**
 
@@ -175,20 +127,25 @@ sentry_dsn = "X"
   token = "SHARED_RUNNER_TOKEN"
   executor = "docker+machine"
   environment = [
-    "DOCKER_DRIVER=overlay2"
+    "DOCKER_DRIVER=overlay2",
+    "DOCKER_TLS_CERTDIR="
   ]
   limit = X
   [runners.docker]
     image = "ruby:2.5"
     privileged = true
+    volumes = [
+      "/certs/client",
+      "/dummy-sys-class-dmi-id:/sys/class/dmi/id:ro" # Make kaniko builds work on GCP.
+    ]
   [runners.machine]
-    IdleCount = 20
-    IdleTime = 1800
+    IdleCount = 50
+    IdleTime = 3600
     OffPeakPeriods = ["* * * * * sat,sun *"]
     OffPeakTimezone = "UTC"
-    OffPeakIdleCount = 5
-    OffPeakIdleTime = 1800
-    MaxBuilds = 1
+    OffPeakIdleCount = 15
+    OffPeakIdleTime = 3600
+    MaxBuilds = 1 # For security reasons we delete the VM after job has finished so it's not reused.
     MachineName = "srm-%s"
     MachineDriver = "google"
     MachineOptions = [
@@ -199,33 +156,42 @@ sentry_dsn = "X"
       "google-tags=gitlab-com,srm",
       "google-use-internal-ip",
       "google-zone=us-east1-d",
+      "engine-opt=mtu=1460", # Set MTU for container interface, for more information check https://gitlab.com/gitlab-org/gitlab-runner/issues/3214#note_82892928
       "google-machine-image=PROJECT/global/images/IMAGE",
-      "engine-registry-mirror=http://INTERNAL_IP_OF_OUR_REGISTRY_MIRROR"
+      "engine-opt=ipv6", # This will create IPv6 interfaces in the containers.
+      "engine-opt=fixed-cidr-v6=fc00::/7",
+      "google-operation-backoff-initial-interval=2" # Custom flag from forked docker-machine, for more information check https://github.com/docker/machine/pull/4600
     ]
   [runners.cache]
-    Type = "s3"
-    BucketName = "runner"
-    Insecure = true
+    Type = "gcs"
     Shared = true
-    ServerAddress = "INTERNAL_IP_OF_OUR_CACHE_SERVER"
-    AccessKey = "ACCESS_KEY"
-    SecretKey = "ACCESS_SECRET_KEY"
+    [runners.cache.gcs]
+      CredentialsFile = "/path/to/file"
+      BucketName = "bucket-name"
 ```
 
 ## Sidekiq
 
-GitLab.com runs [Sidekiq][sidekiq] with arguments `--timeout=4 --concurrency=4`
+GitLab.com runs [Sidekiq](https://sidekiq.org) with arguments `--timeout=4 --concurrency=4`
 and the following environment variables:
 
-| Setting                                 | GitLab.com | Default   |
-|--------                                 |----------- |--------   |
-| `SIDEKIQ_MEMORY_KILLER_MAX_RSS`         | `1000000`  | `1000000` |
-| `SIDEKIQ_MEMORY_KILLER_SHUTDOWN_SIGNAL` | `SIGKILL`  | -         |
-| `SIDEKIQ_LOG_ARGUMENTS`                 | `1`        | -         |
+| Setting                                    | GitLab.com | Default   |
+|--------                                    |----------- |--------   |
+| `SIDEKIQ_DAEMON_MEMORY_KILLER`             | -          | -         |
+| `SIDEKIQ_MEMORY_KILLER_MAX_RSS`            | `2000000`  | `2000000` |
+| `SIDEKIQ_MEMORY_KILLER_HARD_LIMIT_RSS`     | -          | -         |
+| `SIDEKIQ_MEMORY_KILLER_CHECK_INTERVAL`     | -          | `3`       |
+| `SIDEKIQ_MEMORY_KILLER_GRACE_TIME`         | -          | `900`     |
+| `SIDEKIQ_MEMORY_KILLER_SHUTDOWN_WAIT`      | -          | `30`      |
+| `SIDEKIQ_LOG_ARGUMENTS`                    | `1`        | -         |
+
+NOTE: **Note:**
+The `SIDEKIQ_MEMORY_KILLER_MAX_RSS` setting is `16000000` on Sidekiq import
+nodes and Sidekiq export nodes.
 
 ## Cron jobs
 
-Periodically executed jobs by Sidekiq, to self-heal Gitlab, do external
+Periodically executed jobs by Sidekiq, to self-heal GitLab, do external
 synchronizations, run scheduled pipelines, etc.:
 
 | Setting                     | GitLab.com   | Default      |
@@ -256,7 +222,7 @@ The list of GitLab.com specific settings (and their defaults) is as follows:
 | hot_standby_feedback                | on                                                                  | off                                   |
 | log_autovacuum_min_duration         | 0                                                                   | -1                                    |
 | log_checkpoints                     | on                                                                  | off                                   |
-| log_line_prefix                     | `%t [%p]: [%l-1] `                                                  | empty                                 |
+| log_line_prefix                     | `%t [%p]: [%l-1]`                                                   | empty                                 |
 | log_min_duration_statement          | 1000                                                                | -1                                    |
 | log_temp_files                      | 0                                                                   | -1                                    |
 | maintenance_work_mem                | 2048MB                                                              | 16 MB                                 |
@@ -285,64 +251,153 @@ of proposed changes can be found at
 GitLab.com adjusts the memory limits for the [unicorn-worker-killer][unicorn-worker-killer] gem.
 
 Base default:
-* `memory_limit_min` = 750MiB
-* `memory_limit_max` = 1024MiB
+
+- `memory_limit_min` = 750MiB
+- `memory_limit_max` = 1024MiB
 
 Web front-ends:
-* `memory_limit_min` = 1024MiB
-* `memory_limit_max` = 1280MiB
+
+- `memory_limit_min` = 1024MiB
+- `memory_limit_max` = 1280MiB
+
+## GitLab.com-specific rate limits
+
+NOTE: **Note:**
+See [Rate limits](../../security/rate_limits.md) for administrator
+documentation.
+
+IP blocks usually happen when GitLab.com receives unusual traffic from a single
+IP address that the system views as potentially malicious based on rate limit
+settings. After the unusual traffic ceases, the IP address will be automatically
+released depending on the type of block, as described below.
+
+If you receive a `403 Forbidden` error for all requests to GitLab.com, please
+check for any automated processes that may be triggering a block. For
+assistance, contact [GitLab Support](https://support.gitlab.com/hc/en-us)
+with details, such as the affected IP address.
+
+### HAProxy API throttle
+
+GitLab.com responds with HTTP status code `429` to API requests that exceed 10
+requests
+per second per IP address.
+
+The following example headers are included for all API requests:
+
+```
+RateLimit-Limit: 600
+RateLimit-Observed: 6
+RateLimit-Remaining: 594
+RateLimit-Reset: 1563325137
+RateLimit-ResetTime: Wed, 17 Jul 2019 00:58:57 GMT
+```
+
+Source:
+
+- Search for `rate_limit_http_rate_per_minute` and `rate_limit_sessions_per_second` in [GitLab.com's current HAProxy settings](https://gitlab.com/gitlab-cookbooks/gitlab-haproxy/blob/master/attributes/default.rb).
+
+### Rack Attack initializer
+
+Details of rate limits enforced by [Rack Attack](../../security/rack_attack.md).
+
+#### Protected paths throttle
+
+GitLab.com responds with HTTP status code `429` to POST requests at protected
+paths that exceed 10 requests per **minute** per IP address.
+
+See the source below for which paths are protected. This includes user creation,
+user confirmation, user sign in, and password reset.
+
+This header is included in responses to blocked requests:
+
+```
+Retry-After: 60
+```
+
+See [Protected Paths](../admin_area/settings/protected_paths.md) for more details.
+
+#### Git and container registry failed authentication ban
+
+GitLab.com responds with HTTP status code `403` for 1 hour, if 30 failed
+authentication requests were received in a 3-minute period from a single IP address.
+
+This applies only to Git requests and container registry (`/jwt/auth`) requests
+(combined).
+
+This limit:
+
+- Is reset by requests that authenticate successfully. For example, 29
+  failed authentication requests followed by 1 successful request, followed by 29
+  more failed authentication requests would not trigger a ban.
+- Does not apply to JWT requests authenticated by `gitlab-ci-token`.
+
+No response headers are provided.
+
+### Admin Area settings
+
+GitLab.com:
+
+- Has [rate limits on raw endpoints](../../user/admin_area/settings/rate_limits_on_raw_endpoints.md)
+  set to the default.
+- Does not have the user and IP rate limits settings enabled.
 
 ## GitLab.com at scale
 
 In addition to the GitLab Enterprise Edition Omnibus install, GitLab.com uses
 the following applications and settings to achieve scale. All settings are
-located publicly available [chef cookbooks](https://gitlab.com/gitlab-cookbooks).
+publicly available at [chef cookbooks](https://gitlab.com/gitlab-cookbooks).
 
 ### ELK
 
 We use Elasticsearch, logstash, and Kibana for part of our monitoring solution:
 
-- [gitlab-cookbooks / gitlab-elk · GitLab](https://gitlab.com/gitlab-cookbooks/gitlab-elk)
-- [gitlab-cookbooks / gitlab_elasticsearch · GitLab](https://gitlab.com/gitlab-cookbooks/gitlab_elasticsearch)
+- [`gitlab-cookbooks` / `gitlab-elk` · GitLab](https://gitlab.com/gitlab-cookbooks/gitlab-elk)
+- [`gitlab-cookbooks` / `gitlab_elasticsearch` · GitLab](https://gitlab.com/gitlab-cookbooks/gitlab_elasticsearch)
 
 ### Prometheus
 
 Prometheus complete our monitoring stack:
 
-- [gitlab-cookbooks / gitlab-prometheus · GitLab](https://gitlab.com/gitlab-cookbooks/gitlab-prometheus)
+- [`gitlab-cookbooks` / `gitlab-prometheus` · GitLab](https://gitlab.com/gitlab-cookbooks/gitlab-prometheus)
 
 ### Grafana
 
 For the visualization of monitoring data:
 
-- [gitlab-cookbooks / gitlab-grafana · GitLab](https://gitlab.com/gitlab-cookbooks/gitlab-grafana)
+- [`gitlab-cookbooks` / `gitlab-grafana` · GitLab](https://gitlab.com/gitlab-cookbooks/gitlab-grafana)
 
 ### Sentry
 
 Open source error tracking:
 
-- [gitlab-cookbooks / gitlab-sentry · GitLab](https://gitlab.com/gitlab-cookbooks/gitlab-sentry)
+- [`gitlab-cookbooks` / `gitlab-sentry` · GitLab](https://gitlab.com/gitlab-cookbooks/gitlab-sentry)
 
 ### Consul
 
 Service discovery:
 
-- [gitlab-cookbooks / gitlab_consul · GitLab](https://gitlab.com/gitlab-cookbooks/gitlab_consul)
+- [`gitlab-cookbooks` / `gitlab_consul` · GitLab](https://gitlab.com/gitlab-cookbooks/gitlab_consul)
 
 ### Haproxy
 
 High Performance TCP/HTTP Load Balancer:
 
-- [gitlab-cookbooks / gitlab-haproxy · GitLab](https://gitlab.com/gitlab-cookbooks/gitlab-haproxy)
+- [`gitlab-cookbooks` / `gitlab-haproxy` · GitLab](https://gitlab.com/gitlab-cookbooks/gitlab-haproxy)
 
 [autoscale mode]: https://docs.gitlab.com/runner/configuration/autoscale.html "How Autoscale works"
-[runners-post]: https://about.gitlab.com/2016/04/05/shared-runners/ "Shared Runners on GitLab.com"
+[runners-post]: https://about.gitlab.com/blog/2016/04/05/shared-runners/ "Shared Runners on GitLab.com"
 [GitLab Runner]: https://gitlab.com/gitlab-org/gitlab-runner
-[altssh]: https://about.gitlab.com/2016/02/18/gitlab-dot-com-now-supports-an-alternate-git-plus-ssh-port/ "GitLab.com now supports an alternate git+ssh port"
-[GitLab Pages]: https://about.gitlab.com/features/pages "GitLab Pages"
+[altssh]: https://about.gitlab.com/blog/2016/02/18/gitlab-dot-com-now-supports-an-alternate-git-plus-ssh-port/ "GitLab.com now supports an alternate git+ssh port"
 [docker in docker]: https://hub.docker.com/_/docker/ "Docker in Docker at DockerHub"
 [mailgun]: https://www.mailgun.com/ "Mailgun website"
-[sidekiq]: http://sidekiq.org/ "Sidekiq website"
 [unicorn-worker-killer]: https://rubygems.org/gems/unicorn-worker-killer "unicorn-worker-killer"
 [4010]: https://gitlab.com/gitlab-com/infrastructure/issues/4010 "Find a good value for maximum timeout for Shared Runners"
 [4070]: https://gitlab.com/gitlab-com/infrastructure/issues/4070 "Configure per-runner timeout for shared-runners-manager-X on GitLab.com"
+
+## Group and project settings
+
+On GitLab.com, projects, groups, and snippets created
+after July 2019 have the `Internal` visibility setting disabled.
+
+You can read more about the change in the
+[relevant issue](https://gitlab.com/gitlab-org/gitlab/issues/12388).

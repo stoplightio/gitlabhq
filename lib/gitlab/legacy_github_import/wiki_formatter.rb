@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module LegacyGithubImport
     class WikiFormatter
@@ -9,6 +11,10 @@ module Gitlab
 
       def disk_path
         project.wiki.disk_path
+      end
+
+      def full_path
+        project.wiki.full_path
       end
 
       def import_url

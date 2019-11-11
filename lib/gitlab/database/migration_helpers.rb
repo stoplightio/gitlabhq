@@ -1,36 +1,50 @@
+# frozen_string_literal: true
+
 module Gitlab
   module Database
     module MigrationHelpers
-      include Gitlab::Database::ArelMethods
-
       BACKGROUND_MIGRATION_BATCH_SIZE = 1000 # Number of rows to process per job
       BACKGROUND_MIGRATION_JOB_BUFFER_SIZE = 1000 # Number of jobs to bulk queue at a time
+
+      PERMITTED_TIMESTAMP_COLUMNS = %i[created_at updated_at deleted_at].to_set.freeze
+      DEFAULT_TIMESTAMP_COLUMNS = %i[created_at updated_at].freeze
 
       # Adds `created_at` and `updated_at` columns with timezone information.
       #
       # This method is an improved version of Rails' built-in method `add_timestamps`.
       #
+      # By default, adds `created_at` and `updated_at` columns, but these can be specified as:
+      #
+      #   add_timestamps_with_timezone(:my_table, columns: [:created_at, :deleted_at])
+      #
+      # This allows you to create just the timestamps you need, saving space.
+      #
       # Available options are:
-      # default - The default value for the column.
-      # null - When set to `true` the column will allow NULL values.
+      #  :default - The default value for the column.
+      #  :null - When set to `true` the column will allow NULL values.
       #        The default is to not allow NULL values.
+      #  :columns - the column names to create. Must be one
+      #             of `Gitlab::Database::MigrationHelpers::PERMITTED_TIMESTAMP_COLUMNS`.
+      #             Default value: `DEFAULT_TIMESTAMP_COLUMNS`
+      #
+      # All options are optional.
       def add_timestamps_with_timezone(table_name, options = {})
         options[:null] = false if options[:null].nil?
+        columns = options.fetch(:columns, DEFAULT_TIMESTAMP_COLUMNS)
+        default_value = options[:default]
 
-        [:created_at, :updated_at].each do |column_name|
-          if options[:default] && transaction_open?
-            raise '`add_timestamps_with_timezone` with default value cannot be run inside a transaction. ' \
-              'You can disable transactions by calling `disable_ddl_transaction!` ' \
-              'in the body of your migration class'
-          end
+        validate_not_in_transaction!(:add_timestamps_with_timezone, 'with default value') if default_value
+
+        columns.each do |column_name|
+          validate_timestamp_column_name!(column_name)
 
           # If default value is presented, use `add_column_with_default` method instead.
-          if options[:default]
+          if default_value
             add_column_with_default(
               table_name,
               column_name,
               :datetime_with_timezone,
-              default: options[:default],
+              default: default_value,
               allow_null: options[:null]
             )
           else
@@ -39,10 +53,22 @@ module Gitlab
         end
       end
 
-      # Creates a new index, concurrently when supported
+      # To be used in the `#down` method of migrations that
+      # use `#add_timestamps_with_timezone`.
       #
-      # On PostgreSQL this method creates an index concurrently, on MySQL this
-      # creates a regular index.
+      # Available options are:
+      #  :columns - the column names to remove. Must be one
+      #             Default value: `DEFAULT_TIMESTAMP_COLUMNS`
+      #
+      # All options are optional.
+      def remove_timestamps(table_name, options = {})
+        columns = options.fetch(:columns, DEFAULT_TIMESTAMP_COLUMNS)
+        columns.each do |column_name|
+          remove_column(table_name, column_name)
+        end
+      end
+
+      # Creates a new index, concurrently
       #
       # Example:
       #
@@ -56,22 +82,19 @@ module Gitlab
             'in the body of your migration class'
         end
 
-        if Database.postgresql?
-          options = options.merge({ algorithm: :concurrently })
-          disable_statement_timeout
-        end
+        options = options.merge({ algorithm: :concurrently })
 
         if index_exists?(table_name, column_name, options)
-          Rails.logger.warn "Index not created because it already exists (this may be due to an aborted migration or similar): table_name: #{table_name}, column_name: #{column_name}"
+          Rails.logger.warn "Index not created because it already exists (this may be due to an aborted migration or similar): table_name: #{table_name}, column_name: #{column_name}" # rubocop:disable Gitlab/RailsLogger
           return
         end
 
-        add_index(table_name, column_name, options)
+        disable_statement_timeout do
+          add_index(table_name, column_name, options)
+        end
       end
 
-      # Removes an existed index, concurrently when supported
-      #
-      # On PostgreSQL this method removes an index concurrently.
+      # Removes an existed index, concurrently
       #
       # Example:
       #
@@ -87,20 +110,19 @@ module Gitlab
 
         if supports_drop_index_concurrently?
           options = options.merge({ algorithm: :concurrently })
-          disable_statement_timeout
         end
 
         unless index_exists?(table_name, column_name, options)
-          Rails.logger.warn "Index not removed because it does not exist (this may be due to an aborted migration or similar): table_name: #{table_name}, column_name: #{column_name}"
+          Rails.logger.warn "Index not removed because it does not exist (this may be due to an aborted migration or similar): table_name: #{table_name}, column_name: #{column_name}" # rubocop:disable Gitlab/RailsLogger
           return
         end
 
-        remove_index(table_name, options.merge({ column: column_name }))
+        disable_statement_timeout do
+          remove_index(table_name, options.merge({ column: column_name }))
+        end
       end
 
-      # Removes an existing index, concurrently when supported
-      #
-      # On PostgreSQL this method removes an index concurrently.
+      # Removes an existing index, concurrently
       #
       # Example:
       #
@@ -116,21 +138,20 @@ module Gitlab
 
         if supports_drop_index_concurrently?
           options = options.merge({ algorithm: :concurrently })
-          disable_statement_timeout
         end
 
         unless index_exists_by_name?(table_name, index_name)
-          Rails.logger.warn "Index not removed because it does not exist (this may be due to an aborted migration or similar): table_name: #{table_name}, index_name: #{index_name}"
+          Rails.logger.warn "Index not removed because it does not exist (this may be due to an aborted migration or similar): table_name: #{table_name}, index_name: #{index_name}" # rubocop:disable Gitlab/RailsLogger
           return
         end
 
-        remove_index(table_name, options.merge({ name: index_name }))
+        disable_statement_timeout do
+          remove_index(table_name, options.merge({ name: index_name }))
+        end
       end
 
       # Only available on Postgresql >= 9.2
       def supports_drop_index_concurrently?
-        return false unless Database.postgresql?
-
         version = select_one("SELECT current_setting('server_version_num') AS v")['v'].to_i
 
         version >= 90200
@@ -138,42 +159,25 @@ module Gitlab
 
       # Adds a foreign key with only minimal locking on the tables involved.
       #
-      # This method only requires minimal locking when using PostgreSQL. When
-      # using MySQL this method will use Rails' default `add_foreign_key`.
+      # This method only requires minimal locking
       #
       # source - The source table containing the foreign key.
       # target - The target table the key points to.
       # column - The name of the column to create the foreign key on.
       # on_delete - The action to perform when associated data is removed,
       #             defaults to "CASCADE".
-      def add_concurrent_foreign_key(source, target, column:, on_delete: :cascade)
+      #
+      # rubocop:disable Gitlab/RailsLogger
+      def add_concurrent_foreign_key(source, target, column:, on_delete: :cascade, name: nil)
         # Transactions would result in ALTER TABLE locks being held for the
         # duration of the transaction, defeating the purpose of this method.
         if transaction_open?
           raise 'add_concurrent_foreign_key can not be run inside a transaction'
         end
 
-        # While MySQL does allow disabling of foreign keys it has no equivalent
-        # of PostgreSQL's "VALIDATE CONSTRAINT". As a result we'll just fall
-        # back to the normal foreign key procedure.
-        if Database.mysql?
-          if foreign_key_exists?(source, target, column: column)
-            Rails.logger.warn "Foreign key not created because it exists already " \
-              "(this may be due to an aborted migration or similar): " \
-              "source: #{source}, target: #{target}, column: #{column}"
-            return
-          end
+        on_delete = 'SET NULL' if on_delete == :nullify
 
-          return add_foreign_key(source, target,
-                                 column: column,
-                                 on_delete: on_delete)
-        else
-          on_delete = 'SET NULL' if on_delete == :nullify
-        end
-
-        disable_statement_timeout
-
-        key_name = concurrent_foreign_key_name(source, column)
+        key_name = name || concurrent_foreign_key_name(source, column)
 
         unless foreign_key_exists?(source, target, column: column)
           Rails.logger.warn "Foreign key not created because it exists already " \
@@ -199,8 +203,11 @@ module Gitlab
         # while running.
         #
         # Note this is a no-op in case the constraint is VALID already
-        execute("ALTER TABLE #{source} VALIDATE CONSTRAINT #{key_name};")
+        disable_statement_timeout do
+          execute("ALTER TABLE #{source} VALIDATE CONSTRAINT #{key_name};")
+        end
       end
+      # rubocop:enable Gitlab/RailsLogger
 
       def foreign_key_exists?(source, target = nil, column: nil)
         foreign_keys(source).any? do |key|
@@ -218,14 +225,48 @@ module Gitlab
       # here is based on Rails' foreign_key_name() method, which unfortunately
       # is private so we can't rely on it directly.
       def concurrent_foreign_key_name(table, column)
-        "fk_#{Digest::SHA256.hexdigest("#{table}_#{column}_fk").first(10)}"
+        identifier = "#{table}_#{column}_fk"
+        hashed_identifier = Digest::SHA256.hexdigest(identifier).first(10)
+
+        "fk_#{hashed_identifier}"
       end
 
       # Long-running migrations may take more than the timeout allowed by
       # the database. Disable the session's statement timeout to ensure
-      # migrations don't get killed prematurely. (PostgreSQL only)
+      # migrations don't get killed prematurely.
+      #
+      # There are two possible ways to disable the statement timeout:
+      #
+      # - Per transaction (this is the preferred and default mode)
+      # - Per connection (requires a cleanup after the execution)
+      #
+      # When using a per connection disable statement, code must be inside
+      # a block so we can automatically execute `RESET ALL` after block finishes
+      # otherwise the statement will still be disabled until connection is dropped
+      # or `RESET ALL` is executed
       def disable_statement_timeout
-        execute('SET statement_timeout TO 0') if Database.postgresql?
+        if block_given?
+          begin
+            execute('SET statement_timeout TO 0')
+
+            yield
+          ensure
+            execute('RESET ALL')
+          end
+        else
+          unless transaction_open?
+            raise <<~ERROR
+              Cannot call disable_statement_timeout() without a transaction open or outside of a transaction block.
+              If you don't want to use a transaction wrap your code in a block call:
+
+              disable_statement_timeout { # code that requires disabled statement here }
+
+              This will make sure statement_timeout is disabled before and reset after the block execution is finished.
+            ERROR
+          end
+
+          execute('SET LOCAL statement_timeout TO 0')
+        end
       end
 
       def true_value
@@ -239,6 +280,7 @@ module Gitlab
       # Updates the value of a column in batches.
       #
       # This method updates the table in batches of 5% of the total row count.
+      # A `batch_size` option can also be passed to set this to a fixed number.
       # This method will continue updating rows until no rows remain.
       #
       # When given a block this method will yield two values to the block:
@@ -277,7 +319,7 @@ module Gitlab
       # make things _more_ complex).
       #
       # rubocop: disable Metrics/AbcSize
-      def update_column_in_batches(table, column, value)
+      def update_column_in_batches(table, column, value, batch_size: nil)
         if transaction_open?
           raise 'update_column_in_batches can not be run inside a transaction, ' \
             'you can disable transactions by calling disable_ddl_transaction! ' \
@@ -293,14 +335,16 @@ module Gitlab
 
         return if total == 0
 
-        # Update in batches of 5% until we run out of any rows to update.
-        batch_size = ((total / 100.0) * 5.0).ceil
-        max_size = 1000
+        if batch_size.nil?
+          # Update in batches of 5% until we run out of any rows to update.
+          batch_size = ((total / 100.0) * 5.0).ceil
+          max_size = 1000
 
-        # The upper limit is 1000 to ensure we don't lock too many rows. For
-        # example, for "merge_requests" even 1% of the table is around 35 000
-        # rows for GitLab.com.
-        batch_size = max_size if batch_size > max_size
+          # The upper limit is 1000 to ensure we don't lock too many rows. For
+          # example, for "merge_requests" even 1% of the table is around 35 000
+          # rows for GitLab.com.
+          batch_size = max_size if batch_size > max_size
+        end
 
         start_arel = table.project(table[:id]).order(table[:id].asc).take(1)
         start_arel = yield table, start_arel if block_given?
@@ -316,7 +360,7 @@ module Gitlab
           stop_arel = yield table, stop_arel if block_given?
           stop_row = exec_query(stop_arel.to_sql).to_hash.first
 
-          update_arel = arel_update_manager
+          update_arel = Arel::UpdateManager.new
             .table(table)
             .set([[table[column], value]])
             .where(table[:id].gteq(start_id))
@@ -367,30 +411,31 @@ module Gitlab
             'in the body of your migration class'
         end
 
-        disable_statement_timeout
+        disable_statement_timeout do
+          transaction do
+            if limit
+              add_column(table, column, type, default: nil, limit: limit)
+            else
+              add_column(table, column, type, default: nil)
+            end
 
-        transaction do
-          if limit
-            add_column(table, column, type, default: nil, limit: limit)
-          else
-            add_column(table, column, type, default: nil)
+            # Changing the default before the update ensures any newly inserted
+            # rows already use the proper default value.
+            change_column_default(table, column, default)
           end
 
-          # Changing the default before the update ensures any newly inserted
-          # rows already use the proper default value.
-          change_column_default(table, column, default)
-        end
+          begin
+            default_after_type_cast = connection.type_cast(default, column_for(table, column))
+            update_column_in_batches(table, column, default_after_type_cast, &block)
 
-        begin
-          update_column_in_batches(table, column, default, &block)
+            change_column_null(table, column, false) unless allow_null
+          # We want to rescue _all_ exceptions here, even those that don't inherit
+          # from StandardError.
+          rescue Exception => error # rubocop: disable all
+            remove_column(table, column)
 
-          change_column_null(table, column, false) unless allow_null
-        # We want to rescue _all_ exceptions here, even those that don't inherit
-        # from StandardError.
-        rescue Exception => error # rubocop: disable all
-          remove_column(table, column)
-
-          raise error
+            raise error
+          end
         end
       end
 
@@ -414,27 +459,27 @@ module Gitlab
 
         check_trigger_permissions!(table)
 
-        old_col = column_for(table, old)
-        new_type = type || old_col.type
-
-        add_column(table, new, new_type,
-                   limit: old_col.limit,
-                   precision: old_col.precision,
-                   scale: old_col.scale)
-
-        # We set the default value _after_ adding the column so we don't end up
-        # updating any existing data with the default value. This isn't
-        # necessary since we copy over old values further down.
-        change_column_default(table, new, old_col.default) if old_col.default
+        create_column_from(table, old, new, type: type)
 
         install_rename_triggers(table, old, new)
+      end
 
-        update_column_in_batches(table, new, Arel::Table.new(table)[old])
+      # Reverses operations performed by rename_column_concurrently.
+      #
+      # This method takes care of removing previously installed triggers as well
+      # as removing the new column.
+      #
+      # table - The name of the database table.
+      # old - The name of the old column.
+      # new - The name of the new column.
+      def undo_rename_column_concurrently(table, old, new)
+        trigger_name = rename_trigger_name(table, old, new)
 
-        change_column_null(table, new, false) unless old_col.null
+        check_trigger_permissions!(table)
 
-        copy_indexes(table, old, new)
-        copy_foreign_keys(table, old, new)
+        remove_rename_triggers_for_postgresql(table, trigger_name)
+
+        remove_column(table, new)
       end
 
       # Installs triggers in a table that keep a new column in sync with an old
@@ -449,13 +494,12 @@ module Gitlab
         quoted_old = quote_column_name(old_column)
         quoted_new = quote_column_name(new_column)
 
-        if Database.postgresql?
-          install_rename_triggers_for_postgresql(trigger_name, quoted_table,
-                                                 quoted_old, quoted_new)
-        else
-          install_rename_triggers_for_mysql(trigger_name, quoted_table,
-                                            quoted_old, quoted_new)
-        end
+        install_rename_triggers_for_postgresql(
+          trigger_name,
+          quoted_table,
+          quoted_old,
+          quoted_new
+        )
       end
 
       # Changes the type of a column concurrently.
@@ -498,13 +542,33 @@ module Gitlab
 
         check_trigger_permissions!(table)
 
-        if Database.postgresql?
-          remove_rename_triggers_for_postgresql(table, trigger_name)
-        else
-          remove_rename_triggers_for_mysql(trigger_name)
-        end
+        remove_rename_triggers_for_postgresql(table, trigger_name)
 
         remove_column(table, old)
+      end
+
+      # Reverses the operations performed by cleanup_concurrent_column_rename.
+      #
+      # This method adds back the old_column removed
+      # by cleanup_concurrent_column_rename.
+      # It also adds back the (old_column > new_column) trigger that is removed
+      # by cleanup_concurrent_column_rename.
+      #
+      # table - The name of the database table containing the column.
+      # old - The old column name.
+      # new - The new column name.
+      # type - The type of the old column. If no type is given the new column's
+      #        type is used.
+      def undo_cleanup_concurrent_column_rename(table, old, new, type: nil)
+        if transaction_open?
+          raise 'undo_cleanup_concurrent_column_rename can not be run inside a transaction'
+        end
+
+        check_trigger_permissions!(table)
+
+        create_column_from(table, new, old, type: type)
+
+        install_rename_triggers(table, old, new)
       end
 
       # Changes the column type of a table using a background migration.
@@ -596,6 +660,97 @@ module Gitlab
         end
       end
 
+      # Renames a column using a background migration.
+      #
+      # Because this method uses a background migration it's more suitable for
+      # large tables. For small tables it's better to use
+      # `rename_column_concurrently` since it can complete its work in a much
+      # shorter amount of time and doesn't rely on Sidekiq.
+      #
+      # Example usage:
+      #
+      #     rename_column_using_background_migration(
+      #       :users,
+      #       :feed_token,
+      #       :rss_token
+      #     )
+      #
+      # table - The name of the database table containing the column.
+      #
+      # old - The old column name.
+      #
+      # new - The new column name.
+      #
+      # type - The type of the new column. If no type is given the old column's
+      #        type is used.
+      #
+      # batch_size - The number of rows to schedule in a single background
+      #              migration.
+      #
+      # interval - The time interval between every background migration.
+      def rename_column_using_background_migration(
+        table,
+        old_column,
+        new_column,
+        type: nil,
+        batch_size: 10_000,
+        interval: 10.minutes
+      )
+
+        check_trigger_permissions!(table)
+
+        old_col = column_for(table, old_column)
+        new_type = type || old_col.type
+        max_index = 0
+
+        add_column(table, new_column, new_type,
+                   limit: old_col.limit,
+                   precision: old_col.precision,
+                   scale: old_col.scale)
+
+        # We set the default value _after_ adding the column so we don't end up
+        # updating any existing data with the default value. This isn't
+        # necessary since we copy over old values further down.
+        change_column_default(table, new_column, old_col.default) if old_col.default
+
+        install_rename_triggers(table, old_column, new_column)
+
+        model = Class.new(ActiveRecord::Base) do
+          self.table_name = table
+
+          include ::EachBatch
+        end
+
+        # Schedule the jobs that will copy the data from the old column to the
+        # new one. Rows with NULL values in our source column are skipped since
+        # the target column is already NULL at this point.
+        model.where.not(old_column => nil).each_batch(of: batch_size) do |batch, index|
+          start_id, end_id = batch.pluck('MIN(id), MAX(id)').first
+          max_index = index
+
+          BackgroundMigrationWorker.perform_in(
+            index * interval,
+            'CopyColumn',
+            [table, old_column, new_column, start_id, end_id]
+          )
+        end
+
+        # Schedule the renaming of the column to happen (initially) 1 hour after
+        # the last batch finished.
+        BackgroundMigrationWorker.perform_in(
+          (max_index * interval) + 1.hour,
+          'CleanupConcurrentRename',
+          [table, old_column, new_column]
+        )
+
+        if perform_background_migration_inline?
+          # To ensure the schema is up to date immediately we perform the
+          # migration inline in dev / test environments.
+          Gitlab::BackgroundMigration.steal('CopyColumn')
+          Gitlab::BackgroundMigration.steal('CleanupConcurrentRename')
+        end
+      end
+
       def perform_background_migration_inline?
         Rails.env.test? || Rails.env.development?
       end
@@ -616,6 +771,11 @@ module Gitlab
         EOF
 
         execute <<-EOF.strip_heredoc
+        DROP TRIGGER IF EXISTS #{trigger}
+        ON #{table}
+        EOF
+
+        execute <<-EOF.strip_heredoc
         CREATE TRIGGER #{trigger}
         BEFORE INSERT OR UPDATE
         ON #{table}
@@ -624,36 +784,10 @@ module Gitlab
         EOF
       end
 
-      # Installs the triggers necessary to perform a concurrent column rename on
-      # MySQL.
-      def install_rename_triggers_for_mysql(trigger, table, old, new)
-        execute <<-EOF.strip_heredoc
-        CREATE TRIGGER #{trigger}_insert
-        BEFORE INSERT
-        ON #{table}
-        FOR EACH ROW
-        SET NEW.#{new} = NEW.#{old}
-        EOF
-
-        execute <<-EOF.strip_heredoc
-        CREATE TRIGGER #{trigger}_update
-        BEFORE UPDATE
-        ON #{table}
-        FOR EACH ROW
-        SET NEW.#{new} = NEW.#{old}
-        EOF
-      end
-
       # Removes the triggers used for renaming a PostgreSQL column concurrently.
       def remove_rename_triggers_for_postgresql(table, trigger)
         execute("DROP TRIGGER IF EXISTS #{trigger} ON #{table}")
         execute("DROP FUNCTION IF EXISTS #{trigger}()")
-      end
-
-      # Removes the triggers used for renaming a MySQL column concurrently.
-      def remove_rename_triggers_for_mysql(trigger)
-        execute("DROP TRIGGER IF EXISTS #{trigger}_insert")
-        execute("DROP TRIGGER IF EXISTS #{trigger}_update")
       end
 
       # Returns the (base) name to use for triggers when renaming columns.
@@ -705,8 +839,6 @@ module Gitlab
             order: index.orders
           }
 
-          # These options are not supported by MySQL, so we only add them if
-          # they were previously set.
           options[:using] = index.using if index.using
           options[:where] = index.where if index.where
 
@@ -745,26 +877,22 @@ module Gitlab
         columns(table).find { |column| column.name == name }
       end
 
-      # This will replace the first occurance of a string in a column with
-      # the replacement
-      # On postgresql we can use `regexp_replace` for that.
-      # On mysql we find the location of the pattern, and overwrite it
-      # with the replacement
+      # This will replace the first occurrence of a string in a column with
+      # the replacement using `regexp_replace`
       def replace_sql(column, pattern, replacement)
         quoted_pattern = Arel::Nodes::Quoted.new(pattern.to_s)
         quoted_replacement = Arel::Nodes::Quoted.new(replacement.to_s)
 
-        if Database.mysql?
-          locate = Arel::Nodes::NamedFunction
-            .new('locate', [quoted_pattern, column])
-          insert_in_place = Arel::Nodes::NamedFunction
-            .new('insert', [column, locate, pattern.size, quoted_replacement])
+        replace = Arel::Nodes::NamedFunction.new(
+          "regexp_replace", [column, quoted_pattern, quoted_replacement]
+        )
 
-          Arel::Nodes::SqlLiteral.new(insert_in_place.to_sql)
-        else
-          replace = Arel::Nodes::NamedFunction
-            .new("regexp_replace", [column, quoted_pattern, quoted_replacement])
-          Arel::Nodes::SqlLiteral.new(replace.to_sql)
+        Arel::Nodes::SqlLiteral.new(replace.to_sql)
+      end
+
+      def remove_foreign_key_if_exists(*args)
+        if foreign_key_exists?(*args)
+          remove_foreign_key(*args)
         end
       end
 
@@ -801,11 +929,7 @@ database (#{dbname}) using a super user and running:
 
     ALTER #{user} WITH SUPERUSER
 
-For MySQL you instead need to run:
-
-    GRANT ALL PRIVILEGES ON *.* TO #{user}@'%'
-
-Both queries will grant the user super user permissions, ensuring you don't run
+This query will grant the user super user permissions, ensuring you don't run
 into similar problems in the future (e.g. when new tables are created).
           EOF
         end
@@ -839,9 +963,10 @@ into similar problems in the future (e.g. when new tables are created).
         raise "#{model_class} does not have an ID to use for batch ranges" unless model_class.column_names.include?('id')
 
         jobs = []
+        table_name = model_class.quoted_table_name
 
         model_class.each_batch(of: batch_size) do |relation|
-          start_id, end_id = relation.pluck('MIN(id), MAX(id)').first
+          start_id, end_id = relation.pluck("MIN(#{table_name}.id), MAX(#{table_name}.id)").first
 
           if jobs.length >= BACKGROUND_MIGRATION_JOB_BUFFER_SIZE
             # Note: This code path generally only helps with many millions of rows
@@ -888,12 +1013,12 @@ into similar problems in the future (e.g. when new tables are created).
 
         # To not overload the worker too much we enforce a minimum interval both
         # when scheduling and performing jobs.
-        if delay_interval < BackgroundMigrationWorker::MIN_INTERVAL
-          delay_interval = BackgroundMigrationWorker::MIN_INTERVAL
+        if delay_interval < BackgroundMigrationWorker.minimum_interval
+          delay_interval = BackgroundMigrationWorker.minimum_interval
         end
 
         model_class.each_batch(of: batch_size) do |relation, index|
-          start_id, end_id = relation.pluck('MIN(id), MAX(id)').first
+          start_id, end_id = relation.pluck(Arel.sql('MIN(id), MAX(id)')).first
 
           # `BackgroundMigrationWorker.bulk_perform_in` schedules all jobs for
           # the same time, which is not helpful in most cases where we wish to
@@ -907,10 +1032,6 @@ into similar problems in the future (e.g. when new tables are created).
       # This will include indexes using an expression on the column, for example:
       # `CREATE INDEX CONCURRENTLY index_name ON table (LOWER(column));`
       #
-      # For mysql, it falls back to the default ActiveRecord implementation that
-      # will not find custom indexes. But it will select by name without passing
-      # a column.
-      #
       # We can remove this when upgrading to Rails 5 with an updated `index_exists?`:
       # - https://github.com/rails/rails/commit/edc2b7718725016e988089b5fb6d6fb9d6e16882
       #
@@ -921,10 +1042,8 @@ into similar problems in the future (e.g. when new tables are created).
         # does not find indexes without passing a column name.
         if indexes(table).map(&:name).include?(index.to_s)
           true
-        elsif Gitlab::Database.postgresql?
-          postgres_exists_by_name?(table, index)
         else
-          false
+          postgres_exists_by_name?(table, index)
         end
       end
 
@@ -938,6 +1057,50 @@ into similar problems in the future (e.g. when new tables are created).
         SQL
 
         connection.select_value(index_sql).to_i > 0
+      end
+
+      private
+
+      def create_column_from(table, old, new, type: nil)
+        old_col = column_for(table, old)
+        new_type = type || old_col.type
+
+        add_column(table, new, new_type,
+                   limit: old_col.limit,
+                   precision: old_col.precision,
+                   scale: old_col.scale)
+
+        # We set the default value _after_ adding the column so we don't end up
+        # updating any existing data with the default value. This isn't
+        # necessary since we copy over old values further down.
+        change_column_default(table, new, old_col.default) unless old_col.default.nil?
+
+        update_column_in_batches(table, new, Arel::Table.new(table)[old])
+
+        change_column_null(table, new, false) unless old_col.null
+
+        copy_indexes(table, old, new)
+        copy_foreign_keys(table, old, new)
+      end
+
+      def validate_timestamp_column_name!(column_name)
+        return if PERMITTED_TIMESTAMP_COLUMNS.member?(column_name)
+
+        raise <<~MESSAGE
+          Illegal timestamp column name! Got #{column_name}.
+          Must be one of: #{PERMITTED_TIMESTAMP_COLUMNS.to_a}
+        MESSAGE
+      end
+
+      def validate_not_in_transaction!(method_name, modifier = nil)
+        return unless transaction_open?
+
+        raise <<~ERROR
+          #{["`#{method_name}`", modifier].compact.join(' ')} cannot be run inside a transaction.
+
+          You can disable transactions by calling `disable_ddl_transaction!` in the body of
+          your migration class
+        ERROR
       end
     end
   end

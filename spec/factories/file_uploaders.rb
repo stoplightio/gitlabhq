@@ -1,9 +1,11 @@
+# frozen_string_literal: true
+
 FactoryBot.define do
   factory :file_uploader do
     skip_create
 
     project
-    secret nil
+    secret { nil }
 
     transient do
       fixture { 'rails_sample.jpg' }

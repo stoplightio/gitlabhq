@@ -1,4 +1,4 @@
-class CreateClustersApplicationsRunners < ActiveRecord::Migration
+class CreateClustersApplicationsRunners < ActiveRecord::Migration[4.2]
   include Gitlab::Database::MigrationHelpers
 
   DOWNTIME = false
@@ -13,7 +13,7 @@ class CreateClustersApplicationsRunners < ActiveRecord::Migration
       t.index :cluster_id, unique: true
       t.integer :status, null: false
       t.timestamps_with_timezone null: false
-      t.string :version, null: false
+      t.string :version, null: false # rubocop:disable Migration/AddLimitToStringColumns
       t.text :status_reason
     end
 

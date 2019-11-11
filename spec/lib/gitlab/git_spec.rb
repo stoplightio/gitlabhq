@@ -1,4 +1,3 @@
-# coding: utf-8
 require 'spec_helper'
 
 describe Gitlab::Git do
@@ -36,6 +35,26 @@ describe Gitlab::Git do
       utf8_invalid_ref = Gitlab::Git::BRANCH_REF_PREFIX + "an_invalid_ref_\xE5"
 
       expect(described_class.ref_name(utf8_invalid_ref)).to eq("an_invalid_ref_å")
+    end
+  end
+
+  describe '.commit_id?' do
+    using RSpec::Parameterized::TableSyntax
+
+    where(:sha, :result) do
+      ''                                         | false
+      'foobar'                                   | false
+      '4b825dc'                                  | false
+      'zzz25dc642cb6eb9a060e54bf8d69288fbee4904' | false
+
+      '4b825dc642cb6eb9a060e54bf8d69288fbee4904' | true
+      Gitlab::Git::BLANK_SHA                     | true
+    end
+
+    with_them do
+      it 'returns the expected result' do
+        expect(described_class.commit_id?(sha)).to eq(result)
+      end
     end
   end
 

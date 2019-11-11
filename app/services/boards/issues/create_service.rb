@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Boards
   module Issues
     class CreateService < Boards::BaseService
@@ -33,3 +35,5 @@ module Boards
     end
   end
 end
+
+Boards::Issues::CreateService.prepend_if_ee('EE::Boards::Issues::CreateService')

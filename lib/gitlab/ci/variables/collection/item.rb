@@ -1,14 +1,16 @@
+# frozen_string_literal: true
+
 module Gitlab
   module Ci
     module Variables
       class Collection
         class Item
-          def initialize(key:, value:, public: true, file: false)
-            raise ArgumentError, "`value` must be of type String, while it was: #{value.class}" unless
+          def initialize(key:, value:, public: true, file: false, masked: false)
+            raise ArgumentError, "`#{key}` must be of type String or nil value, while it was: #{value.class}" unless
               value.is_a?(String) || value.nil?
 
             @variable = {
-              key: key, value: value, public: public, file: file
+              key: key, value: value, public: public, file: file, masked: masked
             }
           end
 
@@ -34,7 +36,7 @@ module Gitlab
           def self.fabricate(resource)
             case resource
             when Hash
-              self.new(resource)
+              self.new(resource.symbolize_keys)
             when ::HasVariable
               self.new(resource.to_runner_variable)
             when self

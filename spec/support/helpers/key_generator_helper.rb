@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Spec
   module Support
     module Helpers
@@ -24,7 +26,7 @@ module Spec
         private
 
         # Encodes an openssh-mpi-encoded integer.
-        def encode_mpi(n)
+        def encode_mpi(n) # rubocop:disable Naming/UncommunicativeMethodParamName
           chars, n = [], n.to_i
           chars << (n & 0xff) && n >>= 8 while n != 0
           chars << 0 if chars.empty? || chars.last >= 0x80
@@ -33,7 +35,7 @@ module Spec
 
         # Packs string components into an openssh-encoded pubkey.
         def pack_pubkey_components(strings)
-          (strings.map { |s| [s.length].pack('N') }).zip(strings).flatten.join
+          (strings.flat_map { |s| [s.length].pack('N') }).zip(strings).join
         end
       end
     end

@@ -1,19 +1,24 @@
 <script>
+import _ from 'underscore';
+import { GlTooltipDirective, GlLink } from '@gitlab/ui';
+import { __, sprintf } from '~/locale';
+import TooltipOnTruncate from '~/vue_shared/components/tooltip_on_truncate.vue';
 import UserAvatarLink from './user_avatar/user_avatar_link.vue';
-import tooltip from '../directives/tooltip';
 import Icon from '../../vue_shared/components/icon.vue';
 
 export default {
   directives: {
-    tooltip,
+    GlTooltip: GlTooltipDirective,
   },
   components: {
     UserAvatarLink,
     Icon,
+    GlLink,
+    TooltipOnTruncate,
   },
   props: {
     /**
-     * Indicates the existance of a tag.
+     * Indicates the existence of a tag.
      * Used to render the correct icon, if true will render `fa-tag` icon,
      * if false will render a svg sprite fork icon
      */
@@ -33,6 +38,27 @@ export default {
       required: false,
       default: () => ({}),
     },
+
+    /**
+     * If provided, is used the render the MR IID and link
+     * in place of the branch name.  Must contains the
+     * following properties:
+     *   - iid (number)
+     *   - path (non-empty string)
+     *
+     * May optionally contain the following properties:
+     *   - title (string): used in a tooltip if provided
+     *
+     * Any additional properties are ignored.
+     */
+    mergeRequestRef: {
+      type: Object,
+      required: false,
+      default: undefined,
+      validator: ref =>
+        _.isUndefined(ref) || (_.isFinite(ref.iid) && _.isString(ref.path) && !_.isEmpty(ref.path)),
+    },
+
     /**
      * Used to link to the commit sha.
      */
@@ -70,7 +96,11 @@ export default {
       required: false,
       default: () => ({}),
     },
-    showBranch: {
+
+    /**
+     * Indicates whether or not to show the branch/MR ref info
+     */
+    showRefInfo: {
       type: Boolean,
       required: false,
       default: true,
@@ -78,14 +108,12 @@ export default {
   },
   computed: {
     /**
-     * Used to verify if all the properties needed to render the commit
-     * ref section were provided.
-     *
-     * @returns {Boolean}
+     * Determines if we shoud render the ref info section based
      */
-    hasCommitRef() {
-      return this.commitRef && this.commitRef.name && this.commitRef.ref_url;
+    shouldShowRefInfo() {
+      return this.showRefInfo && (this.commitRef || this.mergeRequestRef);
     },
+
     /**
      * Used to verify if all the properties needed to render the commit
      * author section were provided.
@@ -102,72 +130,58 @@ export default {
      * @returns {String}
      */
     userImageAltDescription() {
-      return this.author && this.author.username ? `${this.author.username}'s avatar` : null;
+      return this.author && this.author.username
+        ? sprintf(__("%{username}'s avatar"), { username: this.author.username })
+        : null;
     },
   },
 };
 </script>
 <template>
-  <div class="branch-commit">
-    <template v-if="hasCommitRef && showBranch">
+  <div class="branch-commit cgray">
+    <template v-if="shouldShowRefInfo">
       <div class="icon-container">
-        <i
-          v-if="tag"
-          class="fa fa-tag"
-          aria-hidden="true"
-        >
-        </i>
-        <icon
-          v-if="!tag"
-          name="fork"
-        />
+        <icon v-if="tag" name="tag" />
+        <icon v-else-if="mergeRequestRef" name="git-merge" />
+        <icon v-else name="branch" />
       </div>
 
-      <a
+      <gl-link
+        v-if="mergeRequestRef"
+        v-gl-tooltip
+        :href="mergeRequestRef.path"
+        :title="mergeRequestRef.title"
         class="ref-name"
+        >{{ mergeRequestRef.iid }}</gl-link
+      >
+      <gl-link
+        v-else
+        v-gl-tooltip
         :href="commitRef.ref_url"
-        v-tooltip
-        data-container="body"
         :title="commitRef.name"
+        class="ref-name"
+        >{{ commitRef.name }}</gl-link
       >
-        {{ commitRef.name }}
-      </a>
     </template>
-    <icon
-      name="commit"
-      class="commit-icon js-commit-icon"
-    />
+    <icon name="commit" class="commit-icon js-commit-icon" />
 
-    <a
-      class="commit-sha"
-      :href="commitUrl"
-    >
-      {{ shortSha }}
-    </a>
+    <gl-link :href="commitUrl" class="commit-sha mr-0">{{ shortSha }}</gl-link>
 
-    <div class="commit-title flex-truncate-parent">
-      <span
-        v-if="title"
-        class="flex-truncate-child"
-      >
+    <div class="commit-title">
+      <span v-if="title" class="flex-truncate-parent">
         <user-avatar-link
           v-if="hasAuthor"
-          class="avatar-image-container"
           :link-href="author.path"
           :img-src="author.avatar_url"
           :img-alt="userImageAltDescription"
           :tooltip-text="author.username"
+          class="avatar-image-container text-decoration-none"
         />
-        <a
-          class="commit-row-message"
-          :href="commitUrl"
-        >
-          {{ title }}
-        </a>
+        <tooltip-on-truncate :title="title" class="flex-truncate-child">
+          <gl-link :href="commitUrl" class="commit-row-message cgray">{{ title }}</gl-link>
+        </tooltip-on-truncate>
       </span>
-      <span v-else>
-        Can't find HEAD commit for this branch
-      </span>
+      <span v-else>{{ __("Can't find HEAD commit for this branch") }}</span>
     </div>
   </div>
 </template>

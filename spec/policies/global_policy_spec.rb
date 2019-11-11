@@ -65,12 +65,12 @@ describe GlobalPolicy do
       it { is_expected.not_to be_allowed(:create_fork) }
     end
 
-    context "when user is a master in a group" do
+    context "when user is a maintainer in a group" do
       let(:group) { create(:group) }
       let(:current_user) { create(:user, projects_limit: 0) }
 
       before do
-        group.add_master(current_user)
+        group.add_maintainer(current_user)
       end
 
       it { is_expected.to be_allowed(:create_fork) }
@@ -141,6 +141,40 @@ describe GlobalPolicy do
     end
   end
 
+  describe 'receive notifications' do
+    describe 'regular user' do
+      it { is_expected.to be_allowed(:receive_notifications) }
+    end
+
+    describe 'admin' do
+      let(:current_user) { create(:admin) }
+
+      it { is_expected.to be_allowed(:receive_notifications) }
+    end
+
+    describe 'anonymous' do
+      let(:current_user) { nil }
+
+      it { is_expected.not_to be_allowed(:receive_notifications) }
+    end
+
+    describe 'blocked user' do
+      before do
+        current_user.block
+      end
+
+      it { is_expected.not_to be_allowed(:receive_notifications) }
+    end
+
+    describe 'deactivated user' do
+      before do
+        current_user.deactivate
+      end
+
+      it { is_expected.not_to be_allowed(:receive_notifications) }
+    end
+  end
+
   describe 'git access' do
     describe 'regular user' do
       it { is_expected.to be_allowed(:access_git) }
@@ -156,6 +190,14 @@ describe GlobalPolicy do
       let(:current_user) { nil }
 
       it { is_expected.to be_allowed(:access_git) }
+    end
+
+    describe 'deactivated user' do
+      before do
+        current_user.deactivate
+      end
+
+      it { is_expected.not_to be_allowed(:access_git) }
     end
 
     context 'when terms are enforced' do
@@ -178,6 +220,88 @@ describe GlobalPolicy do
 
         it { is_expected.to be_allowed(:access_git) }
       end
+    end
+  end
+
+  describe 'read instance metadata' do
+    context 'regular user' do
+      it { is_expected.to be_allowed(:read_instance_metadata) }
+    end
+
+    context 'anonymous' do
+      let(:current_user) { nil }
+
+      it { is_expected.not_to be_allowed(:read_instance_metadata) }
+    end
+  end
+
+  describe 'read instance statistics' do
+    context 'regular user' do
+      it { is_expected.to be_allowed(:read_instance_statistics) }
+
+      context 'when instance statistics are set to private' do
+        before do
+          stub_application_setting(instance_statistics_visibility_private: true)
+        end
+
+        it { is_expected.not_to be_allowed(:read_instance_statistics) }
+      end
+    end
+
+    context 'admin' do
+      let(:current_user) { create(:admin) }
+
+      it { is_expected.to be_allowed(:read_instance_statistics) }
+
+      context 'when instance statistics are set to private' do
+        before do
+          stub_application_setting(instance_statistics_visibility_private: true)
+        end
+
+        it { is_expected.to be_allowed(:read_instance_statistics) }
+      end
+    end
+
+    context 'anonymous' do
+      let(:current_user) { nil }
+
+      it { is_expected.not_to be_allowed(:read_instance_statistics) }
+    end
+  end
+
+  describe 'slash commands' do
+    context 'regular user' do
+      it { is_expected.to be_allowed(:use_slash_commands) }
+    end
+
+    context 'when internal' do
+      let(:current_user) { User.ghost }
+
+      it { is_expected.not_to be_allowed(:use_slash_commands) }
+    end
+
+    context 'when blocked' do
+      before do
+        current_user.block
+      end
+
+      it { is_expected.not_to be_allowed(:use_slash_commands) }
+    end
+
+    context 'when deactivated' do
+      before do
+        current_user.deactivate
+      end
+
+      it { is_expected.not_to be_allowed(:use_slash_commands) }
+    end
+
+    context 'when access locked' do
+      before do
+        current_user.lock_access!
+      end
+
+      it { is_expected.not_to be_allowed(:use_slash_commands) }
     end
   end
 end

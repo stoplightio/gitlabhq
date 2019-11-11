@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module PrometheusHelpers
   def prometheus_memory_query(environment_slug)
     %{avg(container_memory_usage_bytes{container_name!="POD",environment="#{environment_slug}"}) / 2^20}
@@ -5,6 +7,10 @@ module PrometheusHelpers
 
   def prometheus_cpu_query(environment_slug)
     %{avg(rate(container_cpu_usage_seconds_total{container_name!="POD",environment="#{environment_slug}"}[2m])) * 100}
+  end
+
+  def prometheus_istio_query(function_name, kube_namespace)
+    %{floor(sum(rate(istio_revision_request_count{destination_configuration=\"#{function_name}\", destination_namespace=\"#{kube_namespace}\"}[1m])*30))}
   end
 
   def prometheus_ping_url(prometheus_query)
@@ -25,12 +31,16 @@ module PrometheusHelpers
     "https://prometheus.example.com/api/v1/query?#{query}"
   end
 
-  def prometheus_query_range_url(prometheus_query, start: 8.hours.ago, stop: Time.now.to_f)
+  def prometheus_query_range_url(prometheus_query, start: 8.hours.ago, stop: Time.now, step: nil)
+    start = start.to_f
+    stop = stop.to_f
+    step ||= Gitlab::PrometheusClient.compute_step(start, stop)
+
     query = {
       query: prometheus_query,
-      start: start.to_f,
+      start: start,
       end: stop,
-      step: 1.minute.to_i
+      step: step
     }.to_query
 
     "https://prometheus.example.com/api/v1/query_range?#{query}"
@@ -49,17 +59,29 @@ module PrometheusHelpers
     "https://prometheus.example.com/api/v1/series?#{query}"
   end
 
-  def stub_prometheus_request(url, body: {}, status: 200)
+  def stub_prometheus_request(url, body: {}, status: 200, headers: {})
     WebMock.stub_request(:get, url)
       .to_return({
         status: status,
-        headers: { 'Content-Type' => 'application/json' },
+        headers: { 'Content-Type' => 'application/json' }.merge(headers),
         body: body.to_json
       })
   end
 
   def stub_prometheus_request_with_exception(url, exception_type)
     WebMock.stub_request(:get, url).to_raise(exception_type)
+  end
+
+  def stub_any_prometheus_request
+    WebMock.stub_request(:any, /prometheus.example.com/)
+  end
+
+  def stub_any_prometheus_request_with_response(status: 200, headers: {}, body: nil)
+    stub_any_prometheus_request.to_return({
+      status: status,
+      headers: { 'Content-Type' => 'application/json' }.merge(headers),
+      body: body || prometheus_values_body.to_json
+    })
   end
 
   def stub_all_prometheus_requests(environment_slug, body: nil, status: 200)

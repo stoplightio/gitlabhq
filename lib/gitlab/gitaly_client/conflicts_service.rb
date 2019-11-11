@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module GitalyClient
     class ConflictsService
@@ -18,22 +20,24 @@ module Gitlab
           our_commit_oid: @our_commit_oid,
           their_commit_oid: @their_commit_oid
         )
-        response = GitalyClient.call(@repository.storage, :conflicts_service, :list_conflict_files, request)
+        response = GitalyClient.call(@repository.storage, :conflicts_service, :list_conflict_files, request, timeout: GitalyClient.long_timeout)
 
-        GitalyClient::ConflictFilesStitcher.new(response)
+        GitalyClient::ConflictFilesStitcher.new(response, @gitaly_repo)
       end
 
       def conflicts?
         list_conflict_files.any?
-      rescue GRPC::FailedPrecondition
-        # The server raises this exception when it encounters ConflictSideMissing, which
-        # means a conflict exists but its `theirs` or `ours` data is nil due to a non-existent
-        # file in one of the trees.
+      rescue GRPC::FailedPrecondition, GRPC::Unknown
+        # The server raises FailedPrecondition when it encounters
+        # ConflictSideMissing, which means a conflict exists but its `theirs` or
+        # `ours` data is nil due to a non-existent file in one of the trees.
+        #
+        # GRPC::Unknown comes from Rugged::ReferenceError and Rugged::OdbError.
         true
       end
 
       def resolve_conflicts(target_repository, resolution, source_branch, target_branch)
-        reader = binary_stringio(resolution.files.to_json)
+        reader = binary_io(resolution.files.to_json)
 
         req_enum = Enumerator.new do |y|
           header = resolve_conflicts_request_header(target_repository, resolution, source_branch, target_branch)
@@ -46,7 +50,7 @@ module Gitlab
           end
         end
 
-        response = GitalyClient.call(@repository.storage, :conflicts_service, :resolve_conflicts, req_enum, remote_storage: target_repository.storage)
+        response = GitalyClient.call(@repository.storage, :conflicts_service, :resolve_conflicts, req_enum, remote_storage: target_repository.storage, timeout: GitalyClient.medium_timeout)
 
         if response.resolution_error.present?
           raise Gitlab::Git::Conflict::Resolver::ResolutionError, response.resolution_error
@@ -61,9 +65,9 @@ module Gitlab
           our_commit_oid: @our_commit_oid,
           target_repository: target_repository.gitaly_repository,
           their_commit_oid: @their_commit_oid,
-          source_branch: source_branch,
-          target_branch: target_branch,
-          commit_message: resolution.commit_message,
+          source_branch: encode_binary(source_branch),
+          target_branch: encode_binary(target_branch),
+          commit_message: encode_binary(resolution.commit_message),
           user: Gitlab::Git::User.from_gitlab(resolution.user).to_gitaly
         )
       end

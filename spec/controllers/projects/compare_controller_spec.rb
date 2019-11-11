@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Projects::CompareController do
@@ -6,25 +8,25 @@ describe Projects::CompareController do
 
   before do
     sign_in(user)
-    project.add_master(user)
+    project.add_maintainer(user)
   end
 
   describe 'GET index' do
     render_views
 
     before do
-      get :index, namespace_id: project.namespace, project_id: project
+      get :index, params: { namespace_id: project.namespace, project_id: project }
     end
 
     it 'returns successfully' do
-      expect(response).to be_success
+      expect(response).to be_successful
     end
   end
 
   describe 'GET show' do
     render_views
 
-    subject(:show_request) { get :show, request_params }
+    subject(:show_request) { get :show, params: request_params }
 
     let(:request_params) do
       {
@@ -47,7 +49,7 @@ describe Projects::CompareController do
         it 'shows some diffs with ignore whitespace change option' do
           show_request
 
-          expect(response).to be_success
+          expect(response).to be_successful
           diff_file = assigns(:diffs).diff_files.first
           expect(diff_file).not_to be_nil
           expect(assigns(:commits).length).to be >= 1
@@ -65,7 +67,7 @@ describe Projects::CompareController do
         it 'sets the diffs and commits ivars' do
           show_request
 
-          expect(response).to be_success
+          expect(response).to be_successful
           expect(assigns(:diffs).diff_files.first).not_to be_nil
           expect(assigns(:commits).length).to be >= 1
         end
@@ -79,8 +81,8 @@ describe Projects::CompareController do
       it 'sets empty diff and commit ivars' do
         show_request
 
-        expect(response).to be_success
-        expect(assigns(:diffs).diff_files.to_a).to eq([])
+        expect(response).to be_successful
+        expect(assigns(:diffs)).to eq([])
         expect(assigns(:commits)).to eq([])
       end
     end
@@ -92,9 +94,33 @@ describe Projects::CompareController do
       it 'sets empty diff and commit ivars' do
         show_request
 
-        expect(response).to be_success
+        expect(response).to be_successful
         expect(assigns(:diffs)).to eq([])
         expect(assigns(:commits)).to eq([])
+      end
+    end
+
+    context 'when the target ref is invalid' do
+      let(:target_ref) { "master%' AND 2554=4423 AND '%'='" }
+      let(:source_ref) { "improve%2Fawesome" }
+
+      it 'shows a flash message and redirects' do
+        show_request
+
+        expect(flash[:alert]).to eq('Invalid branch name')
+        expect(response).to have_http_status(302)
+      end
+    end
+
+    context 'when the source ref is invalid' do
+      let(:source_ref) { "master%' AND 2554=4423 AND '%'='" }
+      let(:target_ref) { "improve%2Fawesome" }
+
+      it 'shows a flash message and redirects' do
+        show_request
+
+        expect(flash[:alert]).to eq('Invalid branch name')
+        expect(response).to have_http_status(302)
       end
     end
   end
@@ -106,7 +132,7 @@ describe Projects::CompareController do
         project_id: project
       }
 
-      get :diff_for_path, params.merge(extra_params)
+      get :diff_for_path, params: params.merge(extra_params)
     end
 
     let(:existing_path) { 'files/ruby/feature.rb' }
@@ -177,7 +203,7 @@ describe Projects::CompareController do
   end
 
   describe 'POST create' do
-    subject(:create_request) { post :create, request_params }
+    subject(:create_request) { post :create, params: request_params }
 
     let(:request_params) do
       {
@@ -236,7 +262,7 @@ describe Projects::CompareController do
   end
 
   describe 'GET signatures' do
-    subject(:signatures_request) { get :signatures, request_params }
+    subject(:signatures_request) { get :signatures, params: request_params }
 
     let(:request_params) do
       {
@@ -276,8 +302,7 @@ describe Projects::CompareController do
           signatures_request
 
           expect(response).to have_gitlab_http_status(200)
-          parsed_body = JSON.parse(response.body)
-          signatures = parsed_body['signatures']
+          signatures = json_response['signatures']
 
           expect(signatures.size).to eq(1)
           expect(signatures.first['commit_sha']).to eq(signature_commit.sha)
@@ -306,8 +331,7 @@ describe Projects::CompareController do
         signatures_request
 
         expect(response).to have_gitlab_http_status(200)
-        parsed_body = JSON.parse(response.body)
-        expect(parsed_body['signatures']).to be_empty
+        expect(json_response['signatures']).to be_empty
       end
     end
 
@@ -319,8 +343,7 @@ describe Projects::CompareController do
         signatures_request
 
         expect(response).to have_gitlab_http_status(200)
-        parsed_body = JSON.parse(response.body)
-        expect(parsed_body['signatures']).to be_empty
+        expect(json_response['signatures']).to be_empty
       end
     end
   end

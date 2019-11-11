@@ -1,6 +1,8 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
-describe "Profile access"  do
+describe "Profile access" do
   include AccessMatchers
 
   describe "GET /profile/keys" do

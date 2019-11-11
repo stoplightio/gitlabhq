@@ -1,7 +1,9 @@
+# frozen_string_literal: true
+
 require "spec_helper"
 
 describe ProjectTeam do
-  let(:master) { create(:user) }
+  let(:maintainer) { create(:user) }
   let(:reporter) { create(:user) }
   let(:guest) { create(:user) }
   let(:nonmember) { create(:user) }
@@ -10,23 +12,23 @@ describe ProjectTeam do
     let(:project) { create(:project) }
 
     before do
-      project.add_master(master)
+      project.add_maintainer(maintainer)
       project.add_reporter(reporter)
       project.add_guest(guest)
     end
 
     describe 'members collection' do
-      it { expect(project.team.masters).to include(master) }
-      it { expect(project.team.masters).not_to include(guest) }
-      it { expect(project.team.masters).not_to include(reporter) }
-      it { expect(project.team.masters).not_to include(nonmember) }
+      it { expect(project.team.maintainers).to include(maintainer) }
+      it { expect(project.team.maintainers).not_to include(guest) }
+      it { expect(project.team.maintainers).not_to include(reporter) }
+      it { expect(project.team.maintainers).not_to include(nonmember) }
     end
 
     describe 'access methods' do
-      it { expect(project.team.master?(master)).to be_truthy }
-      it { expect(project.team.master?(guest)).to be_falsey }
-      it { expect(project.team.master?(reporter)).to be_falsey }
-      it { expect(project.team.master?(nonmember)).to be_falsey }
+      it { expect(project.team.maintainer?(maintainer)).to be_truthy }
+      it { expect(project.team.maintainer?(guest)).to be_falsey }
+      it { expect(project.team.maintainer?(reporter)).to be_falsey }
+      it { expect(project.team.maintainer?(nonmember)).to be_falsey }
       it { expect(project.team.member?(nonmember)).to be_falsey }
       it { expect(project.team.member?(guest)).to be_truthy }
       it { expect(project.team.member?(reporter, Gitlab::Access::REPORTER)).to be_truthy }
@@ -40,35 +42,35 @@ describe ProjectTeam do
     let!(:project) { create(:project, group: group) }
 
     before do
-      group.add_master(master)
+      group.add_maintainer(maintainer)
       group.add_reporter(reporter)
       group.add_guest(guest)
 
       # If user is a group and a project member - GitLab uses highest permission
-      # So we add group guest as master and add group master as guest
+      # So we add group guest as maintainer and add group maintainer as guest
       # to this project to test highest access
-      project.add_master(guest)
-      project.add_guest(master)
+      project.add_maintainer(guest)
+      project.add_guest(maintainer)
     end
 
     describe 'members collection' do
       it { expect(project.team.reporters).to include(reporter) }
-      it { expect(project.team.masters).to include(master) }
-      it { expect(project.team.masters).to include(guest) }
-      it { expect(project.team.masters).not_to include(reporter) }
-      it { expect(project.team.masters).not_to include(nonmember) }
+      it { expect(project.team.maintainers).to include(maintainer) }
+      it { expect(project.team.maintainers).to include(guest) }
+      it { expect(project.team.maintainers).not_to include(reporter) }
+      it { expect(project.team.maintainers).not_to include(nonmember) }
     end
 
     describe 'access methods' do
       it { expect(project.team.reporter?(reporter)).to be_truthy }
-      it { expect(project.team.master?(master)).to be_truthy }
-      it { expect(project.team.master?(guest)).to be_truthy }
-      it { expect(project.team.master?(reporter)).to be_falsey }
-      it { expect(project.team.master?(nonmember)).to be_falsey }
+      it { expect(project.team.maintainer?(maintainer)).to be_truthy }
+      it { expect(project.team.maintainer?(guest)).to be_truthy }
+      it { expect(project.team.maintainer?(reporter)).to be_falsey }
+      it { expect(project.team.maintainer?(nonmember)).to be_falsey }
       it { expect(project.team.member?(nonmember)).to be_falsey }
       it { expect(project.team.member?(guest)).to be_truthy }
-      it { expect(project.team.member?(guest, Gitlab::Access::MASTER)).to be_truthy }
-      it { expect(project.team.member?(reporter, Gitlab::Access::MASTER)).to be_falsey }
+      it { expect(project.team.member?(guest, Gitlab::Access::MAINTAINER)).to be_truthy }
+      it { expect(project.team.member?(reporter, Gitlab::Access::MAINTAINER)).to be_falsey }
       it { expect(project.team.member?(nonmember, Gitlab::Access::GUEST)).to be_falsey }
     end
   end
@@ -139,19 +141,19 @@ describe ProjectTeam do
   describe '#find_member' do
     context 'personal project' do
       let(:project) do
-        create(:project, :public, :access_requestable)
+        create(:project, :public)
       end
 
       let(:requester) { create(:user) }
 
       before do
-        project.add_master(master)
+        project.add_maintainer(maintainer)
         project.add_reporter(reporter)
         project.add_guest(guest)
         project.request_access(requester)
       end
 
-      it { expect(project.team.find_member(master.id)).to be_a(ProjectMember) }
+      it { expect(project.team.find_member(maintainer.id)).to be_a(ProjectMember) }
       it { expect(project.team.find_member(reporter.id)).to be_a(ProjectMember) }
       it { expect(project.team.find_member(guest.id)).to be_a(ProjectMember) }
       it { expect(project.team.find_member(nonmember.id)).to be_nil }
@@ -159,22 +161,61 @@ describe ProjectTeam do
     end
 
     context 'group project' do
-      let(:group) { create(:group, :access_requestable) }
+      let(:group) { create(:group) }
       let(:project) { create(:project, group: group) }
       let(:requester) { create(:user) }
 
       before do
-        group.add_master(master)
+        group.add_maintainer(maintainer)
         group.add_reporter(reporter)
         group.add_guest(guest)
         group.request_access(requester)
       end
 
-      it { expect(project.team.find_member(master.id)).to be_a(GroupMember) }
+      it { expect(project.team.find_member(maintainer.id)).to be_a(GroupMember) }
       it { expect(project.team.find_member(reporter.id)).to be_a(GroupMember) }
       it { expect(project.team.find_member(guest.id)).to be_a(GroupMember) }
       it { expect(project.team.find_member(nonmember.id)).to be_nil }
       it { expect(project.team.find_member(requester.id)).to be_nil }
+    end
+  end
+
+  describe '#members_in_project_and_ancestors' do
+    context 'group project' do
+      it 'filters out users who are not members of the project' do
+        group = create(:group)
+        project = create(:project, group: group)
+        group_member = create(:group_member, group: group)
+        old_user = create(:user)
+
+        ProjectAuthorization.create!(project: project, user: old_user, access_level: Gitlab::Access::GUEST)
+
+        expect(project.team.members_in_project_and_ancestors).to contain_exactly(group_member.user)
+      end
+    end
+  end
+
+  describe '#add_users' do
+    let(:user1) { create(:user) }
+    let(:user2) { create(:user) }
+    let(:project) { create(:project) }
+
+    it 'add the given users to the team' do
+      project.team.add_users([user1, user2], :reporter)
+
+      expect(project.team.reporter?(user1)).to be(true)
+      expect(project.team.reporter?(user2)).to be(true)
+    end
+  end
+
+  describe '#add_user' do
+    let(:user) { create(:user) }
+    let(:project) { create(:project) }
+
+    it 'add the given user to the team' do
+      project.team.add_user(user, :reporter)
+
+      expect(project.team.reporter?(user)).to be(true)
     end
   end
 
@@ -184,7 +225,7 @@ describe ProjectTeam do
       group = create(:group)
       project = create(:project, namespace: group)
 
-      group.add_master(user)
+      group.add_maintainer(user)
 
       expect(project.team.human_max_access(user.id)).to eq 'Maintainer'
     end
@@ -205,18 +246,18 @@ describe ProjectTeam do
 
     context 'personal project' do
       let(:project) do
-        create(:project, :public, :access_requestable)
+        create(:project, :public)
       end
 
       context 'when project is not shared with group' do
         before do
-          project.add_master(master)
+          project.add_maintainer(maintainer)
           project.add_reporter(reporter)
           project.add_guest(guest)
           project.request_access(requester)
         end
 
-        it { expect(project.team.max_member_access(master.id)).to eq(Gitlab::Access::MASTER) }
+        it { expect(project.team.max_member_access(maintainer.id)).to eq(Gitlab::Access::MAINTAINER) }
         it { expect(project.team.max_member_access(reporter.id)).to eq(Gitlab::Access::REPORTER) }
         it { expect(project.team.max_member_access(guest.id)).to eq(Gitlab::Access::GUEST) }
         it { expect(project.team.max_member_access(nonmember.id)).to eq(Gitlab::Access::NO_ACCESS) }
@@ -230,11 +271,11 @@ describe ProjectTeam do
             group: group,
             group_access: Gitlab::Access::DEVELOPER)
 
-          group.add_master(master)
+          group.add_maintainer(maintainer)
           group.add_reporter(reporter)
         end
 
-        it { expect(project.team.max_member_access(master.id)).to eq(Gitlab::Access::DEVELOPER) }
+        it { expect(project.team.max_member_access(maintainer.id)).to eq(Gitlab::Access::DEVELOPER) }
         it { expect(project.team.max_member_access(reporter.id)).to eq(Gitlab::Access::REPORTER) }
         it { expect(project.team.max_member_access(nonmember.id)).to eq(Gitlab::Access::NO_ACCESS) }
         it { expect(project.team.max_member_access(requester.id)).to eq(Gitlab::Access::NO_ACCESS) }
@@ -244,26 +285,26 @@ describe ProjectTeam do
             project.namespace.update(share_with_group_lock: true)
           end
 
-          it { expect(project.team.max_member_access(master.id)).to eq(Gitlab::Access::NO_ACCESS) }
+          it { expect(project.team.max_member_access(maintainer.id)).to eq(Gitlab::Access::NO_ACCESS) }
           it { expect(project.team.max_member_access(reporter.id)).to eq(Gitlab::Access::NO_ACCESS) }
         end
       end
     end
 
     context 'group project' do
-      let(:group) { create(:group, :access_requestable) }
+      let(:group) { create(:group) }
       let!(:project) do
         create(:project, group: group)
       end
 
       before do
-        group.add_master(master)
+        group.add_maintainer(maintainer)
         group.add_reporter(reporter)
         group.add_guest(guest)
         group.request_access(requester)
       end
 
-      it { expect(project.team.max_member_access(master.id)).to eq(Gitlab::Access::MASTER) }
+      it { expect(project.team.max_member_access(maintainer.id)).to eq(Gitlab::Access::MAINTAINER) }
       it { expect(project.team.max_member_access(reporter.id)).to eq(Gitlab::Access::REPORTER) }
       it { expect(project.team.max_member_access(guest.id)).to eq(Gitlab::Access::GUEST) }
       it { expect(project.team.max_member_access(nonmember.id)).to eq(Gitlab::Access::NO_ACCESS) }
@@ -274,7 +315,7 @@ describe ProjectTeam do
   describe '#member?' do
     let(:group) { create(:group) }
     let(:developer) { create(:user) }
-    let(:master) { create(:user) }
+    let(:maintainer) { create(:user) }
 
     let(:personal_project) do
       create(:project, namespace: developer.namespace)
@@ -288,11 +329,11 @@ describe ProjectTeam do
     let(:shared_project) { create(:project) }
 
     before do
-      group.add_master(master)
+      group.add_maintainer(maintainer)
       group.add_developer(developer)
 
       members_project.add_developer(developer)
-      members_project.add_master(master)
+      members_project.add_maintainer(maintainer)
 
       create(:project_group_link, project: shared_project, group: group)
     end
@@ -318,14 +359,14 @@ describe ProjectTeam do
     end
 
     it 'checks for the correct minimum level access' do
-      expect(group_project.team.member?(developer, Gitlab::Access::MASTER)).to be(false)
-      expect(group_project.team.member?(master, Gitlab::Access::MASTER)).to be(true)
-      expect(members_project.team.member?(developer, Gitlab::Access::MASTER)).to be(false)
-      expect(members_project.team.member?(master, Gitlab::Access::MASTER)).to be(true)
-      expect(shared_project.team.member?(developer, Gitlab::Access::MASTER)).to be(false)
-      expect(shared_project.team.member?(master, Gitlab::Access::MASTER)).to be(false)
+      expect(group_project.team.member?(developer, Gitlab::Access::MAINTAINER)).to be(false)
+      expect(group_project.team.member?(maintainer, Gitlab::Access::MAINTAINER)).to be(true)
+      expect(members_project.team.member?(developer, Gitlab::Access::MAINTAINER)).to be(false)
+      expect(members_project.team.member?(maintainer, Gitlab::Access::MAINTAINER)).to be(true)
+      expect(shared_project.team.member?(developer, Gitlab::Access::MAINTAINER)).to be(false)
+      expect(shared_project.team.member?(maintainer, Gitlab::Access::MAINTAINER)).to be(false)
       expect(shared_project.team.member?(developer, Gitlab::Access::DEVELOPER)).to be(true)
-      expect(shared_project.team.member?(master, Gitlab::Access::DEVELOPER)).to be(true)
+      expect(shared_project.team.member?(maintainer, Gitlab::Access::DEVELOPER)).to be(true)
     end
   end
 
@@ -334,7 +375,7 @@ describe ProjectTeam do
     let(:group) { create(:group) }
     let(:second_group) { create(:group) }
 
-    let(:master) { create(:user) }
+    let(:maintainer) { create(:user) }
     let(:reporter) { create(:user) }
     let(:guest) { create(:user) }
 
@@ -347,23 +388,23 @@ describe ProjectTeam do
     let(:second_user_without_access) { create(:user) }
 
     let(:users) do
-      [master, reporter, promoted_guest, guest, group_developer, second_developer, user_without_access].map(&:id)
+      [maintainer, reporter, promoted_guest, guest, group_developer, second_developer, user_without_access].map(&:id)
     end
 
     let(:expected) do
       {
-        master.id => Gitlab::Access::MASTER,
+        maintainer.id => Gitlab::Access::MAINTAINER,
         reporter.id => Gitlab::Access::REPORTER,
         promoted_guest.id => Gitlab::Access::DEVELOPER,
         guest.id => Gitlab::Access::GUEST,
         group_developer.id => Gitlab::Access::DEVELOPER,
-        second_developer.id => Gitlab::Access::MASTER,
+        second_developer.id => Gitlab::Access::MAINTAINER,
         user_without_access.id => Gitlab::Access::NO_ACCESS
       }
     end
 
     before do
-      project.add_master(master)
+      project.add_maintainer(maintainer)
       project.add_reporter(reporter)
       project.add_guest(promoted_guest)
       project.add_guest(guest)
@@ -373,16 +414,16 @@ describe ProjectTeam do
         group_access: Gitlab::Access::DEVELOPER
       )
 
-      group.add_master(promoted_guest)
+      group.add_maintainer(promoted_guest)
       group.add_developer(group_developer)
       group.add_developer(second_developer)
 
       project.project_group_links.create(
         group: second_group,
-        group_access: Gitlab::Access::MASTER
+        group_access: Gitlab::Access::MAINTAINER
       )
 
-      second_group.add_master(second_developer)
+      second_group.add_maintainer(second_developer)
     end
 
     it 'returns correct roles for different users' do

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe ContainerRegistry::Blob do
@@ -64,7 +66,7 @@ describe ContainerRegistry::Blob do
         .to_return(status: 200)
     end
 
-    it 'returns true when blob has been successfuly deleted' do
+    it 'returns true when blob has been successfully deleted' do
       expect(blob.delete).to be_truthy
     end
   end
@@ -110,11 +112,28 @@ describe ContainerRegistry::Blob do
         end
       end
 
+      context 'for a relative address' do
+        before do
+          stub_request(:get, 'http://registry.gitlab/relative')
+            .with { |request| !request.headers.include?('Authorization') }
+            .to_return(
+              status: 200,
+              headers: { 'Content-Type' => 'application/json' },
+              body: '{"key":"value"}')
+        end
+
+        let(:location) { '/relative' }
+
+        it 'returns correct data' do
+          expect(blob.data).to eq '{"key":"value"}'
+        end
+      end
+
       context 'for invalid file' do
         let(:location) { 'file:///etc/passwd' }
 
         it 'raises an error' do
-          expect { blob.data }.to raise_error(ArgumentError, 'invalid address')
+          expect { blob.data }.to raise_error(ArgumentError, 'Invalid scheme for file:///etc/passwd')
         end
       end
     end

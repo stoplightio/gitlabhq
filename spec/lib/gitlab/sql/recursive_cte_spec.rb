@@ -1,6 +1,8 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
-describe Gitlab::SQL::RecursiveCTE, :postgresql do
+describe Gitlab::SQL::RecursiveCTE do
   let(:cte) { described_class.new(:cte_name) }
 
   describe '#to_arel' do
@@ -28,6 +30,15 @@ describe Gitlab::SQL::RecursiveCTE, :postgresql do
 
       source_name = ActiveRecord::Base.connection.quote_table_name(:cte_name)
       alias_name = ActiveRecord::Base.connection.quote_table_name(:kittens)
+
+      expect(cte.alias_to(table).to_sql).to eq("#{source_name} AS #{alias_name}")
+    end
+
+    it 'replaces dots with an underscore' do
+      table = Arel::Table.new('gitlab.kittens')
+
+      source_name = ActiveRecord::Base.connection.quote_table_name(:cte_name)
+      alias_name = ActiveRecord::Base.connection.quote_table_name(:gitlab_kittens)
 
       expect(cte.alias_to(table).to_sql).to eq("#{source_name} AS #{alias_name}")
     end

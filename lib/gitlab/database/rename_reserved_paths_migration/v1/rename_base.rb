@@ -1,10 +1,10 @@
+# frozen_string_literal: true
+
 module Gitlab
   module Database
     module RenameReservedPathsMigration
       module V1
         class RenameBase
-          include Gitlab::Database::ArelMethods
-
           attr_reader :paths, :migration
 
           delegate :update_column_in_batches,
@@ -51,20 +51,16 @@ module Gitlab
             quoted_old_full_path = quote_string(old_full_path)
             quoted_old_wildcard_path = quote_string("#{old_full_path}/%")
 
-            filter = if Database.mysql?
-                       "lower(routes.path) = lower('#{quoted_old_full_path}') "\
-                       "OR routes.path LIKE '#{quoted_old_wildcard_path}'"
-                     else
-                       "routes.id IN "\
-                       "( SELECT routes.id FROM routes WHERE lower(routes.path) = lower('#{quoted_old_full_path}') "\
-                       "UNION SELECT routes.id FROM routes WHERE routes.path ILIKE '#{quoted_old_wildcard_path}' )"
-                     end
+            filter =
+              "routes.id IN "\
+              "( SELECT routes.id FROM routes WHERE lower(routes.path) = lower('#{quoted_old_full_path}') "\
+              "UNION SELECT routes.id FROM routes WHERE routes.path ILIKE '#{quoted_old_wildcard_path}' )"
 
             replace_statement = replace_sql(Route.arel_table[:path],
                                             old_full_path,
                                             new_full_path)
 
-            update = arel_update_manager
+            update = Arel::UpdateManager.new
               .table(routes)
               .set([[routes[:path], replace_statement]])
               .where(Arel::Nodes::SqlLiteral.new(filter))

@@ -15,7 +15,7 @@ GET /projects/:id/deployments
 | `sort`    | string  | no       | Return deployments sorted in `asc` or `desc` order. Default is `asc` |
 
 ```bash
-curl --header "PRIVATE-TOKEN: 9koXpg98eAheJpvBs5tK" "https://gitlab.example.com/api/v4/projects/1/deployments"
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/1/deployments"
 ```
 
 Example of response
@@ -24,6 +24,7 @@ Example of response
 [
   {
     "created_at": "2016-08-11T07:36:40.222Z",
+    "updated_at": "2016-08-11T07:38:12.414Z",
     "deployable": {
       "commit": {
         "author_email": "admin@example.com",
@@ -46,19 +47,21 @@ Example of response
       "status": "success",
       "tag": false,
       "user": {
-        "avatar_url": "http://www.gravatar.com/avatar/e64c7d89f26bd1972efa854d13d7dd61?s=80&d=identicon",
-        "bio": null,
-        "created_at": "2016-08-11T07:09:20.351Z",
         "id": 1,
-        "linkedin": "",
-        "location": null,
         "name": "Administrator",
-        "skype": "",
-        "state": "active",
-        "twitter": "",
         "username": "root",
-        "web_url": "http://localhost:3000/root",
-        "website_url": ""
+        "state": "active",
+        "avatar_url": "http://www.gravatar.com/avatar/e64c7d89f26bd1972efa854d13d7dd61?s=80&d=identicon",
+        "web_url": "http://gitlab.dev/root",
+        "created_at": "2015-12-21T13:14:24.077Z",
+        "bio": null,
+        "location": null,
+        "public_email": "",
+        "skype": "",
+        "linkedin": "",
+        "twitter": "",
+        "website_url": "",
+        "organization": ""
       }
     },
     "environment": {
@@ -81,6 +84,7 @@ Example of response
   },
   {
     "created_at": "2016-08-11T11:32:35.444Z",
+    "updated_at": "2016-08-11T11:34:01.123Z",
     "deployable": {
       "commit": {
         "author_email": "admin@example.com",
@@ -103,19 +107,21 @@ Example of response
       "status": "success",
       "tag": false,
       "user": {
-        "avatar_url": "http://www.gravatar.com/avatar/e64c7d89f26bd1972efa854d13d7dd61?s=80&d=identicon",
-        "bio": null,
-        "created_at": "2016-08-11T07:09:20.351Z",
         "id": 1,
-        "linkedin": "",
-        "location": null,
         "name": "Administrator",
-        "skype": "",
-        "state": "active",
-        "twitter": "",
         "username": "root",
-        "web_url": "http://localhost:3000/root",
-        "website_url": ""
+        "state": "active",
+        "avatar_url": "http://www.gravatar.com/avatar/e64c7d89f26bd1972efa854d13d7dd61?s=80&d=identicon",
+        "web_url": "http://gitlab.dev/root",
+        "created_at": "2015-12-21T13:14:24.077Z",
+        "bio": null,
+        "location": null,
+        "public_email": "",
+        "skype": "",
+        "linkedin": "",
+        "twitter": "",
+        "website_url": "",
+        "organization": ""
       }
     },
     "environment": {
@@ -151,7 +157,7 @@ GET /projects/:id/deployments/:deployment_id
 | `deployment_id` | integer | yes      | The ID of the deployment |
 
 ```bash
-curl --header "PRIVATE-TOKEN: 9koXpg98eAheJpvBs5tK" "https://gitlab.example.com/api/v4/projects/1/deployments/1"
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/1/deployments/1"
 ```
 
 Example of response
@@ -163,6 +169,7 @@ Example of response
   "ref": "master",
   "sha": "a91957a858320c0e17f3a0eca7cfacbff50ea29a",
   "created_at": "2016-08-11T11:32:35.444Z",
+  "updated_at": "2016-08-11T11:34:01.123Z",
   "user": {
     "name": "Administrator",
     "username": "root",
@@ -188,19 +195,20 @@ Example of response
     "started_at": null,
     "finished_at": "2016-08-11T11:32:35.145Z",
     "user": {
+      "id": 1,
       "name": "Administrator",
       "username": "root",
-      "id": 1,
       "state": "active",
       "avatar_url": "http://www.gravatar.com/avatar/e64c7d89f26bd1972efa854d13d7dd61?s=80&d=identicon",
-      "web_url": "http://localhost:3000/root",
-      "created_at": "2016-08-11T07:09:20.351Z",
+      "web_url": "http://gitlab.dev/root",
+      "created_at": "2015-12-21T13:14:24.077Z",
       "bio": null,
       "location": null,
       "skype": "",
       "linkedin": "",
       "twitter": "",
-      "website_url": ""
+      "website_url": "",
+      "organization": ""
     },
     "commit": {
       "id": "a91957a858320c0e17f3a0eca7cfacbff50ea29a",
@@ -213,5 +221,102 @@ Example of response
     },
     "runner": null
   }
+}
+```
+
+## Create a deployment
+
+```
+POST /projects/:id/deployments
+```
+
+| Attribute        | Type           | Required | Description         |
+|------------------|----------------|----------|---------------------|
+| `id`             | integer/string | yes      | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) owned by the authenticated user |
+| `environment`    | string         | yes      | The name of the environment to create the deployment for |
+| `sha`            | string         | yes      | The SHA of the commit that is deployed |
+| `ref`            | string         | yes      | The name of the branch or tag that is deployed |
+| `tag`            | boolean        | yes      | A boolean that indicates if the deployed ref is a tag (true) or not (false) |
+| `status`         | string         | yes      | The status of the deployment |
+
+The status can be one of the following values:
+
+- created
+- running
+- success
+- failed
+- canceled
+
+```bash
+curl --data "environment=production&sha=a91957a858320c0e17f3a0eca7cfacbff50ea29a&ref=master&tag=false&status=success" --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/1/deployments"
+```
+
+Example of a response:
+
+```json
+{
+  "id": 42,
+  "iid": 2,
+  "ref": "master",
+  "sha": "a91957a858320c0e17f3a0eca7cfacbff50ea29a",
+  "created_at": "2016-08-11T11:32:35.444Z",
+  "status": "success",
+  "user": {
+    "name": "Administrator",
+    "username": "root",
+    "id": 1,
+    "state": "active",
+    "avatar_url": "http://www.gravatar.com/avatar/e64c7d89f26bd1972efa854d13d7dd61?s=80&d=identicon",
+    "web_url": "http://localhost:3000/root"
+  },
+  "environment": {
+    "id": 9,
+    "name": "production",
+    "external_url": "https://about.gitlab.com"
+  },
+  "deployable": null
+}
+```
+
+## Updating a deployment
+
+```
+PUT /projects/:id/deployments/:deployment_id
+```
+
+| Attribute        | Type           | Required | Description         |
+|------------------|----------------|----------|---------------------|
+| `id`             | integer/string | yes      | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) owned by the authenticated user |
+| `deployment_id`  | integer        | yes      | The ID of the deployment to update |
+| `status`         | string         | yes      | The new status of the deployment |
+
+```bash
+curl --request PUT --data "status=success" --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/1/deployments/42"
+```
+
+Example of a response:
+
+```json
+{
+  "id": 42,
+  "iid": 2,
+  "ref": "master",
+  "sha": "a91957a858320c0e17f3a0eca7cfacbff50ea29a",
+  "created_at": "2016-08-11T11:32:35.444Z",
+  "status": "success",
+  "user": {
+    "name": "Administrator",
+    "username": "root",
+    "id": 1,
+    "state": "active",
+    "avatar_url": "http://www.gravatar.com/avatar/e64c7d89f26bd1972efa854d13d7dd61?s=80&d=identicon",
+    "web_url": "http://localhost:3000/root"
+  },
+  "environment": {
+    "id": 9,
+    "name": "production",
+    "external_url": "https://about.gitlab.com"
+  },
+  "deployable": null
 }
 ```

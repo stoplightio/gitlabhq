@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Resolvers::ProjectResolver do
@@ -12,7 +14,7 @@ describe Resolvers::ProjectResolver do
     it 'batch-resolves projects by full path' do
       paths = [project1.full_path, project2.full_path]
 
-      result = batch(max_queries: 1) do
+      result = batch_sync(max_queries: 1) do
         paths.map { |path| resolve_project(path) }
       end
 
@@ -20,10 +22,18 @@ describe Resolvers::ProjectResolver do
     end
 
     it 'resolves an unknown full_path to nil' do
-      result = batch { resolve_project('unknown/project') }
+      result = batch_sync { resolve_project('unknown/project') }
 
       expect(result).to be_nil
     end
+  end
+
+  it 'does not increase complexity depending on number of load limits' do
+    field1 = Types::BaseField.new(name: 'test', type: GraphQL::STRING_TYPE, resolver_class: described_class, null: false, max_page_size: 100)
+    field2 = Types::BaseField.new(name: 'test', type: GraphQL::STRING_TYPE, resolver_class: described_class, null: false, max_page_size: 1)
+
+    expect(field1.to_graphql.complexity.call({}, {}, 1)).to eq 2
+    expect(field2.to_graphql.complexity.call({}, {}, 1)).to eq 2
   end
 
   def resolve_project(full_path)

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "spec_helper"
 
 describe "User interacts with deploy keys", :js do
@@ -50,7 +52,7 @@ describe "User interacts with deploy keys", :js do
       before do
         create(:deploy_keys_project, project: another_project, deploy_key: deploy_key)
 
-        another_project.add_master(user)
+        another_project.add_maintainer(user)
       end
 
       it "shows deploy keys" do
@@ -110,7 +112,7 @@ describe "User interacts with deploy keys", :js do
       before do
         create(:deploy_keys_project, project: another_project, deploy_key: deploy_key)
 
-        another_project.add_master(user)
+        another_project.add_maintainer(user)
       end
 
       it_behaves_like "attaches a key"

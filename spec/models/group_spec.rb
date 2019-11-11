@@ -1,7 +1,9 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Group do
-  let!(:group) { create(:group, :access_requestable) }
+  let!(:group) { create(:group) }
 
   describe 'associations' do
     it { is_expected.to have_many :projects }
@@ -19,6 +21,9 @@ describe Group do
     it { is_expected.to have_one(:chat_team) }
     it { is_expected.to have_many(:custom_attributes).class_name('GroupCustomAttribute') }
     it { is_expected.to have_many(:badges).class_name('GroupBadge') }
+    it { is_expected.to have_many(:cluster_groups).class_name('Clusters::Group') }
+    it { is_expected.to have_many(:clusters).class_name('Clusters::Cluster') }
+    it { is_expected.to have_many(:container_repositories) }
 
     describe '#members & #requesters' do
       let(:requester) { create(:user) }
@@ -67,14 +72,14 @@ describe Group do
       end
     end
 
-    describe '#notification_settings', :nested_groups do
+    describe '#notification_settings' do
       let(:user) { create(:user) }
       let(:group) { create(:group) }
       let(:sub_group) { create(:group, parent_id: group.id) }
 
       before do
         group.add_developer(user)
-        sub_group.add_developer(user)
+        sub_group.add_maintainer(user)
       end
 
       it 'also gets notification settings from parent groups' do
@@ -87,6 +92,43 @@ describe Group do
           expect do
             sub_group.destroy
           end.to change { NotificationSetting.count }.by(-1)
+        end
+      end
+    end
+
+    describe '#notification_email_for' do
+      let(:user) { create(:user) }
+      let(:group) { create(:group) }
+      let(:subgroup) { create(:group, parent: group) }
+
+      let(:group_notification_email) { 'user+group@example.com' }
+      let(:subgroup_notification_email) { 'user+subgroup@example.com' }
+
+      subject { subgroup.notification_email_for(user) }
+
+      context 'when both group notification emails are set' do
+        it 'returns subgroup notification email' do
+          create(:notification_setting, user: user, source: group, notification_email: group_notification_email)
+          create(:notification_setting, user: user, source: subgroup, notification_email: subgroup_notification_email)
+
+          is_expected.to eq(subgroup_notification_email)
+        end
+      end
+
+      context 'when subgroup notification email is blank' do
+        it 'returns parent group notification email' do
+          create(:notification_setting, user: user, source: group, notification_email: group_notification_email)
+          create(:notification_setting, user: user, source: subgroup, notification_email: '')
+
+          is_expected.to eq(group_notification_email)
+        end
+      end
+
+      context 'when only the parent group notification email is set' do
+        it 'returns parent group notification email' do
+          create(:notification_setting, user: user, source: group, notification_email: group_notification_email)
+
+          is_expected.to eq(group_notification_email)
         end
       end
     end
@@ -169,22 +211,42 @@ describe Group do
     end
   end
 
-  describe '.visible_to_user' do
-    let!(:group) { create(:group) }
-    let!(:user)  { create(:user) }
+  describe '.public_or_visible_to_user' do
+    let!(:private_group)  { create(:group, :private)  }
+    let!(:internal_group) { create(:group, :internal) }
 
-    subject { described_class.visible_to_user(user) }
+    subject { described_class.public_or_visible_to_user(user) }
 
-    describe 'when the user has access to a group' do
-      before do
-        group.add_user(user, Gitlab::Access::MASTER)
-      end
+    context 'when user is nil' do
+      let!(:user) { nil }
 
-      it { is_expected.to eq([group]) }
+      it { is_expected.to match_array([group]) }
     end
 
-    describe 'when the user does not have access to any groups' do
-      it { is_expected.to eq([]) }
+    context 'when user' do
+      let!(:user) { create(:user) }
+
+      context 'when user does not have access to any private group' do
+        it { is_expected.to match_array([internal_group, group]) }
+      end
+
+      context 'when user is a member of private group' do
+        before do
+          private_group.add_user(user, Gitlab::Access::DEVELOPER)
+        end
+
+        it { is_expected.to match_array([private_group, internal_group, group]) }
+      end
+
+      context 'when user is a member of private subgroup' do
+        let!(:private_subgroup) { create(:group, :private, parent: private_group) }
+
+        before do
+          private_subgroup.add_user(user, Gitlab::Access::DEVELOPER)
+        end
+
+        it { is_expected.to match_array([private_subgroup, internal_group, group]) }
+      end
     end
   end
 
@@ -229,10 +291,10 @@ describe Group do
     let(:user) { create(:user) }
 
     before do
-      group.add_user(user, GroupMember::MASTER)
+      group.add_user(user, GroupMember::MAINTAINER)
     end
 
-    it { expect(group.group_members.masters.map(&:user)).to include(user) }
+    it { expect(group.group_members.maintainers.map(&:user)).to include(user) }
   end
 
   describe '#add_users' do
@@ -254,7 +316,7 @@ describe Group do
     let(:user) { create(:user) }
 
     before do
-      group.add_user(user, GroupMember::MASTER)
+      group.add_user(user, GroupMember::MAINTAINER)
     end
 
     it "is true if avatar is image" do
@@ -269,12 +331,12 @@ describe Group do
   end
 
   describe '#avatar_url' do
-    let!(:group) { create(:group, :access_requestable, :with_avatar) }
+    let!(:group) { create(:group, :with_avatar) }
     let(:user) { create(:user) }
 
     context 'when avatar file is uploaded' do
       before do
-        group.add_master(user)
+        group.add_maintainer(user)
       end
 
       it 'shows correct avatar url' do
@@ -317,7 +379,7 @@ describe Group do
     end
 
     it { expect(group.has_owner?(@members[:owner])).to be_truthy }
-    it { expect(group.has_owner?(@members[:master])).to be_falsey }
+    it { expect(group.has_owner?(@members[:maintainer])).to be_falsey }
     it { expect(group.has_owner?(@members[:developer])).to be_falsey }
     it { expect(group.has_owner?(@members[:reporter])).to be_falsey }
     it { expect(group.has_owner?(@members[:guest])).to be_falsey }
@@ -325,19 +387,45 @@ describe Group do
     it { expect(group.has_owner?(nil)).to be_falsey }
   end
 
-  describe '#has_master?' do
+  describe '#has_maintainer?' do
     before do
       @members = setup_group_members(group)
-      create(:group_member, :invited, :master, group: group)
+      create(:group_member, :invited, :maintainer, group: group)
     end
 
-    it { expect(group.has_master?(@members[:owner])).to be_falsey }
-    it { expect(group.has_master?(@members[:master])).to be_truthy }
-    it { expect(group.has_master?(@members[:developer])).to be_falsey }
-    it { expect(group.has_master?(@members[:reporter])).to be_falsey }
-    it { expect(group.has_master?(@members[:guest])).to be_falsey }
-    it { expect(group.has_master?(@members[:requester])).to be_falsey }
-    it { expect(group.has_master?(nil)).to be_falsey }
+    it { expect(group.has_maintainer?(@members[:owner])).to be_falsey }
+    it { expect(group.has_maintainer?(@members[:maintainer])).to be_truthy }
+    it { expect(group.has_maintainer?(@members[:developer])).to be_falsey }
+    it { expect(group.has_maintainer?(@members[:reporter])).to be_falsey }
+    it { expect(group.has_maintainer?(@members[:guest])).to be_falsey }
+    it { expect(group.has_maintainer?(@members[:requester])).to be_falsey }
+    it { expect(group.has_maintainer?(nil)).to be_falsey }
+  end
+
+  describe '#last_owner?' do
+    before do
+      @members = setup_group_members(group)
+    end
+
+    it { expect(group.last_owner?(@members[:owner])).to be_truthy }
+
+    context 'with two owners' do
+      before do
+        create(:group_member, :owner, group: group)
+      end
+
+      it { expect(group.last_owner?(@members[:owner])).to be_falsy }
+    end
+
+    context 'with owners from a parent' do
+      before do
+        parent_group = create(:group)
+        create(:group_member, :owner, group: parent_group)
+        group.update(parent: parent_group)
+      end
+
+      it { expect(group.last_owner?(@members[:owner])).to be_falsy }
+    end
   end
 
   describe '#lfs_enabled?' do
@@ -401,7 +489,7 @@ describe Group do
   def setup_group_members(group)
     members = {
       owner: create(:user),
-      master: create(:user),
+      maintainer: create(:user),
       developer: create(:user),
       reporter: create(:user),
       guest: create(:user),
@@ -409,7 +497,7 @@ describe Group do
     }
 
     group.add_user(members[:owner], GroupMember::OWNER)
-    group.add_user(members[:master], GroupMember::MASTER)
+    group.add_user(members[:maintainer], GroupMember::MAINTAINER)
     group.add_user(members[:developer], GroupMember::DEVELOPER)
     group.add_user(members[:reporter], GroupMember::REPORTER)
     group.add_user(members[:guest], GroupMember::GUEST)
@@ -437,27 +525,27 @@ describe Group do
     it { expect(subject.parent).to be_kind_of(described_class) }
   end
 
-  describe '#members_with_parents', :nested_groups do
+  describe '#members_with_parents' do
     let!(:group) { create(:group, :nested) }
-    let!(:master) { group.parent.add_user(create(:user), GroupMember::MASTER) }
+    let!(:maintainer) { group.parent.add_user(create(:user), GroupMember::MAINTAINER) }
     let!(:developer) { group.add_user(create(:user), GroupMember::DEVELOPER) }
 
     it 'returns parents members' do
       expect(group.members_with_parents).to include(developer)
-      expect(group.members_with_parents).to include(master)
+      expect(group.members_with_parents).to include(maintainer)
     end
   end
 
-  describe '#direct_and_indirect_members', :nested_groups do
+  describe '#direct_and_indirect_members' do
     let!(:group) { create(:group, :nested) }
     let!(:sub_group) { create(:group, parent: group) }
-    let!(:master) { group.parent.add_user(create(:user), GroupMember::MASTER) }
+    let!(:maintainer) { group.parent.add_user(create(:user), GroupMember::MAINTAINER) }
     let!(:developer) { group.add_user(create(:user), GroupMember::DEVELOPER) }
     let!(:other_developer) { group.add_user(create(:user), GroupMember::DEVELOPER) }
 
     it 'returns parents members' do
       expect(group.direct_and_indirect_members).to include(developer)
-      expect(group.direct_and_indirect_members).to include(master)
+      expect(group.direct_and_indirect_members).to include(maintainer)
     end
 
     it 'returns descendant members' do
@@ -465,7 +553,7 @@ describe Group do
     end
   end
 
-  describe '#users_with_descendants', :nested_groups do
+  describe '#users_with_descendants' do
     let(:user_a) { create(:user) }
     let(:user_b) { create(:user) }
 
@@ -476,7 +564,7 @@ describe Group do
     it 'returns member users on every nest level without duplication' do
       group.add_developer(user_a)
       nested_group.add_developer(user_b)
-      deep_nested_group.add_developer(user_a)
+      deep_nested_group.add_maintainer(user_a)
 
       expect(group.users_with_descendants).to contain_exactly(user_a, user_b)
       expect(nested_group.users_with_descendants).to contain_exactly(user_a, user_b)
@@ -484,7 +572,7 @@ describe Group do
     end
   end
 
-  describe '#direct_and_indirect_users', :nested_groups do
+  describe '#direct_and_indirect_users' do
     let(:user_a) { create(:user) }
     let(:user_b) { create(:user) }
     let(:user_c) { create(:user) }
@@ -514,7 +602,7 @@ describe Group do
     end
   end
 
-  describe '#project_users_with_descendants', :nested_groups do
+  describe '#project_users_with_descendants' do
     let(:user_a) { create(:user) }
     let(:user_b) { create(:user) }
     let(:user_c) { create(:user) }
@@ -539,54 +627,110 @@ describe Group do
 
   describe '#user_ids_for_project_authorizations' do
     it 'returns the user IDs for which to refresh authorizations' do
-      master = create(:user)
+      maintainer = create(:user)
       developer = create(:user)
 
-      group.add_user(master, GroupMember::MASTER)
+      group.add_user(maintainer, GroupMember::MAINTAINER)
       group.add_user(developer, GroupMember::DEVELOPER)
 
       expect(group.user_ids_for_project_authorizations)
-        .to include(master.id, developer.id)
+        .to include(maintainer.id, developer.id)
     end
   end
 
   describe '#update_two_factor_requirement' do
     let(:user) { create(:user) }
 
-    before do
-      group.add_user(user, GroupMember::OWNER)
-    end
-
-    it 'is called when require_two_factor_authentication is changed' do
-      expect_any_instance_of(User).to receive(:update_two_factor_requirement)
-
-      group.update!(require_two_factor_authentication: true)
-    end
-
-    it 'is called when two_factor_grace_period is changed' do
-      expect_any_instance_of(User).to receive(:update_two_factor_requirement)
-
-      group.update!(two_factor_grace_period: 23)
-    end
-
-    it 'is not called when other attributes are changed' do
-      expect_any_instance_of(User).not_to receive(:update_two_factor_requirement)
-
-      group.update!(description: 'foobar')
-    end
-
-    it 'calls #update_two_factor_requirement on each group member' do
-      other_user = create(:user)
-      group.add_user(other_user, GroupMember::OWNER)
-
-      calls = 0
-      allow_any_instance_of(User).to receive(:update_two_factor_requirement) do
-        calls += 1
+    context 'group membership' do
+      before do
+        group.add_user(user, GroupMember::OWNER)
       end
 
-      group.update!(require_two_factor_authentication: true, two_factor_grace_period: 23)
+      it 'is called when require_two_factor_authentication is changed' do
+        expect_any_instance_of(User).to receive(:update_two_factor_requirement)
 
-      expect(calls).to eq 2
+        group.update!(require_two_factor_authentication: true)
+      end
+
+      it 'is called when two_factor_grace_period is changed' do
+        expect_any_instance_of(User).to receive(:update_two_factor_requirement)
+
+        group.update!(two_factor_grace_period: 23)
+      end
+
+      it 'is not called when other attributes are changed' do
+        expect_any_instance_of(User).not_to receive(:update_two_factor_requirement)
+
+        group.update!(description: 'foobar')
+      end
+
+      it 'calls #update_two_factor_requirement on each group member' do
+        other_user = create(:user)
+        group.add_user(other_user, GroupMember::OWNER)
+
+        calls = 0
+        allow_any_instance_of(User).to receive(:update_two_factor_requirement) do
+          calls += 1
+        end
+
+        group.update!(require_two_factor_authentication: true, two_factor_grace_period: 23)
+
+        expect(calls).to eq 2
+      end
+    end
+
+    context 'sub groups and projects' do
+      it 'enables two_factor_requirement for group member' do
+        group.add_user(user, GroupMember::OWNER)
+
+        group.update!(require_two_factor_authentication: true)
+
+        expect(user.reload.require_two_factor_authentication_from_group).to be_truthy
+      end
+
+      context 'expanded group members' do
+        let(:indirect_user) { create(:user) }
+
+        it 'enables two_factor_requirement for subgroup member' do
+          subgroup = create(:group, :nested, parent: group)
+          subgroup.add_user(indirect_user, GroupMember::OWNER)
+
+          group.update!(require_two_factor_authentication: true)
+
+          expect(indirect_user.reload.require_two_factor_authentication_from_group).to be_truthy
+        end
+
+        it 'does not enable two_factor_requirement for ancestor group member' do
+          ancestor_group = create(:group)
+          ancestor_group.add_user(indirect_user, GroupMember::OWNER)
+          group.update!(parent: ancestor_group)
+
+          group.update!(require_two_factor_authentication: true)
+
+          expect(indirect_user.reload.require_two_factor_authentication_from_group).to be_falsey
+        end
+      end
+
+      context 'project members' do
+        it 'does not enable two_factor_requirement for child project member' do
+          project = create(:project, group: group)
+          project.add_maintainer(user)
+
+          group.update!(require_two_factor_authentication: true)
+
+          expect(user.reload.require_two_factor_authentication_from_group).to be_falsey
+        end
+
+        it 'does not enable two_factor_requirement for subgroup child project member' do
+          subgroup = create(:group, :nested, parent: group)
+          project = create(:project, group: subgroup)
+          project.add_maintainer(user)
+
+          group.update!(require_two_factor_authentication: true)
+
+          expect(user.reload.require_two_factor_authentication_from_group).to be_falsey
+        end
+      end
     end
   end
 
@@ -617,7 +761,7 @@ describe Group do
           expect(group).to receive(:system_hook_service).and_return(system_hook_service)
           expect(system_hook_service).to receive(:execute_hooks_for).with(group, :rename)
 
-          group.update_attributes!(path: new_path)
+          group.update!(path: new_path)
         end
       end
 
@@ -625,16 +769,16 @@ describe Group do
         it 'does not trigger system hook' do
           expect(group).not_to receive(:system_hook_service)
 
-          group.update_attributes!(name: 'new name')
+          group.update!(name: 'new name')
         end
       end
     end
   end
 
-  describe '#secret_variables_for' do
+  describe '#ci_variables_for' do
     let(:project) { create(:project, group: group) }
 
-    let!(:secret_variable) do
+    let!(:ci_variable) do
       create(:ci_group_variable, value: 'secret', group: group)
     end
 
@@ -642,11 +786,11 @@ describe Group do
       create(:ci_group_variable, :protected, value: 'protected', group: group)
     end
 
-    subject { group.secret_variables_for('ref', project) }
+    subject { group.ci_variables_for('ref', project) }
 
     shared_examples 'ref is protected' do
       it 'contains all the variables' do
-        is_expected.to contain_exactly(secret_variable, protected_variable)
+        is_expected.to contain_exactly(ci_variable, protected_variable)
       end
     end
 
@@ -656,8 +800,8 @@ describe Group do
           default_branch_protection: Gitlab::Access::PROTECTION_NONE)
       end
 
-      it 'contains only the secret variables' do
-        is_expected.to contain_exactly(secret_variable)
+      it 'contains only the CI variables' do
+        is_expected.to contain_exactly(ci_variable)
       end
     end
 
@@ -677,7 +821,7 @@ describe Group do
       it_behaves_like 'ref is protected'
     end
 
-    context 'when group has children', :postgresql do
+    context 'when group has children' do
       let(:group_child)      { create(:group, parent: group) }
       let(:group_child_2)    { create(:group, parent: group_child) }
       let(:group_child_3)    { create(:group, parent: group_child_2) }
@@ -690,9 +834,9 @@ describe Group do
       end
 
       it 'returns all variables belong to the group and parent groups' do
-        expected_array1 = [protected_variable, secret_variable]
+        expected_array1 = [protected_variable, ci_variable]
         expected_array2 = [variable_child, variable_child_2, variable_child_3]
-        got_array = group_child_3.secret_variables_for('ref', project).to_a
+        got_array = group_child_3.ci_variables_for('ref', project).to_a
 
         expect(got_array.shift(2)).to contain_exactly(*expected_array1)
         expect(got_array).to eq(expected_array2)
@@ -700,27 +844,219 @@ describe Group do
     end
   end
 
-  describe '#has_parent?' do
-    context 'when the group has a parent' do
-      it 'should be truthy' do
-        group = create(:group, :nested)
-        expect(group.has_parent?).to be_truthy
+  describe '#highest_group_member' do
+    let(:nested_group) { create(:group, parent: group) }
+    let(:nested_group_2) { create(:group, parent: nested_group) }
+    let(:user) { create(:user) }
+
+    subject(:highest_group_member) { nested_group_2.highest_group_member(user) }
+
+    context 'when the user is not a member of any group in the hierarchy' do
+      it 'returns nil' do
+        expect(highest_group_member).to be_nil
       end
     end
 
-    context 'when the group has no parent' do
-      it 'should be falsy' do
-        group = create(:group, parent: nil)
-        expect(group.has_parent?).to be_falsy
+    context 'when the user is only a member of one group in the hierarchy' do
+      before do
+        nested_group.add_developer(user)
+      end
+
+      it 'returns that group member' do
+        expect(highest_group_member.access_level).to eq(Gitlab::Access::DEVELOPER)
+      end
+    end
+
+    context 'when the user is a member of several groups in the hierarchy' do
+      before do
+        group.add_owner(user)
+        nested_group.add_developer(user)
+        nested_group_2.add_maintainer(user)
+      end
+
+      it 'returns the group member with the highest access level' do
+        expect(highest_group_member.access_level).to eq(Gitlab::Access::OWNER)
       end
     end
   end
 
   context 'with uploads' do
-    it_behaves_like 'model with mounted uploader', true do
+    it_behaves_like 'model with uploads', true do
       let(:model_object) { create(:group, :with_avatar) }
       let(:upload_attribute) { :avatar }
       let(:uploader_class) { AttachmentUploader }
+    end
+  end
+
+  describe '#first_auto_devops_config' do
+    using RSpec::Parameterized::TableSyntax
+
+    let(:group) { create(:group) }
+
+    subject { group.first_auto_devops_config }
+
+    where(:instance_value, :group_value, :config) do
+      # Instance level enabled
+      true | nil    | { status: true, scope: :instance }
+      true | true   | { status: true, scope: :group }
+      true | false  | { status: false, scope: :group }
+
+      # Instance level disabled
+      false | nil    | { status: false, scope: :instance }
+      false | true   | { status: true, scope: :group }
+      false | false  | { status: false, scope: :group }
+    end
+
+    with_them do
+      before do
+        stub_application_setting(auto_devops_enabled: instance_value)
+
+        group.update_attribute(:auto_devops_enabled, group_value)
+      end
+
+      it { is_expected.to eq(config) }
+    end
+
+    context 'with parent groups' do
+      where(:instance_value, :parent_value, :group_value, :config) do
+        # Instance level enabled
+        true | nil   | nil    | { status: true, scope: :instance }
+        true | nil   | true   | { status: true, scope: :group }
+        true | nil   | false  | { status: false, scope: :group }
+
+        true | true  | nil    | { status: true, scope: :group }
+        true | true  | true   | { status: true, scope: :group }
+        true | true  | false  | { status: false, scope: :group }
+
+        true | false | nil    | { status: false, scope: :group }
+        true | false | true   | { status: true, scope: :group }
+        true | false | false  | { status: false, scope: :group }
+
+        # Instance level disable
+        false | nil  | nil    | { status: false, scope: :instance }
+        false | nil  | true   | { status: true, scope: :group }
+        false | nil  | false  | { status: false, scope: :group }
+
+        false | true | nil    | { status: true, scope: :group }
+        false | true | true   | { status: true, scope: :group }
+        false | true | false  | { status: false, scope: :group }
+
+        false | false | nil   | { status: false, scope: :group }
+        false | false | true  | { status: true, scope: :group }
+        false | false | false | { status: false, scope: :group }
+      end
+
+      with_them do
+        before do
+          stub_application_setting(auto_devops_enabled: instance_value)
+          parent = create(:group, auto_devops_enabled: parent_value)
+
+          group.update!(
+            auto_devops_enabled: group_value,
+            parent: parent
+          )
+        end
+
+        it { is_expected.to eq(config) }
+      end
+    end
+  end
+
+  describe '#auto_devops_enabled?' do
+    subject { group.auto_devops_enabled? }
+
+    context 'when auto devops is explicitly enabled on group' do
+      let(:group) { create(:group, :auto_devops_enabled) }
+
+      it { is_expected.to be_truthy }
+    end
+
+    context 'when auto devops is explicitly disabled on group' do
+      let(:group) { create(:group, :auto_devops_disabled) }
+
+      it { is_expected.to be_falsy }
+    end
+
+    context 'when auto devops is implicitly enabled or disabled' do
+      before do
+        stub_application_setting(auto_devops_enabled: false)
+
+        group.update!(parent: parent_group)
+      end
+
+      context 'when auto devops is enabled on root group' do
+        let(:root_group) { create(:group, :auto_devops_enabled) }
+        let(:subgroup) { create(:group, parent: root_group) }
+        let(:parent_group) { create(:group, parent: subgroup) }
+
+        it { is_expected.to be_truthy }
+      end
+
+      context 'when auto devops is disabled on root group' do
+        let(:root_group) { create(:group, :auto_devops_disabled) }
+        let(:subgroup) { create(:group, parent: root_group) }
+        let(:parent_group) { create(:group, parent: subgroup) }
+
+        it { is_expected.to be_falsy }
+      end
+
+      context 'when auto devops is disabled on parent group and enabled on root group' do
+        let(:root_group) { create(:group, :auto_devops_enabled) }
+        let(:parent_group) { create(:group, :auto_devops_disabled, parent: root_group) }
+
+        it { is_expected.to be_falsy }
+      end
+    end
+  end
+
+  describe 'project_creation_level' do
+    it 'outputs the default one if it is nil' do
+      group = create(:group, project_creation_level: nil)
+
+      expect(group.project_creation_level).to eq(Gitlab::CurrentSettings.default_project_creation)
+    end
+  end
+
+  describe 'subgroup_creation_level' do
+    it 'defaults to maintainers' do
+      expect(group.subgroup_creation_level)
+        .to eq(Gitlab::Access::MAINTAINER_SUBGROUP_ACCESS)
+    end
+  end
+
+  describe '#access_request_approvers_to_be_notified' do
+    it 'returns a maximum of ten, active, non_requested owners of the group in recent_sign_in descending order' do
+      group = create(:group, :public)
+
+      users = create_list(:user, 12, :with_sign_ins)
+      active_owners = users.map do |user|
+        create(:group_member, :owner, group: group, user: user)
+      end
+
+      create(:group_member, :owner, :blocked, group: group)
+      create(:group_member, :maintainer, group: group)
+      create(:group_member, :access_request, :owner, group: group)
+
+      active_owners_in_recent_sign_in_desc_order = group.members_and_requesters.where(id: active_owners).order_recent_sign_in.limit(10)
+
+      expect(group.access_request_approvers_to_be_notified).to eq(active_owners_in_recent_sign_in_desc_order)
+    end
+  end
+
+  describe '.groups_including_descendants_by' do
+    it 'returns the expected groups for a group and its descendants' do
+      parent_group1 = create(:group)
+      child_group1 = create(:group, parent: parent_group1)
+      child_group2 = create(:group, parent: parent_group1)
+
+      parent_group2 = create(:group)
+      child_group3 = create(:group, parent: parent_group2)
+
+      create(:group)
+
+      groups = described_class.groups_including_descendants_by([parent_group2.id, parent_group1.id])
+
+      expect(groups).to contain_exactly(parent_group1, parent_group2, child_group1, child_group2, child_group3)
     end
   end
 end

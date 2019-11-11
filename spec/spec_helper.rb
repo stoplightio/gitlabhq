@@ -1,14 +1,18 @@
+# frozen_string_literal: true
+
 require './spec/simplecov_env'
 SimpleCovEnv.start!
 
 ENV["RAILS_ENV"] = 'test'
 ENV["IN_MEMORY_APPLICATION_SETTINGS"] = 'true'
+ENV["RSPEC_ALLOW_INVALID_URLS"] = 'true'
 
-require File.expand_path("../../config/environment", __FILE__)
+require File.expand_path('../config/environment', __dir__)
 require 'rspec/rails'
 require 'shoulda/matchers'
 require 'rspec/retry'
 require 'rspec-parameterized'
+require 'test_prof/recipes/rspec/let_it_be'
 
 rspec_profiling_is_configured =
   ENV['RSPEC_PROFILING_POSTGRES_URL'].present? ||
@@ -22,34 +26,50 @@ if rspec_profiling_is_configured && (!ENV.key?('CI') || branch_can_be_profiled)
   require 'rspec_profiling/rspec'
 end
 
-if ENV['CI'] && !ENV['NO_KNAPSACK']
+if ENV['CI'] && ENV['KNAPSACK_GENERATE_REPORT'] && !ENV['NO_KNAPSACK']
   require 'knapsack'
   Knapsack::Adapters::RSpecAdapter.bind
 end
 
 # require rainbow gem String monkeypatch, so we can test SystemChecks
 require 'rainbow/ext/string'
+Rainbow.enabled = false
+
+require_relative('../ee/spec/spec_helper') if Gitlab.ee?
 
 # Requires supporting ruby files with custom matchers and macros, etc,
 # in spec/support/ and its subdirectories.
 # Requires helpers, and shared contexts/examples first since they're used in other support files
+
+# Load these first since they may be required by other helpers
+require Rails.root.join("spec/support/helpers/git_helpers.rb")
+
+# Then the rest
 Dir[Rails.root.join("spec/support/helpers/*.rb")].each { |f| require f }
 Dir[Rails.root.join("spec/support/shared_contexts/*.rb")].each { |f| require f }
 Dir[Rails.root.join("spec/support/shared_examples/*.rb")].each { |f| require f }
 Dir[Rails.root.join("spec/support/**/*.rb")].each { |f| require f }
 
+quality_level = Quality::TestLevel.new
+
 RSpec.configure do |config|
-  config.use_transactional_fixtures = false
+  config.filter_run focus: true
+  config.run_all_when_everything_filtered = true
+
+  config.use_transactional_fixtures = true
   config.use_instantiated_fixtures  = false
+  config.fixture_path = Rails.root
 
   config.verbose_retry = true
   config.display_try_failure_messages = true
 
   config.infer_spec_type_from_file_location!
+  config.full_backtrace = !!ENV['CI']
 
-  config.define_derived_metadata(file_path: %r{/spec/}) do |metadata|
+  config.define_derived_metadata(file_path: %r{(ee)?/spec/.+_spec\.rb\z}) do |metadata|
     location = metadata[:location]
 
+    metadata[:level] = quality_level.level_for(location)
     metadata[:api] = true if location =~ %r{/spec/requests/api/}
 
     # do not overwrite type if it's already set
@@ -59,6 +79,7 @@ RSpec.configure do |config|
     metadata[:type] = match[1].singularize.to_sym if match
   end
 
+  config.include LicenseHelpers
   config.include ActiveJob::TestHelper
   config.include ActiveSupport::Testing::TimeHelpers
   config.include CycleAnalyticsHelpers
@@ -67,13 +88,16 @@ RSpec.configure do |config|
   config.include FixtureHelpers
   config.include GitlabRoutingHelper
   config.include StubFeatureFlags
+  config.include StubExperiments
   config.include StubGitlabCalls
   config.include StubGitlabData
+  config.include NextInstanceOf
   config.include TestEnv
   config.include Devise::Test::ControllerHelpers, type: :controller
   config.include Devise::Test::IntegrationHelpers, type: :feature
   config.include LoginHelpers, type: :feature
   config.include SearchHelpers, type: :feature
+  config.include WaitHelpers, type: :feature
   config.include EmailHelpers, :mailer, type: :mailer
   config.include Warden::Test::Helpers, type: :request
   config.include Gitlab::Routing, type: :routing
@@ -87,6 +111,11 @@ RSpec.configure do |config|
   config.include LiveDebugger, :js
   config.include MigrationsHelpers, :migration
   config.include RedisHelpers
+  config.include Rails.application.routes.url_helpers, type: :routing
+  config.include PolicyHelpers, type: :policy
+  config.include MemoryUsageHelper
+  config.include ExpectRequestWithStatus, type: :request
+  config.include RailsHelpers
 
   if ENV['CI']
     # This includes the first try, i.e. tests will be run 4 times before failing.
@@ -106,22 +135,70 @@ RSpec.configure do |config|
     TestEnv.clean_test_path
   end
 
-  config.before(:example) do
-    # Skip pre-receive hook check so we can use the web editor and merge.
-    allow_any_instance_of(Gitlab::Git::Hook).to receive(:trigger).and_return([true, nil])
-
-    allow_any_instance_of(Gitlab::Git::GitlabProjects).to receive(:fork_repository).and_wrap_original do |m, *args|
-      m.call(*args)
-
-      shard_name, repository_relative_path = args
-      # We can't leave the hooks in place after a fork, as those would fail in tests
-      # The "internal" API is not available
-      Gitlab::Shell.new.rm_directory(shard_name,
-                                     File.join(repository_relative_path, 'hooks'))
-    end
-
+  config.before do |example|
     # Enable all features by default for testing
     allow(Feature).to receive(:enabled?) { true }
+
+    enabled = example.metadata[:enable_rugged].present?
+
+    # Disable Rugged features by default
+    Gitlab::Git::RuggedImpl::Repository::FEATURE_FLAGS.each do |flag|
+      allow(Feature).to receive(:enabled?).with(flag).and_return(enabled)
+    end
+
+    allow(Gitlab::GitalyClient).to receive(:can_use_disk?).and_return(enabled)
+
+    # The following can be removed when we remove the staged rollout strategy
+    # and we can just enable it using instance wide settings
+    # (ie. ApplicationSetting#auto_devops_enabled)
+    allow(Feature).to receive(:enabled?)
+      .with(:force_autodevops_on_by_default, anything)
+      .and_return(false)
+
+    # The following can be removed once Vue Issuable Sidebar
+    # is feature-complete and can be made default in place
+    # of older sidebar.
+    # See https://gitlab.com/groups/gitlab-org/-/epics/1863
+    allow(Feature).to receive(:enabled?)
+      .with(:vue_issuable_sidebar, anything)
+      .and_return(false)
+    allow(Feature).to receive(:enabled?)
+      .with(:vue_issuable_epic_sidebar, anything)
+      .and_return(false)
+
+    # Stub these calls due to being expensive operations
+    # It can be reenabled for specific tests via:
+    #
+    # allow(DetectRepositoryLanguagesWorker).to receive(:perform_async).and_call_original
+    # allow(Gitlab::Git::KeepAround).to receive(:execute).and_call_original
+    allow(DetectRepositoryLanguagesWorker).to receive(:perform_async).and_return(true)
+    allow(Gitlab::Git::KeepAround).to receive(:execute)
+
+    Gitlab::ThreadMemoryCache.cache_backend.clear
+
+    # Temporary patch to force admin mode to be active by default in tests when
+    # using the feature flag :user_mode_in_session, since this will require
+    # modifying a significant number of specs to test both states for admin
+    # mode enabled / disabled.
+    #
+    # See https://gitlab.com/gitlab-org/gitlab/issues/31511
+    # See gitlab/spec/support/helpers/admin_mode_helpers.rb
+    #
+    # If it is required to have the real behaviour that an admin is signed in
+    # with normal user mode and needs to switch to admin mode, it is possible to
+    # mark such tests with the `do_not_mock_admin_mode` metadata tag, e.g:
+    #
+    # context 'some test with normal user mode', :do_not_mock_admin_mode do ... end
+    unless example.metadata[:do_not_mock_admin_mode]
+      allow_any_instance_of(Gitlab::Auth::CurrentUserMode).to receive(:admin_mode?) do |current_user_mode|
+        current_user_mode.send(:user)&.admin?
+      end
+    end
+  end
+
+  config.around(:example, :quarantine) do |example|
+    # Skip tests in quarantine unless we explicitly focus on them.
+    example.run if config.inclusion_filter[:quarantine]
   end
 
   config.before(:example, :request_store) do
@@ -133,8 +210,12 @@ RSpec.configure do |config|
     RequestStore.clear!
   end
 
-  config.after(:example) do
+  config.after do
     Fog.unmock! if Fog.mock?
+  end
+
+  config.after do
+    Gitlab::CurrentSettings.clear_in_memory_application_settings!
   end
 
   config.before(:example, :mailer) do
@@ -181,6 +262,23 @@ RSpec.configure do |config|
     redis_queues_cleanup!
   end
 
+  config.around(:each, :use_clean_rails_memory_store_fragment_caching) do |example|
+    caching_store = ActionController::Base.cache_store
+    ActionController::Base.cache_store = ActiveSupport::Cache::MemoryStore.new
+    ActionController::Base.perform_caching = true
+
+    example.run
+
+    ActionController::Base.perform_caching = false
+    ActionController::Base.cache_store = caching_store
+  end
+
+  config.around(:each, :use_sql_query_cache) do |example|
+    ActiveRecord::Base.cache do
+      example.run
+    end
+  end
+
   # The :each scope runs "inside" the example, so this hook ensures the DB is in the
   # correct state before any examples' before hooks are called. This prevents a
   # problem where `ScheduleIssuesClosedAtTypeChange` (or any migration that depends
@@ -198,23 +296,15 @@ RSpec.configure do |config|
 
   # Each example may call `migrate!`, so we must ensure we are migrated down every time
   config.before(:each, :migration) do
+    use_fake_application_settings
+
     schema_migrate_down!
   end
 
   config.after(:context, :migration) do
     schema_migrate_up!
-  end
 
-  config.around(:each, :nested_groups) do |example|
-    example.run if Group.supports_nested_groups?
-  end
-
-  config.around(:each, :postgresql) do |example|
-    example.run if Gitlab::Database.postgresql?
-  end
-
-  config.around(:each, :mysql) do |example|
-    example.run if Gitlab::Database.mysql?
+    Gitlab::CurrentSettings.clear_in_memory_application_settings!
   end
 
   # This makes sure the `ApplicationController#can?` method is stubbed with the
@@ -240,6 +330,16 @@ RSpec.configure do |config|
   config.before(:each, :https_pages_disabled) do |_|
     allow(Gitlab.config.pages).to receive(:external_https).and_return(false)
   end
+
+  # We can't use an `around` hook here because the wrapping transaction
+  # is not yet opened at the time that is triggered
+  config.prepend_before do
+    Gitlab::Database.set_open_transactions_baseline
+  end
+
+  config.append_after do
+    Gitlab::Database.reset_open_transactions_baseline
+  end
 end
 
 # add simpler way to match asset paths containing digest strings
@@ -264,6 +364,10 @@ FactoryBot::SyntaxRunner.class_eval do
   include RSpec::Mocks::ExampleMethods
 end
 
+# Use FactoryBot 4.x behavior:
+# https://github.com/thoughtbot/factory_bot/blob/master/GETTING_STARTED.md#associations
+FactoryBot.use_parent_strategy = false
+
 ActiveRecord::Migration.maintain_test_schema!
 
 Shoulda::Matchers.configure do |config|
@@ -275,3 +379,6 @@ end
 
 # Prevent Rugged from picking up local developer gitconfig.
 Rugged::Settings['search_path_global'] = Rails.root.join('tmp/tests').to_s
+
+# Disable timestamp checks for invisible_captcha
+InvisibleCaptcha.timestamp_enabled = false

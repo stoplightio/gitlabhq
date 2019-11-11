@@ -1,28 +1,25 @@
 # Vue
 
-To get started with Vue, read through [their documentation][vue-docs].
+To get started with Vue, read through [their documentation](https://vuejs.org/v2/guide/).
+
+## Examples
+
+What is described in the following sections can be found in these examples:
+
+- web ide: <https://gitlab.com/gitlab-org/gitlab-foss/tree/master/app/assets/javascripts/ide/stores>
+- security products: <https://gitlab.com/gitlab-org/gitlab/tree/master/ee/app/assets/javascripts/vue_shared/security_reports>
+- registry: <https://gitlab.com/gitlab-org/gitlab-foss/tree/master/app/assets/javascripts/registry/stores>
 
 ## Vue architecture
 
 All new features built with Vue.js must follow a [Flux architecture][flux].
 The main goal we are trying to achieve is to have only one data flow and only one data entry.
-In order to achieve this goal, you can either use [vuex](#vuex) or use the [store pattern][state-management], explained below:
-
-Each Vue bundle needs a Store - where we keep all the data -, a Service - that we use to communicate with the server - and a main Vue component.
-
-Think of the Main Vue Component as the entry point of your application. This is the only smart
-component that should exist in each Vue feature.
-This component is responsible for:
-1. Calling the Service to get data from the server
-1. Calling the Store to store the data received
-1. Mounting all the other components
-
-![Vue Architecture](img/vue_arch.png)
+In order to achieve this goal we use [vuex](#vuex).
 
 You can also read about this architecture in vue docs about [state management][state-management]
 and about [one way data flow][one-way-data-flow].
 
-### Components, Stores and Services
+### Components and Store
 
 In some features implemented with Vue.js, like the [issue board][issue-boards]
 or [environments table][environments-table]
@@ -33,17 +30,16 @@ new_feature
 ├── components
 │   └── component.vue
 │   └── ...
-├── stores
+├── store
 │  └── new_feature_store.js
-├── services # only when not using vuex
-│  └── new_feature_service.js
 ├── index.js
 ```
+
 _For consistency purposes, we recommend you to follow the same structure._
 
 Let's look into each of them:
 
-### A `index.js` file
+### An `index.js` file
 
 This is the index file of your new feature. This is where the root Vue instance
 of the new feature should be.
@@ -51,10 +47,12 @@ of the new feature should be.
 The Store and the Service should be imported and initialized in this file and
 provided as a prop to the main component.
 
-Don't forget to follow [these steps][page_specific_javascript].
+Be sure to read about [page-specific JavaScript][page_specific_javascript].
 
 ### Bootstrapping Gotchas
+
 #### Providing data from HAML to JavaScript
+
 While mounting a Vue application may be a need to provide data from Rails to JavaScript.
 To do that, provide the data through `data` attributes in the HTML element and query them while mounting the application.
 
@@ -88,7 +86,8 @@ document.addEventListener('DOMContentLoaded', () => new Vue({
 ```
 
 #### Accessing the `gl` object
-When we need to query the `gl` object for data that won't change during the application's life cyle, we should do it in the same place where we query the DOM.
+
+When we need to query the `gl` object for data that won't change during the application's life cycle, we should do it in the same place where we query the DOM.
 By following this practice, we can avoid the need to mock the `gl` object, which will make tests easier.
 It should be done while initializing our Vue instance, and the data should be provided as `props` to the main component:
 
@@ -104,6 +103,51 @@ document.addEventListener('DOMContentLoaded', () => new Vue({
   },
 }));
 ```
+
+#### Accessing feature flags
+
+Use Vue's [provide/inject](https://vuejs.org/v2/api/#provide-inject) mechanism
+to make feature flags available to any descendant components in a Vue
+application. The `glFeatures` object is already provided in `commons/vue.js`, so
+only the mixin is required to utilize the flags:
+
+```javascript
+// An arbitrary descendant component
+
+import glFeatureFlagsMixin from '~/vue_shared/mixins/gl_feature_flags_mixin';
+
+export default {
+  // ...
+  mixins: [glFeatureFlagsMixin()],
+  // ...
+  created() {
+    if (this.glFeatures.myFlag) {
+      // ...
+    }
+  },
+}
+```
+
+This approach has a few benefits:
+
+- Arbitrarily deeply nested components can opt-in and access the flag without
+  intermediate components being aware of it (c.f. passing the flag down via
+  props).
+- Good testability, since the flag can be provided to `mount`/`shallowMount`
+  from `vue-test-utils` as easily as a prop.
+
+  ```javascript
+  import { shallowMount } from '@vue/test-utils';
+
+  shallowMount(component, {
+    provide: {
+      glFeatures: { myFlag: true },
+    },
+  });
+  ```
+
+- No need to access a global variable, except in the application's
+  [entry point](#accessing-the-gl-object).
 
 ### A folder for Components
 
@@ -123,222 +167,19 @@ You can read more about components in Vue.js site, [Component System][component-
 ### A folder for the Store
 
 #### Vuex
+
 Check this [page](vuex.md) for more details.
 
-#### Flux like state management
-The Store is a class that allows us to manage the state in a single
-source of truth. It is not aware of the service or the components.
+### Mixing Vue and jQuery
 
-The concept we are trying to follow is better explained by Vue documentation
-itself, please read this guide: [State Management][state-management]
-
-### A folder for the Service
-
-**If you are using Vuex you won't need this step**
-
-The Service is a class used only to communicate with the server.
-It does not store or manipulate any data. It is not aware of the store or the components.
-We use [axios][axios] to communicate with the server.
-Refer to [axios](axios.md) for more details.
-
-Axios instance should only be imported in the service file.
-
-```javascript
-import axios from '~/lib/utils/axios_utils';
-```
-
-### End Result
-
-The following example shows an application:
-
-```javascript
-// store.js
-export default class Store {
-
-  /**
-   * This is where we will iniatialize the state of our data.
-   * Usually in a small SPA you don't need any options when starting the store.
-   * In that case you do need guarantee it's an Object and it's documented.
-   *
-   * @param  {Object} options
-   */
-  constructor(options) {
-    this.options = options;
-
-    // Create a state object to handle all our data in the same place
-    this.todos = [];
-  }
-
-  setTodos(todos = []) {
-    this.todos = todos;
-  }
-
-  addTodo(todo) {
-    this.todos.push(todo);
-  }
-
-  removeTodo(todoID) {
-    const state = this.todos;
-
-    const newState = state.filter((element) => {element.id !== todoID});
-
-    this.todos = newState;
-  }
-}
-
-// service.js
-import axios from '~/lib/utils/axios_utils'
-
-export default class Service {
-  constructor(options) {
-    this.todos = axios.create({
-      baseURL: endpoint.todosEndpoint
-    });
-
-  }
-
-  getTodos() {
-    return this.todos.get();
-  }
-
-  addTodo(todo) {
-    return this.todos.put(todo);
-  }
-}
-// todo_component.vue
-<script>
-export default {
-  props: {
-    data: {
-      type: Object,
-      required: true,
-    },
-  },
-};
-</script>
-<template>
-  <div>
-    <h1>
-      Title: {{data.title}}
-    </h1>
-    <p>
-      {{data.text}}
-    </p>
-  </div>
-</template>
-
-// todos_main_component.vue
-<script>
-import Store from 'store';
-import Service from 'service';
-import TodoComponent from 'todoComponent';
-export default {
-  components: {
-    todo: TodoComponent,
-  },
-  /**
-   * Although most data belongs in the store, each component it's own state.
-   * We want to show a loading spinner while we are fetching the todos, this state belong
-   * in the component.
-   *
-   * We need to access the store methods through all methods of our component.
-   * We need to access the state of our store.
-   */
-  data() {
-    const store = new Store();
-
-    return {
-      isLoading: false,
-      store: store,
-      todos: store.todos,
-    };
-  },
-
-  created() {
-    this.service = new Service('/todos');
-
-    this.getTodos();
-  },
-
-  methods: {
-    getTodos() {
-      this.isLoading = true;
-
-      this.service
-        .getTodos()
-        .then(response => {
-          this.store.setTodos(response);
-          this.isLoading = false;
-        })
-        .catch(() => {
-          this.isLoading = false;
-          // Show an error
-        });
-    },
-
-    addTodo(event) {
-      this.service
-        .addTodo({
-          title: 'New entry',
-          text: `You clicked on ${event.target.tagName}`,
-        })
-        .then(response => {
-          this.store.addTodo(response);
-        })
-        .catch(() => {
-          // Show an error
-        });
-    },
-  },
-};
-</script>
-<template>
-  <div class="container">
-    <div v-if="isLoading">
-      <i
-        class="fa fa-spin fa-spinner"
-        aria-hidden="true" />
-    </div>
-
-    <div
-      v-if="!isLoading"
-      class="js-todo-list">
-      <template v-for='todo in todos'>
-        <todo :data="todo" />
-      </template>
-
-      <button
-        @click="addTodo"
-        class="js-add-todo">
-        Add Todo
-      </button>
-    </div>
-  <div>
-</template>
-
-// index.js
-import todoComponent from 'todos_main_component.vue';
-
-new Vue({
-  el: '.js-todo-app',
-  components: {
-    todoComponent,
-  },
-  render: createElement => createElement('todo-component' {
-    props: {
-      someProp: [],
-    }
-  }),
-});
-
-```
-
-The [issue boards service][issue-boards-service]
-is a good example of this pattern.
+- Mixing Vue and jQuery is not recommended.
+- If you need to use a specific jQuery plugin in Vue, [create a wrapper around it](https://vuejs.org/v2/examples/select2.html).
+- It is acceptable for Vue to listen to existing jQuery events using jQuery event listeners.
+- It is not recommended to add new jQuery events for Vue to interact with jQuery.
 
 ## Style guide
 
-Please refer to the Vue section of our [style guide](style_guide_js.md#vue-js)
+Please refer to the Vue section of our [style guide](style_guide_js.md#vuejs)
 for best practices while writing your Vue components and templates.
 
 ## Testing Vue Components
@@ -348,7 +189,7 @@ Each Vue component has a unique output. This output is always present in the ren
 Although we can test each method of a Vue component individually, our goal must be to test the output
 of the render/template function, which represents the state at all times.
 
-Make use of the [axios mock adapter](axios.md#mock-axios-response-on-tests) to mock data returned.
+Make use of the [axios mock adapter](axios.md#mock-axios-response-in-tests) to mock data returned.
 
 Here's how we would test the Todo App above:
 
@@ -421,11 +262,12 @@ describe('Todos App', () => {
 ```
 
 ### `mountComponent` helper
+
 There is a helper in `spec/javascripts/helpers/vue_mount_component_helper.js` that allows you to mount a component with the given props:
 
 ```javascript
 import Vue from 'vue';
-import mountComponent from 'helpers/vue_mount_component_helper.js'
+import mountComponent from 'spec/helpers/vue_mount_component_helper'
 import component from 'component.vue'
 
 const Component = Vue.extend(component);
@@ -434,18 +276,26 @@ const vm = mountComponent(Component, data);
 ```
 
 ### Test the component's output
+
 The main return value of a Vue component is the rendered output. In order to test the component we
 need to test the rendered output. [Vue][vue-test] guide's to unit test show us exactly that:
 
+## Vue.js Expert Role
 
-[vue-docs]: http://vuejs.org/guide/index.html
-[issue-boards]: https://gitlab.com/gitlab-org/gitlab-ce/tree/master/app/assets/javascripts/boards
-[environments-table]: https://gitlab.com/gitlab-org/gitlab-ce/tree/master/app/assets/javascripts/environments
-[page_specific_javascript]: https://docs.gitlab.com/ce/development/frontend.html#page-specific-javascript
+One should apply to be a Vue.js expert by opening an MR when the Merge Request's they create and review show:
+
+- Deep understanding of Vue and Vuex reactivy
+- Vue and Vuex code are structured according to both official and our guidelines
+- Full understanding of testing a Vue and Vuex application
+- Vuex code follows the [documented pattern](vuex.md#actions-pattern-request-and-receive-namespaces)
+- Knowledge about the existing Vue and Vuex applications and existing reusable components
+
+[issue-boards]: https://gitlab.com/gitlab-org/gitlab-foss/tree/master/app/assets/javascripts/boards
+[environments-table]: https://gitlab.com/gitlab-org/gitlab-foss/tree/master/app/assets/javascripts/environments
+[page_specific_javascript]: ./performance.md#page-specific-javascript
 [component-system]: https://vuejs.org/v2/guide/#Composing-with-Components
 [state-management]: https://vuejs.org/v2/guide/state-management.html#Simple-State-Management-from-Scratch
 [one-way-data-flow]: https://vuejs.org/v2/guide/components.html#One-Way-Data-Flow
 [vue-test]: https://vuejs.org/v2/guide/unit-testing.html
-[issue-boards-service]: https://gitlab.com/gitlab-org/gitlab-ce/blob/master/app/assets/javascripts/boards/services/board_service.js.es6
-[flux]: https://facebook.github.io/flux
+[flux]: https://facebook.github.io/flux/
 [axios]: https://github.com/axios/axios

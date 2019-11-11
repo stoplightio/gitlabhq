@@ -1,7 +1,7 @@
 # See http://doc.gitlab.com/ce/development/migration_style_guide.html
 # for more information on how to write migrations for GitLab.
 
-class PopulateMissingProjectCiCdSettings < ActiveRecord::Migration
+class PopulateMissingProjectCiCdSettings < ActiveRecord::Migration[4.2]
   include Gitlab::Database::MigrationHelpers
 
   DOWNTIME = false
@@ -9,10 +9,6 @@ class PopulateMissingProjectCiCdSettings < ActiveRecord::Migration
   disable_ddl_transaction!
 
   def up
-    # MySQL does not support online upgrades, thus there can't be any missing
-    # rows.
-    return if Gitlab::Database.mysql?
-
     # Projects created after the initial migration but before the code started
     # using ProjectCiCdSetting won't have a corresponding row in
     # project_ci_cd_settings, so let's fix that.

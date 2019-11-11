@@ -1,6 +1,12 @@
+# frozen_string_literal: true
+
 module Gitlab
   # Helper methods to do with Kubernetes network services & resources
   module Kubernetes
+    def self.build_header_hash
+      Hash.new { |h, k| h[k] = [] }
+    end
+
     # This is the comand that is run to start a terminal session. Kubernetes
     # expects `command=foo&command=bar, not `command[]=foo&command[]=bar`
     EXEC_COMMAND = URI.encode_www_form(
@@ -16,6 +22,33 @@ module Gitlab
 
         labels.all? { |k, v| item_labels[k.to_s] == v }
       end
+    end
+
+    # Filters an array of pods (as returned by the kubernetes API) by their annotations
+    def filter_by_annotation(items, annotations = {})
+      items.select do |item|
+        metadata = item.fetch("metadata", {})
+        item_annotations = metadata.fetch("annotations", nil)
+        next unless item_annotations
+
+        annotations.all? { |k, v| item_annotations[k.to_s] == v }
+      end
+    end
+
+    # Filters an array of pods (as returned by the kubernetes API) by their project and environment
+    def filter_by_project_environment(items, app, env)
+      filter_by_annotation(items, {
+        'app.gitlab.com/app' => app,
+        'app.gitlab.com/env' => env
+      })
+    end
+
+    def filter_by_legacy_label(items, app, env)
+      legacy_items = filter_by_label(items, { app: env })
+
+      non_legacy_items = filter_by_project_environment(legacy_items, app, env)
+
+      legacy_items - non_legacy_items
     end
 
     # Converts a pod (as returned by the kubernetes API) into a terminal
@@ -37,13 +70,14 @@ module Gitlab
           selectors:    { pod: pod_name, container: container["name"] },
           url:          container_exec_url(api_url, namespace, pod_name, container["name"]),
           subprotocols: ['channel.k8s.io'],
-          headers:      Hash.new { |h, k| h[k] = [] },
+          headers:      ::Gitlab::Kubernetes.build_header_hash,
           created_at:   created_at
         }
       end
     end
 
     def add_terminal_auth(terminal, token:, max_session_time:, ca_pem: nil)
+      terminal[:headers] ||= ::Gitlab::Kubernetes.build_header_hash
       terminal[:headers]['Authorization'] << "Bearer #{token}"
       terminal[:max_session_time] = max_session_time
       terminal[:ca_pem] = ca_pem if ca_pem.present?
@@ -78,6 +112,8 @@ module Gitlab
     end
 
     def to_kubeconfig(url:, namespace:, token:, ca_pem: nil)
+      return unless token.present?
+
       config = {
         apiVersion: 'v1',
         clusters: [
@@ -106,7 +142,7 @@ module Gitlab
 
       kubeconfig_embed_ca_pem(config, ca_pem) if ca_pem
 
-      config.deep_stringify_keys
+      YAML.dump(config.deep_stringify_keys)
     end
 
     private

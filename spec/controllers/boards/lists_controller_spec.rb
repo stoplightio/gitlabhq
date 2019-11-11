@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Boards::ListsController do
@@ -7,11 +9,15 @@ describe Boards::ListsController do
   let(:guest)   { create(:user) }
 
   before do
-    project.add_master(user)
+    project.add_maintainer(user)
     project.add_guest(guest)
   end
 
   describe 'GET index' do
+    before do
+      create(:list, board: board)
+    end
+
     it 'returns a successful 200 response' do
       read_board_list user: user, board: board
 
@@ -20,24 +26,29 @@ describe Boards::ListsController do
     end
 
     it 'returns a list of board lists' do
-      create(:list, board: board)
-
       read_board_list user: user, board: board
 
-      parsed_response = JSON.parse(response.body)
-
       expect(response).to match_response_schema('lists')
-      expect(parsed_response.length).to eq 3
+      expect(json_response.length).to eq 3
+    end
+
+    context 'when another user has list preferences' do
+      before do
+        board.lists.first.update_preferences_for(guest, collapsed: true)
+      end
+
+      it 'returns the complete list of board lists' do
+        read_board_list user: user, board: board
+
+        expect(json_response.length).to eq 3
+      end
     end
 
     context 'with unauthorized user' do
-      before do
-        allow(Ability).to receive(:allowed?).with(user, :read_project, project).and_return(true)
-        allow(Ability).to receive(:allowed?).with(user, :read_list, project).and_return(false)
-      end
+      let(:unauth_user) { create(:user) }
 
       it 'returns a forbidden 403 response' do
-        read_board_list user: user, board: board
+        read_board_list user: unauth_user, board: board
 
         expect(response).to have_gitlab_http_status(403)
       end
@@ -46,9 +57,11 @@ describe Boards::ListsController do
     def read_board_list(user:, board:)
       sign_in(user)
 
-      get :index, namespace_id: project.namespace.to_param,
-                  project_id: project,
-                  board_id: board.to_param,
+      get :index, params: {
+                    namespace_id: project.namespace.to_param,
+                    project_id: project,
+                    board_id: board.to_param
+                  },
                   format: :json
     end
   end
@@ -103,10 +116,12 @@ describe Boards::ListsController do
     def create_board_list(user:, board:, label_id:)
       sign_in(user)
 
-      post :create, namespace_id: project.namespace.to_param,
-                    project_id: project,
-                    board_id: board.to_param,
-                    list: { label_id: label_id },
+      post :create, params: {
+                      namespace_id: project.namespace.to_param,
+                      project_id: project,
+                      board_id: board.to_param,
+                      list: { label_id: label_id }
+                    },
                     format: :json
     end
   end
@@ -146,22 +161,71 @@ describe Boards::ListsController do
     end
 
     context 'with unauthorized user' do
-      it 'returns a forbidden 403 response' do
+      it 'returns a 422 unprocessable entity response' do
         move user: guest, board: board, list: planning, position: 6
 
-        expect(response).to have_gitlab_http_status(403)
+        expect(response).to have_gitlab_http_status(422)
+      end
+    end
+
+    context 'with collapsed preference' do
+      it 'saves collapsed preference for user' do
+        save_setting user: user, board: board, list: planning, setting: { collapsed: true }
+
+        expect(planning.preferences_for(user).collapsed).to eq(true)
+        expect(response).to have_gitlab_http_status(200)
+      end
+
+      it 'saves not collapsed preference for user' do
+        save_setting user: user, board: board, list: planning, setting: { collapsed: false }
+
+        expect(planning.preferences_for(user).collapsed).to eq(false)
+        expect(response).to have_gitlab_http_status(200)
+      end
+    end
+
+    context 'with a list_type other than :label' do
+      let!(:closed) { create(:closed_list, board: board, position: 2) }
+
+      it 'saves collapsed preference for user' do
+        save_setting user: user, board: board, list: closed, setting: { collapsed: true }
+
+        expect(closed.preferences_for(user).collapsed).to eq(true)
+        expect(response).to have_gitlab_http_status(200)
+      end
+
+      it 'saves not collapsed preference for user' do
+        save_setting user: user, board: board, list: closed, setting: { collapsed: false }
+
+        expect(closed.preferences_for(user).collapsed).to eq(false)
+        expect(response).to have_gitlab_http_status(200)
       end
     end
 
     def move(user:, board:, list:, position:)
       sign_in(user)
 
-      patch :update, namespace_id: project.namespace.to_param,
-                     project_id: project,
-                     board_id: board.to_param,
-                     id: list.to_param,
-                     list: { position: position },
-                     format: :json
+      params = { namespace_id: project.namespace.to_param,
+                 project_id: project,
+                 board_id: board.to_param,
+                 id: list.to_param,
+                 list: { position: position },
+                 format: :json }
+
+      patch :update, params: params, as: :json
+    end
+
+    def save_setting(user:, board:, list:, setting: {})
+      sign_in(user)
+
+      params = { namespace_id: project.namespace.to_param,
+                 project_id: project,
+                 board_id: board.to_param,
+                 id: list.to_param,
+                 list: setting,
+                 format: :json }
+
+      patch :update, params: params, as: :json
     end
   end
 
@@ -199,10 +263,12 @@ describe Boards::ListsController do
     def remove_board_list(user:, board:, list:)
       sign_in(user)
 
-      delete :destroy, namespace_id: project.namespace.to_param,
-                       project_id: project,
-                       board_id: board.to_param,
-                       id: list.to_param,
+      delete :destroy, params: {
+                         namespace_id: project.namespace.to_param,
+                         project_id: project,
+                         board_id: board.to_param,
+                         id: list.to_param
+                       },
                        format: :json
     end
   end
@@ -243,9 +309,11 @@ describe Boards::ListsController do
     def generate_default_lists(user:, board:)
       sign_in(user)
 
-      post :generate, namespace_id: project.namespace.to_param,
-                      project_id: project,
-                      board_id: board.to_param,
+      post :generate, params: {
+                        namespace_id: project.namespace.to_param,
+                        project_id: project,
+                        board_id: board.to_param
+                      },
                       format: :json
     end
   end

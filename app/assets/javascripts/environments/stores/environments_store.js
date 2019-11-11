@@ -1,4 +1,6 @@
 import { parseIntPagination, normalizeHeaders } from '~/lib/utils/common_utils';
+import { setDeployBoard } from 'ee_else_ce/environments/stores/helpers';
+
 /**
  * Environments Store.
  *
@@ -20,7 +22,8 @@ export default class EnvironmentsStore {
    *
    * Stores the received environments.
    *
-   * In the main environments endpoint, each environment has the following schema
+   * In the main environments endpoint (with { nested: true } in params), each folder
+   * has the following schema:
    * { name: String, size: Number, latest: Object }
    * In the endpoint to retrieve environments from each folder, the environment does
    * not have the `latest` key and the data is all in the root level.
@@ -30,18 +33,26 @@ export default class EnvironmentsStore {
    * If the `size` is bigger than 1, it means it should be rendered as a folder.
    * In those cases we add `isFolder` key in order to render it properly.
    *
+   * Top level environments - when the size is 1 - with `rollout_status`
+   * can render a deploy board. We add `isDeployBoardVisible` and `deployBoardData`
+   * keys to those environments.
+   * The first key will let's us know if we should or not render the deploy board.
+   * It will be toggled when the user clicks to seee the deploy board.
+   *
+   * The second key will allow us to update the environment with the received deploy board data.
+   *
    * @param  {Array} environments
    * @returns {Array}
    */
   storeEnvironments(environments = []) {
-    const filteredEnvironments = environments.map((env) => {
-      const oldEnvironmentState = this.state.environments
-      .find((element) => {
-        if (env.latest) {
-          return element.id === env.latest.id;
-        }
-        return element.id === env.id;
-      }) || {};
+    const filteredEnvironments = environments.map(env => {
+      const oldEnvironmentState =
+        this.state.environments.find(element => {
+          if (env.latest) {
+            return element.id === env.latest.id;
+          }
+          return element.id === env.id;
+        }) || {};
 
       let filtered = {};
 
@@ -62,6 +73,7 @@ export default class EnvironmentsStore {
         filtered = Object.assign(filtered, env);
       }
 
+      filtered = setDeployBoard(oldEnvironmentState, filtered);
       return filtered;
     });
 
@@ -70,6 +82,20 @@ export default class EnvironmentsStore {
     return filteredEnvironments;
   }
 
+  /**
+   * Stores the pagination information needed to render the pagination for the
+   * table.
+   *
+   * Normalizes the headers to uppercase since they can be provided either
+   * in uppercase or lowercase.
+   *
+   * Parses to an integer the normalized ones needed for the pagination component.
+   *
+   * Stores the normalized and parsed information.
+   *
+   * @param  {Object} pagination = {}
+   * @return {Object}
+   */
   setPagination(pagination = {}) {
     const normalizedHeaders = normalizeHeaders(pagination);
     const paginationInformation = parseIntPagination(normalizedHeaders);
@@ -101,11 +127,11 @@ export default class EnvironmentsStore {
   }
 
   /**
-    * Toggles folder open property for the given folder.
-    *
-    * @param  {Object} folder
-    * @return {Array}
-    */
+   * Toggles folder open property for the given folder.
+   *
+   * @param  {Object} folder
+   * @return {Array}
+   */
   toggleFolder(folder) {
     return this.updateEnvironmentProp(folder, 'isOpen', !folder.isOpen);
   }
@@ -119,7 +145,7 @@ export default class EnvironmentsStore {
    * @return {Object}
    */
   setfolderContent(folder, environments) {
-    const updatedEnvironments = environments.map((env) => {
+    const updatedEnvironments = environments.map(env => {
       let updated = env;
 
       if (env.latest) {
@@ -146,9 +172,9 @@ export default class EnvironmentsStore {
    * @return {Array}
    */
   updateEnvironmentProp(environment, prop, newValue) {
-    const environments = this.state.environments;
+    const { environments } = this.state;
 
-    const updatedEnvironments = environments.map((env) => {
+    const updatedEnvironments = environments.map(env => {
       const updateEnv = Object.assign({}, env);
       if (env.id === environment.id) {
         updateEnv[prop] = newValue;
@@ -161,7 +187,7 @@ export default class EnvironmentsStore {
   }
 
   getOpenFolders() {
-    const environments = this.state.environments;
+    const { environments } = this.state;
 
     return environments.filter(env => env.isFolder && env.isOpen);
   }

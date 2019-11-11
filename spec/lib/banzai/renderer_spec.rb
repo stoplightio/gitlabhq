@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Banzai::Renderer do
@@ -11,16 +13,42 @@ describe Banzai::Renderer do
     object
   end
 
+  def fake_cacheless_object
+    object = double('cacheless object')
+
+    allow(object).to receive(:respond_to?).with(:cached_markdown_fields).and_return(false)
+
+    object
+  end
+
+  describe '#cache_collection_render' do
+    let(:merge_request) { fake_object(fresh: true) }
+    let(:context) { { cache_key: [merge_request, 'field'], rendered: merge_request.field_html } }
+
+    context 'when an item has a rendered field' do
+      before do
+        allow(merge_request).to receive(:field).and_return('This is the field')
+        allow(merge_request).to receive(:field_html).and_return('This is the field')
+      end
+
+      it 'does not touch redis if the field is in the cache' do
+        expect(Rails).not_to receive(:cache)
+
+        described_class.cache_collection_render([{ text: merge_request.field, context: context }])
+      end
+    end
+  end
+
   describe '#render_field' do
     let(:renderer) { described_class }
 
     context 'without cache' do
-      let(:commit) { create(:project, :repository).commit }
+      let(:commit) { fake_cacheless_object }
 
       it 'returns cacheless render field' do
-        expect(renderer).to receive(:cacheless_render_field).with(commit, :title, {})
+        expect(renderer).to receive(:cacheless_render_field).with(commit, :field, {})
 
-        renderer.render_field(commit, :title)
+        renderer.render_field(commit, :field)
       end
     end
 

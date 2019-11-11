@@ -1,11 +1,13 @@
-require 'rails_helper'
+# frozen_string_literal: true
+
+require 'spec_helper'
 
 describe 'Merge request > User merges only if pipeline succeeds', :js do
   let(:merge_request) { create(:merge_request_with_diffs) }
   let(:project)       { merge_request.target_project }
 
   before do
-    project.add_master(merge_request.author)
+    project.add_maintainer(merge_request.author)
     sign_in(merge_request.author)
   end
 

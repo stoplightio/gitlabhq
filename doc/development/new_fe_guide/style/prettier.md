@@ -4,7 +4,7 @@ Our code is automatically formatted with [Prettier](https://prettier.io) to foll
 
 ## Editor
 
-The easiest way to include prettier in your workflow is by setting up your preferred editor (all major editors are supported) accordingly. We suggest setting up prettier to run automatically when each file is saved. Find [here](https://prettier.io/docs/en/editors.html) the best way to set it up in your preferred editor. 
+The easiest way to include prettier in your workflow is by setting up your preferred editor (all major editors are supported) accordingly. We suggest setting up prettier to run automatically when each file is saved. Find [here](https://prettier.io/docs/en/editors.html) the best way to set it up in your preferred editor.
 
 Please take care that you only let Prettier format the same file types as the global Yarn script does (.js, .vue, and .scss). In VSCode by example you can easily exclude file formats in your settings file:
 
@@ -28,6 +28,7 @@ Updates all currently staged files (based on `git diff`) with Prettier and saves
 ```
 yarn prettier-staged
 ```
+
 Checks all currently staged files (based on `git diff`) with Prettier and log which files would need manual updating to the console.
 
 ```
@@ -43,3 +44,55 @@ yarn prettier-all-save
 Formats all files in the repository with Prettier. (This should only be used to test global rule updates otherwise you would end up with huge MR's).
 
 The source of these Yarn scripts can be found in `/scripts/frontend/prettier.js`.
+
+### Scripts during Conversion period
+
+```
+node ./scripts/frontend/prettier.js check-all ./vendor/
+```
+
+This will go over all files in a specific folder check it.
+
+```
+node ./scripts/frontend/prettier.js save-all ./vendor/
+```
+
+This will go over all files in a specific folder and save it.
+
+## VSCode Settings
+
+### Select Prettier as default formatter
+
+To select Prettier as a formatter, add the following properties to your User or Workspace Settings:
+
+```javascript
+{
+  "[html]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[vue]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  }
+}
+```
+
+### Format on Save
+
+To automatically format your files with Prettier, add the following properties to your User or Workspace Settings:
+
+```javascript
+{
+  "[html]": {
+    "editor.formatOnSave": true
+  },
+  "[javascript]": {
+    "editor.formatOnSave": true
+  },
+  "[vue]": {
+    "editor.formatOnSave": true
+  },
+}
+```

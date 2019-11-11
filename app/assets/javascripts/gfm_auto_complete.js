@@ -1,4 +1,5 @@
 import $ from 'jquery';
+import 'at.js';
 import _ from 'underscore';
 import glRegexp from './lib/utils/regexp';
 import AjaxCache from './lib/utils/ajax_cache';
@@ -7,6 +8,17 @@ function sanitize(str) {
   return str.replace(/<(?:.|\n)*?>/gm, '');
 }
 
+export const defaultAutocompleteConfig = {
+  emojis: true,
+  members: true,
+  issues: true,
+  mergeRequests: true,
+  epics: true,
+  milestones: true,
+  labels: true,
+  snippets: true,
+};
+
 class GfmAutoComplete {
   constructor(dataSources) {
     this.dataSources = dataSources || {};
@@ -14,14 +26,7 @@ class GfmAutoComplete {
     this.isLoadingData = {};
   }
 
-  setup(input, enableMap = {
-    emojis: true,
-    members: true,
-    issues: true,
-    milestones: true,
-    mergeRequests: true,
-    labels: true,
-  }) {
+  setup(input, enableMap = defaultAutocompleteConfig) {
     // Add GFM auto-completion to all input fields, that accept GFM input.
     this.input = input || $('.js-gfm-input');
     this.enableMap = enableMap;
@@ -47,6 +52,7 @@ class GfmAutoComplete {
     if (this.enableMap.milestones) this.setupMilestones($input);
     if (this.enableMap.mergeRequests) this.setupMergeRequests($input);
     if (this.enableMap.labels) this.setupLabels($input);
+    if (this.enableMap.snippets) this.setupSnippets($input);
 
     // We don't instantiate the quick actions autocomplete for note and issue/MR edit forms
     $input.filter('[data-supports-quick-actions="true"]').atwho({
@@ -57,9 +63,11 @@ class GfmAutoComplete {
       skipMarkdownCharacterTest: true,
       data: GfmAutoComplete.defaultLoadingData,
       displayTpl(value) {
+        const cssClasses = [];
+
         if (GfmAutoComplete.isLoading(value)) return GfmAutoComplete.Loading.template;
         // eslint-disable-next-line no-template-curly-in-string
-        let tpl = '<li><span class="name">/${name}</span>';
+        let tpl = '<li class="<%- className %>"><span class="name">/${name}</span>';
         if (value.aliases.length > 0) {
           tpl += ' <small class="aliases">(or /<%- aliases.join(", /") %>)</small>';
         }
@@ -67,17 +75,26 @@ class GfmAutoComplete {
           tpl += ' <small class="params"><%- params.join(" ") %></small>';
         }
         if (value.description !== '') {
-          tpl += '<small class="description"><i><%- description %></i></small>';
+          tpl += '<small class="description"><i><%- description %> <%- warningText %></i></small>';
         }
         tpl += '</li>';
-        return _.template(tpl)(value);
+
+        if (value.warning) {
+          cssClasses.push('has-warning');
+        }
+
+        return _.template(tpl)({
+          ...value,
+          className: cssClasses.join(' '),
+          warningText: value.warning ? `(${value.warning})` : '',
+        });
       },
       insertTpl(value) {
         // eslint-disable-next-line no-template-curly-in-string
         let tpl = '/${name} ';
         let referencePrefix = null;
         if (value.params.length > 0) {
-          referencePrefix = value.params[0][0];
+          [[referencePrefix]] = value.params;
           if (/^[@%~]/.test(referencePrefix)) {
             tpl += '<%- referencePrefix %>';
           }
@@ -89,7 +106,7 @@ class GfmAutoComplete {
         ...this.getDefaultCallbacks(),
         beforeSave(commands) {
           if (GfmAutoComplete.isLoading(commands)) return commands;
-          return $.map(commands, (c) => {
+          return $.map(commands, c => {
             let search = c.name;
             if (c.aliases.length > 0) {
               search = `${search} ${c.aliases.join(' ')}`;
@@ -99,6 +116,7 @@ class GfmAutoComplete {
               aliases: c.aliases,
               params: c.params,
               description: c.description,
+              warning: c.warning,
               search,
             };
           });
@@ -146,10 +164,16 @@ class GfmAutoComplete {
     // Team Members
     $input.atwho({
       at: '@',
+      alias: 'users',
       displayTpl(value) {
         let tmpl = GfmAutoComplete.Loading.template;
-        if (value.username != null) {
-          tmpl = GfmAutoComplete.Members.template;
+        const { avatarTag, username, title } = value;
+        if (username != null) {
+          tmpl = GfmAutoComplete.Members.templateFunction({
+            avatarTag,
+            username,
+            title,
+          });
         }
         return tmpl;
       },
@@ -162,7 +186,7 @@ class GfmAutoComplete {
       callbacks: {
         ...this.getDefaultCallbacks(),
         beforeSave(members) {
-          return $.map(members, (m) => {
+          return $.map(members, m => {
             let title = '';
             if (m.username == null) {
               return m;
@@ -172,9 +196,13 @@ class GfmAutoComplete {
               title += ` (${m.count})`;
             }
 
+            const GROUP_TYPE = 'Group';
+
             const autoCompleteAvatar = m.avatar_url || m.username.charAt(0).toUpperCase();
-            const imgAvatar = `<img src="${m.avatar_url}" alt="${m.username}" class="avatar avatar-inline center s26"/>`;
-            const txtAvatar = `<div class="avatar center avatar-inline s26">${autoCompleteAvatar}</div>`;
+
+            const rectAvatarClass = m.type === GROUP_TYPE ? 'rect-avatar' : '';
+            const imgAvatar = `<img src="${m.avatar_url}" alt="${m.username}" class="avatar ${rectAvatarClass} avatar-inline center s26"/>`;
+            const txtAvatar = `<div class="avatar ${rectAvatarClass} center avatar-inline s26">${autoCompleteAvatar}</div>`;
 
             return {
               username: m.username,
@@ -196,23 +224,24 @@ class GfmAutoComplete {
       displayTpl(value) {
         let tmpl = GfmAutoComplete.Loading.template;
         if (value.title != null) {
-          tmpl = GfmAutoComplete.Issues.template;
+          tmpl = GfmAutoComplete.Issues.templateFunction(value);
         }
         return tmpl;
       },
       data: GfmAutoComplete.defaultLoadingData,
-      // eslint-disable-next-line no-template-curly-in-string
-      insertTpl: '${atwho-at}${id}',
+      insertTpl: GfmAutoComplete.Issues.insertTemplateFunction,
+      skipSpecialCharacterTest: true,
       callbacks: {
         ...this.getDefaultCallbacks(),
         beforeSave(issues) {
-          return $.map(issues, (i) => {
+          return $.map(issues, i => {
             if (i.title == null) {
               return i;
             }
             return {
               id: i.iid,
               title: sanitize(i.title),
+              reference: i.reference,
               search: `${i.iid} ${i.title}`,
             };
           });
@@ -231,7 +260,7 @@ class GfmAutoComplete {
       displayTpl(value) {
         let tmpl = GfmAutoComplete.Loading.template;
         if (value.title != null) {
-          tmpl = GfmAutoComplete.Milestones.template;
+          tmpl = GfmAutoComplete.Milestones.templateFunction(value.title);
         }
         return tmpl;
       },
@@ -239,7 +268,7 @@ class GfmAutoComplete {
       callbacks: {
         ...this.getDefaultCallbacks(),
         beforeSave(milestones) {
-          return $.map(milestones, (m) => {
+          return $.map(milestones, m => {
             if (m.title == null) {
               return m;
             }
@@ -262,23 +291,24 @@ class GfmAutoComplete {
       displayTpl(value) {
         let tmpl = GfmAutoComplete.Loading.template;
         if (value.title != null) {
-          tmpl = GfmAutoComplete.Issues.template;
+          tmpl = GfmAutoComplete.Issues.templateFunction(value);
         }
         return tmpl;
       },
       data: GfmAutoComplete.defaultLoadingData,
-      // eslint-disable-next-line no-template-curly-in-string
-      insertTpl: '${atwho-at}${id}',
+      insertTpl: GfmAutoComplete.Issues.insertTemplateFunction,
+      skipSpecialCharacterTest: true,
       callbacks: {
         ...this.getDefaultCallbacks(),
         beforeSave(merges) {
-          return $.map(merges, (m) => {
+          return $.map(merges, m => {
             if (m.title == null) {
               return m;
             }
             return {
               id: m.iid,
               title: sanitize(m.title),
+              reference: m.reference,
               search: `${m.iid} ${m.title}`,
             };
           });
@@ -288,6 +318,7 @@ class GfmAutoComplete {
   }
 
   setupLabels($input) {
+    const instance = this;
     const fetchData = this.fetchData.bind(this);
     const LABEL_COMMAND = { LABEL: '/label', UNLABEL: '/unlabel', RELABEL: '/relabel' };
     let command = '';
@@ -298,7 +329,7 @@ class GfmAutoComplete {
       searchKey: 'search',
       data: GfmAutoComplete.defaultLoadingData,
       displayTpl(value) {
-        let tmpl = GfmAutoComplete.Labels.template;
+        let tmpl = GfmAutoComplete.Labels.templateFunction(value.color, value.title);
         if (GfmAutoComplete.isLoading(value)) {
           tmpl = GfmAutoComplete.Loading.template;
         }
@@ -306,6 +337,7 @@ class GfmAutoComplete {
       },
       // eslint-disable-next-line no-template-curly-in-string
       insertTpl: '${atwho-at}${title}',
+      limit: 20,
       callbacks: {
         ...this.getDefaultCallbacks(),
         beforeSave(merges) {
@@ -318,17 +350,44 @@ class GfmAutoComplete {
           }));
         },
         matcher(flag, subtext) {
-          const match = GfmAutoComplete.defaultMatcher(flag, subtext, this.app.controllers);
-          const subtextNodes = subtext.split(/\n+/g).pop().split(GfmAutoComplete.regexSubtext);
+          const subtextNodes = subtext
+            .split(/\n+/g)
+            .pop()
+            .split(GfmAutoComplete.regexSubtext);
 
           // Check if ~ is followed by '/label', '/relabel' or '/unlabel' commands.
-          command = subtextNodes.find((node) => {
-            if (node === LABEL_COMMAND.LABEL ||
-                node === LABEL_COMMAND.RELABEL ||
-                node === LABEL_COMMAND.UNLABEL) { return node; }
+          command = subtextNodes.find(node => {
+            if (
+              node === LABEL_COMMAND.LABEL ||
+              node === LABEL_COMMAND.RELABEL ||
+              node === LABEL_COMMAND.UNLABEL
+            ) {
+              return node;
+            }
             return null;
           });
 
+          // If any label matches the inserted text after the last `~`, suggest those labels,
+          // even if any spaces or funky characters were typed.
+          // This allows matching labels like "Accepting merge requests".
+          const labels = instance.cachedData[flag];
+          if (labels) {
+            if (!subtext.includes(flag)) {
+              // Do not match if there is no `~` before the cursor
+              return null;
+            }
+            const lastCandidate = subtext.split(flag).pop();
+            if (labels.find(label => label.title.startsWith(lastCandidate))) {
+              return lastCandidate;
+            }
+          } else {
+            // Load all labels into the autocompleter.
+            // This needs to happen if e.g. editing a label in an existing comment, because normally
+            // label data would only be loaded only once you type `~`.
+            fetchData(this.$inputor, this.at);
+          }
+
+          const match = GfmAutoComplete.defaultMatcher(flag, subtext, this.app.controllers);
           return match && match.length ? match[1] : null;
         },
         filter(query, data, searchKey) {
@@ -352,6 +411,39 @@ class GfmAutoComplete {
           }
 
           return data;
+        },
+      },
+    });
+  }
+
+  setupSnippets($input) {
+    $input.atwho({
+      at: '$',
+      alias: 'snippets',
+      searchKey: 'search',
+      displayTpl(value) {
+        let tmpl = GfmAutoComplete.Loading.template;
+        if (value.title != null) {
+          tmpl = GfmAutoComplete.Issues.templateFunction(value);
+        }
+        return tmpl;
+      },
+      data: GfmAutoComplete.defaultLoadingData,
+      // eslint-disable-next-line no-template-curly-in-string
+      insertTpl: '${atwho-at}${id}',
+      callbacks: {
+        ...this.getDefaultCallbacks(),
+        beforeSave(snippets) {
+          return $.map(snippets, m => {
+            if (m.title == null) {
+              return m;
+            }
+            return {
+              id: m.id,
+              title: sanitize(m.title),
+              search: `${m.id} ${m.title}`,
+            };
+          });
         },
       },
     });
@@ -390,7 +482,10 @@ class GfmAutoComplete {
         // We can ignore this for quick actions because they are processed
         // before Markdown.
         if (!this.setting.skipMarkdownCharacterTest) {
-          withoutAt = withoutAt.replace(/([~\-_*`])/g, '\\$&');
+          withoutAt = withoutAt
+            .replace(/(~~|`|\*)/g, '\\$1')
+            .replace(/(\b)(_+)/g, '$1\\$2') // only escape underscores at the start
+            .replace(/(_+)(\b)/g, '\\$1$2'); // or end of words
         }
 
         return `${at}${withoutAt}`;
@@ -402,6 +497,16 @@ class GfmAutoComplete {
           return match[1];
         }
         return null;
+      },
+      highlighter(li, query) {
+        // override default behaviour to escape dot character
+        // see https://github.com/ichord/At.js/pull/576
+        if (!query) {
+          return li;
+        }
+        const escapedQuery = query.replace(/[.+]/, '\\$&');
+        const regexp = new RegExp(`>\\s*([^<]*?)(${escapedQuery})([^<]*)\\s*<`, 'ig');
+        return li.replace(regexp, (str, $1, $2, $3) => `> ${$1}<strong>${$2}</strong>${$3} <`);
       },
     };
   }
@@ -420,13 +525,17 @@ class GfmAutoComplete {
           this.loadData($input, at, validEmojiNames);
           GfmAutoComplete.glEmojiTag = glEmojiTag;
         })
-        .catch(() => { this.isLoadingData[at] = false; });
+        .catch(() => {
+          this.isLoadingData[at] = false;
+        });
     } else if (dataSource) {
       AjaxCache.retrieve(dataSource, true)
-        .then((data) => {
+        .then(data => {
           this.loadData($input, at, data);
         })
-        .catch(() => { this.isLoadingData[at] = false; });
+        .catch(() => {
+          this.isLoadingData[at] = false;
+        });
     } else {
       this.isLoadingData[at] = false;
     }
@@ -455,19 +564,20 @@ class GfmAutoComplete {
   static isLoading(data) {
     let dataToInspect = data;
     if (data && data.length > 0) {
-      dataToInspect = data[0];
+      [dataToInspect] = data;
     }
 
     const loadingState = GfmAutoComplete.defaultLoadingData[0];
-    return dataToInspect &&
-      (dataToInspect === loadingState || dataToInspect.name === loadingState);
+    return dataToInspect && (dataToInspect === loadingState || dataToInspect.name === loadingState);
   }
 
   static defaultMatcher(flag, subtext, controllers) {
     // The below is taken from At.js source
     // Tweaked to commands to start without a space only if char before is a non-word character
     // https://github.com/ichord/At.js
-    const atSymbolsWithBar = Object.keys(controllers).join('|');
+    const atSymbolsWithBar = Object.keys(controllers)
+      .join('|')
+      .replace(/[$]/, '\\$&');
     const atSymbolsWithoutBar = Object.keys(controllers).join('');
     const targetSubtext = subtext.split(GfmAutoComplete.regexSubtext).pop();
     const resultantFlag = flag.replace(/[-[\]/{}()*+?.\\^$|]/g, '\\$&');
@@ -475,7 +585,11 @@ class GfmAutoComplete {
     const accentAChar = decodeURI('%C3%80');
     const accentYChar = decodeURI('%C3%BF');
 
-    const regexp = new RegExp(`^(?:\\B|[^a-zA-Z0-9_\`${atSymbolsWithoutBar}]|\\s)${resultantFlag}(?!${atSymbolsWithBar})((?:[A-Za-z${accentAChar}-${accentYChar}0-9_'.+-]|[^\\x00-\\x7a])*)$`, 'gi');
+    // Holy regex, batman!
+    const regexp = new RegExp(
+      `^(?:\\B|[^a-zA-Z0-9_\`${atSymbolsWithoutBar}]|\\s)${resultantFlag}(?!${atSymbolsWithBar})((?:[A-Za-z${accentAChar}-${accentYChar}0-9_'.+-:]|[^\\x00-\\x7a])*)$`,
+      'gi',
+    );
 
     return regexp.exec(targetSubtext);
   }
@@ -490,9 +604,11 @@ GfmAutoComplete.atTypeMap = {
   '@': 'members',
   '#': 'issues',
   '!': 'mergeRequests',
+  '&': 'epics',
   '~': 'labels',
   '%': 'milestones',
   '/': 'commands',
+  $: 'snippets',
 };
 
 // Emoji
@@ -508,25 +624,36 @@ GfmAutoComplete.Emoji = {
 };
 // Team Members
 GfmAutoComplete.Members = {
-  // eslint-disable-next-line no-template-curly-in-string
-  template: '<li>${avatarTag} ${username} <small>${title}</small></li>',
+  templateFunction({ avatarTag, username, title }) {
+    return `<li>${avatarTag} ${username} <small>${_.escape(title)}</small></li>`;
+  },
 };
 GfmAutoComplete.Labels = {
-  // eslint-disable-next-line no-template-curly-in-string
-  template: '<li><span class="dropdown-label-box" style="background: ${color}"></span> ${title}</li>',
+  templateFunction(color, title) {
+    return `<li><span class="dropdown-label-box" style="background: ${_.escape(
+      color,
+    )}"></span> ${_.escape(title)}</li>`;
+  },
 };
-// Issues and MergeRequests
+// Issues, MergeRequests and Snippets
 GfmAutoComplete.Issues = {
-  // eslint-disable-next-line no-template-curly-in-string
-  template: '<li><small>${id}</small> ${title}</li>',
+  insertTemplateFunction(value) {
+    // eslint-disable-next-line no-template-curly-in-string
+    return value.reference || '${atwho-at}${id}';
+  },
+  templateFunction({ id, title, reference }) {
+    return `<li><small>${reference || id}</small> ${_.escape(title)}</li>`;
+  },
 };
 // Milestones
 GfmAutoComplete.Milestones = {
-  // eslint-disable-next-line no-template-curly-in-string
-  template: '<li>${title}</li>',
+  templateFunction(title) {
+    return `<li>${_.escape(title)}</li>`;
+  },
 };
 GfmAutoComplete.Loading = {
-  template: '<li style="pointer-events: none;"><i class="fa fa-spinner fa-spin"></i> Loading...</li>',
+  template:
+    '<li style="pointer-events: none;"><i class="fa fa-spinner fa-spin"></i> Loading...</li>',
 };
 
 export default GfmAutoComplete;

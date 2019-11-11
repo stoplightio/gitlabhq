@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Bitbucket
   class Page
     attr_reader :attrs, :items
@@ -28,7 +30,7 @@ module Bitbucket
     end
 
     def representation_class(type)
-      Bitbucket::Representation.const_get(type.to_s.camelize)
+      Bitbucket::Representation.const_get(type.to_s.camelize, false)
     end
   end
 end

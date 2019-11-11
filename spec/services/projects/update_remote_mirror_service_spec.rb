@@ -1,357 +1,132 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Projects::UpdateRemoteMirrorService do
   let(:project) { create(:project, :repository) }
   let(:remote_project) { create(:forked_project_with_submodules) }
-  let(:repository) { project.repository }
-  let(:raw_repository) { repository.raw }
   let(:remote_mirror) { project.remote_mirrors.create!(url: remote_project.http_url_to_repo, enabled: true, only_protected_branches: false) }
+  let(:remote_name) { remote_mirror.remote_name }
 
-  subject { described_class.new(project, project.creator) }
+  subject(:service) { described_class.new(project, project.creator) }
 
-  describe "#execute", :skip_gitaly_mock do
+  describe '#execute' do
+    subject(:execute!) { service.execute(remote_mirror, 0) }
+
     before do
-      create_branch(repository, 'existing-branch')
-      allow(raw_repository).to receive(:remote_tags) do
-        generate_tags(repository, 'v1.0.0', 'v1.1.0')
-      end
-      allow(raw_repository).to receive(:push_remote_branches).and_return(true)
+      project.repository.add_branch(project.owner, 'existing-branch', 'master')
+
+      allow(remote_mirror).to receive(:update_repository).and_return(true)
     end
 
-    it "fetches the remote repository" do
-      expect(repository).to receive(:fetch_remote).with(remote_mirror.remote_name, no_tags: true) do
-        sync_remote(repository, remote_mirror.remote_name, local_branch_names)
-      end
+    it 'ensures the remote exists' do
+      stub_fetch_remote(project, remote_name: remote_name, ssh_auth: remote_mirror)
 
-      subject.execute(remote_mirror)
+      expect(remote_mirror).to receive(:ensure_remote!)
+
+      execute!
     end
 
-    it "succeeds" do
-      allow(repository).to receive(:fetch_remote) { sync_remote(repository, remote_mirror.remote_name, local_branch_names) }
+    it 'fetches the remote repository' do
+      expect(project.repository)
+        .to receive(:fetch_remote)
+              .with(remote_mirror.remote_name, no_tags: true, ssh_auth: remote_mirror)
 
-      result = subject.execute(remote_mirror)
+      execute!
+    end
+
+    it 'marks the mirror as started when beginning' do
+      expect(remote_mirror).to receive(:update_start!).and_call_original
+
+      execute!
+    end
+
+    it 'marks the mirror as successfully finished' do
+      stub_fetch_remote(project, remote_name: remote_name, ssh_auth: remote_mirror)
+
+      result = execute!
 
       expect(result[:status]).to eq(:success)
+      expect(remote_mirror).to be_finished
     end
 
-    describe 'Syncing branches' do
-      it "push all the branches the first time" do
-        allow(repository).to receive(:fetch_remote)
+    it 'marks the mirror as failed and raises the error when an unexpected error occurs' do
+      allow(project.repository).to receive(:fetch_remote).and_raise('Badly broken')
 
-        expect(raw_repository).to receive(:push_remote_branches).with(remote_mirror.remote_name, local_branch_names)
+      expect { execute! }.to raise_error /Badly broken/
 
-        subject.execute(remote_mirror)
-      end
-
-      it "does not push anything is remote is up to date" do
-        allow(repository).to receive(:fetch_remote) { sync_remote(repository, remote_mirror.remote_name, local_branch_names) }
-
-        expect(raw_repository).not_to receive(:push_remote_branches)
-
-        subject.execute(remote_mirror)
-      end
-
-      it "sync new branches" do
-        # call local_branch_names early so it is not called after the new branch has been created
-        current_branches = local_branch_names
-        allow(repository).to receive(:fetch_remote) { sync_remote(repository, remote_mirror.remote_name, current_branches) }
-        create_branch(repository, 'my-new-branch')
-
-        expect(raw_repository).to receive(:push_remote_branches).with(remote_mirror.remote_name, ['my-new-branch'])
-
-        subject.execute(remote_mirror)
-      end
-
-      it "sync updated branches" do
-        allow(repository).to receive(:fetch_remote) do
-          sync_remote(repository, remote_mirror.remote_name, local_branch_names)
-          update_branch(repository, 'existing-branch')
-        end
-
-        expect(raw_repository).to receive(:push_remote_branches).with(remote_mirror.remote_name, ['existing-branch'])
-
-        subject.execute(remote_mirror)
-      end
-
-      context 'when push only protected branches option is set' do
-        let(:unprotected_branch_name) { 'existing-branch' }
-        let(:protected_branch_name) do
-          project.repository.branch_names.find { |n| n != unprotected_branch_name }
-        end
-        let!(:protected_branch) do
-          create(:protected_branch, project: project, name: protected_branch_name)
-        end
-
-        before do
-          project.reload
-          remote_mirror.only_protected_branches = true
-        end
-
-        it "sync updated protected branches" do
-          allow(repository).to receive(:fetch_remote) do
-            sync_remote(repository, remote_mirror.remote_name, local_branch_names)
-            update_branch(repository, protected_branch_name)
-          end
-
-          expect(raw_repository).to receive(:push_remote_branches).with(remote_mirror.remote_name, [protected_branch_name])
-
-          subject.execute(remote_mirror)
-        end
-
-        it 'does not sync unprotected branches' do
-          allow(repository).to receive(:fetch_remote) do
-            sync_remote(repository, remote_mirror.remote_name, local_branch_names)
-            update_branch(repository, unprotected_branch_name)
-          end
-
-          expect(raw_repository).not_to receive(:push_remote_branches).with(remote_mirror.remote_name, [unprotected_branch_name])
-
-          subject.execute(remote_mirror)
-        end
-      end
-
-      context 'when branch exists in local and remote repo' do
-        context 'when it has diverged' do
-          it 'syncs branches' do
-            allow(repository).to receive(:fetch_remote) do
-              sync_remote(repository, remote_mirror.remote_name, local_branch_names)
-              update_remote_branch(repository, remote_mirror.remote_name, 'markdown')
-            end
-
-            expect(raw_repository).to receive(:push_remote_branches).with(remote_mirror.remote_name, ['markdown'])
-
-            subject.execute(remote_mirror)
-          end
-        end
-      end
-
-      describe 'for delete' do
-        context 'when branch exists in local and remote repo' do
-          it 'deletes the branch from remote repo' do
-            allow(repository).to receive(:fetch_remote) do
-              sync_remote(repository, remote_mirror.remote_name, local_branch_names)
-              delete_branch(repository, 'existing-branch')
-            end
-
-            expect(raw_repository).to receive(:delete_remote_branches).with(remote_mirror.remote_name, ['existing-branch'])
-
-            subject.execute(remote_mirror)
-          end
-        end
-
-        context 'when push only protected branches option is set' do
-          before do
-            remote_mirror.only_protected_branches = true
-          end
-
-          context 'when branch exists in local and remote repo' do
-            let!(:protected_branch_name) { local_branch_names.first }
-
-            before do
-              create(:protected_branch, project: project, name: protected_branch_name)
-              project.reload
-            end
-
-            it 'deletes the protected branch from remote repo' do
-              allow(repository).to receive(:fetch_remote) do
-                sync_remote(repository, remote_mirror.remote_name, local_branch_names)
-                delete_branch(repository, protected_branch_name)
-              end
-
-              expect(raw_repository).not_to receive(:delete_remote_branches).with(remote_mirror.remote_name, [protected_branch_name])
-
-              subject.execute(remote_mirror)
-            end
-
-            it 'does not delete the unprotected branch from remote repo' do
-              allow(repository).to receive(:fetch_remote) do
-                sync_remote(repository, remote_mirror.remote_name, local_branch_names)
-                delete_branch(repository, 'existing-branch')
-              end
-
-              expect(raw_repository).not_to receive(:delete_remote_branches).with(remote_mirror.remote_name, ['existing-branch'])
-
-              subject.execute(remote_mirror)
-            end
-          end
-
-          context 'when branch only exists on remote repo' do
-            let!(:protected_branch_name) { 'remote-branch' }
-
-            before do
-              create(:protected_branch, project: project, name: protected_branch_name)
-            end
-
-            context 'when it has diverged' do
-              it 'does not delete the remote branch' do
-                allow(repository).to receive(:fetch_remote) do
-                  sync_remote(repository, remote_mirror.remote_name, local_branch_names)
-
-                  rev = repository.find_branch('markdown').dereferenced_target
-                  create_remote_branch(repository, remote_mirror.remote_name, 'remote-branch', rev.id)
-                end
-
-                expect(raw_repository).not_to receive(:delete_remote_branches)
-
-                subject.execute(remote_mirror)
-              end
-            end
-
-            context 'when it has not diverged' do
-              it 'deletes the remote branch' do
-                allow(repository).to receive(:fetch_remote) do
-                  sync_remote(repository, remote_mirror.remote_name, local_branch_names)
-
-                  masterrev = repository.find_branch('master').dereferenced_target
-                  create_remote_branch(repository, remote_mirror.remote_name, protected_branch_name, masterrev.id)
-                end
-
-                expect(raw_repository).to receive(:delete_remote_branches).with(remote_mirror.remote_name, [protected_branch_name])
-
-                subject.execute(remote_mirror)
-              end
-            end
-          end
-        end
-
-        context 'when branch only exists on remote repo' do
-          context 'when it has diverged' do
-            it 'does not delete the remote branch' do
-              allow(repository).to receive(:fetch_remote) do
-                sync_remote(repository, remote_mirror.remote_name, local_branch_names)
-
-                rev = repository.find_branch('markdown').dereferenced_target
-                create_remote_branch(repository, remote_mirror.remote_name, 'remote-branch', rev.id)
-              end
-
-              expect(raw_repository).not_to receive(:delete_remote_branches)
-
-              subject.execute(remote_mirror)
-            end
-          end
-
-          context 'when it has not diverged' do
-            it 'deletes the remote branch' do
-              allow(repository).to receive(:fetch_remote) do
-                sync_remote(repository, remote_mirror.remote_name, local_branch_names)
-
-                masterrev = repository.find_branch('master').dereferenced_target
-                create_remote_branch(repository, remote_mirror.remote_name, 'remote-branch', masterrev.id)
-              end
-
-              expect(raw_repository).to receive(:delete_remote_branches).with(remote_mirror.remote_name, ['remote-branch'])
-
-              subject.execute(remote_mirror)
-            end
-          end
-        end
-      end
+      expect(remote_mirror).to be_failed
+      expect(remote_mirror.last_error).to include('Badly broken')
     end
 
-    describe 'Syncing tags' do
+    context 'when the update fails because of a `Gitlab::Git::CommandError`' do
       before do
-        allow(repository).to receive(:fetch_remote) { sync_remote(repository, remote_mirror.remote_name, local_branch_names) }
+        allow(project.repository).to receive(:fetch_remote).and_raise(Gitlab::Git::CommandError.new('fetch failed'))
       end
 
-      context 'when there are not tags to push' do
-        it 'does not try to push tags' do
-          allow(repository).to receive(:remote_tags) { {} }
-          allow(repository).to receive(:tags) { [] }
-
-          expect(repository).not_to receive(:push_tags)
-
-          subject.execute(remote_mirror)
-        end
+      it 'wraps `Gitlab::Git::CommandError`s in a service error' do
+        expect(execute!).to eq(status: :error, message: 'fetch failed')
       end
 
-      context 'when there are some tags to push' do
-        it 'pushes tags to remote' do
-          allow(raw_repository).to receive(:remote_tags) { {} }
+      it 'marks the mirror as to be retried' do
+        execute!
 
-          expect(raw_repository).to receive(:push_remote_branches).with(remote_mirror.remote_name, ['v1.0.0', 'v1.1.0'])
-
-          subject.execute(remote_mirror)
-        end
+        expect(remote_mirror).to be_to_retry
+        expect(remote_mirror.last_error).to include('fetch failed')
       end
 
-      context 'when there are some tags to delete' do
-        it 'deletes tags from remote' do
-          remote_tags = generate_tags(repository, 'v1.0.0', 'v1.1.0')
-          allow(raw_repository).to receive(:remote_tags) { remote_tags }
+      it "marks the mirror as failed after #{described_class::MAX_TRIES} tries" do
+        service.execute(remote_mirror, described_class::MAX_TRIES)
 
-          repository.rm_tag(create(:user), 'v1.0.0')
+        expect(remote_mirror).to be_failed
+        expect(remote_mirror.last_error).to include('fetch failed')
+      end
+    end
 
-          expect(raw_repository).to receive(:delete_remote_branches).with(remote_mirror.remote_name, ['v1.0.0'])
+    context 'when syncing all branches' do
+      it 'push all the branches the first time' do
+        stub_fetch_remote(project, remote_name: remote_name, ssh_auth: remote_mirror)
 
-          subject.execute(remote_mirror)
-        end
+        expect(remote_mirror).to receive(:update_repository).with({})
+
+        execute!
+      end
+    end
+
+    context 'when only syncing protected branches' do
+      it 'sync updated protected branches' do
+        stub_fetch_remote(project, remote_name: remote_name, ssh_auth: remote_mirror)
+        protected_branch = create_protected_branch(project)
+        remote_mirror.only_protected_branches = true
+
+        expect(remote_mirror)
+          .to receive(:update_repository)
+          .with(only_branches_matching: [protected_branch.name])
+
+        execute!
+      end
+
+      def create_protected_branch(project)
+        branch_name = project.repository.branch_names.find { |n| n != 'existing-branch' }
+        create(:protected_branch, project: project, name: branch_name)
       end
     end
   end
 
-  def create_branch(repository, branch_name)
-    rugged = repository.rugged
-    masterrev = repository.find_branch('master').dereferenced_target
-    parentrev = repository.commit(masterrev).parent_id
-
-    rugged.references.create("refs/heads/#{branch_name}", parentrev)
-
-    repository.expire_branches_cache
+  def stub_fetch_remote(project, remote_name:, ssh_auth:)
+    allow(project.repository)
+      .to receive(:fetch_remote)
+      .with(remote_name, no_tags: true, ssh_auth: ssh_auth) { fetch_remote(project.repository, remote_name) }
   end
 
-  def create_remote_branch(repository, remote_name, branch_name, source_id)
-    rugged = repository.rugged
-
-    rugged.references.create("refs/remotes/#{remote_name}/#{branch_name}", source_id)
-  end
-
-  def sync_remote(repository, remote_name, local_branch_names)
-    rugged = repository.rugged
-
-    local_branch_names.each do |branch|
-      target = repository.find_branch(branch).try(:dereferenced_target)
-      rugged.references.create("refs/remotes/#{remote_name}/#{branch}", target.id) if target
+  def fetch_remote(repository, remote_name)
+    local_branch_names(repository).each do |branch|
+      commit = repository.commit(branch)
+      repository.write_ref("refs/remotes/#{remote_name}/#{branch}", commit.id) if commit
     end
   end
 
-  def update_remote_branch(repository, remote_name, branch)
-    rugged = repository.rugged
-    masterrev = repository.find_branch('master').dereferenced_target.id
-
-    rugged.references.create("refs/remotes/#{remote_name}/#{branch}", masterrev, force: true)
-    repository.expire_branches_cache
-  end
-
-  def update_branch(repository, branch)
-    rugged = repository.rugged
-    masterrev = repository.find_branch('master').dereferenced_target.id
-
-    # Updated existing branch
-    rugged.references.create("refs/heads/#{branch}", masterrev, force: true)
-    repository.expire_branches_cache
-  end
-
-  def delete_branch(repository, branch)
-    rugged = repository.rugged
-
-    rugged.references.delete("refs/heads/#{branch}")
-    repository.expire_branches_cache
-  end
-
-  def generate_tags(repository, *tag_names)
-    tag_names.each_with_object([]) do |name, tags|
-      tag = repository.find_tag(name)
-      target = tag.try(:target)
-      target_commit = tag.try(:dereferenced_target)
-      tags << Gitlab::Git::Tag.new(repository.raw_repository, {
-        name: name,
-        target: target,
-        target_commit: target_commit
-      })
-    end
-  end
-
-  def local_branch_names
+  def local_branch_names(repository)
     branch_names = repository.branches.map(&:name)
     # we want the protected branch to be pushed first
     branch_names.unshift(branch_names.delete('master'))

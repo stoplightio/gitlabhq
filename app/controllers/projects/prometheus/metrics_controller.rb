@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Projects
   module Prometheus
     class MetricsController < Projects::ApplicationController
@@ -30,3 +32,5 @@ module Projects
     end
   end
 end
+
+Projects::Prometheus::MetricsController.prepend_if_ee('EE::Projects::Prometheus::MetricsController')

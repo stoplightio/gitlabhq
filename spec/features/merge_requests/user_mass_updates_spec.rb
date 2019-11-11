@@ -1,4 +1,6 @@
-require 'rails_helper'
+# frozen_string_literal: true
+
+require 'spec_helper'
 
 describe 'Merge requests > User mass updates', :js do
   let(:project) { create(:project, :repository) }
@@ -6,7 +8,7 @@ describe 'Merge requests > User mass updates', :js do
   let!(:merge_request) { create(:merge_request, source_project: project, target_project: project) }
 
   before do
-    project.add_master(user)
+    project.add_maintainer(user)
     sign_in(user)
   end
 
@@ -47,28 +49,27 @@ describe 'Merge requests > User mass updates', :js do
         change_assignee(user.name)
 
         page.within('.merge-request .controls') do
-          expect(find('.author_link')["title"]).to have_content(user.name)
+          expect(find('.author-link')["title"]).to have_content(user.name)
         end
       end
     end
 
     describe 'remove assignee' do
       before do
-        merge_request.assignee = user
-        merge_request.save
+        merge_request.assignees = [user]
         visit project_merge_requests_path(project)
       end
 
       it 'removes assignee from the merge request' do
         change_assignee('Unassigned')
 
-        expect(find('.merge-request .controls')).not_to have_css('.author_link')
+        expect(find('.merge-request .controls')).not_to have_css('.author-link')
       end
     end
   end
 
   context 'milestone' do
-    let(:milestone)  { create(:milestone, project: project) }
+    let(:milestone) { create(:milestone, project: project) }
 
     describe 'set milestone' do
       before do

@@ -28,10 +28,10 @@
     - group_link = link_to _('Group CI/CD settings'), group_settings_ci_cd_path(@project.group)
     = _('Group maintainers can register group runners in the %{link}').html_safe % { link: group_link }
   - else
-    = _('Ask your group maintainer to setup a group Runner.')
+    = _('Ask your group maintainer to set up a group Runner.')
 
 - else
   %h4.underlined-title
-    = _('Available group Runners : %{runners}').html_safe % { runners: @group_runners.count }
+    = _('Available group Runners: %{runners}').html_safe % { runners: @group_runners.count }
   %ul.bordered-list
     = render partial: 'projects/runners/runner', collection: @group_runners, as: :runner

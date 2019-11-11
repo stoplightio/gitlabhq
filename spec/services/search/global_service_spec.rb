@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Search::GlobalService do
@@ -10,7 +12,7 @@ describe Search::GlobalService do
   let!(:public_project)   { create(:project, :public, name: 'searchable_public_project') }
 
   before do
-    found_project.add_master(user)
+    found_project.add_maintainer(user)
   end
 
   describe '#execute' do
@@ -39,6 +41,14 @@ describe Search::GlobalService do
         results = described_class.new(user, search: found_project.name).execute
 
         expect(results.objects('projects')).to match_array [found_project]
+      end
+
+      it 'does not return archived projects' do
+        archived_project = create(:project, :public, archived: true, name: 'archived_project')
+
+        results = described_class.new(user, search: "archived").execute
+
+        expect(results.objects('projects')).not_to include(archived_project)
       end
     end
   end

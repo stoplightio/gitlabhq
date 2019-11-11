@@ -5,14 +5,17 @@ describe Gitlab::ImportSources do
     it 'returns a hash' do
       expected =
         {
-          'GitHub'        => 'github',
-          'Bitbucket'     => 'bitbucket',
-          'GitLab.com'    => 'gitlab',
-          'Google Code'   => 'google_code',
-          'FogBugz'       => 'fogbugz',
-          'Repo by URL'   => 'git',
-          'GitLab export' => 'gitlab_project',
-          'Gitea'         => 'gitea'
+          'GitHub'           => 'github',
+          'Bitbucket Cloud'  => 'bitbucket',
+          'Bitbucket Server' => 'bitbucket_server',
+          'GitLab.com'       => 'gitlab',
+          'Google Code'      => 'google_code',
+          'FogBugz'          => 'fogbugz',
+          'Repo by URL'      => 'git',
+          'GitLab export'    => 'gitlab_project',
+          'Gitea'            => 'gitea',
+          'Manifest file'    => 'manifest',
+          'Phabricator'      => 'phabricator'
         }
 
       expect(described_class.options).to eq(expected)
@@ -25,12 +28,15 @@ describe Gitlab::ImportSources do
         %w(
           github
           bitbucket
+          bitbucket_server
           gitlab
           google_code
           fogbugz
           git
           gitlab_project
           gitea
+          manifest
+          phabricator
         )
 
       expect(described_class.values).to eq(expected)
@@ -43,11 +49,13 @@ describe Gitlab::ImportSources do
         %w(
           github
           bitbucket
+          bitbucket_server
           gitlab
           google_code
           fogbugz
           gitlab_project
           gitea
+          phabricator
         )
 
       expect(described_class.importer_names).to eq(expected)
@@ -58,12 +66,15 @@ describe Gitlab::ImportSources do
     import_sources = {
       'github' => Gitlab::GithubImport::ParallelImporter,
       'bitbucket' => Gitlab::BitbucketImport::Importer,
+      'bitbucket_server' => Gitlab::BitbucketServerImport::Importer,
       'gitlab' => Gitlab::GitlabImport::Importer,
       'google_code' => Gitlab::GoogleCodeImport::Importer,
       'fogbugz' => Gitlab::FogbugzImport::Importer,
       'git' => nil,
       'gitlab_project' => Gitlab::ImportExport::Importer,
-      'gitea' => Gitlab::LegacyGithubImport::Importer
+      'gitea' => Gitlab::LegacyGithubImport::Importer,
+      'manifest' => nil,
+      'phabricator' => Gitlab::PhabricatorImport::Importer
     }
 
     import_sources.each do |name, klass|
@@ -76,13 +87,16 @@ describe Gitlab::ImportSources do
   describe '.title' do
     import_sources = {
       'github' => 'GitHub',
-      'bitbucket' => 'Bitbucket',
+      'bitbucket' => 'Bitbucket Cloud',
+      'bitbucket_server' => 'Bitbucket Server',
       'gitlab' => 'GitLab.com',
       'google_code' => 'Google Code',
       'fogbugz' => 'FogBugz',
       'git' => 'Repo by URL',
       'gitlab_project' => 'GitLab export',
-      'gitea' => 'Gitea'
+      'gitea' => 'Gitea',
+      'manifest' => 'Manifest file',
+      'phabricator' => 'Phabricator'
     }
 
     import_sources.each do |name, title|
@@ -93,7 +107,7 @@ describe Gitlab::ImportSources do
   end
 
   describe 'imports_repository? checker' do
-    let(:allowed_importers) { %w[github gitlab_project] }
+    let(:allowed_importers) { %w[github gitlab_project bitbucket_server phabricator] }
 
     it 'fails if any importer other than the allowed ones implements this method' do
       current_importers = described_class.values.select { |kind| described_class.importer(kind).try(:imports_repository?) }

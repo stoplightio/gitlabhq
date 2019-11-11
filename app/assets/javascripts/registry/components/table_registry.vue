@@ -1,87 +1,235 @@
 <script>
-  import { mapActions } from 'vuex';
-  import { n__ } from '../../locale';
-  import Flash from '../../flash';
-  import clipboardButton from '../../vue_shared/components/clipboard_button.vue';
-  import tablePagination from '../../vue_shared/components/table_pagination.vue';
-  import tooltip from '../../vue_shared/directives/tooltip';
-  import timeagoMixin from '../../vue_shared/mixins/timeago';
-  import { errorMessages, errorMessagesTypes } from '../constants';
-  import { numberToHumanSize } from '../../lib/utils/number_utils';
+import { mapActions, mapGetters } from 'vuex';
+import {
+  GlButton,
+  GlFormCheckbox,
+  GlTooltipDirective,
+  GlModal,
+  GlModalDirective,
+} from '@gitlab/ui';
+import { n__, s__, sprintf } from '../../locale';
+import createFlash from '../../flash';
+import ClipboardButton from '../../vue_shared/components/clipboard_button.vue';
+import TablePagination from '../../vue_shared/components/pagination/table_pagination.vue';
+import Icon from '../../vue_shared/components/icon.vue';
+import timeagoMixin from '../../vue_shared/mixins/timeago';
+import { errorMessages, errorMessagesTypes } from '../constants';
+import { numberToHumanSize } from '../../lib/utils/number_utils';
 
-  export default {
-    components: {
-      clipboardButton,
-      tablePagination,
+export default {
+  components: {
+    ClipboardButton,
+    TablePagination,
+    GlFormCheckbox,
+    GlButton,
+    Icon,
+    GlModal,
+  },
+  directives: {
+    GlTooltip: GlTooltipDirective,
+    GlModal: GlModalDirective,
+  },
+  mixins: [timeagoMixin],
+  props: {
+    repo: {
+      type: Object,
+      required: true,
     },
-    directives: {
-      tooltip,
+    canDeleteRepo: {
+      type: Boolean,
+      default: false,
+      required: false,
     },
-    mixins: [
-      timeagoMixin,
-    ],
-    props: {
-      repo: {
-        type: Object,
-        required: true,
-      },
+  },
+  data() {
+    return {
+      selectedItems: [],
+      itemsToBeDeleted: [],
+      modalId: `confirm-image-deletion-modal-${this.repo.id}`,
+      selectAllChecked: false,
+      modalDescription: '',
+    };
+  },
+  computed: {
+    ...mapGetters(['isDeleteDisabled']),
+    bulkDeletePath() {
+      return this.repo.tagsPath ? this.repo.tagsPath.replace('?format=json', '/bulk_destroy') : '';
     },
-    computed: {
-      shouldRenderPagination() {
-        return this.repo.pagination.total > this.repo.pagination.perPage;
-      },
+    shouldRenderPagination() {
+      return this.repo.pagination.total > this.repo.pagination.perPage;
     },
-    methods: {
-      ...mapActions([
-        'fetchList',
-        'deleteRegistry',
-      ]),
+    modalAction() {
+      return n__(
+        'ContainerRegistry|Remove tag',
+        'ContainerRegistry|Remove tags',
+        this.itemsToBeDeleted.length === 0 ? 1 : this.itemsToBeDeleted.length,
+      );
+    },
+  },
+  mounted() {
+    this.$refs.deleteModal.$refs.modal.$on('hide', this.removeModalEvents);
+  },
+  methods: {
+    ...mapActions(['fetchList', 'deleteItem', 'multiDeleteItems']),
+    setModalDescription(itemIndex = -1) {
+      if (itemIndex === -1) {
+        this.modalDescription = sprintf(
+          s__(`ContainerRegistry|You are about to remove <b>%{count}</b> tags. Are you sure?`),
+          { count: this.itemsToBeDeleted.length },
+        );
+      } else {
+        const { tag } = this.repo.list[itemIndex];
 
-      layers(item) {
-        return item.layers ? n__('%d layer', '%d layers', item.layers) : '';
-      },
+        this.modalDescription = sprintf(
+          s__(`ContainerRegistry|You are about to remove <b>%{title}</b>. Are you sure?`),
+          { title: `${this.repo.name}:${tag}` },
+        );
+      }
+    },
+    layers(item) {
+      return item.layers ? n__('%d layer', '%d layers', item.layers) : '';
+    },
+    formatSize(size) {
+      return numberToHumanSize(size);
+    },
+    removeModalEvents() {
+      this.$refs.deleteModal.$refs.modal.$off('ok');
+    },
+    deleteSingleItem(index) {
+      this.setModalDescription(index);
+      this.itemsToBeDeleted = [index];
 
-      formatSize(size) {
-        return numberToHumanSize(size);
-      },
+      this.$refs.deleteModal.$refs.modal.$once('ok', () => {
+        this.removeModalEvents();
+        this.handleSingleDelete(this.repo.list[index]);
+      });
+    },
+    deleteMultipleItems() {
+      this.itemsToBeDeleted = [...this.selectedItems];
+      if (this.selectedItems.length === 1) {
+        this.setModalDescription(this.itemsToBeDeleted[0]);
+      } else if (this.selectedItems.length > 1) {
+        this.setModalDescription();
+      }
 
-      handleDeleteRegistry(registry) {
-        this.deleteRegistry(registry)
+      this.$refs.deleteModal.$refs.modal.$once('ok', () => {
+        this.removeModalEvents();
+        this.handleMultipleDelete();
+      });
+    },
+    handleSingleDelete(itemToDelete) {
+      this.itemsToBeDeleted = [];
+      this.deleteItem(itemToDelete)
+        .then(() => this.fetchList({ repo: this.repo }))
+        .catch(() => this.showError(errorMessagesTypes.DELETE_REGISTRY));
+    },
+    handleMultipleDelete() {
+      const { itemsToBeDeleted } = this;
+      this.itemsToBeDeleted = [];
+      this.selectedItems = [];
+
+      if (this.bulkDeletePath) {
+        this.multiDeleteItems({
+          path: this.bulkDeletePath,
+          items: itemsToBeDeleted.map(x => this.repo.list[x].tag),
+        })
           .then(() => this.fetchList({ repo: this.repo }))
           .catch(() => this.showError(errorMessagesTypes.DELETE_REGISTRY));
-      },
-
-      onPageChange(pageNumber) {
-        this.fetchList({ repo: this.repo, page: pageNumber })
-          .catch(() => this.showError(errorMessagesTypes.FETCH_REGISTRY));
-      },
-
-      showError(message) {
-        Flash(errorMessages[message]);
-      },
+      } else {
+        this.showError(errorMessagesTypes.DELETE_REGISTRY);
+      }
     },
-  };
+    onPageChange(pageNumber) {
+      this.fetchList({ repo: this.repo, page: pageNumber }).catch(() =>
+        this.showError(errorMessagesTypes.FETCH_REGISTRY),
+      );
+    },
+    showError(message) {
+      createFlash(errorMessages[message]);
+    },
+    onSelectAllChange() {
+      if (this.selectAllChecked) {
+        this.deselectAll();
+      } else {
+        this.selectAll();
+      }
+    },
+    selectAll() {
+      this.selectedItems = this.repo.list.map((x, index) => index);
+      this.selectAllChecked = true;
+    },
+    deselectAll() {
+      this.selectedItems = [];
+      this.selectAllChecked = false;
+    },
+    updateselectedItems(index) {
+      const delIndex = this.selectedItems.findIndex(x => x === index);
+
+      if (delIndex > -1) {
+        this.selectedItems.splice(delIndex, 1);
+        this.selectAllChecked = false;
+      } else {
+        this.selectedItems.push(index);
+
+        if (this.selectedItems.length === this.repo.list.length) {
+          this.selectAllChecked = true;
+        }
+      }
+    },
+    canDeleteRow(item) {
+      return item && item.canDelete && !this.isDeleteDisabled;
+    },
+  },
+};
 </script>
 <template>
   <div>
     <table class="table tags">
       <thead>
         <tr>
+          <th>
+            <gl-form-checkbox
+              v-if="canDeleteRepo"
+              class="js-select-all-checkbox"
+              :checked="selectAllChecked"
+              @change="onSelectAllChange"
+            />
+          </th>
           <th>{{ s__('ContainerRegistry|Tag') }}</th>
           <th>{{ s__('ContainerRegistry|Tag ID') }}</th>
-          <th>{{ s__("ContainerRegistry|Size") }}</th>
-          <th>{{ s__("ContainerRegistry|Created") }}</th>
-          <th></th>
+          <th>{{ s__('ContainerRegistry|Size') }}</th>
+          <th>{{ s__('ContainerRegistry|Last Updated') }}</th>
+          <th>
+            <gl-button
+              v-if="canDeleteRepo"
+              v-gl-tooltip
+              v-gl-modal="modalId"
+              :disabled="!selectedItems || selectedItems.length === 0"
+              class="js-delete-registry float-right"
+              data-track-event="click_button"
+              data-track-label="bulk_registry_tag_delete"
+              variant="danger"
+              :title="s__('ContainerRegistry|Remove selected tags')"
+              :aria-label="s__('ContainerRegistry|Remove selected tags')"
+              @click="deleteMultipleItems()"
+            >
+              <icon name="remove" />
+            </gl-button>
+          </th>
         </tr>
       </thead>
       <tbody>
-        <tr
-          v-for="(item, i) in repo.list"
-          :key="i">
-          <td>
-
+        <tr v-for="(item, index) in repo.list" :key="item.tag" class="registry-image-row">
+          <td class="check">
+            <gl-form-checkbox
+              v-if="canDeleteRow(item)"
+              class="js-select-checkbox"
+              :checked="selectedItems && selectedItems.includes(index)"
+              @change="updateselectedItems(index)"
+            />
+          </td>
+          <td class="monospace">
             {{ item.tag }}
-
             <clipboard-button
               v-if="item.location"
               :title="item.location"
@@ -90,49 +238,38 @@
             />
           </td>
           <td>
-            <span
-              v-tooltip
-              :title="item.revision"
-              data-placement="bottom"
-            >
-              {{ item.shortRevision }}
-            </span>
+            <span v-gl-tooltip.bottom class="monospace" :title="item.revision">{{
+              item.shortRevision
+            }}</span>
           </td>
           <td>
             {{ formatSize(item.size) }}
-            <template v-if="item.size && item.layers">
-              &middot;
-            </template>
+            <template v-if="item.size && item.layers"
+              >&middot;</template
+            >
             {{ layers(item) }}
           </td>
 
           <td>
-            <span
-              v-tooltip
-              :title="tooltipTitle(item.createdAt)"
-              data-placement="bottom"
-            >
-              {{ timeFormated(item.createdAt) }}
-            </span>
+            <span v-gl-tooltip.bottom :title="tooltipTitle(item.createdAt)">{{
+              timeFormated(item.createdAt)
+            }}</span>
           </td>
 
-          <td class="content">
-            <button
-              v-if="item.canDelete"
-              type="button"
-              class="js-delete-registry btn btn-danger d-none d-sm-block float-right"
+          <td class="content action-buttons">
+            <gl-button
+              v-if="canDeleteRow(item)"
+              v-gl-modal="modalId"
               :title="s__('ContainerRegistry|Remove tag')"
               :aria-label="s__('ContainerRegistry|Remove tag')"
-              data-container="body"
-              v-tooltip
-              @click="handleDeleteRegistry(item)"
+              data-track-event="click_button"
+              data-track-label="registry_tag_delete"
+              variant="danger"
+              class="js-delete-registry-row float-right btn-inverted btn-border-color btn-icon"
+              @click="deleteSingleItem(index)"
             >
-              <i
-                class="fa fa-trash"
-                aria-hidden="true"
-              >
-              </i>
-            </button>
+              <icon name="remove" />
+            </gl-button>
           </td>
         </tr>
       </tbody>
@@ -142,6 +279,13 @@
       v-if="shouldRenderPagination"
       :change="onPageChange"
       :page-info="repo.pagination"
+      class="js-registry-pagination"
     />
+
+    <gl-modal ref="deleteModal" :modal-id="modalId" ok-variant="danger">
+      <template v-slot:modal-title>{{ modalAction }}</template>
+      <template v-slot:modal-ok>{{ modalAction }}</template>
+      <p v-html="modalDescription"></p>
+    </gl-modal>
   </div>
 </template>

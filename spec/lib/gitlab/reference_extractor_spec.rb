@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Gitlab::ReferenceExtractor do
@@ -195,14 +197,14 @@ describe Gitlab::ReferenceExtractor do
     let(:issue)   { create(:issue, project: project) }
 
     context 'when GitLab issues are enabled' do
-      it 'returns both JIRA and internal issues' do
+      it 'returns both Jira and internal issues' do
         subject.analyze("JIRA-123 and FOOBAR-4567 and #{issue.to_reference}")
         expect(subject.issues).to eq [ExternalIssue.new('JIRA-123', project),
                                       ExternalIssue.new('FOOBAR-4567', project),
                                       issue]
       end
 
-      it 'returns only JIRA issues if the internal one does not exists' do
+      it 'returns only Jira issues if the internal one does not exists' do
         subject.analyze("JIRA-123 and FOOBAR-4567 and #999")
         expect(subject.issues).to eq [ExternalIssue.new('JIRA-123', project),
                                       ExternalIssue.new('FOOBAR-4567', project)]
@@ -215,7 +217,7 @@ describe Gitlab::ReferenceExtractor do
         project.save!
       end
 
-      it 'returns only JIRA issues' do
+      it 'returns only Jira issues' do
         subject.analyze("JIRA-123 and FOOBAR-4567 and #{issue.to_reference}")
         expect(subject.issues).to eq [ExternalIssue.new('JIRA-123', project),
                                       ExternalIssue.new('FOOBAR-4567', project)]
@@ -257,13 +259,15 @@ describe Gitlab::ReferenceExtractor do
 
   describe '.references_pattern' do
     subject { described_class.references_pattern }
+
     it { is_expected.to be_kind_of Regexp }
   end
 
   describe 'referables prefixes' do
     def prefixes
       described_class::REFERABLES.each_with_object({}) do |referable, result|
-        klass = referable.to_s.camelize.constantize
+        class_name = referable.to_s.camelize
+        klass = class_name.constantize if Object.const_defined?(class_name)
 
         next unless klass.respond_to?(:reference_prefix)
 

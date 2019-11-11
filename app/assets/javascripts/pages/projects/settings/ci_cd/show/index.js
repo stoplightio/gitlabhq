@@ -18,22 +18,18 @@ document.addEventListener('DOMContentLoaded', () => {
   // eslint-disable-next-line no-new
   new AjaxVariableList({
     container: variableListEl,
-    saveButton: variableListEl.querySelector('.js-secret-variables-save-button'),
+    saveButton: variableListEl.querySelector('.js-ci-variables-save-button'),
     errorBox: variableListEl.querySelector('.js-ci-variable-error-box'),
     saveEndpoint: variableListEl.dataset.saveEndpoint,
+    maskableRegex: variableListEl.dataset.maskableRegex,
   });
 
-  // hide extra auto devops settings based on data-attributes
-  const autoDevOpsSettings = document.querySelector('.js-auto-devops-settings');
+  // hide extra auto devops settings based checkbox state
   const autoDevOpsExtraSettings = document.querySelector('.js-extra-settings');
-
-  autoDevOpsSettings.addEventListener('click', event => {
-    const target = event.target;
-    if (target.classList.contains('js-toggle-extra-settings')) {
-      autoDevOpsExtraSettings.classList.toggle(
-        'hidden',
-        !!(target.dataset && target.dataset.hideExtraSettings),
-      );
-    }
+  const instanceDefaultBadge = document.querySelector('.js-instance-default-badge');
+  document.querySelector('.js-toggle-extra-settings').addEventListener('click', event => {
+    const { target } = event;
+    if (instanceDefaultBadge) instanceDefaultBadge.style.display = 'none';
+    autoDevOpsExtraSettings.classList.toggle('hidden', !target.checked);
   });
 });

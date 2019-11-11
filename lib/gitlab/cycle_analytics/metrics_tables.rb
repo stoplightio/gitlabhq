@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module CycleAnalytics
     module MetricsTables
@@ -31,6 +33,14 @@ module Gitlab
 
       def user_table
         User.arel_table
+      end
+
+      def projects_table
+        Project.arel_table
+      end
+
+      def routes_table
+        Route.arel_table
       end
 
       def build_table

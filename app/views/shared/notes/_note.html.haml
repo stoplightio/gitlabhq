@@ -5,7 +5,7 @@
 - note_editable = can?(current_user, :admin_note, note)
 - note_counter = local_assigns.fetch(:note_counter, 0)
 
-%li.timeline-entry{ id: dom_id(note),
+%li.timeline-entry.note-wrapper{ id: dom_id(note),
   class: ["note", "note-row-#{note.id}", ('system-note' if note.system)],
   data: { author_id: note.author.id,
     editable: note_editable,
@@ -31,19 +31,18 @@
       .note-header
         .note-header-info
           %a{ href: user_path(note.author) }
-            %span.note-header-author-name= sanitize(note.author.name)
+            %span.note-header-author-name.bold
+              = sanitize(note.author.name)
+            = user_status(note.author)
             %span.note-headline-light
               = note.author.to_reference
-          %span.note-headline-light
-            %span.note-headline-meta
-              - unless note.system
-                commented
-              - if note.system
-                %span.system-note-message
-                  = markdown_field(note, :note)
-              %span.system-note-separator
-                &middot;
-              %a.system-note-separator{ href: "##{dom_id(note)}" }= time_ago_with_tooltip(note.created_at, placement: 'bottom', html_class: 'note-created-ago')
+          %span.note-headline-light.note-headline-meta
+            - if note.system
+              %span.system-note-message
+                = markdown_field(note, :note)
+            %span.system-note-separator
+              &middot;
+            %a.system-note-separator{ href: "##{dom_id(note)}" }= time_ago_with_tooltip(note.created_at, placement: 'bottom', html_class: 'note-created-ago')
         - unless note.system?
           .note-actions
             - if note.for_personal_snippet?
@@ -61,8 +60,8 @@
         .note-awards
           = render 'award_emoji/awards_block', awardable: note, inline: false
         - if note.system
-          .system-note-commit-list-toggler
-            Toggle commit list
+          .system-note-commit-list-toggler.hide
+            = _("Toggle commit list")
             %i.fa.fa-angle-down
       - if note.attachment.url
         .note-attachment
@@ -74,5 +73,5 @@
               = icon('paperclip')
               = note.attachment_identifier
               = link_to delete_attachment_project_note_path(note.project, note),
-                title: 'Delete this attachment', method: :delete, remote: true, data: { confirm: 'Are you sure you want to remove the attachment?' }, class: 'danger js-note-attachment-delete' do
+                title: _('Delete this attachment'), method: :delete, remote: true, data: { confirm: _('Are you sure you want to remove the attachment?') }, class: 'danger js-note-attachment-delete' do
                 = icon('trash-o', class: 'cred')

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe 'create a merge request, allowing commits from members who can merge to the target branch', :js do
@@ -71,12 +73,12 @@ describe 'create a merge request, allowing commits from members who can merge to
     end
 
     before do
-      target_project.add_master(member)
+      target_project.add_maintainer(member)
 
       sign_in(member)
     end
 
-    it 'it hides the option from members' do
+    it 'hides the option from members' do
       visit edit_project_merge_request_path(target_project, merge_request)
 
       expect(page).not_to have_content('Allows commits from members who can merge to the target branch')

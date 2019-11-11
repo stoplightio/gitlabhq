@@ -6,10 +6,8 @@ export default {
       commitMessage,
     });
   },
-  [types.UPDATE_COMMIT_ACTION](state, commitAction) {
-    Object.assign(state, {
-      commitAction,
-    });
+  [types.UPDATE_COMMIT_ACTION](state, { commitAction }) {
+    Object.assign(state, { commitAction });
   },
   [types.UPDATE_NEW_BRANCH_NAME](state, newBranchName) {
     Object.assign(state, {
@@ -19,6 +17,11 @@ export default {
   [types.UPDATE_LOADING](state, submitCommitLoading) {
     Object.assign(state, {
       submitCommitLoading,
+    });
+  },
+  [types.TOGGLE_SHOULD_CREATE_MR](state, shouldCreateMR) {
+    Object.assign(state, {
+      shouldCreateMR: shouldCreateMR === undefined ? !state.shouldCreateMR : shouldCreateMR,
     });
   },
 };

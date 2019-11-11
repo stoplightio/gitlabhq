@@ -5,6 +5,7 @@
 ### Realtime Components
 
 When writing code for realtime features we have to keep a couple of things in mind:
+
 1. Do not overload the server with requests.
 1. It should feel realtime.
 
@@ -12,28 +13,28 @@ Thus, we must strike a balance between sending requests and the feeling of realt
 Use the following rules when creating realtime solutions.
 
 1. The server will tell you how much to poll by sending `Poll-Interval` in the header.
-Use that as your polling interval. This way it is [easy for system administrators to change the
-polling rate](../../administration/polling.md).
-A `Poll-Interval: -1` means you should disable polling, and this must be implemented.
-1. A response with HTTP status `4XX` or `5XX` should disable polling as well.
+   Use that as your polling interval. This way it is [easy for system administrators to change the
+   polling rate](../../administration/polling.md).
+   A `Poll-Interval: -1` means you should disable polling, and this must be implemented.
+1. A response with HTTP status different from 2XX should disable polling as well.
 1. Use a common library for polling.
 1. Poll on active tabs only. Please use [Visibility](https://github.com/ai/visibilityjs).
 1. Use regular polling intervals, do not use backoff polling, or jitter, as the interval will be
-controlled by the server.
+   controlled by the server.
 1. The backend code will most likely be using etags. You do not and should not check for status
-`304 Not Modified`. The browser will transform it for you.
+   `304 Not Modified`. The browser will transform it for you.
 
 ### Lazy Loading Images
 
-To improve the time to first render we are using lazy loading for images. This works by setting 
-the actual image source on the `data-src` attribute. After the HTML is rendered and JavaScript is loaded, 
+To improve the time to first render we are using lazy loading for images. This works by setting
+the actual image source on the `data-src` attribute. After the HTML is rendered and JavaScript is loaded,
 the value of `data-src` will be moved to `src` automatically if the image is in the current viewport.
 
-*  Prepare images in HTML for lazy loading by renaming the `src` attribute to `data-src` AND adding the class `lazy`
-*  If you are using the Rails `image_tag` helper, all images will be lazy-loaded by default unless `lazy: false` is provided.
+- Prepare images in HTML for lazy loading by renaming the `src` attribute to `data-src` AND adding the class `lazy`.
+- If you are using the Rails `image_tag` helper, all images will be lazy-loaded by default unless `lazy: false` is provided.
 
 If you are asynchronously adding content which contains lazy images then you need to call the function
-`gl.lazyLoader.searchLazyImages()` which will search for lazy images and load them if needed. 
+`gl.lazyLoader.searchLazyImages()` which will search for lazy images and load them if needed.
 But in general it should be handled automatically through a `MutationObserver` in the lazy loading function.
 
 ### Animations
@@ -64,26 +65,27 @@ within the `pages` directory correspond to Rails controllers and actions. These
 auto-generated bundles will be automatically included on the corresponding
 pages.
 
-For example, if you were to visit [gitlab.com/gitlab-org/gitlab-ce/issues](https://gitlab.com/gitlab-org/gitlab-ce/issues),
+For example, if you were to visit <https://gitlab.com/gitlab-org/gitlab/issues>,
 you would be accessing the `app/controllers/projects/issues_controller.rb`
 controller with the `index` action. If a corresponding file exists at
 `pages/projects/issues/index/index.js`, it will be compiled into a webpack
 bundle and included on the page.
 
-> **Note:** Previously we had encouraged the use of
-> `content_for :page_specific_javascripts` within haml files, along with
-> manually generated webpack bundles. However under this new system you should
-> not ever need to manually add an entry point to the `webpack.config.js` file.
+NOTE: **Note:**
+Previously we had encouraged the use of
+`content_for :page_specific_javascripts` within haml files, along with
+manually generated webpack bundles. However under this new system you should
+not ever need to manually add an entry point to the `webpack.config.js` file.
 
-> **Tip:**
-> If you are unsure what controller and action corresponds to a given page, you
-> can find this out by inspecting `document.body.dataset.page` within your
-> browser's developer console while on any page within gitlab.
+TIP: **Tip:**
+If you are unsure what controller and action corresponds to a given page, you
+can find this out by inspecting `document.body.dataset.page` within your
+browser's developer console while on any page within GitLab.
 
-#### Important Considerations:
+#### Important Considerations
 
 - **Keep Entry Points Lite:**
-  Page-specific javascript entry points should be as lite as possible.  These
+  Page-specific JavaScript entry points should be as lite as possible.  These
   files are exempt from unit tests, and should be used primarily for
   instantiation and dependency injection of classes and methods that live in
   modules outside of the entry point script.  Just import, read the DOM,
@@ -95,27 +97,26 @@ bundle and included on the page.
   DOM has loaded, you should attach an event handler to the `DOMContentLoaded`
   event with:
 
-    ```javascript
-    import initMyWidget from './my_widget';
-  
-    document.addEventListener('DOMContentLoaded', () => {
-      initMyWidget();
-    });
-    ```
+  ```javascript
+  import initMyWidget from './my_widget';
 
-- **Supporting Module Placement:**  
-    - If a class or a module is _specific to a particular route_, try to locate
-      it close to the entry point it will be used. For instance, if
-      `my_widget.js` is only imported within `pages/widget/show/index.js`, you
-      should place the module at `pages/widget/show/my_widget.js` and import it
-      with a relative path (e.g. `import initMyWidget from './my_widget';`).
-      
-    - If a class or module is _used by multiple routes_, place it within a
-      shared directory at the closest common parent directory for the entry
-      points that import it.  For example, if `my_widget.js` is imported within
-      both `pages/widget/show/index.js` and `pages/widget/run/index.js`, then
-      place the module at `pages/widget/shared/my_widget.js` and import it with
-      a relative path if possible (e.g. `../shared/my_widget`).
+  document.addEventListener('DOMContentLoaded', () => {
+    initMyWidget();
+  });
+  ```
+
+- **Supporting Module Placement:**
+  - If a class or a module is _specific to a particular route_, try to locate
+    it close to the entry point it will be used. For instance, if
+    `my_widget.js` is only imported within `pages/widget/show/index.js`, you
+    should place the module at `pages/widget/show/my_widget.js` and import it
+    with a relative path (e.g. `import initMyWidget from './my_widget';`).
+  - If a class or module is _used by multiple routes_, place it within a
+    shared directory at the closest common parent directory for the entry
+    points that import it.  For example, if `my_widget.js` is imported within
+    both `pages/widget/show/index.js` and `pages/widget/run/index.js`, then
+    place the module at `pages/widget/shared/my_widget.js` and import it with
+    a relative path if possible (e.g. `../shared/my_widget`).
 
 - **Enterprise Edition Caveats:**
   For GitLab Enterprise Edition, page-specific entry points will override their
@@ -161,19 +162,16 @@ General tips:
 - Use code-splitting dynamic imports wherever possible to lazy-load code that is not needed initially.
 - [High Performance Animations][high-perf-animations]
 
--------
+---
 
 ## Additional Resources
 
-- [WebPage Test][web-page-test] for testing site loading time and size.
+- [WebPage Test](https://www.webpagetest.org) for testing site loading time and size.
 - [Google PageSpeed Insights][pagespeed-insights] grades web pages and provides feedback to improve the page.
-- [Profiling with Chrome DevTools][google-devtools-profiling]
+- [Profiling with Chrome DevTools](https://developers.google.com/web/tools/chrome-devtools/)
 - [Browser Diet][browser-diet] is a community-built guide that catalogues practical tips for improving web page performance.
 
-
-[web-page-test]: http://www.webpagetest.org/
 [pagespeed-insights]: https://developers.google.com/speed/pagespeed/insights/
-[google-devtools-profiling]: https://developers.google.com/web/tools/chrome-devtools/profile/?hl=en
 [browser-diet]: https://browserdiet.com/
 [high-perf-animations]: https://www.html5rocks.com/en/tutorials/speed/high-performance-animations/
 [flip]: https://aerotwist.com/blog/flip-your-animations/

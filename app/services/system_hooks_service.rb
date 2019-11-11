@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class SystemHooksService
   def execute_hooks_for(model, event)
     data = build_event_data(model, event)
@@ -45,7 +47,7 @@ class SystemHooksService
 
       case event
       when :rename
-        data[:old_username] = model.username_was
+        data[:old_username] = model.username_before_last_save
       when :failed_login
         data[:state] = model.state
       end
@@ -56,8 +58,8 @@ class SystemHooksService
 
       if event == :rename
         data.merge!(
-          old_path: model.path_was,
-          old_full_path: model.full_path_was
+          old_path: model.path_before_last_save,
+          old_full_path: model.full_path_before_last_save
         )
       end
     when GroupMember
@@ -72,9 +74,11 @@ class SystemHooksService
     when ProjectMember
       return "user_add_to_team"      if event == :create
       return "user_remove_from_team" if event == :destroy
+      return "user_update_for_team"  if event == :update
     when GroupMember
       return 'user_add_to_group'      if event == :create
       return 'user_remove_from_group' if event == :destroy
+      return 'user_update_for_group'  if event == :update
     else
       "#{model.class.name.downcase}_#{event}"
     end
@@ -146,3 +150,5 @@ class SystemHooksService
     }
   end
 end
+
+SystemHooksService.prepend_if_ee('EE::SystemHooksService')

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe PersonalAccessTokensFinder do
@@ -92,7 +94,7 @@ describe PersonalAccessTokensFinder do
       end
 
       describe 'with id' do
-        subject { finder(params).find_by(id: active_personal_access_token.id) }
+        subject { finder(params).find_by_id(active_personal_access_token.id) }
 
         it { is_expected.to eq(active_personal_access_token) }
 
@@ -106,7 +108,7 @@ describe PersonalAccessTokensFinder do
       end
 
       describe 'with token' do
-        subject { finder(params).find_by(token: active_personal_access_token.token) }
+        subject { finder(params).find_by_token(active_personal_access_token.token) }
 
         it { is_expected.to eq(active_personal_access_token) }
 
@@ -207,7 +209,7 @@ describe PersonalAccessTokensFinder do
       end
 
       describe 'with id' do
-        subject { finder(params).find_by(id: active_personal_access_token.id) }
+        subject { finder(params).find_by_id(active_personal_access_token.id) }
 
         it { is_expected.to eq(active_personal_access_token) }
 
@@ -221,7 +223,7 @@ describe PersonalAccessTokensFinder do
       end
 
       describe 'with token' do
-        subject { finder(params).find_by(token: active_personal_access_token.token) }
+        subject { finder(params).find_by_token(active_personal_access_token.token) }
 
         it { is_expected.to eq(active_personal_access_token) }
 

@@ -1,7 +1,9 @@
+# frozen_string_literal: true
+
 # NOTE: This service cannot be used directly because it is part of a
 # a bigger process. Instead, use the service MoveAccessService which moves
 # project memberships, project group links, authorizations and refreshes
-# the authorizations if neccessary
+# the authorizations if necessary
 module Projects
   class MoveProjectAuthorizationsService < BaseMoveRelationsService
     def execute(source_project, remove_remaining_elements: true)
@@ -19,8 +21,7 @@ module Projects
     private
 
     def move_project_authorizations
-      prepare_relation(non_existent_authorization, :user_id)
-        .update_all(project_id: @project.id)
+      non_existent_authorization.update_all(project_id: @project.id)
     end
 
     def remove_remaining_authorizations
@@ -31,10 +32,12 @@ module Projects
     end
 
     # Look for authorizations in source_project that are not in the target project
+    # rubocop: disable CodeReuse/ActiveRecord
     def non_existent_authorization
       source_project.project_authorizations
                     .select(:user_id)
                     .where.not(user: @project.authorized_users)
     end
+    # rubocop: enable CodeReuse/ActiveRecord
   end
 end

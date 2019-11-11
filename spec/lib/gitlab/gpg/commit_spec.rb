@@ -1,4 +1,4 @@
-require 'rails_helper'
+require 'spec_helper'
 
 describe Gitlab::Gpg::Commit do
   describe '#signature' do
@@ -20,6 +20,28 @@ describe Gitlab::Gpg::Commit do
 
     context 'unsigned commit' do
       let!(:commit) { create :commit, project: project, sha: commit_sha }
+
+      it 'returns nil' do
+        expect(described_class.new(commit).signature).to be_nil
+      end
+    end
+
+    context 'invalid signature' do
+      let!(:commit) { create :commit, project: project, sha: commit_sha, committer_email: GpgHelpers::User1.emails.first }
+
+      let!(:user) { create(:user, email: GpgHelpers::User1.emails.first) }
+
+      before do
+        allow(Gitlab::Git::Commit).to receive(:extract_signature_lazily)
+            .with(Gitlab::Git::Repository, commit_sha)
+            .and_return(
+              [
+                # Corrupt the key
+                GpgHelpers::User1.signed_commit_signature.tr('=', 'a'),
+                GpgHelpers::User1.signed_commit_base_data
+              ]
+            )
+      end
 
       it 'returns nil' do
         expect(described_class.new(commit).signature).to be_nil
@@ -87,6 +109,89 @@ describe Gitlab::Gpg::Commit do
           end
         end
 
+        context 'valid key signed using recent version of Gnupg' do
+          let!(:commit) { create :commit, project: project, sha: commit_sha, committer_email: GpgHelpers::User1.emails.first }
+
+          let!(:user) { create(:user, email: GpgHelpers::User1.emails.first) }
+
+          let!(:gpg_key) do
+            create :gpg_key, key: GpgHelpers::User1.public_key, user: user
+          end
+
+          let!(:crypto) { instance_double(GPGME::Crypto) }
+
+          before do
+            fake_signature = [
+              GpgHelpers::User1.signed_commit_signature,
+              GpgHelpers::User1.signed_commit_base_data
+            ]
+
+            allow(Gitlab::Git::Commit).to receive(:extract_signature_lazily)
+              .with(Gitlab::Git::Repository, commit_sha)
+              .and_return(fake_signature)
+          end
+
+          it 'returns a valid signature' do
+            verified_signature = double('verified-signature', fingerprint: GpgHelpers::User1.fingerprint, valid?: true)
+            allow(GPGME::Crypto).to receive(:new).and_return(crypto)
+            allow(crypto).to receive(:verify).and_return(verified_signature)
+
+            signature = described_class.new(commit).signature
+
+            expect(signature).to have_attributes(
+              commit_sha: commit_sha,
+              project: project,
+              gpg_key: gpg_key,
+              gpg_key_primary_keyid: GpgHelpers::User1.primary_keyid,
+              gpg_key_user_name: GpgHelpers::User1.names.first,
+              gpg_key_user_email: GpgHelpers::User1.emails.first,
+              verification_status: 'verified'
+            )
+          end
+        end
+
+        context 'valid key signed using older version of Gnupg' do
+          let!(:commit) { create :commit, project: project, sha: commit_sha, committer_email: GpgHelpers::User1.emails.first }
+
+          let!(:user) { create(:user, email: GpgHelpers::User1.emails.first) }
+
+          let!(:gpg_key) do
+            create :gpg_key, key: GpgHelpers::User1.public_key, user: user
+          end
+
+          let!(:crypto) { instance_double(GPGME::Crypto) }
+
+          before do
+            fake_signature = [
+              GpgHelpers::User1.signed_commit_signature,
+              GpgHelpers::User1.signed_commit_base_data
+            ]
+
+            allow(Gitlab::Git::Commit).to receive(:extract_signature_lazily)
+              .with(Gitlab::Git::Repository, commit_sha)
+              .and_return(fake_signature)
+          end
+
+          it 'returns a valid signature' do
+            keyid = GpgHelpers::User1.fingerprint.last(16)
+            verified_signature = double('verified-signature', fingerprint: keyid, valid?: true)
+            allow(GPGME::Crypto).to receive(:new).and_return(crypto)
+            allow(crypto).to receive(:verify).and_return(verified_signature)
+
+            signature = described_class.new(commit).signature
+
+            expect(signature).to have_attributes(
+              commit_sha: commit_sha,
+              project: project,
+              gpg_key: gpg_key,
+              gpg_key_primary_keyid: GpgHelpers::User1.primary_keyid,
+              gpg_key_user_name: GpgHelpers::User1.names.first,
+              gpg_key_user_email: GpgHelpers::User1.emails.first,
+              verification_status: 'verified'
+            )
+          end
+        end
+
         context 'commit signed with a subkey' do
           let!(:commit) { create :commit, project: project, sha: commit_sha, committer_email: GpgHelpers::User3.emails.first }
 
@@ -97,7 +202,7 @@ describe Gitlab::Gpg::Commit do
           end
 
           let(:gpg_key_subkey) do
-            gpg_key.subkeys.find_by(fingerprint: '0522DD29B98F167CD8421752E38FFCAF75ABD92A')
+            gpg_key.subkeys.find_by(fingerprint: GpgHelpers::User3.subkey_fingerprints.last)
           end
 
           before do
@@ -264,6 +369,34 @@ describe Gitlab::Gpg::Commit do
       end
 
       it_behaves_like 'returns the cached signature on second call'
+    end
+
+    context 'multiple commits with signatures' do
+      let(:first_signature) { create(:gpg_signature) }
+
+      let(:gpg_key) { create(:gpg_key, key: GpgHelpers::User2.public_key) }
+      let(:second_signature) { create(:gpg_signature, gpg_key: gpg_key) }
+
+      let!(:first_commit) { create(:commit, project: project, sha: first_signature.commit_sha) }
+      let!(:second_commit) { create(:commit, project: project, sha: second_signature.commit_sha) }
+
+      let(:commits) do
+        [first_commit, second_commit].map do |commit|
+          gpg_commit = described_class.new(commit)
+
+          allow(gpg_commit).to receive(:has_signature?).and_return(true)
+
+          gpg_commit
+        end
+      end
+
+      it 'does an aggregated sql request instead of 2 separate ones' do
+        recorder = ActiveRecord::QueryRecorder.new do
+          commits.each(&:signature)
+        end
+
+        expect(recorder.count).to eq(1)
+      end
     end
   end
 end

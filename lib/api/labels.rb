@@ -1,99 +1,123 @@
+# frozen_string_literal: true
+
 module API
   class Labels < Grape::API
     include PaginationParams
+    helpers ::API::Helpers::LabelHelpers
 
     before { authenticate! }
 
     params do
       requires :id, type: String, desc: 'The ID of a project'
     end
-    resource :projects, requirements: API::PROJECT_ENDPOINT_REQUIREMENTS do
+    resource :projects, requirements: API::NAMESPACE_OR_PROJECT_REQUIREMENTS do
       desc 'Get all labels of the project' do
-        success Entities::Label
+        success Entities::ProjectLabel
       end
       params do
+        optional :with_counts, type: Boolean, default: false,
+                 desc: 'Include issue and merge request counts'
+        optional :include_ancestor_groups, type: Boolean, default: true,
+                 desc: 'Include ancestor groups'
         use :pagination
       end
       get ':id/labels' do
-        present paginate(available_labels_for(user_project)), with: Entities::Label, current_user: current_user, project: user_project
+        get_labels(user_project, Entities::ProjectLabel, include_ancestor_groups: params[:include_ancestor_groups])
+      end
+
+      desc 'Get a single label' do
+        detail 'This feature was added in GitLab 12.4.'
+        success Entities::ProjectLabel
+      end
+      params do
+        optional :include_ancestor_groups, type: Boolean, default: true,
+                 desc: 'Include ancestor groups'
+      end
+      get ':id/labels/:name' do
+        get_label(user_project, Entities::ProjectLabel, include_ancestor_groups: params[:include_ancestor_groups])
       end
 
       desc 'Create a new label' do
-        success Entities::Label
+        success Entities::ProjectLabel
       end
       params do
-        requires :name, type: String, desc: 'The name of the label to be created'
-        requires :color, type: String, desc: "The color of the label given in 6-digit hex notation with leading '#' sign (e.g. #FFAABB) or one of the allowed CSS color names"
-        optional :description, type: String, desc: 'The description of label to be created'
+        use :label_create_params
         optional :priority, type: Integer, desc: 'The priority of the label', allow_blank: true
       end
       post ':id/labels' do
-        authorize! :admin_label, user_project
-
-        label = available_labels_for(user_project).find_by(title: params[:name])
-        conflict!('Label already exists') if label
-
-        priority = params.delete(:priority)
-        label = ::Labels::CreateService.new(declared_params(include_missing: false)).execute(project: user_project)
-
-        if label.valid?
-          label.prioritize!(user_project, priority) if priority
-          present label, with: Entities::Label, current_user: current_user, project: user_project
-        else
-          render_validation_error!(label)
-        end
-      end
-
-      desc 'Delete an existing label' do
-        success Entities::Label
-      end
-      params do
-        requires :name, type: String, desc: 'The name of the label to be deleted'
-      end
-      delete ':id/labels' do
-        authorize! :admin_label, user_project
-
-        label = user_project.labels.find_by(title: params[:name])
-        not_found!('Label') unless label
-
-        destroy_conditionally!(label)
+        create_label(user_project, Entities::ProjectLabel)
       end
 
       desc 'Update an existing label. At least one optional parameter is required.' do
-        success Entities::Label
+        detail 'This feature was deprecated in GitLab 12.4.'
+        success Entities::ProjectLabel
       end
       params do
-        requires :name,  type: String, desc: 'The name of the label to be updated'
-        optional :new_name, type: String, desc: 'The new name of the label'
-        optional :color, type: String, desc: "The new color of the label given in 6-digit hex notation with leading '#' sign (e.g. #FFAABB) or one of the allowed CSS color names"
-        optional :description, type: String, desc: 'The new description of label'
-        optional :priority, type: Integer, desc: 'The priority of the label', allow_blank: true
-        at_least_one_of :new_name, :color, :description, :priority
+        optional :label_id, type: Integer, desc: 'The id of the label to be updated'
+        optional :name, type: String, desc: 'The name of the label to be updated'
+        use :project_label_update_params
+        exactly_one_of :label_id, :name
       end
       put ':id/labels' do
-        authorize! :admin_label, user_project
+        update_label(user_project, Entities::ProjectLabel)
+      end
 
-        label = user_project.labels.find_by(title: params[:name])
-        not_found!('Label not found') unless label
+      desc 'Delete an existing label' do
+        detail 'This feature was deprecated in GitLab 12.4.'
+        success Entities::ProjectLabel
+      end
+      params do
+        optional :label_id, type: Integer, desc: 'The id of the label to be deleted'
+        optional :name, type: String, desc: 'The name of the label to be deleted'
+        exactly_one_of :label_id, :name
+      end
+      delete ':id/labels' do
+        delete_label(user_project)
+      end
 
-        update_priority = params.key?(:priority)
-        priority = params.delete(:priority)
-        label_params = declared_params(include_missing: false)
-        # Rename new name to the actual label attribute name
-        label_params[:name] = label_params.delete(:new_name) if label_params.key?(:new_name)
+      desc 'Promote a label to a group label' do
+        detail 'This feature was added in GitLab 12.3 and deprecated in GitLab 12.4.'
+        success Entities::GroupLabel
+      end
+      params do
+        requires :name, type: String, desc: 'The name of the label to be promoted'
+      end
+      put ':id/labels/promote' do
+        promote_label(user_project)
+      end
 
-        label = ::Labels::UpdateService.new(label_params).execute(label)
-        render_validation_error!(label) unless label.valid?
+      desc 'Update an existing label. At least one optional parameter is required.' do
+        detail 'This feature was added in GitLab 12.4.'
+        success Entities::ProjectLabel
+      end
+      params do
+        requires :name, type: String, desc: 'The name or id of the label to be updated'
+        use :project_label_update_params
+      end
+      put ':id/labels/:name' do
+        update_label(user_project, Entities::ProjectLabel)
+      end
 
-        if update_priority
-          if priority.nil?
-            label.unprioritize!(user_project)
-          else
-            label.prioritize!(user_project, priority)
-          end
-        end
+      desc 'Delete an existing label' do
+        detail 'This feature was added in GitLab 12.4.'
+        success Entities::ProjectLabel
+      end
+      params do
+        requires :name, type: String, desc: 'The name or id of the label to be deleted'
+      end
+      delete ':id/labels/:name' do
+        delete_label(user_project)
+      end
 
-        present label, with: Entities::Label, current_user: current_user, project: user_project
+      desc 'Promote a label to a group label' do
+        detail 'This feature was added in GitLab 12.4.'
+        success Entities::GroupLabel
+      end
+      params do
+        requires :name, type: String, desc: 'The name or id of the label to be promoted'
+      end
+      put ':id/labels/:name/promote' do
+        promote_label(user_project)
       end
     end
   end

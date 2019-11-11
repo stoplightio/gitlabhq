@@ -1,11 +1,16 @@
+# frozen_string_literal: true
+
 class Projects::SnippetsController < Projects::ApplicationController
   include RendersNotes
   include ToggleAwardEmoji
   include SpammableActions
   include SnippetsActions
   include RendersBlob
+  include PaginatedCollection
+  include Gitlab::NoteableMetadata
 
-  skip_before_action :verify_authenticity_token, only: [:show], if: :js_request?
+  skip_before_action :verify_authenticity_token,
+    if: -> { action_name == 'show' && js_request? }
 
   before_action :check_snippets_available!
   before_action :snippet, only: [:show, :edit, :destroy, :update, :raw, :toggle_award_emoji, :mark_as_spam]
@@ -25,15 +30,14 @@ class Projects::SnippetsController < Projects::ApplicationController
   respond_to :html
 
   def index
-    @snippets = SnippetsFinder.new(
-      current_user,
-      project: @project,
-      scope: params[:scope]
-    ).execute
-    @snippets = @snippets.page(params[:page])
-    if @snippets.out_of_range? && @snippets.total_pages != 0
-      redirect_to project_snippets_path(@project, page: @snippets.total_pages)
-    end
+    @snippets = SnippetsFinder.new(current_user, project: @project, scope: params[:scope])
+      .execute
+      .page(params[:page])
+      .inc_author
+
+    return if redirect_out_of_range(@snippets)
+
+    @noteable_meta_data = noteable_meta_data(@snippets, 'Snippet')
   end
 
   def new
@@ -73,7 +77,14 @@ class Projects::SnippetsController < Projects::ApplicationController
       format.json do
         render_blob_json(blob)
       end
-      format.js { render 'shared/snippets/show'}
+
+      format.js do
+        if @snippet.embeddable?
+          render 'shared/snippets/show'
+        else
+          head :not_found
+        end
+      end
     end
   end
 
@@ -82,13 +93,13 @@ class Projects::SnippetsController < Projects::ApplicationController
 
     @snippet.destroy
 
-    redirect_to project_snippets_path(@project), status: 302
+    redirect_to project_snippets_path(@project), status: :found
   end
 
   protected
 
   def snippet
-    @snippet ||= @project.snippets.find(params[:id])
+    @snippet ||= @project.snippets.inc_relations_for_view.find(params[:id])
   end
   alias_method :awardable, :snippet
   alias_method :spammable, :snippet

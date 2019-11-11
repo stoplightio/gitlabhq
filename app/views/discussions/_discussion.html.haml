@@ -1,24 +1,24 @@
 - expanded = discussion.expanded?
-%li.note.note-discussion.timeline-entry
+%li.note.note-discussion.timeline-entry.unstyled-comments
   .timeline-entry-inner
-    .timeline-icon
-      = link_to user_path(discussion.author) do
-        = image_tag avatar_icon_for_user(discussion.author), class: "avatar s40"
     .timeline-content
       .discussion.js-toggle-container{ data: { discussion_id: discussion.id } }
         .discussion-header
+          .timeline-icon
+            = link_to user_path(discussion.author) do
+              = image_tag avatar_icon_for_user(discussion.author), class: "avatar s40"
           .discussion-actions
             %button.note-action-button.discussion-toggle-button.js-toggle-button{ type: "button", class: ("js-toggle-lazy-diff" unless expanded) }
               - if expanded
                 = icon("chevron-up")
               - else
                 = icon("chevron-down")
-              = _('Toggle discussion')
+              = _('Toggle thread')
           = link_to_member(@project, discussion.author, avatar: false)
 
           .inline.discussion-headline-light
             = discussion.author.to_reference
-            started a discussion
+            started a thread
 
             - url = discussion_path(discussion)
             - if discussion.for_commit? && @noteable != discussion.noteable

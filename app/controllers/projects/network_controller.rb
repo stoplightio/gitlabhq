@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Projects::NetworkController < Projects::ApplicationController
   include ExtractsPath
   include ApplicationHelper
@@ -6,6 +8,7 @@ class Projects::NetworkController < Projects::ApplicationController
   before_action :require_non_empty_project
   before_action :assign_ref_vars
   before_action :authorize_download_code!
+  before_action :assign_options
   before_action :assign_commit
 
   def show
@@ -27,14 +30,17 @@ class Projects::NetworkController < Projects::ApplicationController
     render
   end
 
-  def assign_commit
-    return if params[:extended_sha1].blank?
+  def assign_options
+    @options = params.permit(:filter_ref, :extended_sha1)
+  end
 
-    @options[:extended_sha1] = params[:extended_sha1]
+  def assign_commit
+    return if @options[:extended_sha1].blank?
+
     @commit = @repo.commit(@options[:extended_sha1])
   end
 
   def whitelist_query_limiting
-    Gitlab::QueryLimiting.whitelist('https://gitlab.com/gitlab-org/gitlab-ce/issues/42333')
+    Gitlab::QueryLimiting.whitelist('https://gitlab.com/gitlab-org/gitlab-foss/issues/42333')
   end
 end

@@ -3,7 +3,6 @@
  */
 
 @mixin gitlab-theme(
-  $location-badge-color,
   $search-and-nav-links,
   $active-tab-border,
   $border-and-box-shadow,
@@ -23,21 +22,31 @@
     .container-fluid {
       .navbar-toggler {
         border-left: 1px solid lighten($border-and-box-shadow, 10%);
+
+        svg {
+          fill: $search-and-nav-links;
+        }
       }
     }
 
     .navbar-sub-nav,
     .navbar-nav {
       > li {
-        > a:hover,
-        > a:focus {
-          background-color: rgba($search-and-nav-links, 0.2);
+        > a,
+        > button {
+          &:hover,
+          &:focus {
+            background-color: rgba($search-and-nav-links, 0.2);
+          }
         }
 
-        &.active > a,
-        &.dropdown.show > a {
-          color: $nav-svg-color;
-          background-color: $color-alternate;
+        &.active,
+        &.dropdown.show {
+          > a,
+          > button {
+            color: $nav-svg-color;
+            background-color: $color-alternate;
+          }
         }
 
         &.line-separator {
@@ -113,12 +122,6 @@
       }
     }
 
-    .location-badge {
-      color: $location-badge-color;
-      background-color: rgba($search-and-nav-links, 0.1);
-      border-right: 1px solid $sidebar-text;
-    }
-
     .search-input::placeholder {
       color: rgba($search-and-nav-links, 0.8);
     }
@@ -135,10 +138,6 @@
         background-color: $white-light;
       }
 
-      .location-badge {
-        color: $gl-text-color;
-      }
-
       .search-input-wrap {
         .search-icon {
           fill: rgba($search-and-nav-links, 0.8);
@@ -146,7 +145,6 @@
       }
     }
   }
-
 
   // Sidebar
   .nav-sidebar li.active {
@@ -167,6 +165,7 @@
 
   .nav-links li {
     &.active a,
+    &.md-header-tab.active button,
     a.active {
       border-bottom: 2px solid $active-tab-border;
 
@@ -177,10 +176,6 @@
   }
 
   .branch-header-title {
-    color: $border-and-box-shadow;
-  }
-
-  .ide-file-list .file.file-active {
     color: $border-and-box-shadow;
   }
 
@@ -199,7 +194,6 @@
 body {
   &.ui-indigo {
     @include gitlab-theme(
-      $indigo-100,
       $indigo-200,
       $indigo-500,
       $indigo-700,
@@ -211,7 +205,6 @@ body {
 
   &.ui-light-indigo {
     @include gitlab-theme(
-      $indigo-100,
       $indigo-200,
       $indigo-500,
       $indigo-500,
@@ -223,7 +216,6 @@ body {
 
   &.ui-blue {
     @include gitlab-theme(
-      $theme-blue-100,
       $theme-blue-200,
       $theme-blue-500,
       $theme-blue-700,
@@ -235,7 +227,6 @@ body {
 
   &.ui-light-blue {
     @include gitlab-theme(
-      $theme-light-blue-100,
       $theme-light-blue-200,
       $theme-light-blue-500,
       $theme-light-blue-500,
@@ -247,7 +238,6 @@ body {
 
   &.ui-green {
     @include gitlab-theme(
-      $theme-green-100,
       $theme-green-200,
       $theme-green-500,
       $theme-green-700,
@@ -259,7 +249,6 @@ body {
 
   &.ui-light-green {
     @include gitlab-theme(
-      $theme-green-100,
       $theme-green-200,
       $theme-green-500,
       $theme-green-500,
@@ -271,7 +260,6 @@ body {
 
   &.ui-red {
     @include gitlab-theme(
-      $theme-red-100,
       $theme-red-200,
       $theme-red-500,
       $theme-red-700,
@@ -283,7 +271,6 @@ body {
 
   &.ui-light-red {
     @include gitlab-theme(
-      $theme-light-red-100,
       $theme-light-red-200,
       $theme-light-red-500,
       $theme-light-red-500,
@@ -295,45 +282,45 @@ body {
 
   &.ui-dark {
     @include gitlab-theme(
-      $theme-gray-100,
-      $theme-gray-200,
-      $theme-gray-500,
-      $theme-gray-700,
-      $theme-gray-800,
-      $theme-gray-900,
+      $gray-200,
+      $gray-500,
+      $gray-700,
+      $gray-800,
+      $gray-900,
       $white-light
     );
   }
 
   &.ui-light {
     @include gitlab-theme(
-      $theme-gray-900,
-      $theme-gray-700,
-      $theme-gray-800,
-      $theme-gray-700,
-      $theme-gray-700,
-      $theme-gray-100,
-      $theme-gray-700
+      $gray-700,
+      $gray-800,
+      $gray-700,
+      $gray-700,
+      $gray-100,
+      $gray-700
     );
 
     .navbar-gitlab {
-      background-color: $theme-gray-100;
+      background-color: $gray-100;
       box-shadow: 0 1px 0 0 $border-color;
 
       .logo-text svg {
-        fill: $theme-gray-900;
+        fill: $gray-900;
       }
 
       .navbar-sub-nav,
       .navbar-nav {
         > li {
           > a:hover,
-          > a:focus {
-            color: $theme-gray-900;
+          > a:focus,
+          > button:hover {
+            color: $gray-900;
           }
 
           &.active > a,
-          &.active > a:hover {
+          &.active > a:hover,
+          &.active > button {
             color: $white-light;
           }
         }
@@ -342,8 +329,8 @@ body {
       .container-fluid {
         .navbar-toggler,
         .navbar-toggler:hover {
-          color: $theme-gray-700;
-          border-left: 1px solid $theme-gray-200;
+          color: $gray-700;
+          border-left: 1px solid $gray-200;
         }
       }
     }
@@ -356,43 +343,32 @@ body {
         &:hover {
           background-color: $white-light;
           box-shadow: inset 0 0 0 1px $blue-200;
-
-          .location-badge {
-            box-shadow: inset 0 0 0 1px $blue-200;
-          }
         }
       }
 
       .search-input-wrap {
         .search-icon {
-          fill: $theme-gray-200;
+          fill: $gray-200;
         }
 
         .search-input {
           color: $gl-text-color;
         }
       }
-
-      .location-badge {
-        color: $theme-gray-700;
-        box-shadow: inset 0 0 0 1px $border-color;
-        background-color: $nav-badge-bg;
-        border-right: 0;
-      }
     }
 
     .nav-sidebar li.active {
       > a {
-        color: $theme-gray-900;
+        color: $gray-900;
       }
 
       svg {
-        fill: $theme-gray-900;
+        fill: $gray-900;
       }
     }
 
     .sidebar-top-level-items > li.active .badge.badge-pill {
-      color: $theme-gray-900;
+      color: $gray-900;
     }
   }
 }

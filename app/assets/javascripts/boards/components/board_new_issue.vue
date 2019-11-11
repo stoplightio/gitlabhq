@@ -1,15 +1,17 @@
 <script>
 import $ from 'jquery';
+import { GlButton } from '@gitlab/ui';
+import { getMilestone } from 'ee_else_ce/boards/boards_util';
+import ListIssue from 'ee_else_ce/boards/models/issue';
 import eventHub from '../eventhub';
 import ProjectSelect from './project_select.vue';
-import ListIssue from '../models/issue';
-
-const Store = gl.issueBoards.BoardsStore;
+import boardsStore from '../stores/boards_store';
 
 export default {
   name: 'BoardNewIssue',
   components: {
     ProjectSelect,
+    GlButton,
   },
   props: {
     groupId: {
@@ -50,24 +52,32 @@ export default {
 
       const labels = this.list.label ? [this.list.label] : [];
       const assignees = this.list.assignee ? [this.list.assignee] : [];
+      const milestone = getMilestone(this.list);
+
+      const { weightFeatureAvailable } = boardsStore;
+      const { weight } = weightFeatureAvailable ? boardsStore.state.currentBoard : {};
+
       const issue = new ListIssue({
         title: this.title,
         labels,
         subscribed: true,
         assignees,
+        milestone,
         project_id: this.selectedProject.id,
+        weight,
       });
 
       eventHub.$emit(`scroll-board-list-${this.list.id}`);
       this.cancel();
 
-      return this.list.newIssue(issue)
+      return this.list
+        .newIssue(issue)
         .then(() => {
           // Need this because our jQuery very kindly disables buttons on ALL form submissions
           $(this.$refs.submitButton).enable();
 
-          Store.detail.issue = issue;
-          Store.detail.list = this.list;
+          boardsStore.setIssueDetail(issue);
+          boardsStore.setListDetail(this.list);
         })
         .catch(() => {
           // Need this because our jQuery very kindly disables buttons on ALL form submissions
@@ -93,50 +103,34 @@ export default {
 
 <template>
   <div class="board-new-issue-form">
-    <div class="board-card">
+    <div class="board-card position-relative p-3 rounded">
       <form @submit="submit($event)">
-        <div
-          class="flash-container"
-          v-if="error"
-        >
-          <div class="flash-alert">
-            An error occurred. Please try again.
-          </div>
+        <div v-if="error" class="flash-container">
+          <div class="flash-alert">{{ __('An error occurred. Please try again.') }}</div>
         </div>
-        <label
-          class="label-light"
-          :for="list.id + '-title'"
-        >
-          Title
-        </label>
+        <label :for="list.id + '-title'" class="label-bold">{{ __('Title') }}</label>
         <input
+          :id="list.id + '-title'"
+          ref="input"
+          v-model="title"
           class="form-control"
           type="text"
-          v-model="title"
-          ref="input"
+          name="issue_title"
           autocomplete="off"
-          :id="list.id + '-title'"
         />
-        <project-select
-          v-if="groupId"
-          :group-id="groupId"
-        />
+        <project-select v-if="groupId" :group-id="groupId" :list="list" />
         <div class="clearfix prepend-top-10">
-          <button
-            class="btn btn-success float-left"
-            type="submit"
-            :disabled="disabled"
+          <gl-button
             ref="submit-button"
+            :disabled="disabled"
+            class="float-left"
+            variant="success"
+            type="submit"
+            >{{ __('Submit issue') }}</gl-button
           >
-            Submit issue
-          </button>
-          <button
-            class="btn btn-default float-right"
-            type="button"
-            @click="cancel"
-          >
-            Cancel
-          </button>
+          <gl-button class="float-right" type="button" variant="default" @click="cancel">{{
+            __('Cancel')
+          }}</gl-button>
         </div>
       </form>
     </div>

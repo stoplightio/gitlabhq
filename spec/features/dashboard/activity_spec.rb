@@ -1,6 +1,8 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
-feature 'Dashboard > Activity' do
+describe 'Dashboard > Activity' do
   let(:user) { create(:user) }
 
   before do
@@ -39,6 +41,8 @@ feature 'Dashboard > Activity' do
       event
     end
 
+    let(:issue) { create(:issue, project: project) }
+
     let!(:merged_event) do
       create(:event, :merged, project: project, target: merge_request, author: user)
     end
@@ -59,14 +63,18 @@ feature 'Dashboard > Activity' do
       create(:event, :closed, project: project, target: milestone, author: user)
     end
 
+    let!(:issue_event) do
+      create(:event, :created, project: project, target: issue, author: user)
+    end
+
     before do
-      project.add_master(user)
+      project.add_maintainer(user)
 
       visit activity_dashboard_path
       wait_for_requests
     end
 
-    scenario 'user should see all events' do
+    it 'user should see all events' do
       within '.content_list' do
         expect(page).to have_content('pushed new branch')
         expect(page).to have_content('joined')
@@ -74,10 +82,11 @@ feature 'Dashboard > Activity' do
         expect(page).to have_content('closed')
         expect(page).to have_content('commented on')
         expect(page).to have_content('closed milestone')
+        expect(page).to have_content('opened issue')
       end
     end
 
-    scenario 'user should see only pushed events' do
+    it 'user should see only pushed events' do
       click_link('Push events')
       wait_for_requests
 
@@ -87,10 +96,11 @@ feature 'Dashboard > Activity' do
         expect(page).not_to have_content('accepted')
         expect(page).not_to have_content('closed')
         expect(page).not_to have_content('commented on')
+        expect(page).not_to have_content('opened issue')
       end
     end
 
-    scenario 'user should see only merged events' do
+    it 'user should see only merged events' do
       click_link('Merge events')
       wait_for_requests
 
@@ -100,10 +110,11 @@ feature 'Dashboard > Activity' do
         expect(page).to have_content('accepted')
         expect(page).not_to have_content('closed')
         expect(page).not_to have_content('commented on')
+        expect(page).not_to have_content('opened issue')
       end
     end
 
-    scenario 'user should see only issues events' do
+    it 'user should see only issues events' do
       click_link('Issue events')
       wait_for_requests
 
@@ -111,13 +122,14 @@ feature 'Dashboard > Activity' do
         expect(page).not_to have_content('pushed new branch')
         expect(page).not_to have_content('joined')
         expect(page).not_to have_content('accepted')
-        expect(page).to have_content('closed')
+        expect(page).not_to have_content('closed')
         expect(page).not_to have_content('commented on')
-        expect(page).to have_content('closed milestone')
+        expect(page).not_to have_content('closed milestone')
+        expect(page).to have_content('opened issue')
       end
     end
 
-    scenario 'user should see only comments events' do
+    it 'user should see only comments events' do
       click_link('Comments')
       wait_for_requests
 
@@ -127,10 +139,11 @@ feature 'Dashboard > Activity' do
         expect(page).not_to have_content('accepted')
         expect(page).not_to have_content('closed')
         expect(page).to have_content('commented on')
+        expect(page).not_to have_content('opened issue')
       end
     end
 
-    scenario 'user should see only joined events' do
+    it 'user should see only joined events' do
       click_link('Team')
       wait_for_requests
 
@@ -140,10 +153,11 @@ feature 'Dashboard > Activity' do
         expect(page).not_to have_content('accepted')
         expect(page).not_to have_content('closed')
         expect(page).not_to have_content('commented on')
+        expect(page).not_to have_content('opened issue')
       end
     end
 
-    scenario 'user see selected event after page reloading' do
+    it 'user see selected event after page reloading' do
       click_link('Push events')
       wait_for_requests
       visit activity_dashboard_path
@@ -155,6 +169,7 @@ feature 'Dashboard > Activity' do
         expect(page).not_to have_content('accepted')
         expect(page).not_to have_content('closed')
         expect(page).not_to have_content('commented on')
+        expect(page).not_to have_content('opened issue')
       end
     end
   end

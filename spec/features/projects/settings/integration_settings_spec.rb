@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe 'Projects > Settings > Integration settings' do
@@ -21,8 +23,8 @@ describe 'Projects > Settings > Integration settings' do
     end
   end
 
-  context 'for master' do
-    let(:role) { :master }
+  context 'for maintainer' do
+    let(:role) { :maintainer }
 
     context 'Webhooks' do
       let(:hook) { create(:project_hook, :all_events_enabled, enable_ssl_verification: true, project: project) }
@@ -41,7 +43,7 @@ describe 'Projects > Settings > Integration settings' do
         expect(page).to have_content('Issues events')
         expect(page).to have_content('Confidential issues events')
         expect(page).to have_content('Note events')
-        expect(page).to have_content('Merge requests  events')
+        expect(page).to have_content('Merge requests events')
         expect(page).to have_content('Pipeline events')
         expect(page).to have_content('Wiki page events')
       end
@@ -51,6 +53,7 @@ describe 'Projects > Settings > Integration settings' do
 
         fill_in 'hook_url', with: url
         check 'Tag push events'
+        fill_in 'hook_push_events_branch_filter', with: 'master'
         check 'Enable SSL verification'
         check 'Job events'
 

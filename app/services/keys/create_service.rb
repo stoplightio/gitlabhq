@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Keys
   class CreateService < ::Keys::BaseService
     def execute
@@ -7,3 +9,5 @@ module Keys
     end
   end
 end
+
+Keys::CreateService.prepend_if_ee('EE::Keys::CreateService')

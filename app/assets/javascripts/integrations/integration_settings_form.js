@@ -1,6 +1,7 @@
 import $ from 'jquery';
 import axios from '../lib/utils/axios_utils';
 import flash from '../flash';
+import { __ } from '~/locale';
 
 export default class IntegrationSettingsForm {
   constructor(formSelector) {
@@ -41,6 +42,7 @@ export default class IntegrationSettingsForm {
     // and test the service using provided configuration.
     if (this.$form.get(0).checkValidity() && this.canTestService) {
       e.preventDefault();
+      // eslint-disable-next-line no-jquery/no-serialize
       this.testSettings(this.$form.serialize());
     }
   }
@@ -65,10 +67,10 @@ export default class IntegrationSettingsForm {
    * Toggle Submit button label based on Integration status and ability to test service
    */
   toggleSubmitBtnLabel(serviceActive) {
-    let btnLabel = 'Save changes';
+    let btnLabel = __('Save changes');
 
     if (serviceActive && this.canTestService) {
-      btnLabel = 'Test settings and save changes';
+      btnLabel = __('Test settings and save changes');
     }
 
     this.$submitBtnLabel.text(btnLabel);
@@ -91,22 +93,22 @@ export default class IntegrationSettingsForm {
     }
   }
 
-  /* eslint-disable promise/catch-or-return, no-new */
   /**
    * Test Integration config
    */
   testSettings(formData) {
     this.toggleSubmitBtnState(true);
 
-    return axios.put(this.testEndPoint, formData)
+    return axios
+      .put(this.testEndPoint, formData)
       .then(({ data }) => {
         if (data.error) {
           let flashActions;
 
           if (data.test_failed) {
             flashActions = {
-              title: 'Save anyway',
-              clickHandler: (e) => {
+              title: __('Save anyway'),
+              clickHandler: e => {
                 e.preventDefault();
                 this.$form.submit();
               },
@@ -121,7 +123,7 @@ export default class IntegrationSettingsForm {
         this.toggleSubmitBtnState(false);
       })
       .catch(() => {
-        flash('Something went wrong on our end.');
+        flash(__('Something went wrong on our end.'));
         this.toggleSubmitBtnState(false);
       });
   }

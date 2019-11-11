@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module Ci
     module Pipeline
@@ -10,6 +12,10 @@ module Gitlab
             def perform!
               unless project.builds_enabled?
                 return error('Pipelines are disabled!')
+              end
+
+              if @command.uses_unsupported_legacy_trigger?
+                return error('Trigger token is invalid because is not owned by any user')
               end
 
               unless allowed_to_trigger_pipeline?
@@ -42,6 +48,8 @@ module Gitlab
                 access.can_update_branch?(@command.ref)
               elsif @command.tag_exists?
                 access.can_create_tag?(@command.ref)
+              elsif @command.merge_request_ref_exists?
+                access.can_update_branch?(@command.merge_request.source_branch)
               else
                 true # Allow it for now and we'll reject when we check ref existence
               end
@@ -52,3 +60,5 @@ module Gitlab
     end
   end
 end
+
+Gitlab::Ci::Pipeline::Chain::Validate::Abilities.prepend_if_ee('EE::Gitlab::Ci::Pipeline::Chain::Validate::Abilities')

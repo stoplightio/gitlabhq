@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Boards
   class ListService < Boards::BaseService
     def execute
@@ -16,3 +18,5 @@ module Boards
     end
   end
 end
+
+Boards::ListService.prepend_if_ee('EE::Boards::ListService')

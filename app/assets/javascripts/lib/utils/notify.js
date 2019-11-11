@@ -1,17 +1,20 @@
-/* eslint-disable func-names, space-before-function-paren, wrap-iife, no-var, one-var, one-var-declaration-per-line, consistent-return, prefer-arrow-callback, no-return-assign, object-shorthand, comma-dangle, no-param-reassign, max-len */
+/* eslint-disable no-var, consistent-return, no-return-assign */
 
 function notificationGranted(message, opts, onclick) {
   var notification;
   notification = new Notification(message, opts);
-  setTimeout(function() {
-    // Hide the notification after X amount of seconds
-    return notification.close();
-  }, 8000);
+  setTimeout(
+    () =>
+      // Hide the notification after X amount of seconds
+      notification.close(),
+    8000,
+  );
 
-  return notification.onclick = onclick || notification.close;
+  return (notification.onclick = onclick || notification.close);
 }
 
 function notifyPermissions() {
+  /* eslint-disable-next-line @gitlab/i18n/no-non-i18n-strings */
   if ('Notification' in window) {
     return Notification.requestPermission();
   }
@@ -20,17 +23,18 @@ function notifyPermissions() {
 function notifyMe(message, body, icon, onclick) {
   var opts;
   opts = {
-    body: body,
-    icon: icon
+    body,
+    icon,
   };
   // Let's check if the browser supports notifications
+  /* eslint-disable-next-line @gitlab/i18n/no-non-i18n-strings */
   if (!('Notification' in window)) {
     // do nothing
   } else if (Notification.permission === 'granted') {
     // If it's okay let's create a notification
     return notificationGranted(message, opts, onclick);
   } else if (Notification.permission !== 'denied') {
-    return Notification.requestPermission(function(permission) {
+    return Notification.requestPermission(permission => {
       // If the user accepts, let's create a notification
       if (permission === 'granted') {
         return notificationGranted(message, opts, onclick);

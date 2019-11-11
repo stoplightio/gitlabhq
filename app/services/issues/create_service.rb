@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Issues
   class CreateService < Issues::BaseService
     include SpamCheckService
@@ -47,3 +49,5 @@ module Issues
     end
   end
 end
+
+Issues::CreateService.prepend_if_ee('EE::Issues::CreateService')

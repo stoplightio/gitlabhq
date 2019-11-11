@@ -13,12 +13,18 @@ namespace :admin do
       get :keys
       put :block
       put :unblock
+      put :deactivate
+      put :activate
       put :unlock
       put :confirm
       post :impersonate
       patch :disable_two_factor
       delete 'remove/:email_id', action: 'remove_email', as: 'remove_email'
     end
+  end
+
+  resource :session, only: [:new, :create] do
+    get 'destroy', action: :destroy, as: :destroy
   end
 
   resource :impersonation, only: :destroy
@@ -69,14 +75,11 @@ namespace :admin do
   end
 
   resource :logs, only: [:show]
-  resource :health_check, controller: 'health_check', only: [:show] do
-    post :reset_storage_health
-  end
+  resource :health_check, controller: 'health_check', only: [:show]
   resource :background_jobs, controller: 'background_jobs', only: [:show]
-  resource :system_info, controller: 'system_info', only: [:show]
-  resources :requests_profiles, only: [:index, :show], param: :name, constraints: { name: /.+\.html/ }
 
-  get 'conversational_development_index' => 'conversational_development_index#show'
+  resource :system_info, controller: 'system_info', only: [:show]
+  resources :requests_profiles, only: [:index, :show], param: :name, constraints: { name: /.+\.(html|txt)/ }
 
   resources :projects, only: [:index]
 
@@ -86,7 +89,7 @@ namespace :admin do
     resources(:projects,
               path: '/',
               constraints: { id: Gitlab::PathRegex.project_route_regex },
-              only: [:show]) do
+              only: [:show, :destroy]) do
 
       member do
         put :transfer
@@ -108,10 +111,13 @@ namespace :admin do
 
   resource :application_settings, only: [:show, :update] do
     resources :services, only: [:index, :edit, :update]
+
     get :usage_data
-    put :reset_runners_token
+    put :reset_registration_token
     put :reset_health_check_token
     put :clear_repository_check_states
+    match :general, :integrations, :repository, :ci_cd, :reporting, :metrics_and_profiling, :network, :preferences, via: [:get, :patch]
+    get :lets_encrypt_terms_of_service
   end
 
   resources :labels
@@ -121,15 +127,19 @@ namespace :admin do
       get :resume
       get :pause
     end
-  end
 
-  resources :cohorts, only: :index
+    collection do
+      get :tag_list, format: :json
+    end
+  end
 
   resources :jobs, only: :index do
     collection do
       post :cancel_all
     end
   end
+
+  concerns :clusterable
 
   root to: 'dashboard#index'
 end

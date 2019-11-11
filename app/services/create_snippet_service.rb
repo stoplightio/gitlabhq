@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class CreateSnippetService < BaseService
   include SpamCheckService
 
@@ -10,7 +12,7 @@ class CreateSnippetService < BaseService
                 PersonalSnippet.new(params)
               end
 
-    unless Gitlab::VisibilityLevel.allowed_for?(current_user, params[:visibility_level])
+    unless Gitlab::VisibilityLevel.allowed_for?(current_user, snippet.visibility_level)
       deny_visibility_level(snippet)
       return snippet
     end
@@ -21,6 +23,7 @@ class CreateSnippetService < BaseService
 
     if snippet.save
       UserAgentDetailService.new(snippet, @request).create
+      Gitlab::UsageDataCounters::SnippetCounter.count(:create)
     end
 
     snippet

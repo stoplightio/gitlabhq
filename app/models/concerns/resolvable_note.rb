@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module ResolvableNote
   extend ActiveSupport::Concern
 
@@ -10,7 +12,7 @@ module ResolvableNote
     validates :resolved_by, presence: true, if: :resolved?
 
     # Keep this scope in sync with `#potentially_resolvable?`
-    scope :potentially_resolvable, -> { where(type: RESOLVABLE_TYPES).where(noteable_type: Noteable::RESOLVABLE_TYPES) }
+    scope :potentially_resolvable, -> { where(type: RESOLVABLE_TYPES).where(noteable_type: Noteable.resolvable_types) }
     # Keep this scope in sync with `#resolvable?`
     scope :resolvable, -> { potentially_resolvable.user }
 
@@ -18,7 +20,7 @@ module ResolvableNote
     scope :unresolved, -> { resolvable.where(resolved_at: nil) }
   end
 
-  module ClassMethods
+  class_methods do
     # This method must be kept in sync with `#resolve!`
     def resolve!(current_user)
       unresolved.update_all(resolved_at: Time.now, resolved_by_id: current_user.id)

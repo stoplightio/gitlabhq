@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Emails
   class DestroyService < ::Emails::BaseService
     def execute(email)
@@ -15,3 +17,5 @@ module Emails
     end
   end
 end
+
+Emails::DestroyService.prepend_if_ee('EE::Emails::DestroyService')

@@ -1,6 +1,6 @@
 // For tabbed navigation links, scrolling tabs, etc. For all top/main navigation,
 // please check nav.scss
-.nav-links {
+.nav-links:not(.quick-links) {
   display: flex;
   padding: 0;
   margin: 0;
@@ -8,15 +8,17 @@
   height: auto;
   border-bottom: 1px solid $border-color;
 
-  li {
+  li:not(.md-header-toolbar) {
     display: flex;
 
-    a {
-      padding: $gl-btn-padding;
-      padding-bottom: 11px;
+    a,
+    button {
+      padding: $gl-padding-8;
+      padding-bottom: $gl-padding-8 + 1;
       font-size: 14px;
       line-height: 28px;
       color: $gl-text-color-secondary;
+      border: 0;
       border-bottom: 2px solid transparent;
       white-space: nowrap;
 
@@ -33,7 +35,13 @@
       }
     }
 
+    button {
+      padding-top: 0;
+      background-color: transparent;
+    }
+
     &.active a,
+    &.active button,
     a.active {
       color: $black;
       font-weight: $gl-font-weight-bold;
@@ -42,14 +50,23 @@
         color: $black;
       }
     }
+
+    &.md-header-tab button {
+      line-height: 19px;
+    }
   }
 }
 
 .top-area {
-  @include clearfix;
   border-bottom: 1px solid $border-color;
+  display: flex;
+
+  @include media-breakpoint-down(md) {
+    flex-flow: column-reverse wrap;
+  }
 
   .nav-text {
+    flex: 1;
     padding-top: 16px;
     padding-bottom: 11px;
     display: inline-block;
@@ -63,9 +80,8 @@
   }
 
   .nav-links {
-    margin-bottom: 0;
     border-bottom: 0;
-    float: left;
+    flex: 1;
 
     &.wide {
       width: 100%;
@@ -86,16 +102,23 @@
 
       &.mobile-separator {
         border-bottom: 1px solid $border-color;
+        margin-bottom: $gl-padding-8;
       }
     }
   }
 
   .nav-controls {
     display: inline-block;
-    float: right;
     text-align: right;
-    padding: 11px 0;
-    margin-bottom: 0;
+
+    @include media-breakpoint-down(sm) {
+      margin-top: $gl-padding-8;
+    }
+
+    @include media-breakpoint-up(md) {
+      display: flex;
+      align-items: center;
+    }
 
     > .btn,
     > .btn-container,
@@ -103,8 +126,6 @@
     > input,
     > form {
       margin-right: $gl-padding-top;
-      display: inline-block;
-      vertical-align: top;
 
       &:last-child {
         margin-right: 0;
@@ -131,7 +152,7 @@
       @include media-breakpoint-up(lg) { width: 250px; }
     }
 
-    @include media-breakpoint-down(xs) {
+    @include media-breakpoint-down(sm) {
       padding-bottom: 0;
       width: 100%;
 
@@ -141,15 +162,19 @@
       .dropdown-toggle,
       .dropdown-menu-toggle,
       .form-control {
-        margin: 0 0 10px;
+        margin: 0 0 $gl-padding-8;
         display: block;
         width: 100%;
+      }
+
+      .dropdown-menu-toggle {
+        margin-bottom: 0;
       }
 
       form {
         display: block;
         height: auto;
-        margin-bottom: 14px;
+        margin-bottom: $gl-padding-8;
 
         input {
           width: 100%;
@@ -164,6 +189,33 @@
       .project-item-select-holder {
         margin: 0;
         width: 100%;
+      }
+
+      &.inline {
+        display: flex;
+        flex-flow: row wrap;
+        justify-content: space-between;
+
+        > .btn,
+        > .btn-container,
+        > .dropdown,
+        > input,
+        > form {
+          flex: 1 1 auto;
+          margin: 0 0 10px;
+          margin-left: $gl-padding-top;
+          width: auto;
+
+          &:first-child {
+            margin-left: 0;
+            float: none;
+          }
+        }
+
+        .btn-full {
+          flex: 1 1 100%;
+          margin-left: 0;
+        }
       }
     }
   }
@@ -193,20 +245,11 @@
     width: 100%;
   }
 
-  @include media-breakpoint-down(xs) {
-    flex-flow: row wrap;
-
+  @include media-breakpoint-down(md) {
     .nav-controls {
-      $controls-margin: $btn-xs-side-margin - 2px;
+      $controls-margin: $btn-margin-5 - 2px;
       flex: 0 0 100%;
-
-      &.controls-flex {
-        display: flex;
-        flex-flow: row wrap;
-        align-items: center;
-        justify-content: center;
-        padding: 0 0 $gl-padding-top;
-      }
+      margin-top: $gl-padding-8;
 
       .controls-item,
       .controls-item-full,
@@ -283,8 +326,8 @@
 
   .fade-right,
   .fade-left {
-    top: 16px;
-    bottom: auto;
+    bottom: $gl-padding;
+    top: auto;
   }
 
   &.is-smaller {
@@ -321,10 +364,18 @@
   }
 
   &.activities {
+    display: flex;
     border-bottom: 1px solid $border-color;
+    overflow: hidden;
+    align-items: center;
 
     .nav-links {
       border-bottom: 0;
+    }
+
+    @include media-breakpoint-down(xs) {
+      display: block;
+      overflow: visible;
     }
   }
 }

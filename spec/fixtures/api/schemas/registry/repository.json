@@ -2,26 +2,37 @@
   "type": "object",
   "required" : [
     "id",
+    "name",
     "path",
     "location",
-    "tags_path"
+    "created_at"
   ],
   "properties" : {
     "id": {
       "type": "integer"
     },
+    "name": {
+      "type": "string"
+    },
     "path": {
       "type": "string"
     },
+    "project_id": {
+      "type": "integer"
+    },
     "location": {
       "type": "string"
+    },
+    "created_at": {
+      "type": "date-time"
     },
     "tags_path": {
       "type": "string"
     },
     "destroy_path": {
       "type": "string"
-    }
+    },
+    "tags": { "$ref": "tags.json" }
   },
   "additionalProperties": false
 }

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Import::FogbugzController < Import::BaseController
   before_action :verify_fogbugz_import_enabled
   before_action :user_map, only: [:new_user_map, :create_user_map]
@@ -9,10 +11,10 @@ class Import::FogbugzController < Import::BaseController
 
   def callback
     begin
-      res = Gitlab::FogbugzImport::Client.new(import_params.symbolize_keys)
+      res = Gitlab::FogbugzImport::Client.new(import_params.to_h.symbolize_keys)
     rescue
       # If the URI is invalid various errors can occur
-      return redirect_to new_import_fogbugz_path, alert: 'Could not connect to FogBugz, check your URL'
+      return redirect_to new_import_fogbugz_path, alert: _('Could not connect to FogBugz, check your URL')
     end
     session[:fogbugz_token] = res.get_token
     session[:fogbugz_uri] = params[:uri]
@@ -24,21 +26,22 @@ class Import::FogbugzController < Import::BaseController
   end
 
   def create_user_map
-    user_map = params[:users]
+    user_map = user_map_params.to_h[:users]
 
     unless user_map.is_a?(Hash) && user_map.all? { |k, v| !v[:name].blank? }
-      flash.now[:alert] = 'All users must have a name.'
+      flash.now[:alert] = _('All users must have a name.')
 
       return render 'new_user_map'
     end
 
     session[:fogbugz_user_map] = user_map
 
-    flash[:notice] = 'The user map has been saved. Continue by selecting the projects you want to import.'
+    flash[:notice] = _('The user map has been saved. Continue by selecting the projects you want to import.')
 
     redirect_to status_import_fogbugz_path
   end
 
+  # rubocop: disable CodeReuse/ActiveRecord
   def status
     unless client.valid?
       return redirect_to new_import_fogbugz_path
@@ -51,6 +54,7 @@ class Import::FogbugzController < Import::BaseController
 
     @repos.reject! { |repo| already_added_projects_names.include? repo.name }
   end
+  # rubocop: enable CodeReuse/ActiveRecord
 
   def jobs
     render json: find_jobs('fogbugz')
@@ -93,6 +97,10 @@ class Import::FogbugzController < Import::BaseController
 
   def import_params
     params.permit(:uri, :email, :password)
+  end
+
+  def user_map_params
+    params.permit(users: %w(name email gitlab_user))
   end
 
   def verify_fogbugz_import_enabled

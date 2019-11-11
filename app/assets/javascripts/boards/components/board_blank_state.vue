@@ -1,16 +1,15 @@
 <script>
-/* global ListLabel */
-import _ from 'underscore';
+import { __ } from '~/locale';
+import ListLabel from '~/boards/models/label';
 import Cookies from 'js-cookie';
-
-const Store = gl.issueBoards.BoardsStore;
+import boardsStore from '../stores/boards_store';
 
 export default {
   data() {
     return {
       predefinedLabels: [
-        new ListLabel({ title: 'To Do', color: '#F0AD4E' }),
-        new ListLabel({ title: 'Doing', color: '#5CB85C' }),
+        new ListLabel({ title: __('To Do'), color: '#F0AD4E' }),
+        new ListLabel({ title: __('Doing'), color: '#5CB85C' }),
       ],
     };
   },
@@ -19,7 +18,7 @@ export default {
       this.clearBlankState();
 
       this.predefinedLabels.forEach((label, i) => {
-        Store.addList({
+        boardsStore.addList({
           title: label.title,
           position: i,
           list_type: 'label',
@@ -30,69 +29,70 @@ export default {
         });
       });
 
-      Store.state.lists = _.sortBy(Store.state.lists, 'position');
+      const loadListIssues = listObj => {
+        const list = boardsStore.findList('title', listObj.title);
+
+        if (!list) {
+          return null;
+        }
+
+        list.id = listObj.id;
+        list.label.id = listObj.label.id;
+        return list.getIssues().catch(() => {
+          // TODO: handle request error
+        });
+      };
 
       // Save the labels
-      gl.boardService.generateDefaultLists()
+      boardsStore
+        .generateDefaultLists()
         .then(res => res.data)
-        .then((data) => {
-          data.forEach((listObj) => {
-            const list = Store.findList('title', listObj.title);
-
-            list.id = listObj.id;
-            list.label.id = listObj.label.id;
-            list.getIssues()
-              .catch(() => {
-                // TODO: handle request error
-              });
-          });
-        })
+        .then(data => Promise.all(data.map(loadListIssues)))
         .catch(() => {
-          Store.removeList(undefined, 'label');
+          boardsStore.removeList(undefined, 'label');
           Cookies.remove('issue_board_welcome_hidden', {
             path: '',
           });
-          Store.addBlankState();
+          boardsStore.addBlankState();
         });
     },
-    clearBlankState: Store.removeBlankState.bind(Store),
+    clearBlankState: boardsStore.removeBlankState.bind(boardsStore),
   },
 };
-
 </script>
 
 <template>
-  <div class="board-blank-state">
+  <div class="board-blank-state p-3">
     <p>
-      Add the following default lists to your Issue Board with one click:
+      {{
+        s__('BoardBlankState|Add the following default lists to your Issue Board with one click:')
+      }}
     </p>
-    <ul class="board-blank-state-list">
-      <li
-        v-for="(label, index) in predefinedLabels"
-        :key="index"
-      >
+    <ul class="list-unstyled board-blank-state-list">
+      <li v-for="(label, index) in predefinedLabels" :key="index">
         <span
-          class="label-color"
-          :style="{ backgroundColor: label.color }">
-        </span>
+          :style="{ backgroundColor: label.color }"
+          class="label-color position-relative d-inline-block rounded"
+        ></span>
         {{ label.title }}
       </li>
     </ul>
     <p>
-      Starting out with the default set of lists will get you
-      right on the way to making the most of your board.
+      {{
+        s__(
+          'BoardBlankState|Starting out with the default set of lists will get you right on the way to making the most of your board.',
+        )
+      }}
     </p>
     <button
-      class="btn btn-create btn-inverted btn-block"
+      class="btn btn-success btn-inverted btn-block"
       type="button"
-      @click.stop="addDefaultLists">
-      Add default lists
+      @click.stop="addDefaultLists"
+    >
+      {{ s__('BoardBlankState|Add default lists') }}
     </button>
-    <button
-      class="btn btn-default btn-block"
-      type="button"
-      @click.stop="clearBlankState">
-      Nevermind, I'll use my own
+    <button class="btn btn-default btn-block" type="button" @click.stop="clearBlankState">
+      {{ s__("BoardBlankState|Nevermind, I'll use my own") }}
     </button>
   </div>
 </template>

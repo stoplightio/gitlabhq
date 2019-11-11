@@ -1,10 +1,30 @@
+# frozen_string_literal: true
+
 module Gitlab
   module Middleware
     class ReadOnly
       class Controller
+        prepend_if_ee('EE::Gitlab::Middleware::ReadOnly::Controller') # rubocop: disable Cop/InjectEnterpriseEditionModule
+
         DISALLOWED_METHODS = %w(POST PATCH PUT DELETE).freeze
-        APPLICATION_JSON = 'application/json'.freeze
-        ERROR_MESSAGE = 'You cannot perform write operations on a read-only instance'.freeze
+        APPLICATION_JSON = 'application/json'
+        APPLICATION_JSON_TYPES = %W{#{APPLICATION_JSON} application/vnd.git-lfs+json}.freeze
+        ERROR_MESSAGE = 'You cannot perform write operations on a read-only instance'
+
+        WHITELISTED_GIT_ROUTES = {
+          'projects/git_http' => %w{git_upload_pack git_receive_pack}
+        }.freeze
+
+        WHITELISTED_GIT_LFS_ROUTES = {
+          'projects/lfs_api' => %w{batch},
+          'projects/lfs_locks_api' => %w{verify create unlock}
+        }.freeze
+
+        WHITELISTED_GIT_REVISION_ROUTES = {
+          'projects/compare' => %w{create}
+        }.freeze
+
+        GRAPHQL_URL = '/api/graphql'
 
         def initialize(app, env)
           @app = app
@@ -13,7 +33,7 @@ module Gitlab
 
         def call
           if disallowed_request? && Gitlab::Database.read_only?
-            Rails.logger.debug('GitLab ReadOnly: preventing possible non read-only operation')
+            Rails.logger.debug('GitLab ReadOnly: preventing possible non read-only operation') # rubocop:disable Gitlab/RailsLogger
 
             if json_request?
               return [403, { 'Content-Type' => APPLICATION_JSON }, [{ 'message' => ERROR_MESSAGE }.to_json]]
@@ -36,7 +56,7 @@ module Gitlab
         end
 
         def json_request?
-          request.media_type == APPLICATION_JSON
+          APPLICATION_JSON_TYPES.include?(request.media_type)
         end
 
         def rack_flash
@@ -48,7 +68,7 @@ module Gitlab
         end
 
         def request
-          @env['rack.request'] ||= Rack::Request.new(@env)
+          @env['actionpack.request'] ||= ActionDispatch::Request.new(@env)
         end
 
         def last_visited_url
@@ -59,26 +79,51 @@ module Gitlab
           @route_hash ||= Rails.application.routes.recognize_path(request.url, { method: request.request_method }) rescue {}
         end
 
+        def relative_url
+          File.join('', Gitlab.config.gitlab.relative_url_root).chomp('/')
+        end
+
+        # Overridden in EE module
         def whitelisted_routes
-          grack_route || ReadOnly.internal_routes.any? { |path| request.path.include?(path) } || lfs_route || sidekiq_route
+          grack_route? || internal_route? || lfs_route? || compare_git_revisions_route? || sidekiq_route? || graphql_query?
         end
 
-        def sidekiq_route
-          request.path.start_with?('/admin/sidekiq')
-        end
-
-        def grack_route
+        def grack_route?
           # Calling route_hash may be expensive. Only do it if we think there's a possible match
-          return false unless request.path.end_with?('.git/git-upload-pack')
+          return false unless
+            request.path.end_with?('.git/git-upload-pack', '.git/git-receive-pack')
 
-          route_hash[:controller] == 'projects/git_http' && route_hash[:action] == 'git_upload_pack'
+          WHITELISTED_GIT_ROUTES[route_hash[:controller]]&.include?(route_hash[:action])
         end
 
-        def lfs_route
-          # Calling route_hash may be expensive. Only do it if we think there's a possible match
-          return false unless request.path.end_with?('/info/lfs/objects/batch')
+        def internal_route?
+          ReadOnly.internal_routes.any? { |path| request.path.include?(path) }
+        end
 
-          route_hash[:controller] == 'projects/lfs_api' && route_hash[:action] == 'batch'
+        def compare_git_revisions_route?
+          # Calling route_hash may be expensive. Only do it if we think there's a possible match
+          return false unless request.post? && request.path.end_with?('compare')
+
+          WHITELISTED_GIT_REVISION_ROUTES[route_hash[:controller]]&.include?(route_hash[:action])
+        end
+
+        def lfs_route?
+          # Calling route_hash may be expensive. Only do it if we think there's a possible match
+          unless request.path.end_with?('/info/lfs/objects/batch',
+            '/info/lfs/locks', '/info/lfs/locks/verify') ||
+              %r{/info/lfs/locks/\d+/unlock\z}.match?(request.path)
+            return false
+          end
+
+          WHITELISTED_GIT_LFS_ROUTES[route_hash[:controller]]&.include?(route_hash[:action])
+        end
+
+        def sidekiq_route?
+          request.path.start_with?("#{relative_url}/admin/sidekiq")
+        end
+
+        def graphql_query?
+          request.post? && request.path.start_with?(GRAPHQL_URL)
         end
       end
     end

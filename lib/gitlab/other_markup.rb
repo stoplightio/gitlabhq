@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   # Parser/renderer for markups without other special support code.
   module OtherMarkup
@@ -8,7 +10,7 @@ module Gitlab
     def self.render(file_name, input, context)
       html = GitHub::Markup.render(file_name, input)
         .force_encoding(input.encoding)
-      context[:pipeline] = :markup
+      context[:pipeline] ||= :markup
 
       html = Banzai.render(html, context)
 

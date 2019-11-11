@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe 'cycle analytics events' do
@@ -7,7 +9,7 @@ describe 'cycle analytics events' do
   let!(:context) { create(:issue, project: project, created_at: 2.days.ago) }
 
   let(:events) do
-    CycleAnalytics.new(project, { from: from_date, current_user: user })[stage].events
+    CycleAnalytics::ProjectLevel.new(project, options: { from: from_date, current_user: user })[stage].events
   end
 
   before do
@@ -53,20 +55,28 @@ describe 'cycle analytics events' do
   describe '#plan_events' do
     let(:stage) { :plan }
 
-    it 'has a title' do
-      expect(events.first[:title]).not_to be_nil
-    end
-
-    it 'has a sha short ID' do
-      expect(events.first[:short_sha]).not_to be_nil
-    end
-
-    it 'has the URL' do
-      expect(events.first[:commit_url]).not_to be_nil
+    before do
+      create_commit_referencing_issue(context)
     end
 
     it 'has the total time' do
       expect(events.first[:total_time]).not_to be_empty
+    end
+
+    it 'has a title' do
+      expect(events.first[:title]).to eq(context.title)
+    end
+
+    it 'has the URL' do
+      expect(events.first[:url]).not_to be_nil
+    end
+
+    it 'has an iid' do
+      expect(events.first[:iid]).to eq(context.iid.to_s)
+    end
+
+    it 'has a created_at timestamp' do
+      expect(events.first[:created_at]).to end_with('ago')
     end
 
     it "has the author's URL" do
@@ -78,12 +88,13 @@ describe 'cycle analytics events' do
     end
 
     it "has the author's name" do
-      expect(events.first[:author][:name]).not_to be_nil
+      expect(events.first[:author][:name]).to eq(context.author.name)
     end
   end
 
   describe '#code_events' do
     let(:stage) { :code }
+    let!(:merge_request) { MergeRequest.first }
 
     before do
       create_commit_referencing_issue(context)
@@ -122,6 +133,7 @@ describe 'cycle analytics events' do
     let(:stage) { :test }
 
     let(:merge_request) { MergeRequest.first }
+    let!(:context) { create(:issue, project: project, created_at: 2.days.ago) }
 
     let!(:pipeline) do
       create(:ci_pipeline,
@@ -137,6 +149,7 @@ describe 'cycle analytics events' do
 
       pipeline.run!
       pipeline.succeed!
+      merge_merge_requests_closing_issue(user, project, context)
     end
 
     it 'has the name' do
@@ -179,6 +192,10 @@ describe 'cycle analytics events' do
   describe '#review_events' do
     let(:stage) { :review }
     let!(:context) { create(:issue, project: project, created_at: 2.days.ago) }
+
+    before do
+      merge_merge_requests_closing_issue(user, project, context)
+    end
 
     it 'has the total time' do
       expect(events.first[:total_time]).not_to be_empty

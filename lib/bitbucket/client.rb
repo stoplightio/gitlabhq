@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Bitbucket
   class Client
     attr_reader :connection
@@ -36,8 +38,10 @@ module Bitbucket
       Representation::Repo.new(parsed_response)
     end
 
-    def repos
+    def repos(filter: nil)
       path = "/repositories?role=member"
+      path += "&q=name~\"#{filter}\"" if filter
+
       get_collection(path, :repo)
     end
 

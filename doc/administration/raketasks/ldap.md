@@ -19,13 +19,36 @@ sudo gitlab-rake gitlab:ldap:check
 sudo -u git -H bundle exec rake gitlab:ldap:check RAILS_ENV=production
 ```
 
-------
-
 By default, the task will return a sample of 100 LDAP users. Change this
 limit by passing a number to the check task:
 
 ```bash
 rake gitlab:ldap:check[50]
+```
+
+## Run a Group Sync
+
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/merge_requests/14735) in [GitLab Starter](https://about.gitlab.com/pricing/) 12.3.
+
+The following task will run a [group sync](../auth/ldap-ee.md#group-sync) immediately. This is valuable
+when you'd like to update all configured group memberships against LDAP without
+waiting for the next scheduled group sync to be run.
+
+NOTE: **NOTE:**
+If you'd like to change the frequency at which a group sync is performed,
+[adjust the cron schedule](../auth/ldap-ee.md#adjusting-ldap-group-sync-schedule)
+instead.
+
+**Omnibus Installation**
+
+```
+sudo gitlab-rake gitlab:ldap:group_sync
+```
+
+**Source Installation**
+
+```bash
+bundle exec rake gitlab:ldap:group_sync
 ```
 
 ## Rename a provider
@@ -109,8 +132,6 @@ bundle exec rake gitlab:ldap:rename_provider RAILS_ENV=production
 What is the old provider? Ex. 'ldapmain': ldapmain
 What is the new provider? Ex. 'ldapcustom': ldapmycompany
 ```
-
-------
 
 This tasks also accepts the `force` environment variable which will skip the
 confirmation dialog:

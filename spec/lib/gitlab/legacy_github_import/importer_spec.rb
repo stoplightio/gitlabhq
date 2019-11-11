@@ -13,21 +13,22 @@ describe Gitlab::LegacyGithubImport::Importer do
 
       expected_called = [
         :import_labels, :import_milestones, :import_pull_requests, :import_issues,
-        :import_wiki, :import_releases, :handle_errors
+        :import_wiki, :import_releases, :handle_errors,
+        [:import_comments, :issues],
+        [:import_comments, :pull_requests]
       ]
 
       expected_called -= expected_not_called
 
       aggregate_failures do
-        expected_called.each do |method_name|
-          expect(importer).to receive(method_name)
+        expected_called.each do |method_name, arg|
+          base_expectation = proc { expect(importer).to receive(method_name) }
+          arg ? base_expectation.call.with(arg) : base_expectation.call
         end
 
-        expect(importer).to receive(:import_comments).with(:issues)
-        expect(importer).to receive(:import_comments).with(:pull_requests)
-
-        expected_not_called.each do |method_name|
-          expect(importer).not_to receive(method_name)
+        expected_not_called.each do |method_name, arg|
+          base_expectation = proc { expect(importer).not_to receive(method_name) }
+          arg ? base_expectation.call.with(arg) : base_expectation.call
         end
       end
 
@@ -131,6 +132,7 @@ describe Gitlab::LegacyGithubImport::Importer do
         body: 'Release v1.0.0',
         draft: false,
         created_at: created_at,
+        published_at: created_at,
         updated_at: updated_at,
         url: "#{api_root}/repos/octocat/Hello-World/releases/1"
       )
@@ -138,11 +140,12 @@ describe Gitlab::LegacyGithubImport::Importer do
 
     let(:release2) do
       double(
-        tag_name: 'v2.0.0',
+        tag_name: 'v1.1.0',
         name: 'Second release',
         body: nil,
         draft: false,
         created_at: created_at,
+        published_at: created_at,
         updated_at: updated_at,
         url: "#{api_root}/repos/octocat/Hello-World/releases/2"
       )
@@ -174,7 +177,7 @@ describe Gitlab::LegacyGithubImport::Importer do
 
       described_class.new(project).execute
 
-      expect(project.import_error).to eq error.to_json
+      expect(project.import_state.last_error).to eq error.to_json
     end
   end
 
@@ -289,7 +292,7 @@ describe Gitlab::LegacyGithubImport::Importer do
     end
 
     it_behaves_like 'Gitlab::LegacyGithubImport::Importer#execute' do
-      let(:expected_not_called) { [:import_releases] }
+      let(:expected_not_called) { [:import_releases, [:import_comments, :pull_requests]] }
     end
     it_behaves_like 'Gitlab::LegacyGithubImport::Importer#execute an error occurs'
     it_behaves_like 'Gitlab::LegacyGithubImport unit-testing'

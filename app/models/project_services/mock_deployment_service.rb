@@ -1,4 +1,8 @@
-class MockDeploymentService < DeploymentService
+# frozen_string_literal: true
+
+class MockDeploymentService < Service
+  default_value_for :category, 'deployment'
+
   def title
     'Mock deployment'
   end
@@ -15,4 +19,18 @@ class MockDeploymentService < DeploymentService
   def terminals(environment)
     []
   end
+
+  def self.supported_events
+    %w()
+  end
+
+  def predefined_variables(project:, environment_name:)
+    []
+  end
+
+  def can_test?
+    false
+  end
 end
+
+MockDeploymentService.prepend_if_ee('EE::MockDeploymentService')

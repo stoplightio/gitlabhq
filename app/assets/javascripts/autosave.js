@@ -1,4 +1,4 @@
-/* eslint-disable no-param-reassign, prefer-template, no-var, no-void, consistent-return */
+/* eslint-disable no-param-reassign, no-void, consistent-return */
 
 import AccessorUtilities from './lib/utils/accessor';
 
@@ -10,7 +10,7 @@ export default class Autosave {
     if (key.join != null) {
       key = key.join('/');
     }
-    this.key = 'autosave/' + key;
+    this.key = `autosave/${key}`;
     this.field.data('autosave', this);
     this.restore();
     this.field.on('input', () => this.save());
@@ -31,7 +31,9 @@ export default class Autosave {
     // https://github.com/vuejs/vue/issues/2804#issuecomment-216968137
     const event = new Event('change', { bubbles: true, cancelable: false });
     const field = this.field.get(0);
-    field.dispatchEvent(event);
+    if (field) {
+      field.dispatchEvent(event);
+    }
   }
 
   save() {
@@ -50,5 +52,9 @@ export default class Autosave {
     if (!this.isLocalStorageAvailable) return;
 
     return window.localStorage.removeItem(this.key);
+  }
+
+  dispose() {
+    this.field.off('input');
   }
 }

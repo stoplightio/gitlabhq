@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "spec_helper"
 
 describe "Compare", :js do
@@ -5,11 +7,28 @@ describe "Compare", :js do
   let(:project) { create(:project, :repository) }
 
   before do
-    project.add_master(user)
+    project.add_maintainer(user)
     sign_in user
   end
 
   describe "branches" do
+    shared_examples 'compares branches' do
+      it 'compares branches' do
+        visit project_compare_index_path(project, from: 'master', to: 'master')
+
+        select_using_dropdown 'from', 'feature'
+        expect(find('.js-compare-from-dropdown .dropdown-toggle-text')).to have_content('feature')
+
+        select_using_dropdown 'to', 'binary-encoding'
+        expect(find('.js-compare-to-dropdown .dropdown-toggle-text')).to have_content('binary-encoding')
+
+        click_button 'Compare'
+
+        expect(page).to have_content 'Commits'
+        expect(page).to have_link 'Create merge request'
+      end
+    end
+
     it "pre-populates fields" do
       visit project_compare_index_path(project, from: "master", to: "master")
 
@@ -17,19 +36,14 @@ describe "Compare", :js do
       expect(find(".js-compare-to-dropdown .dropdown-toggle-text")).to have_content("master")
     end
 
-    it "compares branches" do
-      visit project_compare_index_path(project, from: "master", to: "master")
+    it_behaves_like 'compares branches'
 
-      select_using_dropdown "from", "feature"
-      expect(find(".js-compare-from-dropdown .dropdown-toggle-text")).to have_content("feature")
+    context 'on a read-only instance' do
+      before do
+        allow(Gitlab::Database).to receive(:read_only?).and_return(true)
+      end
 
-      select_using_dropdown "to", "binary-encoding"
-      expect(find(".js-compare-to-dropdown .dropdown-toggle-text")).to have_content("binary-encoding")
-
-      click_button "Compare"
-
-      expect(page).to have_content "Commits"
-      expect(page).to have_link 'Create merge request'
+      it_behaves_like 'compares branches'
     end
 
     it 'renders additions info when click unfold diff' do
@@ -86,6 +100,21 @@ describe "Compare", :js do
       find(".js-compare-from-dropdown .compare-dropdown-toggle").click
 
       expect(find(".js-compare-from-dropdown .dropdown-content")).to have_selector("li", count: 3)
+    end
+
+    context 'when commit has overflow', :js do
+      it 'displays warning' do
+        visit project_compare_index_path(project, from: "feature", to: "master")
+
+        allow(Commit).to receive(:max_diff_options).and_return(max_files: 3)
+        allow_any_instance_of(DiffHelper).to receive(:render_overflow_warning?).and_return(true)
+
+        click_button('Compare')
+
+        page.within('.alert') do
+          expect(page).to have_text("Too many changes to show. To preserve performance only 3 of 3+ files are displayed.")
+        end
+      end
     end
   end
 

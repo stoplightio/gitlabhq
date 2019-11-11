@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe WikiPages::UpdateService do
@@ -12,6 +14,10 @@ describe WikiPages::UpdateService do
       message: 'New wiki message',
       title: 'New Title'
     }
+  end
+
+  let(:bad_opts) do
+    { title: '' }
   end
 
   subject(:service) { described_class.new(project, user, opts) }
@@ -36,6 +42,27 @@ describe WikiPages::UpdateService do
         .with(instance_of(WikiPage), 'update')
 
       service.execute(page)
+    end
+
+    it 'counts edit events' do
+      counter = Gitlab::UsageDataCounters::WikiPageCounter
+
+      expect { service.execute page }.to change { counter.read(:update) }.by 1
+    end
+
+    context 'when the options are bad' do
+      subject(:service) { described_class.new(project, user, bad_opts) }
+
+      it 'does not count an edit event' do
+        counter = Gitlab::UsageDataCounters::WikiPageCounter
+
+        expect { service.execute page }.not_to change { counter.read(:update) }
+      end
+
+      it 'reports the error' do
+        expect(service.execute page).to be_invalid
+          .and have_attributes(errors: be_present)
+      end
     end
   end
 end

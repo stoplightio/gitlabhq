@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Import::GitlabController do
@@ -195,7 +197,7 @@ describe Import::GitlabController do
         end
       end
 
-      context 'user has chosen an existing nested namespace for the project', :postgresql do
+      context 'user has chosen an existing nested namespace for the project' do
         let(:parent_namespace) { create(:group, name: 'foo') }
         let(:nested_namespace) { create(:group, name: 'bar', parent: parent_namespace) }
 
@@ -209,11 +211,11 @@ describe Import::GitlabController do
             .to receive(:new).with(gitlab_repo, nested_namespace, user, access_params)
               .and_return(double(execute: project))
 
-          post :create, { target_namespace: nested_namespace.full_path, format: :json }
+          post :create, params: { target_namespace: nested_namespace.full_path }, format: :json
         end
       end
 
-      context 'user has chosen a non-existent nested namespaces for the project', :postgresql do
+      context 'user has chosen a non-existent nested namespaces for the project' do
         let(:test_name) { 'test_name' }
 
         it 'takes the selected namespace and name' do
@@ -221,7 +223,7 @@ describe Import::GitlabController do
             .to receive(:new).with(gitlab_repo, kind_of(Namespace), user, access_params)
               .and_return(double(execute: project))
 
-          post :create, { target_namespace: 'foo/bar', format: :json }
+          post :create, params: { target_namespace: 'foo/bar' }, format: :json
         end
 
         it 'creates the namespaces' do
@@ -229,7 +231,7 @@ describe Import::GitlabController do
             .to receive(:new).with(gitlab_repo, kind_of(Namespace), user, access_params)
               .and_return(double(execute: project))
 
-          expect { post :create, { target_namespace: 'foo/bar', format: :json } }
+          expect { post :create, params: { target_namespace: 'foo/bar' }, format: :json }
             .to change { Namespace.count }.by(2)
         end
 
@@ -238,13 +240,13 @@ describe Import::GitlabController do
             .to receive(:new).with(gitlab_repo, kind_of(Namespace), user, access_params)
               .and_return(double(execute: project))
 
-          post :create, { target_namespace: 'foo/bar', format: :json }
+          post :create, params: { target_namespace: 'foo/bar' }, format: :json
 
           expect(Namespace.find_by_path_or_name('bar').parent.path).to eq('foo')
         end
       end
 
-      context 'user has chosen existent and non-existent nested namespaces and name for the project', :postgresql do
+      context 'user has chosen existent and non-existent nested namespaces and name for the project' do
         let(:test_name) { 'test_name' }
         let!(:parent_namespace) { create(:group, name: 'foo') }
 
@@ -257,7 +259,7 @@ describe Import::GitlabController do
             .to receive(:new).with(gitlab_repo, kind_of(Namespace), user, access_params)
               .and_return(double(execute: project))
 
-          post :create, { target_namespace: 'foo/foobar/bar', format: :json }
+          post :create, params: { target_namespace: 'foo/foobar/bar' }, format: :json
         end
 
         it 'creates the namespaces' do
@@ -265,7 +267,7 @@ describe Import::GitlabController do
             .to receive(:new).with(gitlab_repo, kind_of(Namespace), user, access_params)
               .and_return(double(execute: project))
 
-          expect { post :create, { target_namespace: 'foo/foobar/bar', format: :json } }
+          expect { post :create, params: { target_namespace: 'foo/foobar/bar' }, format: :json }
             .to change { Namespace.count }.by(2)
         end
       end
@@ -274,7 +276,7 @@ describe Import::GitlabController do
         it 'returns 422 response' do
           other_namespace = create(:group, name: 'other_namespace')
 
-          post :create, { target_namespace: other_namespace.name, format: :json }
+          post :create, params: { target_namespace: other_namespace.name }, format: :json
 
           expect(response).to have_gitlab_http_status(422)
         end

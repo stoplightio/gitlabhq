@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # These helpers allow you to manipulate with sorting features.
 #
 # Usage:
@@ -20,7 +22,7 @@ module Spec
           end
 
           def select_branch(branch_name)
-            find(".git-revision-dropdown-toggle").click
+            find(".js-branch-select").click
 
             page.within("#new-branch-form .dropdown-menu") do
               click_link(branch_name)

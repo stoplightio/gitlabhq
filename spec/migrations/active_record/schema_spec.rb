@@ -5,14 +5,17 @@ require 'spec_helper'
 
 describe ActiveRecord::Schema do
   let(:latest_migration_timestamp) do
-    migrations = Dir[Rails.root.join('db', 'migrate', '*'), Rails.root.join('db', 'post_migrate', '*')]
+    migrations_paths = %w[db/migrate db/post_migrate]
+      .map { |path| Rails.root.join(*path, '*') }
+
+    migrations = Dir[*migrations_paths]
     migrations.map { |migration| File.basename(migration).split('_').first.to_i }.max
   end
 
   it '> schema version equals last migration timestamp' do
     defined_schema_version = File.open(Rails.root.join('db', 'schema.rb')) do |file|
       file.find { |line| line =~ /ActiveRecord::Schema.define/ }
-    end.match(/(\d+)/)[0].to_i
+    end.match(/(\d{4}_\d{2}_\d{2}_\d{6})/)[0].to_i
 
     expect(defined_schema_version).to eq(latest_migration_timestamp)
   end

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe 'Projects > Settings > Visibility settings', :js do
@@ -57,14 +59,20 @@ describe 'Projects > Settings > Visibility settings', :js do
         end
       end
     end
+
+    context 'disable email notifications' do
+      it 'is visible' do
+        expect(page).to have_selector('.js-emails-disabled', visible: true)
+      end
+    end
   end
 
-  context 'as master' do
-    let(:master_user) { create(:user) }
+  context 'as maintainer' do
+    let(:maintainer_user) { create(:user) }
 
     before do
-      project.add_master(master_user)
-      sign_in(master_user)
+      project.add_maintainer(maintainer_user)
+      sign_in(maintainer_user)
       visit edit_project_path(project)
     end
 
@@ -73,6 +81,12 @@ describe 'Projects > Settings > Visibility settings', :js do
 
       expect(visibility_select_container).to have_selector 'select[name="project[visibility_level]"]:disabled'
       expect(visibility_select_container).to have_content 'The project can be accessed by anyone, regardless of authentication.'
+    end
+
+    context 'disable email notifications' do
+      it 'is not available' do
+        expect(page).not_to have_selector('.js-emails-disabled', visible: true)
+      end
     end
   end
 end

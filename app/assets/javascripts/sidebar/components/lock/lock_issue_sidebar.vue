@@ -1,5 +1,5 @@
 <script>
-import { __ } from '~/locale';
+import { __, sprintf } from '~/locale';
 import Flash from '~/flash';
 import tooltip from '~/vue_shared/directives/tooltip';
 import issuableMixin from '~/vue_shared/mixins/issuable';
@@ -34,11 +34,7 @@ export default {
       required: true,
       type: Object,
       validator(mediatorObject) {
-        return (
-          mediatorObject.service &&
-          mediatorObject.service.update &&
-          mediatorObject.store
-        );
+        return mediatorObject.service && mediatorObject.service.update && mediatorObject.store;
       },
     },
   },
@@ -67,22 +63,23 @@ export default {
 
   methods: {
     toggleForm() {
-      this.mediator.store.isLockDialogOpen = !this.mediator.store
-        .isLockDialogOpen;
+      this.mediator.store.isLockDialogOpen = !this.mediator.store.isLockDialogOpen;
     },
-
     updateLockedAttribute(locked) {
       this.mediator.service
         .update(this.issuableType, {
           discussion_locked: locked,
         })
-        .then(() => location.reload())
+        .then(() => window.location.reload())
         .catch(() =>
           Flash(
-            this.__(
-              `Something went wrong trying to change the locked state of this ${
-                this.issuableDisplayName
-              }`,
+            sprintf(
+              __(
+                'Something went wrong trying to change the locked state of this %{issuableDisplayName}',
+              ),
+              {
+                issuableDisplayName: this.issuableDisplayName,
+              },
             ),
           ),
         );
@@ -94,19 +91,15 @@ export default {
 <template>
   <div class="block issuable-sidebar-item lock">
     <div
-      class="sidebar-collapsed-icon"
-      @click="toggleForm"
       v-tooltip
+      :title="tooltipLabel"
+      class="sidebar-collapsed-icon"
       data-container="body"
       data-placement="left"
       data-boundary="viewport"
-      :title="tooltipLabel"
+      @click="toggleForm"
     >
-      <icon
-        :name="lockIcon"
-        aria-hidden="true"
-        class="sidebar-item-icon is-active"
-      />
+      <icon :name="lockIcon" class="sidebar-item-icon is-active" />
     </div>
 
     <div class="title hide-collapsed">
@@ -115,6 +108,9 @@ export default {
         v-if="isEditable"
         class="float-right lock-edit"
         type="button"
+        data-track-event="click_edit_button"
+        data-track-label="right_sidebar"
+        data-track-property="lock_issue"
         @click.prevent="toggleForm"
       >
         {{ __('Edit') }}
@@ -129,30 +125,13 @@ export default {
         :issuable-type="issuableType"
       />
 
-      <div
-        v-if="isLocked"
-        class="value sidebar-item-value"
-      >
-        <icon
-          name="lock"
-          :size="16"
-          aria-hidden="true"
-          class="sidebar-item-icon inline is-active"
-        />
+      <div v-if="isLocked" class="value sidebar-item-value">
+        <icon :size="16" name="lock" class="sidebar-item-icon inline is-active" />
         {{ __('Locked') }}
       </div>
 
-      <div
-        v-else
-        class="no-value sidebar-item-value hide-collapsed"
-      >
-        <icon
-          name="lock-open"
-          :size="16"
-          aria-hidden="true"
-          class="sidebar-item-icon inline"
-        />
-        {{ __('Unlocked') }}
+      <div v-else class="no-value sidebar-item-value hide-collapsed">
+        <icon :size="16" name="lock-open" class="sidebar-item-icon inline" /> {{ __('Unlocked') }}
       </div>
     </div>
   </div>

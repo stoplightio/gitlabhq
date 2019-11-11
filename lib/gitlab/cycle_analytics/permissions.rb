@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module CycleAnalytics
     class Permissions
@@ -21,7 +23,7 @@ module Gitlab
       end
 
       def get
-        ::CycleAnalytics::STAGES.each do |stage|
+        ::CycleAnalytics::LevelBase::STAGES.each do |stage|
           @stage_permission_hash[stage] = authorized_stage?(stage)
         end
 

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # RootController
 #
 # This controller exists solely to handle requests to `root_url`. When a user is
@@ -13,7 +15,7 @@ class RootController < Dashboard::ProjectsController
   before_action :redirect_logged_user, if: -> { current_user.present? }
 
   def index
-    # n+1: https://gitlab.com/gitlab-org/gitlab-ce/issues/37434
+    # n+1: https://gitlab.com/gitlab-org/gitlab-foss/issues/40260
     Gitlab::GitalyClient.allow_n_plus_1_calls do
       super
     end
@@ -43,9 +45,9 @@ class RootController < Dashboard::ProjectsController
     when 'todos'
       redirect_to(dashboard_todos_path)
     when 'issues'
-      redirect_to(issues_dashboard_path(assignee_id: current_user.id))
+      redirect_to(issues_dashboard_path(assignee_username: current_user.username))
     when 'merge_requests'
-      redirect_to(merge_requests_dashboard_path(assignee_id: current_user.id))
+      redirect_to(merge_requests_dashboard_path(assignee_username: current_user.username))
     end
   end
 
@@ -60,3 +62,5 @@ class RootController < Dashboard::ProjectsController
     root_urls.exclude?(home_page_url)
   end
 end
+
+RootController.prepend_if_ee('EE::RootController')

@@ -1,11 +1,12 @@
+# frozen_string_literal: true
 require 'spec_helper'
 
-feature 'Pages' do
-  given(:project) { create(:project) }
-  given(:user) { create(:user) }
-  given(:role) { :master }
+shared_examples 'pages settings editing' do
+  let(:project) { create(:project) }
+  let(:user) { create(:user) }
+  let(:role) { :maintainer }
 
-  background do
+  before do
     allow(Gitlab.config.pages).to receive(:enabled).and_return(true)
 
     project.add_role(user, role)
@@ -13,30 +14,26 @@ feature 'Pages' do
     sign_in(user)
   end
 
-  shared_examples 'no pages deployed' do
-    scenario 'does not see anything to destroy' do
-      visit project_pages_path(project)
-
-      expect(page).to have_content('Configure pages')
-      expect(page).not_to have_link('Remove pages')
-      expect(page).not_to have_text('Only the project owner can remove pages')
-    end
-  end
-
   context 'when user is the owner' do
-    background do
+    before do
       project.namespace.update(owner: user)
     end
 
     context 'when pages deployed' do
-      background do
+      before do
         allow_any_instance_of(Project).to receive(:pages_deployed?) { true }
       end
 
-      scenario 'renders Access pages' do
+      it 'renders Access pages' do
         visit project_pages_path(project)
 
         expect(page).to have_content('Access pages')
+      end
+
+      it 'renders first deployment warning' do
+        visit project_pages_path(project)
+
+        expect(page).to have_content('It may take up to 30 minutes before the site is available after the first deployment.')
       end
 
       context 'when support for external domains is disabled' do
@@ -48,7 +45,7 @@ feature 'Pages' do
       end
 
       context 'when pages are exposed on external HTTP address', :http_pages_enabled do
-        given(:project) { create(:project, pages_https_only: false) }
+        let(:project) { create(:project, pages_https_only: false) }
 
         shared_examples 'adds new domain' do
           it 'adds new domain' do
@@ -181,7 +178,12 @@ feature 'Pages' do
       end
     end
 
-    it_behaves_like 'no pages deployed'
+    it 'does not see anything to destroy' do
+      visit project_pages_path(project)
+
+      expect(page).to have_content('Configure pages')
+      expect(page).not_to have_link('Remove pages')
+    end
 
     describe 'project settings page' do
       it 'renders "Pages" tab' do
@@ -208,32 +210,16 @@ feature 'Pages' do
     end
   end
 
-  context 'when the user is not the owner' do
-    context 'when pages deployed' do
-      background do
-        allow_any_instance_of(Project).to receive(:pages_deployed?) { true }
-      end
-
-      scenario 'sees "Only the project owner can remove pages" text' do
-        visit project_pages_path(project)
-
-        expect(page).to have_text('Only the project owner can remove pages')
-      end
-    end
-
-    it_behaves_like 'no pages deployed'
-  end
-
   describe 'HTTPS settings', :js, :https_pages_enabled do
-    background do
+    before do
       project.namespace.update(owner: user)
 
       allow_any_instance_of(Project).to receive(:pages_deployed?) { true }
     end
 
-    scenario 'tries to change the setting' do
+    it 'tries to change the setting' do
       visit project_pages_path(project)
-      expect(page).to have_content("Force domains with SSL certificates to use HTTPS")
+      expect(page).to have_content("Force HTTPS (requires valid certificates)")
 
       uncheck :project_pages_https_only
 
@@ -251,7 +237,7 @@ feature 'Pages' do
         allow(service).to receive(:execute).and_return(status: :error)
       end
 
-      scenario 'tries to change the setting' do
+      it 'tries to change the setting' do
         visit project_pages_path(project)
 
         uncheck :project_pages_https_only
@@ -263,13 +249,13 @@ feature 'Pages' do
     end
 
     context 'non-HTTPS domain exists' do
-      given(:project) { create(:project, pages_https_only: false) }
+      let(:project) { create(:project, pages_https_only: false) }
 
       before do
         create(:pages_domain, :without_key, :without_certificate, project: project)
       end
 
-      scenario 'the setting is disabled' do
+      it 'the setting is disabled' do
         visit project_pages_path(project)
 
         expect(page).to have_field(:project_pages_https_only, disabled: true)
@@ -278,63 +264,78 @@ feature 'Pages' do
     end
 
     context 'HTTPS pages are disabled', :https_pages_disabled do
-      scenario 'the setting is unavailable' do
+      it 'the setting is unavailable' do
         visit project_pages_path(project)
 
         expect(page).not_to have_field(:project_pages_https_only)
-        expect(page).not_to have_content('Force domains with SSL certificates to use HTTPS')
+        expect(page).not_to have_content('Force HTTPS (requires valid certificates)')
         expect(page).not_to have_button('Save')
       end
     end
   end
 
   describe 'Remove page' do
-    context 'when user is the owner' do
-      let(:project) { create :project, :repository }
+    let(:project) { create :project, :repository }
+
+    context 'when pages are deployed' do
+      let(:pipeline) do
+        commit_sha = project.commit('HEAD').sha
+
+        project.ci_pipelines.create(
+          ref: 'HEAD',
+          sha: commit_sha,
+          source: :push,
+          protected: false
+        )
+      end
+
+      let(:ci_build) do
+        create(
+          :ci_build,
+          project: project,
+          pipeline: pipeline,
+          ref: 'HEAD')
+      end
+
+      let!(:artifact) do
+        create(:ci_job_artifact, :archive,
+               file: fixture_file_upload(File.join('spec/fixtures/pages.zip')), job: ci_build)
+      end
+
+      let!(:metadata) do
+        create(:ci_job_artifact, :metadata,
+               file: fixture_file_upload(File.join('spec/fixtures/pages.zip.meta')), job: ci_build)
+      end
 
       before do
-        project.namespace.update(owner: user)
+        result = Projects::UpdatePagesService.new(project, ci_build).execute
+        expect(result[:status]).to eq(:success)
+        expect(project).to be_pages_deployed
       end
 
-      context 'when pages are deployed' do
-        let(:pipeline) do
-          commit_sha = project.commit('HEAD').sha
+      it 'removes the pages' do
+        visit project_pages_path(project)
 
-          project.pipelines.create(
-            ref: 'HEAD',
-            sha: commit_sha,
-            source: :push,
-            protected: false
-          )
-        end
+        expect(page).to have_link('Remove pages')
 
-        let(:ci_build) do
-          create(
-            :ci_build,
-            project: project,
-            pipeline: pipeline,
-            ref: 'HEAD',
-            legacy_artifacts_file: fixture_file_upload(Rails.root.join('spec/fixtures/pages.zip')),
-            legacy_artifacts_metadata: fixture_file_upload(Rails.root.join('spec/fixtures/pages.zip.meta'))
-          )
-        end
+        click_link 'Remove pages'
 
-        before do
-          result = Projects::UpdatePagesService.new(project, ci_build).execute
-          expect(result[:status]).to eq(:success)
-          expect(project).to be_pages_deployed
-        end
-
-        it 'removes the pages' do
-          visit project_pages_path(project)
-
-          expect(page).to have_link('Remove pages')
-
-          click_link 'Remove pages'
-
-          expect(project.pages_deployed?).to be_falsey
-        end
+        expect(project.pages_deployed?).to be_falsey
       end
     end
+  end
+end
+
+describe 'Pages' do
+  include LetsEncryptHelpers
+
+  include_examples 'pages settings editing'
+
+  context 'when letsencrypt support is enabled' do
+    before do
+      stub_lets_encrypt_settings
+    end
+
+    include_examples 'pages settings editing'
   end
 end

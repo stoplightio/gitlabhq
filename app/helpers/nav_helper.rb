@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module NavHelper
   def header_links
     @header_links ||= get_header_links
@@ -17,11 +19,7 @@ module NavHelper
   end
 
   def page_gutter_class
-    if current_path?('merge_requests#show') ||
-        current_path?('projects/merge_requests/conflicts#show') ||
-        current_path?('issues#show') ||
-        current_path?('milestones#show')
-
+    if page_has_markdown?
       if cookies[:collapsed_gutter] == 'true'
         %w[page-gutter right-sidebar-collapsed]
       else
@@ -48,6 +46,25 @@ module NavHelper
     class_names
   end
 
+  def has_extra_nav_icons?
+    Gitlab::Sherlock.enabled? || can?(current_user, :read_instance_statistics) || current_user.admin?
+  end
+
+  def page_has_markdown?
+    current_path?('merge_requests#show') ||
+      current_path?('projects/merge_requests/conflicts#show') ||
+      current_path?('issues#show') ||
+      current_path?('milestones#show')
+  end
+
+  def admin_monitoring_nav_links
+    %w(system_info background_jobs logs health_check requests_profiles)
+  end
+
+  def group_issues_sub_menu_items
+    %w(groups#issues labels#index milestones#index boards#index boards#show)
+  end
+
   private
 
   def get_header_links
@@ -69,6 +86,14 @@ module NavHelper
       links << :admin_impersonation
     end
 
+    if Feature.enabled?(:user_mode_in_session)
+      if current_user&.admin? && current_user_mode&.admin_mode?
+        links << :admin_mode
+      end
+    end
+
     links
   end
 end
+
+NavHelper.prepend_if_ee('EE::NavHelper')

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module DependencyLinker
     class PodspecLinker < MethodLinker
@@ -17,7 +19,7 @@ module Gitlab
         link_method_call('license', &method(:license_url))
         link_regex(/license\s*=\s*\{\s*(type:|:type\s*=>)\s*#{STRING_REGEX}/, &method(:license_url))
 
-        link_method_call(%w[name dependency], &method(:package_url))
+        link_method_call('dependency', &method(:package_url))
       end
     end
   end

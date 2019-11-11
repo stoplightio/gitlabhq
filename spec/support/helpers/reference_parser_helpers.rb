@@ -1,9 +1,11 @@
+# frozen_string_literal: true
+
 module ReferenceParserHelpers
   def empty_html_link
     Nokogiri::HTML.fragment('<a></a>').children[0]
   end
 
-  shared_examples 'no N+1 queries' do
+  shared_examples 'no project N+1 queries' do
     it 'avoids N+1 queries in #nodes_visible_to_user', :request_store do
       context = Banzai::RenderContext.new(project, user)
 
@@ -19,6 +21,10 @@ module ReferenceParserHelpers
       expect(actual.count).to be <= control.count
       expect(actual.cached_count).to be <= control.cached_count
     end
+  end
+
+  shared_examples 'no N+1 queries' do
+    it_behaves_like 'no project N+1 queries'
 
     it 'avoids N+1 queries in #records_for_nodes', :request_store do
       context = Banzai::RenderContext.new(project, user)

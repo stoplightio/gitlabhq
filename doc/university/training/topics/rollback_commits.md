@@ -4,55 +4,50 @@ comments: false
 
 # Rollback Commits
 
-----------
-
 ## Undo Commits
 
-* Undo last commit putting everything back into the staging area.
-```
-git reset --soft HEAD^
-```
+- Undo last commit putting everything back into the staging area:
 
-* Add files and change message with:
-```
-git commit --amend -m "New Message"
-```
+  ```sh
+  git reset --soft HEAD^
+  ```
 
-----------
+- Add files and change message with:
 
-* Undo last and remove changes
-```
-git reset --hard HEAD^
-```
+  ```sh
+  git commit --amend -m "New Message"
+  ```
 
-* Same as last one but for two commits back
-```
-git reset --hard HEAD^^
-```
+- Undo last and remove changes:
 
-** Don't reset after pushing **
+  ```sh
+  git reset --hard HEAD^
+  ```
 
-----------
+- Same as last one but for two commits back:
+
+  ```sh
+  git reset --hard HEAD^^
+  ```
+
+**Don't reset after pushing**
 
 ## Reset Workflow
 
 1. Edit file again 'edit_this_file.rb'
-2. Check status
-3. Add and commit with wrong message
-4. Check log
-5. Amend commit
-6. Check log
-7. Soft reset
-8. Check log
-9. Pull for updates
-10. Push changes
-
-
-----------
+1. Check status
+1. Add and commit with wrong message
+1. Check log
+1. Amend commit
+1. Check log
+1. Soft reset
+1. Check log
+1. Pull for updates
+1. Push changes
 
 ## Commands
 
-```
+```sh
 # Change file edit_this_file.rb
 git status
 git commit -am "kjkfjkg"
@@ -65,15 +60,13 @@ git pull origin master
 git push origin master
 ```
 
-----------
-
 ## Note
 
-* git revert vs git reset
-* Reset removes the commit while revert removes the changes but leaves the commit
-* Revert is safer considering we can revert a revert
+- `git revert` vs `git reset`
+- Reset removes the commit while revert removes the changes but leaves the commit
+- Revert is safer considering we can revert a revert
 
-```
+```sh
 # Changed file
 git commit -am "bug introduced"
 git revert HEAD

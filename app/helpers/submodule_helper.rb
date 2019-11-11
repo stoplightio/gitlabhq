@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module SubmoduleHelper
   extend self
 
@@ -7,8 +9,14 @@ module SubmoduleHelper
   def submodule_links(submodule_item, ref = nil, repository = @repository)
     url = repository.submodule_url_for(ref, submodule_item.path)
 
+    submodule_links_for_url(submodule_item.id, url, repository)
+  end
+
+  def submodule_links_for_url(submodule_item_id, url, repository)
+    return [nil, nil] unless url
+
     if url == '.' || url == './'
-      url = File.join(Gitlab.config.gitlab.url, @project.full_path)
+      url = File.join(Gitlab.config.gitlab.url, repository.project.full_path)
     end
 
     if url =~ %r{([^/:]+)/([^/]+(?:\.git)?)\Z}
@@ -28,14 +36,14 @@ module SubmoduleHelper
       project.sub!(/\.git\z/, '')
 
       if self_url?(url, namespace, project)
-        [namespace_project_path(namespace, project),
-         namespace_project_tree_path(namespace, project, submodule_item.id)]
+        [url_helpers.namespace_project_path(namespace, project),
+         url_helpers.namespace_project_tree_path(namespace, project, submodule_item_id)]
       elsif relative_self_url?(url)
-        relative_self_links(url, submodule_item.id)
+        relative_self_links(url, submodule_item_id, repository.project)
       elsif github_dot_com_url?(url)
-        standard_links('github.com', namespace, project, submodule_item.id)
+        standard_links('github.com', namespace, project, submodule_item_id)
       elsif gitlab_dot_com_url?(url)
-        standard_links('gitlab.com', namespace, project, submodule_item.id)
+        standard_links('gitlab.com', namespace, project, submodule_item_id)
       else
         [sanitize_submodule_url(url), nil]
       end
@@ -64,8 +72,7 @@ module SubmoduleHelper
   end
 
   def relative_self_url?(url)
-    # (./)?(../repo.git) || (./)?(../../project/repo.git) )
-    url =~ %r{\A((\./)?(\.\./))(?!(\.\.)|(.*/)).*(\.git)?\z} || url =~ %r{\A((\./)?(\.\./){2})(?!(\.\.))([^/]*)/(?!(\.\.)|(.*/)).*(\.git)?\z}
+    url.start_with?('../', './')
   end
 
   def standard_links(host, namespace, project, commit)
@@ -73,25 +80,29 @@ module SubmoduleHelper
     [base, [base, '/tree/', commit].join('')]
   end
 
-  def relative_self_links(url, commit)
-    url.rstrip!
-    # Map relative links to a namespace and project
-    # For example:
-    # ../bar.git -> same namespace, repo bar
-    # ../foo/bar.git -> namespace foo, repo bar
-    # ../../foo/bar/baz.git -> namespace bar, repo baz
-    components = url.split('/')
-    base = components.pop.gsub(/.git$/, '')
-    namespace = components.pop.gsub(/^\.\.$/, '')
+  def relative_self_links(relative_path, commit, project)
+    relative_path = relative_path.rstrip
+    absolute_project_path = "/" + project.full_path
 
-    if namespace.empty?
-      namespace = @project.namespace.full_path
+    # Resolve `relative_path` to target path
+    # Assuming `absolute_project_path` is `/g1/p1`:
+    # ../p2.git -> /g1/p2
+    # ../g2/p3.git -> /g1/g2/p3
+    # ../../g3/g4/p4.git -> /g3/g4/p4
+    submodule_project_path = File.absolute_path(relative_path, absolute_project_path)
+    target_namespace_path = File.dirname(submodule_project_path)
+
+    if target_namespace_path == '/' || target_namespace_path.start_with?(absolute_project_path)
+      return [nil, nil]
     end
+
+    target_namespace_path.sub!(%r{^/}, '')
+    submodule_base = File.basename(submodule_project_path, '.git')
 
     begin
       [
-        namespace_project_path(namespace, base),
-        namespace_project_tree_path(namespace, base, commit)
+        url_helpers.namespace_project_path(target_namespace_path, submodule_base),
+        url_helpers.namespace_project_tree_path(target_namespace_path, submodule_base, commit)
       ]
     rescue ActionController::UrlGenerationError
       [nil, nil]
@@ -108,5 +119,9 @@ module SubmoduleHelper
     end
   rescue URI::InvalidURIError
     nil
+  end
+
+  def url_helpers
+    Gitlab::Routing.url_helpers
   end
 end

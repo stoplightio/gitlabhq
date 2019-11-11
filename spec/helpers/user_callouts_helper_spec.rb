@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "spec_helper"
 
 describe UserCalloutsHelper do
@@ -42,6 +44,15 @@ describe UserCalloutsHelper do
       end
 
       it { is_expected.to be false }
+    end
+  end
+
+  describe '.render_flash_user_callout' do
+    it 'renders the flash_user_callout partial' do
+      expect(helper).to receive(:render)
+        .with(/flash_user_callout/, flash_type: :warning, message: 'foo', feature_name: 'bar')
+
+      helper.render_flash_user_callout(:warning, 'foo', 'bar')
     end
   end
 end

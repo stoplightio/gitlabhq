@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module ProtectedBranches
   class DestroyService < BaseService
     def execute(protected_branch)
@@ -7,3 +9,5 @@ module ProtectedBranches
     end
   end
 end
+
+ProtectedBranches::DestroyService.prepend_if_ee('EE::ProtectedBranches::DestroyService')

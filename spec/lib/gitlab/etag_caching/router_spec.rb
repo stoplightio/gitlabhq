@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Gitlab::EtagCaching::Router do
@@ -13,6 +15,24 @@ describe Gitlab::EtagCaching::Router do
   it 'matches issue title endpoint' do
     result = described_class.match(
       '/my-group/my-project/issues/123/realtime_changes'
+    )
+
+    expect(result).to be_present
+    expect(result.name).to eq 'issue_title'
+  end
+
+  it 'matches with a project name that includes a suffix of create' do
+    result = described_class.match(
+      '/group/test-create/issues/123/realtime_changes'
+    )
+
+    expect(result).to be_present
+    expect(result.name).to eq 'issue_title'
+  end
+
+  it 'matches with a project name that includes a prefix of create' do
+    result = described_class.match(
+      '/group/create-test/issues/123/realtime_changes'
     )
 
     expect(result).to be_present
@@ -70,6 +90,15 @@ describe Gitlab::EtagCaching::Router do
     )
 
     expect(result).to be_blank
+  end
+
+  it 'matches the cluster environments path' do
+    result = described_class.match(
+      '/my-group/my-project/-/clusters/47/environments'
+    )
+
+    expect(result).to be_present
+    expect(result.name).to eq 'cluster_environments'
   end
 
   it 'matches the environments path' do

@@ -1,4 +1,6 @@
-class UserCustomAttribute < ActiveRecord::Base
+# frozen_string_literal: true
+
+class UserCustomAttribute < ApplicationRecord
   belongs_to :user
 
   validates :user_id, :key, :value, presence: true

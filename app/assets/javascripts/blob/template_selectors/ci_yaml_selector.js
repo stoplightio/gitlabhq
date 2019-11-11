@@ -1,5 +1,3 @@
-import Api from '../../api';
-
 import FileTemplateSelector from '../file_template_selector';
 
 export default class BlobCiYamlSelector extends FileTemplateSelector {
@@ -9,7 +7,7 @@ export default class BlobCiYamlSelector extends FileTemplateSelector {
       key: 'gitlab-ci-yaml',
       name: '.gitlab-ci.yml',
       pattern: /(.gitlab-ci.yml)/,
-      endpoint: Api.gitlabCiYml,
+      type: 'gitlab_ci_ymls',
       dropdown: '.js-gitlab-ci-yml-selector',
       wrapper: '.js-gitlab-ci-yml-selector-wrap',
     };
@@ -21,7 +19,6 @@ export default class BlobCiYamlSelector extends FileTemplateSelector {
       data: this.$dropdown.data('data'),
       filterable: true,
       selectable: true,
-      toggleLabel: item => item.name,
       search: {
         fields: ['name'],
       },

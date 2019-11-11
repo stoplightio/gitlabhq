@@ -1,6 +1,8 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
-describe "Admin::Projects"  do
+describe "Admin::Projects" do
   include AccessMatchers
 
   describe "GET /admin/projects" do

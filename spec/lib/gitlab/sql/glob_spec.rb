@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Gitlab::SQL::Glob do
@@ -35,9 +37,8 @@ describe Gitlab::SQL::Glob do
     value = query("SELECT #{quote(string)} LIKE #{pattern}")
               .rows.flatten.first
 
-    check = Gitlab.rails5? ? true : 't'
     case value
-    when check, 1
+    when true, 1
       true
     else
       false

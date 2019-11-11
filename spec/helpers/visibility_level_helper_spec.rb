@@ -1,10 +1,37 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe VisibilityLevelHelper do
+  include ProjectForksHelper
+
   let(:project)          { build(:project) }
   let(:group)            { build(:group) }
   let(:personal_snippet) { build(:personal_snippet) }
   let(:project_snippet)  { build(:project_snippet) }
+
+  describe 'visibility_icon_description' do
+    context 'used with a Project' do
+      it 'delegates projects to #project_visibility_icon_description' do
+        expect(visibility_icon_description(project))
+          .to match /project/i
+      end
+
+      context 'used with a ProjectPresenter' do
+        it 'delegates projects to #project_visibility_icon_description' do
+          expect(visibility_icon_description(project.present))
+            .to match /project/i
+        end
+      end
+
+      context 'used with a Group' do
+        it 'delegates groups to #group_visibility_icon_description' do
+          expect(visibility_icon_description(group))
+            .to match /group/i
+        end
+      end
+    end
+  end
 
   describe 'visibility_level_description' do
     context 'used with a Project' do
@@ -60,13 +87,13 @@ describe VisibilityLevelHelper do
 
   describe "disallowed_visibility_level?" do
     describe "forks" do
-      let(:project)       { create(:project, :internal) }
-      let(:fork_project)  { create(:project, forked_from_project: project) }
+      let(:project) { create(:project, :internal) }
+      let(:forked_project) { fork_project(project) }
 
       it "disallows levels" do
-        expect(disallowed_visibility_level?(fork_project, Gitlab::VisibilityLevel::PUBLIC)).to be_truthy
-        expect(disallowed_visibility_level?(fork_project, Gitlab::VisibilityLevel::INTERNAL)).to be_falsey
-        expect(disallowed_visibility_level?(fork_project, Gitlab::VisibilityLevel::PRIVATE)).to be_falsey
+        expect(disallowed_visibility_level?(forked_project, Gitlab::VisibilityLevel::PUBLIC)).to be_truthy
+        expect(disallowed_visibility_level?(forked_project, Gitlab::VisibilityLevel::INTERNAL)).to be_falsey
+        expect(disallowed_visibility_level?(forked_project, Gitlab::VisibilityLevel::PRIVATE)).to be_falsey
       end
     end
 
@@ -112,29 +139,94 @@ describe VisibilityLevelHelper do
     end
   end
 
-  describe "disallowed_visibility_level_description" do
-    let(:group) { create(:group, :internal) }
-    let!(:subgroup) { create(:group, :internal, parent: group) }
+  describe "selected_visibility_level" do
+    let(:group) { create(:group, :public) }
     let!(:project) { create(:project, :internal, group: group) }
+    let!(:forked_project) { fork_project(project) }
 
-    describe "project" do
-      it "provides correct description for disabled levels" do
-        expect(disallowed_visibility_level?(project, Gitlab::VisibilityLevel::PUBLIC)).to be_truthy
-        expect(strip_tags disallowed_visibility_level_description(Gitlab::VisibilityLevel::PUBLIC, project))
-          .to include "the visibility of #{project.group.name} is internal"
-      end
+    using RSpec::Parameterized::TableSyntax
+
+    PUBLIC = Gitlab::VisibilityLevel::PUBLIC
+    INTERNAL = Gitlab::VisibilityLevel::INTERNAL
+    PRIVATE = Gitlab::VisibilityLevel::PRIVATE
+
+    # This is a subset of all the permutations
+    where(:requested_level, :max_allowed, :global_default_level, :restricted_levels, :expected) do
+      PUBLIC | PUBLIC | PUBLIC | [] | PUBLIC
+      PUBLIC | PUBLIC | PUBLIC | [PUBLIC] | INTERNAL
+      INTERNAL | PUBLIC | PUBLIC | [] | INTERNAL
+      INTERNAL | PRIVATE | PRIVATE | [] | PRIVATE
+      PRIVATE | PUBLIC | PUBLIC | [] | PRIVATE
+      PUBLIC | PRIVATE | INTERNAL | [] | PRIVATE
+      PUBLIC | INTERNAL | PUBLIC | [] | INTERNAL
+      PUBLIC | PRIVATE | PUBLIC | [] | PRIVATE
+      PUBLIC | INTERNAL | INTERNAL | [] | INTERNAL
+      PUBLIC | PUBLIC | INTERNAL | [] | PUBLIC
     end
 
-    describe "group" do
-      it "provides correct description for disabled levels" do
-        expect(disallowed_visibility_level?(group, Gitlab::VisibilityLevel::PRIVATE)).to be_truthy
-        expect(disallowed_visibility_level_description(Gitlab::VisibilityLevel::PRIVATE, group))
-          .to include "it contains projects with higher visibility", "it contains sub-groups with higher visibility"
+    before do
+      stub_application_setting(restricted_visibility_levels: restricted_levels,
+                               default_project_visibility: global_default_level)
+    end
 
-        expect(disallowed_visibility_level?(subgroup, Gitlab::VisibilityLevel::PUBLIC)).to be_truthy
-        expect(strip_tags disallowed_visibility_level_description(Gitlab::VisibilityLevel::PUBLIC, subgroup))
-          .to include "the visibility of #{group.name} is internal"
+    with_them do
+      it "provides correct visibility level for forked project" do
+        project.update(visibility_level: max_allowed)
+
+        expect(selected_visibility_level(forked_project, requested_level)).to eq(expected)
       end
+
+      it "provides correct visibiility level for project in group" do
+        project.group.update(visibility_level: max_allowed)
+
+        expect(selected_visibility_level(project, requested_level)).to eq(expected)
+      end
+    end
+  end
+
+  describe 'multiple_visibility_levels_restricted?' do
+    using RSpec::Parameterized::TableSyntax
+
+    let(:user) { create(:user) }
+
+    subject { helper.multiple_visibility_levels_restricted? }
+
+    where(:restricted_visibility_levels, :expected) do
+      [Gitlab::VisibilityLevel::PUBLIC] | false
+      [Gitlab::VisibilityLevel::PUBLIC, Gitlab::VisibilityLevel::INTERNAL] | true
+      [Gitlab::VisibilityLevel::PUBLIC, Gitlab::VisibilityLevel::INTERNAL, Gitlab::VisibilityLevel::PRIVATE] | true
+    end
+
+    with_them do
+      before do
+        allow(helper).to receive(:current_user) { user }
+        allow(Gitlab::CurrentSettings.current_application_settings).to receive(:restricted_visibility_levels) { restricted_visibility_levels }
+      end
+
+      it { is_expected.to eq(expected) }
+    end
+  end
+
+  describe 'all_visibility_levels_restricted?' do
+    using RSpec::Parameterized::TableSyntax
+
+    let(:user) { create(:user) }
+
+    subject { helper.all_visibility_levels_restricted? }
+
+    where(:restricted_visibility_levels, :expected) do
+      [Gitlab::VisibilityLevel::PUBLIC] | false
+      [Gitlab::VisibilityLevel::PUBLIC, Gitlab::VisibilityLevel::INTERNAL] | false
+      Gitlab::VisibilityLevel.values | true
+    end
+
+    with_them do
+      before do
+        allow(helper).to receive(:current_user) { user }
+        allow(Gitlab::CurrentSettings.current_application_settings).to receive(:restricted_visibility_levels) { restricted_visibility_levels }
+      end
+
+      it { is_expected.to eq(expected) }
     end
   end
 end

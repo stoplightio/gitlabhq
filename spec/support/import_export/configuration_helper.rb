@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module ConfigurationHelper
   # Returns a list of models from hashes/arrays contained in +project_tree+
   def names_from_tree(project_tree)
@@ -9,7 +11,7 @@ module ConfigurationHelper
   end
 
   def relation_class_for_name(relation_name)
-    relation_name = Gitlab::ImportExport::RelationFactory::OVERRIDES[relation_name.to_sym] || relation_name
+    relation_name = Gitlab::ImportExport::RelationFactory.overrides[relation_name.to_sym] || relation_name
     Gitlab::ImportExport::RelationFactory.relation_class(relation_name)
   end
 

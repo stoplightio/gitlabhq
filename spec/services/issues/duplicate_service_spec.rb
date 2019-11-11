@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Issues::DuplicateService do
@@ -74,6 +76,12 @@ describe Issues::DuplicateService do
           .to receive(:mark_canonical_issue_of_duplicate).with(canonical_issue, canonical_project, user, duplicate_issue)
 
         subject.execute(duplicate_issue, canonical_issue)
+      end
+
+      it 'updates duplicate issue with canonical issue id' do
+        subject.execute(duplicate_issue, canonical_issue)
+
+        expect(duplicate_issue.reload.duplicated_to).to eq(canonical_issue)
       end
     end
   end

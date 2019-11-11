@@ -1,14 +1,34 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Gitlab::SlashCommands::Presenters::Access do
+  shared_examples_for 'displays an error message' do
+    it do
+      expect(subject[:text]).to match(error_message)
+      expect(subject[:response_type]).to be(:ephemeral)
+    end
+  end
+
   describe '#access_denied' do
-    subject { described_class.new.access_denied }
+    let(:project) { build(:project) }
+
+    subject { described_class.new.access_denied(project) }
 
     it { is_expected.to be_a(Hash) }
 
-    it 'displays an error message' do
-      expect(subject[:text]).to match("is not allowed")
-      expect(subject[:response_type]).to be(:ephemeral)
+    it_behaves_like 'displays an error message' do
+      let(:error_message) { 'you do not have access to the GitLab project' }
+    end
+  end
+
+  describe '#deactivated' do
+    subject { described_class.new.deactivated }
+
+    it { is_expected.to be_a(Hash) }
+
+    it_behaves_like 'displays an error message' do
+      let(:error_message) { 'your account has been deactivated by your administrator' }
     end
   end
 

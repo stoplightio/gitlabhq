@@ -1,96 +1,80 @@
 ---
 comments: false
+type: reference
 ---
 
 # GitLab Git Workshop
 
----
+## Agenda
 
-# Agenda
+1. Brief history of Git.
+1. GitLab walkthrough.
+1. Configure your environment.
+1. Workshop.
 
-1. Brief history of Git
-1. GitLab walkthrough
-1. Configure your environment
-1. Workshop
+## Git introduction
 
----
+<https://git-scm.com/about>
 
-# Git introduction
+- Distributed version control.
+  - Does not rely on connection to a central server.
+  - Many copies of the complete history.
+- Powerful branching and merging.
+- Adapts to nearly any workflow.
+- Fast, reliable and stable file format.
 
-https://git-scm.com/about
-
-- Distributed version control
-  - Does not rely on connection to a central server
-  - Many copies of the complete history
-- Powerful branching and merging
-- Adapts to nearly any workflow
-- Fast, reliable and stable file format
-
----
-
-# Help!
+## Help
 
 Use the tools at your disposal when you get stuck.
 
-- Use '`git help <command>`' command
-- Use Google
-- Read documentation at https://git-scm.com
+- Use '`git help <command>`' command.
+- Use Google.
+- Read documentation at <https://git-scm.com>.
 
----
-
-# GitLab Walkthrough
+## GitLab Walkthrough
 
 ![fit](logo.png)
 
----
-
-# Configure your environment
+## Configure your environment
 
 - Windows: Install 'Git for Windows'
 
-> https://git-for-windows.github.io
+> <https://gitforwindows.org>
 
 - Mac: Type '`git`' in the Terminal application.
 
 > If it's not installed, it will prompt you to install it.
 
-- Debian: '`sudo apt-get install git-all`'
-or Red Hat '`sudo yum install git-all`'
+- Debian: '`sudo apt-get install git-all`' or Red Hat '`sudo yum install git-all`'
 
----
+## Git Workshop
 
-# Git Workshop
+### Overview
 
-## Overview
+1. Configure Git.
+1. Configure SSH Key.
+1. Create a project.
+1. Committing.
+1. Feature branching.
+1. Merge requests.
+1. Feedback and Collaboration.
 
-1. Configure Git
-1. Configure SSH Key
-1. Create a project
-1. Committing
-1. Feature branching
-1. Merge requests
-1. Feedback and Collaboration
+## Configure Git
 
----
+One-time configuration of the Git client:
 
-# Configure Git
-
-One-time configuration of the Git client
-
-```bash
+```sh
 git config --global user.name "Your Name"
 git config --global user.email you@example.com
 ```
 
----
+## Configure SSH Key
 
-# Configure SSH Key
-
-```bash
+```sh
 ssh-keygen -t rsa -b 4096 -C "you@computer-name"
 ```
 
-```bash
+```sh
 # You will be prompted for the following information. Press enter to accept the defaults. Defaults appear in parentheses.
 Generating public/private rsa key pair.
 Enter file in which to save the key (/Users/you/.ssh/id_rsa):
@@ -102,31 +86,26 @@ The key fingerprint is:
 39:fc:ce:94:f4:09:13:95:64:9a:65:c1:de:05:4d:01 you@computer-name
 ```
 
-Copy your public key and add it to your GitLab profile
+Copy your public key and add it to your GitLab profile:
 
-```bash
+```sh
 cat ~/.ssh/id_rsa.pub
 ```
 
-```bash
+```sh
 ssh-rsa AAAAB3NzaC1yc2EAAAADAQEL17Ufacg8cDhlQMS5NhV8z3GHZdhCrZbl4gz you@example.com
 ```
 
----
+## Create a project
 
-# Create a project
-
-- Create a project in your user namespace
-  - Choose to import from 'Any Repo by URL' and use
-    https://gitlab.com/gitlab-org/training-examples.git
+- Create a project in your user namespace.
+  - Choose to import from 'Any Repo by URL' and use <https://gitlab.com/gitlab-org/training-examples.git>.
 - Create a '`development`' or '`workspace`' directory in your home directory.
-- Clone the '`training-examples`' project
+- Clone the '`training-examples`' project.
 
----
+## Commands (project)
 
-# Commands
-
-```
+```sh
 mkdir ~/development
 cd ~/development
 
@@ -139,39 +118,33 @@ git clone git@gitlab.example.com:<username>/training-examples.git
 cd training-examples
 ```
 
----
+## Git concepts
 
-# Git concepts
-
-**Untracked files**
+### Untracked files
 
 New files that Git has not been told to track previously.
 
-**Working area**
+### Working area
 
 Files that have been modified but are not committed.
 
-**Staging area**
+### Staging area
 
 Modified files that have been marked to go in the next commit.
 
----
+## Committing
 
-# Committing
+1. Edit '`edit_this_file.rb`' in '`training-examples`'.
+1. See it listed as a changed file (working area).
+1. View the differences.
+1. Stage the file.
+1. Commit.
+1. Push the commit to the remote.
+1. View the Git log.
 
-1. Edit '`edit_this_file.rb`' in '`training-examples`'
-1. See it listed as a changed file (working area)
-1. View the differences
-1. Stage the file
-1. Commit
-1. Push the commit to the remote
-1. View the git log
+## Commands (committing)
 
----
-
-# Commands
-
-```
+```sh
 # Edit `edit_this_file.rb`
 git status
 git diff
@@ -181,31 +154,25 @@ git push origin master
 git log
 ```
 
----
+## Feature branching
 
-# Feature branching
+- Efficient parallel workflow for teams.
+- Develop each feature in a branch.
+- Keeps changes isolated.
+- Consider a 1-to-1 link to issues.
+- Push branches to the server frequently.
+  - Hint: This is a cheap backup for your work-in-progress code.
 
-- Efficient parallel workflow for teams
-- Develop each feature in a branch
-- Keeps changes isolated
-- Consider a 1-to-1 link to issues
-- Push branches to the server frequently
-  - Hint: This is a cheap backup for your work-in-progress code
+## Feature branching steps
 
----
-
-# Feature branching
-
-1. Create a new feature branch called 'squash_some_bugs'
+1. Create a new feature branch called 'squash_some_bugs'.
 1. Edit '`bugs.rb`' and remove all the bugs.
-1. Commit
-1. Push
+1. Commit.
+1. Push.
 
----
+## Commands (feature branching)
 
-# Commands
-
-```
+```sh
 git checkout -b squash_some_bugs
 # Edit `bugs.rb`
 git status
@@ -214,53 +181,42 @@ git commit -m 'Fix some buggy code'
 git push origin squash_some_bugs
 ```
 
----
+## Merge requests
 
-# Merge requests
+- When you want feedback create a merge request.
+- Target is the ‘default’ branch (usually master).
+- Assign or mention the person you would like to review.
+- Add 'WIP' to the title if it's a work in progress.
+- When accepting, always delete the branch.
+- Anyone can comment, not just the assignee.
+- Push corrections to the same branch.
 
-- When you want feedback create a merge request
-- Target is the ‘default’ branch (usually master)
-- Assign or mention the person you would like to review
-- Add 'WIP' to the title if it's a work in progress
-- When accepting, always delete the branch
-- Anyone can comment, not just the assignee
-- Push corrections to the same branch
+## Merge requests steps
 
----
+Create your first merge request:
 
-# Merge requests
+1. Use the blue button in the activity feed.
+1. View the diff (changes) and leave a comment.
+1. Push a new commit to the same branch.
+1. Review the changes again and notice the update.
 
-**Create your first merge request**
+## Feedback and Collaboration
 
-1. Use the blue button in the activity feed
-1. View the diff (changes) and leave a comment
-1. Push a new commit to the same branch
-1. Review the changes again and notice the update
+- Merge requests are a time for feedback and collaboration.
+- Giving feedback is hard.
+- Be as kind as possible.
+- Receiving feedback is hard.
+- Be as receptive as possible.
+- Feedback is about the best code, not the person. You are not your code.
 
----
-
-# Feedback and Collaboration
-
-- Merge requests are a time for feedback and collaboration
-- Giving feedback is hard
-- Be as kind as possible
-- Receiving feedback is hard
-- Be as receptive as possible
-- Feedback is about the best code, not the person. You are not your code
-
----
-
-# Feedback and Collaboration
+## Feedback and Collaboration resources
 
 Review the Thoughtbot code-review guide for suggestions to follow when reviewing merge requests:
-[https://github.com/thoughtbot/guides/tree/master/code-review](https://github.com/thoughtbot/guides/tree/master/code-review)
+<https://github.com/thoughtbot/guides/tree/master/code-review>.
 
-See GitLab merge requests for examples:
-[https://gitlab.com/gitlab-org/gitlab-ce/merge_requests](https://gitlab.com/gitlab-org/gitlab-ce/merge_requests)
+See GitLab merge requests for examples: <https://gitlab.com/gitlab-org/gitlab-foss/merge_requests>.
 
----
-
-# Explore GitLab projects
+## Explore GitLab projects
 
 ![fit](logo.png)
 
@@ -272,33 +228,25 @@ See GitLab merge requests for examples:
 - Manage project members
 - Project settings
 
----
+## Tags
 
-# Tags
+- Useful for marking deployments and releases.
+- Annotated tags are an unchangeable part of Git history.
+- Soft/lightweight tags can be set and removed at will.
+- Many projects combine an annotated release tag with a stable branch.
+- Consider setting deployment/release tags automatically.
 
-- Useful for marking deployments and releases
-- Annotated tags are an unchangeable part of Git history
-- Soft/lightweight tags can be set and removed at will
-- Many projects combine an annotated release tag with a stable branch
-- Consider setting deployment/release tags automatically
+## Tags steps
 
----
+1. Create a lightweight tag.
+1. Create an annotated tag.
+1. Push the tags to the remote repository.
 
-# Tags
+Additional resources: <https://git-scm.com/book/en/v2/Git-Basics-Tagging>.
 
-- Create a lightweight tag
-- Create an annotated tag
-- Push the tags to the remote repository
+## Commands (tags)
 
-**Additional resources**
-
-[http://git-scm.com/book/en/Git-Basics-Tagging](http://git-scm.com/book/en/Git-Basics-Tagging)
-
----
-
-# Commands
-
-```
+```sh
 git checkout master
 
 # Lightweight tag
@@ -311,33 +259,27 @@ git tag
 git push origin --tags
 ```
 
----
+## Merge conflicts
 
-# Merge conflicts
-
-- Happen often
-- Learning to fix conflicts is hard
-- Practice makes perfect
+- Happen often.
+- Learning to fix conflicts is hard.
+- Practice makes perfect.
 - Force push after fixing conflicts. Be careful!
 
----
-
-# Merge conflicts
+## Merge conflicts steps
 
 1. Checkout a new branch and edit `conflicts.rb`. Add 'Line4' and 'Line5'.
-1. Commit and push
+1. Commit and push.
 1. Checkout master and edit `conflicts.rb`. Add 'Line6' and 'Line7' below 'Line3'.
-1. Commit and push to master
-1. Create a merge request
+1. Commit and push to master.
+1. Create a merge request.
 
----
-
-# Merge conflicts
+## Merge conflicts commands
 
 After creating a merge request you should notice that conflicts exist. Resolve
 the conflicts locally by rebasing.
 
-```
+```sh
 git rebase master
 
 # Fix conflicts by editing the files.
@@ -348,9 +290,7 @@ git rebase --continue
 git push origin <branch> -f
 ```
 
----
-
-# Rebase with squash
+## Rebase with squash
 
 You may end up with a commit log that looks like this:
 
@@ -366,31 +306,34 @@ Does this work?
 
 Squash these in to meaningful commits using an interactive rebase.
 
----
-
-# Rebase with squash
+## Rebase with squash commands
 
 Squash the commits on the same branch we used for the merge conflicts step.
 
-```
+```sh
 git rebase -i master
 ```
 
 In the editor, leave the first commit as 'pick' and set others to 'fixup'.
 
----
-
-# Questions?
+## Questions?
 
 ![fit](logo.png)
 
 Thank you for your hard work!
 
-**Additional Resources**
+## Additional Resources
 
-GitLab Documentation [http://docs.gitlab.com](http://docs.gitlab.com/)
-GUI Clients [http://git-scm.com/downloads/guis](http://git-scm.com/downloads/guis)
-Pro git book [http://git-scm.com/book](http://git-scm.com/book)
-Platzi Course [https://courses.platzi.com/courses/git-gitlab/](https://courses.platzi.com/courses/git-gitlab/)
-Code School tutorial [http://try.github.io/](http://try.github.io/)
-Contact Us at `subscribers@gitlab.com`
+See [additional resources](index.md#additional-resources).
+
+<!-- ## Troubleshooting
+
+Include any troubleshooting steps that you can foresee. If you know beforehand what issues
+one might have when setting this up, or when something is changed, or on upgrading, it's
+important to describe those, too. Think of things that may go wrong and include them here.
+This is important to minimize requests for support, and to avoid doc comments with
+questions that you know someone might ask.
+
+Each scenario can be a third-level heading, e.g. `### Getting error message X`.
+If you have none to add when creating a doc, leave this section in place
+but commented out to help encourage others to add to it in the future. -->

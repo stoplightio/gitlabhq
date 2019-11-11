@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # Guard API with OAuth 2.0 Access Token
 
 require 'rack/oauth2'
@@ -14,6 +16,8 @@ module API
         # Must yield access token to store it in the env
         request.access_token
       end
+
+      use AdminModeMiddleware
 
       helpers HelperMethods
 
@@ -39,6 +43,7 @@ module API
 
     # Helper Methods for Grape Endpoint
     module HelperMethods
+      prepend_if_ee('EE::API::APIGuard::HelperMethods') # rubocop: disable Cop/InjectEnterpriseEditionModule
       include Gitlab::Auth::UserAuthFinders
 
       def find_current_user!
@@ -47,6 +52,11 @@ module API
 
         unless api_access_allowed?(user)
           forbidden!(api_access_denied_message(user))
+        end
+
+        # Set admin mode for API requests (if admin)
+        if Feature.enabled?(:user_mode_in_session)
+          Gitlab::Auth::CurrentUserMode.new(user).enable_admin_mode!(skip_password_validation: true)
         end
 
         user
@@ -84,7 +94,7 @@ module API
       end
     end
 
-    module ClassMethods
+    class_methods do
       private
 
       def install_error_responders(base)
@@ -92,6 +102,7 @@ module API
                          Gitlab::Auth::TokenNotFoundError,
                          Gitlab::Auth::ExpiredError,
                          Gitlab::Auth::RevokedError,
+                         Gitlab::Auth::ImpersonationDisabled,
                          Gitlab::Auth::InsufficientScopeError]
 
         base.__send__(:rescue_from, *error_classes, oauth2_bearer_token_error_handler) # rubocop:disable GitlabSecurity/PublicSend
@@ -119,6 +130,11 @@ module API
                 :invalid_token,
                 "Token was revoked. You have to re-authorize from the user.")
 
+            when Gitlab::Auth::ImpersonationDisabled
+              Rack::OAuth2::Server::Resource::Bearer::Unauthorized.new(
+                :invalid_token,
+                "Token is an impersonation token but impersonation was disabled.")
+
             when Gitlab::Auth::InsufficientScopeError
               # FIXME: ForbiddenError (inherited from Bearer::Forbidden of Rack::Oauth2)
               # does not include WWW-Authenticate header, which breaks the standard.
@@ -129,6 +145,23 @@ module API
             end
 
           response.finish
+        end
+      end
+    end
+
+    class AdminModeMiddleware < ::Grape::Middleware::Base
+      def initialize(app, **options)
+        super
+      end
+
+      def call(env)
+        if Feature.enabled?(:user_mode_in_session)
+          session = {}
+          Gitlab::Session.with_session(session) do
+            app.call(env)
+          end
+        else
+          app.call(env)
         end
       end
     end

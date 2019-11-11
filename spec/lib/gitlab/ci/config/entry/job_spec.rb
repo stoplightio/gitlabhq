@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Gitlab::Ci::Config::Entry::Job do
@@ -9,11 +11,49 @@ describe Gitlab::Ci::Config::Entry::Job do
 
       let(:result) do
         %i[before_script script stage type after_script cache
-           image services only except variables artifacts
-           environment coverage]
+           image services only except rules variables artifacts
+           environment coverage retry]
       end
 
       it { is_expected.to match_array result }
+    end
+  end
+
+  describe '.matching?' do
+    subject { described_class.matching?(name, config) }
+
+    context 'when config is not a hash' do
+      let(:name) { :rspec }
+      let(:config) { 'string' }
+
+      it { is_expected.to be_falsey }
+    end
+
+    context 'when config is a regular job' do
+      let(:name) { :rspec }
+      let(:config) do
+        { script: 'ls -al' }
+      end
+
+      it { is_expected.to be_truthy }
+    end
+
+    context 'when config is a bridge job' do
+      let(:name) { :rspec }
+      let(:config) do
+        { trigger: 'other-project' }
+      end
+
+      it { is_expected.to be_falsey }
+    end
+
+    context 'when config is a hidden job' do
+      let(:name) { '.rspec' }
+      let(:config) do
+        { script: 'ls -al' }
+      end
+
+      it { is_expected.to be_falsey }
     end
   end
 
@@ -36,6 +76,39 @@ describe Gitlab::Ci::Config::Entry::Job do
 
         it 'reports error' do
           expect(entry.errors).to include "job name can't be blank"
+        end
+      end
+
+      context 'when delayed job' do
+        context 'when start_in is specified' do
+          let(:config) { { script: 'echo', when: 'delayed', start_in: '1 day' } }
+
+          it { expect(entry).to be_valid }
+        end
+      end
+
+      context 'when has needs' do
+        let(:config) do
+          {
+            stage: 'test',
+            script: 'echo',
+            needs: ['another-job']
+          }
+        end
+
+        it { expect(entry).to be_valid }
+
+        context 'when has dependencies' do
+          let(:config) do
+            {
+              stage: 'test',
+              script: 'echo',
+              dependencies: ['another-job'],
+              needs: ['another-job']
+            }
+          end
+
+          it { expect(entry).to be_valid }
         end
       end
     end
@@ -81,42 +154,298 @@ describe Gitlab::Ci::Config::Entry::Job do
         end
       end
 
-      context 'when retry value is not correct' do
+      context 'when extends key is not a string' do
+        let(:config) { { extends: 123 } }
+
+        it 'returns error about wrong value type' do
+          expect(entry).not_to be_valid
+          expect(entry.errors).to include "job extends should be an array of strings or a string"
+        end
+      end
+
+      context 'when parallel value is not correct' do
         context 'when it is not a numeric value' do
-          let(:config) { { retry: true } }
+          let(:config) { { parallel: true } }
 
           it 'returns error about invalid type' do
             expect(entry).not_to be_valid
-            expect(entry.errors).to include 'job retry is not a number'
+            expect(entry.errors).to include 'job parallel is not a number'
           end
         end
 
-        context 'when it is lower than zero' do
-          let(:config) { { retry: -1 } }
+        context 'when it is lower than two' do
+          let(:config) { { parallel: 1 } }
 
           it 'returns error about value too low' do
             expect(entry).not_to be_valid
             expect(entry.errors)
-              .to include 'job retry must be greater than or equal to 0'
+              .to include 'job parallel must be greater than or equal to 2'
+          end
+        end
+
+        context 'when it is bigger than 50' do
+          let(:config) { { parallel: 51 } }
+
+          it 'returns error about value too high' do
+            expect(entry).not_to be_valid
+            expect(entry.errors)
+              .to include 'job parallel must be less than or equal to 50'
           end
         end
 
         context 'when it is not an integer' do
-          let(:config) { { retry: 1.5 } }
+          let(:config) { { parallel: 1.5 } }
 
           it 'returns error about wrong value' do
             expect(entry).not_to be_valid
-            expect(entry.errors).to include 'job retry must be an integer'
+            expect(entry.errors).to include 'job parallel must be an integer'
           end
         end
 
-        context 'when the value is too high' do
-          let(:config) { { retry: 10 } }
+        context 'when it uses both "when:" and "rules:"' do
+          let(:config) do
+            {
+              script: 'echo',
+              when: 'on_failure',
+              rules: [{ if: '$VARIABLE', when: 'on_success' }]
+            }
+          end
+
+          it 'returns an error about when: being combined with rules' do
+            expect(entry).not_to be_valid
+            expect(entry.errors).to include 'job config key may not be used with `rules`: when'
+          end
+        end
+      end
+
+      context 'when delayed job' do
+        context 'when start_in is specified' do
+          let(:config) { { script: 'echo', when: 'delayed', start_in: '1 day' } }
+
+          it 'returns error about invalid type' do
+            expect(entry).to be_valid
+          end
+        end
+
+        context 'when start_in is empty' do
+          let(:config) { { when: 'delayed', start_in: nil } }
+
+          it 'returns error about invalid type' do
+            expect(entry).not_to be_valid
+            expect(entry.errors).to include 'job start in should be a duration'
+          end
+        end
+
+        context 'when start_in is not formatted as a duration' do
+          let(:config) { { when: 'delayed', start_in: 'test' } }
+
+          it 'returns error about invalid type' do
+            expect(entry).not_to be_valid
+            expect(entry.errors).to include 'job start in should be a duration'
+          end
+        end
+
+        context 'when start_in is longer than one day' do
+          let(:config) { { when: 'delayed', start_in: '2 days' } }
+
+          it 'returns error about exceeding the limit' do
+            expect(entry).not_to be_valid
+            expect(entry.errors).to include 'job start in should not exceed the limit'
+          end
+        end
+      end
+
+      context 'when only: is used with rules:' do
+        let(:config) { { only: ['merge_requests'], rules: [{ if: '$THIS' }] } }
+
+        it 'returns error about mixing only: with rules:' do
+          expect(entry).not_to be_valid
+          expect(entry.errors).to include /may not be used with `rules`/
+        end
+
+        context 'and only: is blank' do
+          let(:config) { { only: nil, rules: [{ if: '$THIS' }] } }
+
+          it 'returns error about mixing only: with rules:' do
+            expect(entry).not_to be_valid
+            expect(entry.errors).to include /may not be used with `rules`/
+          end
+        end
+
+        context 'and rules: is blank' do
+          let(:config) { { only: ['merge_requests'], rules: nil } }
+
+          it 'returns error about mixing only: with rules:' do
+            expect(entry).not_to be_valid
+            expect(entry.errors).to include /may not be used with `rules`/
+          end
+        end
+      end
+
+      context 'when except: is used with rules:' do
+        let(:config) { { except: { refs: %w[master] }, rules: [{ if: '$THIS' }] } }
+
+        it 'returns error about mixing except: with rules:' do
+          expect(entry).not_to be_valid
+          expect(entry.errors).to include /may not be used with `rules`/
+        end
+
+        context 'and except: is blank' do
+          let(:config) { { except: nil, rules: [{ if: '$THIS' }] } }
+
+          it 'returns error about mixing except: with rules:' do
+            expect(entry).not_to be_valid
+            expect(entry.errors).to include /may not be used with `rules`/
+          end
+        end
+
+        context 'and rules: is blank' do
+          let(:config) { { except: { refs: %w[master] }, rules: nil } }
+
+          it 'returns error about mixing except: with rules:' do
+            expect(entry).not_to be_valid
+            expect(entry.errors).to include /may not be used with `rules`/
+          end
+        end
+      end
+
+      context 'when only: and except: are both used with rules:' do
+        let(:config) do
+          {
+            only: %w[merge_requests],
+            except: { refs: %w[master] },
+            rules: [{ if: '$THIS' }]
+          }
+        end
+
+        it 'returns errors about mixing both only: and except: with rules:' do
+          expect(entry).not_to be_valid
+          expect(entry.errors).to include /may not be used with `rules`/
+          expect(entry.errors).to include /may not be used with `rules`/
+        end
+
+        context 'when only: and except: as both blank' do
+          let(:config) do
+            { only: nil, except: nil, rules: [{ if: '$THIS' }] }
+          end
+
+          it 'returns errors about mixing both only: and except: with rules:' do
+            expect(entry).not_to be_valid
+            expect(entry.errors).to include /may not be used with `rules`/
+            expect(entry.errors).to include /may not be used with `rules`/
+          end
+        end
+
+        context 'when rules: is blank' do
+          let(:config) do
+            { only: %w[merge_requests], except: { refs: %w[master] }, rules: nil }
+          end
+
+          it 'returns errors about mixing both only: and except: with rules:' do
+            expect(entry).not_to be_valid
+            expect(entry.errors).to include /may not be used with `rules`/
+            expect(entry.errors).to include /may not be used with `rules`/
+          end
+        end
+      end
+
+      context 'when start_in specified without delayed specification' do
+        let(:config) { { start_in: '1 day' } }
+
+        it 'returns error about invalid type' do
+          expect(entry).not_to be_valid
+          expect(entry.errors).to include 'job start in must be blank'
+        end
+      end
+
+      context 'when has dependencies' do
+        context 'that are not a array of strings' do
+          let(:config) do
+            { script: 'echo', dependencies: 'build-job' }
+          end
+
+          it 'returns error about invalid type' do
+            expect(entry).not_to be_valid
+            expect(entry.errors).to include 'job dependencies should be an array of strings'
+          end
+        end
+      end
+
+      context 'when has needs' do
+        context 'that are not a array of strings' do
+          let(:config) do
+            {
+              stage: 'test',
+              script: 'echo',
+              needs: 'build-job'
+            }
+          end
+
+          it 'returns error about invalid type' do
+            expect(entry).not_to be_valid
+            expect(entry.errors).to include 'job needs should be an array of strings'
+          end
+        end
+
+        context 'when have dependencies that are not subset of needs' do
+          let(:config) do
+            {
+              stage: 'test',
+              script: 'echo',
+              dependencies: ['another-job'],
+              needs: ['build-job']
+            }
+          end
+
+          it 'returns error about invalid data' do
+            expect(entry).not_to be_valid
+            expect(entry.errors).to include 'job dependencies the another-job should be part of needs'
+          end
+        end
+
+        context 'when stage: is missing' do
+          let(:config) do
+            {
+              script: 'echo',
+              needs: ['build-job']
+            }
+          end
+
+          it 'returns error about invalid data' do
+            expect(entry).not_to be_valid
+            expect(entry.errors).to include 'job config missing required keys: stage'
+          end
+        end
+      end
+
+      context 'when timeout value is not correct' do
+        context 'when it is higher than instance wide timeout' do
+          let(:config) { { timeout: '3 months' } }
 
           it 'returns error about value too high' do
             expect(entry).not_to be_valid
-            expect(entry.errors).to include 'job retry must be less than or equal to 2'
+            expect(entry.errors)
+              .to include "job timeout should not exceed the limit"
           end
+        end
+
+        context 'when it is not a duration' do
+          let(:config) { { timeout: 100 } }
+
+          it 'returns error about wrong value' do
+            expect(entry).not_to be_valid
+            expect(entry.errors).to include 'job timeout should be a duration'
+          end
+        end
+      end
+
+      context 'when timeout value is correct' do
+        let(:config) { { script: 'echo', timeout: '1m 1s' } }
+
+        it 'returns correct timeout' do
+          expect(entry).to be_valid
+          expect(entry.errors).to be_empty
+          expect(entry.timeout).to eq('1m 1s')
         end
       end
     end
@@ -124,20 +453,22 @@ describe Gitlab::Ci::Config::Entry::Job do
 
   describe '#relevant?' do
     it 'is a relevant entry' do
+      entry = described_class.new({ script: 'rspec' }, name: :rspec)
+
       expect(entry).to be_relevant
     end
   end
 
   describe '#compose!' do
-    let(:unspecified) { double('unspecified', 'specified?' => false) }
-
     let(:specified) do
       double('specified', 'specified?' => true, value: 'specified')
     end
 
-    let(:deps) { double('deps', '[]' => unspecified) }
+    let(:unspecified) { double('unspecified', 'specified?' => false) }
+    let(:default) { double('default', '[]' => unspecified) }
+    let(:deps) { double('deps', 'default' => default, '[]' => unspecified) }
 
-    context 'when job config overrides global config' do
+    context 'when job config overrides default config' do
       before do
         entry.compose!(deps)
       end
@@ -146,21 +477,22 @@ describe Gitlab::Ci::Config::Entry::Job do
         { script: 'rspec', image: 'some_image', cache: { key: 'test' } }
       end
 
-      it 'overrides global config' do
+      it 'overrides default config' do
         expect(entry[:image].value).to eq(name: 'some_image')
         expect(entry[:cache].value).to eq(key: 'test', policy: 'pull-push')
       end
     end
 
-    context 'when job config does not override global config' do
+    context 'when job config does not override default config' do
       before do
-        allow(deps).to receive('[]').with(:image).and_return(specified)
+        allow(default).to receive('[]').with(:image).and_return(specified)
+
         entry.compose!(deps)
       end
 
       let(:config) { { script: 'ls', cache: { key: 'test' } } }
 
-      it 'uses config from global entry' do
+      it 'uses config from default entry' do
         expect(entry[:image].value).to eq 'specified'
         expect(entry[:cache].value).to eq(key: 'test', policy: 'pull-push')
       end
@@ -189,21 +521,12 @@ describe Gitlab::Ci::Config::Entry::Job do
             .to eq(name: :rspec,
                    before_script: %w[ls pwd],
                    script: %w[rspec],
-                   commands: "ls\npwd\nrspec",
                    stage: 'test',
                    ignore: false,
-                   after_script: %w[cleanup])
+                   after_script: %w[cleanup],
+                   only: { refs: %w[branches tags] },
+                   variables: {})
         end
-      end
-    end
-
-    describe '#commands' do
-      let(:config) do
-        { before_script: %w[ls pwd], script: 'rspec' }
-      end
-
-      it 'returns a string of commands concatenated with new line character' do
-        expect(entry.commands).to eq "ls\npwd\nrspec"
       end
     end
   end
@@ -222,6 +545,24 @@ describe Gitlab::Ci::Config::Entry::Job do
 
       it 'is not a manual action' do
         expect(entry).not_to be_manual_action
+      end
+    end
+  end
+
+  describe '#delayed?' do
+    context 'when job is a delayed' do
+      let(:config) { { script: 'deploy', when: 'delayed' } }
+
+      it 'is a delayed' do
+        expect(entry).to be_delayed
+      end
+    end
+
+    context 'when job is not a delayed' do
+      let(:config) { { script: 'deploy' } }
+
+      it 'is not a delayed' do
+        expect(entry).not_to be_delayed
       end
     end
   end

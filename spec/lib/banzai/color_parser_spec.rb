@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Banzai::ColorParser do
@@ -57,7 +59,7 @@ describe Banzai::ColorParser do
 
     context 'HSL format' do
       [
-        'hsl(0,0%,0%)',  'hsl(0,100%,100%)',
+        'hsl(0,0%,0%)', 'hsl(0,100%,100%)',
         'hsl(540,0%,0%)', 'hsl(-720,0%,0%)',
         'hsl(0deg,0%,0%)', 'hsl(0DEG,0%,0%)',
         'hsl(0, 0%, 0%)', 'HSL(0,0%,0%)',

@@ -1,39 +1,41 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
-feature 'Groups > Members > Filter members' do
+describe 'Groups > Members > Filter members' do
   let(:user)          { create(:user) }
   let(:user_with_2fa) { create(:user, :two_factor_via_otp) }
   let(:group)         { create(:group) }
 
-  background do
+  before do
     group.add_owner(user)
-    group.add_master(user_with_2fa)
+    group.add_maintainer(user_with_2fa)
 
     sign_in(user)
   end
 
-  scenario 'shows all members' do
+  it 'shows all members' do
     visit_members_list
 
     expect(first_member).to include(user.name)
     expect(second_member).to include(user_with_2fa.name)
-    expect(page).to have_css('.member-filter-2fa-dropdown .dropdown-toggle-text', text: '2FA: Everyone')
+    expect(page).to have_css('.member-filter-2fa-dropdown .dropdown-toggle-text', text: 'Everyone')
   end
 
-  scenario 'shows only 2FA members' do
+  it 'shows only 2FA members' do
     visit_members_list(two_factor: 'enabled')
 
     expect(first_member).to include(user_with_2fa.name)
     expect(members_list.size).to eq(1)
-    expect(page).to have_css('.member-filter-2fa-dropdown .dropdown-toggle-text', text: '2FA: Enabled')
+    expect(page).to have_css('.member-filter-2fa-dropdown .dropdown-toggle-text', text: 'Enabled')
   end
 
-  scenario 'shows only non 2FA members' do
+  it 'shows only non 2FA members' do
     visit_members_list(two_factor: 'disabled')
 
     expect(first_member).to include(user.name)
     expect(members_list.size).to eq(1)
-    expect(page).to have_css('.member-filter-2fa-dropdown .dropdown-toggle-text', text: '2FA: Disabled')
+    expect(page).to have_css('.member-filter-2fa-dropdown .dropdown-toggle-text', text: 'Disabled')
   end
 
   def visit_members_list(options = {})

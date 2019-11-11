@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 require 'rake_helper'
 
@@ -96,15 +98,6 @@ describe SystemCheck::SimpleExecutor do
     def check?
       raise CustomError, 'omg'
     end
-  end
-
-  before do
-    @rainbow = Rainbow.enabled
-    Rainbow.enabled = false
-  end
-
-  after do
-    Rainbow.enabled = @rainbow
   end
 
   describe '#component' do

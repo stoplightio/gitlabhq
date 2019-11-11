@@ -1,13 +1,15 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
-feature 'Group variables', :js do
+describe 'Group variables', :js do
   let(:user) { create(:user) }
   let(:group) { create(:group) }
-  let!(:variable) { create(:ci_group_variable, key: 'test_key', value: 'test value', group: group) }
+  let!(:variable) { create(:ci_group_variable, key: 'test_key', value: 'test_value', masked: true, group: group) }
   let(:page_path) { group_settings_ci_cd_path(group) }
 
-  background do
-    group.add_master(user)
+  before do
+    group.add_owner(user)
     gitlab_sign_in(user)
 
     visit page_path

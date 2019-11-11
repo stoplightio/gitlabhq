@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe 'Edit Project Settings' do
@@ -8,7 +10,7 @@ describe 'Edit Project Settings' do
 
   describe 'project features visibility selectors', :js do
     before do
-      project.add_master(member)
+      project.add_maintainer(member)
       sign_in(member)
     end
 
@@ -68,7 +70,8 @@ describe 'Edit Project Settings' do
       end
 
       it "hides builds when disabled" do
-        allow(Ability).to receive(:allowed?).with(member, :read_builds, project).and_return(false)
+        allow(Ability).to receive(:allowed?).and_return(true)
+        allow(Ability).to receive(:allowed?).with(member, :read_build, project).and_return(false)
 
         visit project_pipelines_path(project)
 
@@ -165,7 +168,7 @@ describe 'Edit Project Settings' do
 
   describe 'repository visibility', :js do
     before do
-      project.add_master(member)
+      project.add_maintainer(member)
       sign_in(member)
       visit edit_project_path(project)
     end
@@ -208,14 +211,14 @@ describe 'Edit Project Settings' do
       visit activity_project_path(project)
 
       page.within(".event-filter") do
-        expect(page).to have_selector("a", count: 2)
+        expect(page).to have_content("All")
         expect(page).not_to have_content("Push events")
         expect(page).not_to have_content("Merge events")
         expect(page).not_to have_content("Comments")
       end
     end
 
-    # Regression spec for https://gitlab.com/gitlab-org/gitlab-ce/issues/25272
+    # Regression spec for https://gitlab.com/gitlab-org/gitlab-foss/issues/25272
     it "hides comments activity tab only on disabled issues, merge requests and repository" do
       toggle_feature_off('project[project_feature_attributes][issues_access_level]')
 
@@ -256,7 +259,7 @@ describe 'Edit Project Settings' do
     end
   end
 
-  # Regression spec for https://gitlab.com/gitlab-org/gitlab-ce/issues/24056
+  # Regression spec for https://gitlab.com/gitlab-org/gitlab-foss/issues/24056
   describe 'project statistic visibility' do
     let!(:project) { create(:project, :private) }
 

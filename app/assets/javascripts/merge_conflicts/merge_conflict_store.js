@@ -1,27 +1,28 @@
-/* eslint-disable comma-dangle, object-shorthand, no-param-reassign, camelcase, no-nested-ternary, no-continue, max-len */
+/* eslint-disable no-param-reassign, camelcase, no-nested-ternary, no-continue */
 
 import $ from 'jquery';
 import Vue from 'vue';
 import Cookies from 'js-cookie';
+import { s__ } from '~/locale';
 
-((global) => {
+(global => {
   global.mergeConflicts = global.mergeConflicts || {};
 
   const diffViewType = Cookies.get('diff_view');
-  const HEAD_HEADER_TEXT = 'HEAD//our changes';
-  const ORIGIN_HEADER_TEXT = 'origin//their changes';
-  const HEAD_BUTTON_TITLE = 'Use ours';
-  const ORIGIN_BUTTON_TITLE = 'Use theirs';
+  const HEAD_HEADER_TEXT = s__('MergeConflict|HEAD//our changes');
+  const ORIGIN_HEADER_TEXT = s__('MergeConflict|origin//their changes');
+  const HEAD_BUTTON_TITLE = s__('MergeConflict|Use ours');
+  const ORIGIN_BUTTON_TITLE = s__('MergeConflict|Use theirs');
   const INTERACTIVE_RESOLVE_MODE = 'interactive';
   const EDIT_RESOLVE_MODE = 'edit';
   const DEFAULT_RESOLVE_MODE = INTERACTIVE_RESOLVE_MODE;
   const VIEW_TYPES = {
     INLINE: 'inline',
-    PARALLEL: 'parallel'
+    PARALLEL: 'parallel',
   };
   const CONFLICT_TYPES = {
     TEXT: 'text',
-    TEXT_EDITOR: 'text-editor'
+    TEXT_EDITOR: 'text-editor',
   };
 
   global.mergeConflicts.mergeConflictsStore = {
@@ -30,8 +31,8 @@ import Cookies from 'js-cookie';
       hasError: false,
       isSubmitting: false,
       isParallel: diffViewType === VIEW_TYPES.PARALLEL,
-      diffViewType: diffViewType,
-      conflictsData: {}
+      diffViewType,
+      conflictsData: {},
     },
 
     setConflictsData(data) {
@@ -47,7 +48,7 @@ import Cookies from 'js-cookie';
     },
 
     decorateFiles(files) {
-      files.forEach((file) => {
+      files.forEach(file => {
         file.content = '';
         file.resolutionData = {};
         file.promptDiscardConfirmation = false;
@@ -72,7 +73,7 @@ import Cookies from 'js-cookie';
     setInlineLine(file) {
       file.inlineLines = [];
 
-      file.sections.forEach((section) => {
+      file.sections.forEach(section => {
         let currentLineType = 'new';
         const { conflict, lines, id } = section;
 
@@ -80,7 +81,7 @@ import Cookies from 'js-cookie';
           file.inlineLines.push(this.getHeadHeaderLine(id));
         }
 
-        lines.forEach((line) => {
+        lines.forEach(line => {
           const { type } = line;
 
           if ((type === 'new' || type === 'old') && currentLineType !== type) {
@@ -102,7 +103,7 @@ import Cookies from 'js-cookie';
       file.parallelLines = [];
       const linesObj = { left: [], right: [] };
 
-      file.sections.forEach((section) => {
+      file.sections.forEach(section => {
         const { conflict, lines, id } = section;
 
         if (conflict) {
@@ -110,7 +111,7 @@ import Cookies from 'js-cookie';
           linesObj.right.push(this.getHeadHeaderLine(id));
         }
 
-        lines.forEach((line) => {
+        lines.forEach(line => {
           const { type } = line;
 
           if (conflict) {
@@ -131,10 +132,7 @@ import Cookies from 'js-cookie';
       });
 
       for (let i = 0, len = linesObj.left.length; i < len; i += 1) {
-        file.parallelLines.push([
-          linesObj.right[i],
-          linesObj.left[i]
-        ]);
+        file.parallelLines.push([linesObj.right[i], linesObj.left[i]]);
       }
     },
 
@@ -156,12 +154,12 @@ import Cookies from 'js-cookie';
         return 0;
       }
 
-      const files = this.state.conflictsData.files;
+      const { files } = this.state.conflictsData;
       let count = 0;
 
-      files.forEach((file) => {
+      files.forEach(file => {
         if (file.type === CONFLICT_TYPES.TEXT) {
-          file.sections.forEach((section) => {
+          file.sections.forEach(section => {
             if (section.conflict) {
               count += 1;
             }
@@ -176,7 +174,7 @@ import Cookies from 'js-cookie';
 
     getConflictsCountText() {
       const count = this.getConflictsCount();
-      const text = count > 1 ? 'conflicts' : 'conflict';
+      const text = count > 1 ? s__('MergeConflict|conflicts') : s__('MergeConflict|conflict');
 
       return `${count} ${text}`;
     },
@@ -190,7 +188,7 @@ import Cookies from 'js-cookie';
 
     getHeadHeaderLine(id) {
       return {
-        id: id,
+        id,
         richText: HEAD_HEADER_TEXT,
         buttonTitle: HEAD_BUTTON_TITLE,
         type: 'new',
@@ -198,7 +196,7 @@ import Cookies from 'js-cookie';
         isHeader: true,
         isHead: true,
         isSelected: false,
-        isUnselected: false
+        isUnselected: false,
       };
     },
 
@@ -229,13 +227,13 @@ import Cookies from 'js-cookie';
         section: isHead ? 'head' : 'origin',
         richText: rich_text,
         isSelected: false,
-        isUnselected: false
+        isUnselected: false,
       };
     },
 
     getOriginHeaderLine(id) {
       return {
-        id: id,
+        id,
         richText: ORIGIN_HEADER_TEXT,
         buttonTitle: ORIGIN_BUTTON_TITLE,
         type: 'old',
@@ -243,7 +241,7 @@ import Cookies from 'js-cookie';
         isHeader: true,
         isOrigin: true,
         isSelected: false,
-        isUnselected: false
+        isUnselected: false,
       };
     },
 
@@ -290,14 +288,14 @@ import Cookies from 'js-cookie';
     },
 
     restoreFileLinesState(file) {
-      file.inlineLines.forEach((line) => {
+      file.inlineLines.forEach(line => {
         if (line.hasConflict || line.isHeader) {
           line.isSelected = false;
           line.isUnselected = false;
         }
       });
 
-      file.parallelLines.forEach((lines) => {
+      file.parallelLines.forEach(lines => {
         const left = lines[0];
         const right = lines[1];
         const isLeftMatch = left.hasConflict || left.isHeader;
@@ -313,7 +311,7 @@ import Cookies from 'js-cookie';
     },
 
     isReadyToCommit() {
-      const files = this.state.conflictsData.files;
+      const { files } = this.state.conflictsData;
       const hasCommitMessage = $.trim(this.state.conflictsData.commitMessage).length;
       let unresolved = 0;
 
@@ -351,10 +349,10 @@ import Cookies from 'js-cookie';
     },
 
     getCommitButtonText() {
-      const initial = 'Commit to source branch';
-      const inProgress = 'Committing...';
+      const initial = s__('MergeConflict|Commit to source branch');
+      const inProgress = s__('MergeConflict|Committing...');
 
-      return this.state ? this.state.isSubmitting ? inProgress : initial : initial;
+      return this.state ? (this.state.isSubmitting ? inProgress : initial) : initial;
     },
 
     getCommitData() {
@@ -362,13 +360,13 @@ import Cookies from 'js-cookie';
 
       commitData = {
         commit_message: this.state.conflictsData.commitMessage,
-        files: []
+        files: [],
       };
 
-      this.state.conflictsData.files.forEach((file) => {
+      this.state.conflictsData.files.forEach(file => {
         const addFile = {
           old_path: file.old_path,
-          new_path: file.new_path
+          new_path: file.new_path,
         };
 
         if (file.type === CONFLICT_TYPES.TEXT) {
@@ -391,13 +389,13 @@ import Cookies from 'js-cookie';
     handleSelected(file, sectionId, selection) {
       Vue.set(file.resolutionData, sectionId, selection);
 
-      file.inlineLines.forEach((line) => {
+      file.inlineLines.forEach(line => {
         if (line.id === sectionId && (line.hasConflict || line.isHeader)) {
           this.markLine(line, selection);
         }
       });
 
-      file.parallelLines.forEach((lines) => {
+      file.parallelLines.forEach(lines => {
         const left = lines[0];
         const right = lines[1];
         const hasSameId = right.id === sectionId || left.id === sectionId;
@@ -430,6 +428,6 @@ import Cookies from 'js-cookie';
 
     fileTextTypePresent() {
       return this.state.conflictsData.files.some(f => f.type === CONFLICT_TYPES.TEXT);
-    }
+    },
   };
 })(window.gl || (window.gl = {}));

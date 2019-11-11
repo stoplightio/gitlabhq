@@ -1,6 +1,8 @@
-require 'rails_helper'
+# frozen_string_literal: true
 
-feature 'Issues > Labels bulk assignment' do
+require 'spec_helper'
+
+describe 'Issues > Labels bulk assignment' do
   let(:user)      { create(:user) }
   let!(:project)  { create(:project) }
   let!(:issue1)   { create(:issue, project: project, title: "Issue 1") }
@@ -11,7 +13,7 @@ feature 'Issues > Labels bulk assignment' do
 
   context 'as an allowed user', :js do
     before do
-      project.add_master(user)
+      project.add_maintainer(user)
 
       sign_in user
     end
@@ -304,7 +306,7 @@ feature 'Issues > Labels bulk assignment' do
       end
     end
 
-    # Special case https://gitlab.com/gitlab-org/gitlab-ce/issues/24877
+    # Special case https://gitlab.com/gitlab-org/gitlab-foss/issues/24877
     context 'unmarking common label' do
       before do
         issue1.labels << bug
@@ -381,7 +383,7 @@ feature 'Issues > Labels bulk assignment' do
       if unmark
         items.map do |item|
           # Make sure we are unmarking the item no matter the state it has currently
-          click_link item until find('a', text: item)[:class] == 'label-item'
+          click_link item until find('a', text: item)[:class].include? 'label-item'
         end
       end
     end

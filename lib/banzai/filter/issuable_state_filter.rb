@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Banzai
   module Filter
     # HTML filter that appends state information to issuable links.
@@ -16,10 +18,11 @@ module Banzai
         issuables = extractor.extract([doc])
 
         issuables.each do |node, issuable|
-          next if !can_read_cross_project? && issuable.project != project
+          next if !can_read_cross_project? && cross_reference?(issuable)
 
           if VISIBLE_STATES.include?(issuable.state) && issuable_reference?(node.inner_html, issuable)
-            node.content += " (#{issuable.state})"
+            state = moved_issue?(issuable) ? s_("IssuableStatus|moved") : issuable.state
+            node.content += " (#{state})"
           end
         end
 
@@ -28,8 +31,19 @@ module Banzai
 
       private
 
+      def moved_issue?(issuable)
+        issuable.instance_of?(Issue) && issuable.moved?
+      end
+
       def issuable_reference?(text, issuable)
-        text == issuable.reference_link_text(project || group)
+        CGI.unescapeHTML(text) == issuable.reference_link_text(project || group)
+      end
+
+      def cross_reference?(issuable)
+        return true if issuable.project != project
+        return true if issuable.respond_to?(:group) && issuable.group != group
+
+        false
       end
 
       def can_read_cross_project?

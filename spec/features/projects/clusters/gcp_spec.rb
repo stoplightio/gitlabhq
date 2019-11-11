@@ -1,13 +1,15 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
-feature 'Gcp Cluster', :js do
+describe 'Gcp Cluster', :js do
   include GoogleApi::CloudPlatformHelpers
 
   let(:project) { create(:project) }
   let(:user) { create(:user) }
 
   before do
-    project.add_master(user)
+    project.add_maintainer(user)
     gitlab_sign_in(user)
     allow(Projects::ClustersController).to receive(:STATUS_POLLING_INTERVAL) { 100 }
   end
@@ -16,9 +18,11 @@ feature 'Gcp Cluster', :js do
     let(:project_id) { 'test-project-1234' }
 
     before do
-      allow_any_instance_of(Projects::Clusters::GcpController)
+      stub_feature_flags(create_eks_clusters: false)
+
+      allow_any_instance_of(Projects::ClustersController)
         .to receive(:token_in_session).and_return('token')
-      allow_any_instance_of(Projects::Clusters::GcpController)
+      allow_any_instance_of(Projects::ClustersController)
         .to receive(:expires_at_in_session).and_return(1.hour.since.to_i.to_s)
     end
 
@@ -27,7 +31,7 @@ feature 'Gcp Cluster', :js do
         visit project_clusters_path(project)
 
         click_link 'Add Kubernetes cluster'
-        click_link 'Create on Google Kubernetes Engine'
+        click_link 'Create new Cluster on GKE'
       end
 
       context 'when user filled form with valid parameters' do
@@ -88,7 +92,7 @@ feature 'Gcp Cluster', :js do
         end
 
         it 'user sees a validation error' do
-          expect(page).to have_css('#error_explanation')
+          expect(page).to have_css('.gl-field-error')
         end
       end
     end
@@ -145,10 +149,11 @@ feature 'Gcp Cluster', :js do
 
   context 'when user has not signed with Google' do
     before do
+      stub_feature_flags(create_eks_clusters: false)
       visit project_clusters_path(project)
 
       click_link 'Add Kubernetes cluster'
-      click_link 'Create on Google Kubernetes Engine'
+      click_link 'Create new Cluster on GKE'
     end
 
     it 'user sees a login page' do
@@ -157,8 +162,22 @@ feature 'Gcp Cluster', :js do
     end
   end
 
+  context 'when a user cannot edit the environment scope' do
+    before do
+      visit project_clusters_path(project)
+
+      click_link 'Add Kubernetes cluster'
+      click_link 'Add existing cluster'
+    end
+
+    it 'user does not see the "Environment scope" field' do
+      expect(page).not_to have_css('#cluster_environment_scope')
+    end
+  end
+
   context 'when user has not dismissed GCP signup offer' do
     before do
+      stub_feature_flags(create_eks_clusters: false)
       visit project_clusters_path(project)
     end
 
@@ -174,7 +193,7 @@ feature 'Gcp Cluster', :js do
 
     it 'user sees offer on cluster GCP login page' do
       click_link 'Add Kubernetes cluster'
-      click_link 'Create on Google Kubernetes Engine'
+      click_link 'Create new Cluster on GKE'
 
       expect(page).to have_css('.gcp-signup-offer')
     end
@@ -182,6 +201,7 @@ feature 'Gcp Cluster', :js do
 
   context 'when user has dismissed GCP signup offer' do
     before do
+      stub_feature_flags(create_eks_clusters: false)
       visit project_clusters_path(project)
     end
 

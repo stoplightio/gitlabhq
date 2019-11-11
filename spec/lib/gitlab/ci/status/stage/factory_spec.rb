@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Gitlab::Ci::Status::Stage::Factory do
@@ -22,7 +24,7 @@ describe Gitlab::Ci::Status::Stage::Factory do
   end
 
   context 'when stage has a core status' do
-    HasStatus::AVAILABLE_STATUSES.each do |core_status|
+    (HasStatus::AVAILABLE_STATUSES - %w(manual skipped scheduled)).each do |core_status|
       context "when core status is #{core_status}" do
         before do
           create(:ci_build, pipeline: pipeline, stage: 'test', status: core_status)
@@ -32,7 +34,7 @@ describe Gitlab::Ci::Status::Stage::Factory do
 
         it "fabricates a core status #{core_status}" do
           expect(status).to be_a(
-            Gitlab::Ci::Status.const_get(core_status.capitalize))
+            Gitlab::Ci::Status.const_get(core_status.capitalize, false))
         end
 
         it 'extends core status with common stage methods' do
@@ -62,6 +64,22 @@ describe Gitlab::Ci::Status::Stage::Factory do
     it 'extends core status with common stage method' do
       expect(status).to have_details
       expect(status.details_path).to include "pipelines/#{pipeline.id}##{stage.name}"
+    end
+  end
+
+  context 'when stage has manual builds' do
+    (HasStatus::BLOCKED_STATUS + ['skipped']).each do |core_status|
+      context "when status is #{core_status}" do
+        before do
+          create(:ci_build, pipeline: pipeline, stage: 'test', status: core_status)
+          create(:commit_status, pipeline: pipeline, stage: 'test', status: core_status)
+          create(:ci_build, pipeline: pipeline, stage: 'build', status: :manual)
+        end
+
+        it 'fabricates a play manual status' do
+          expect(status).to be_a(Gitlab::Ci::Status::Stage::PlayManual)
+        end
+      end
     end
   end
 end

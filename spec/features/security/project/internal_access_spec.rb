@@ -1,13 +1,20 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
-describe "Internal Project Access"  do
+describe "Internal Project Access" do
   include AccessMatchers
 
   set(:project) { create(:project, :internal, :repository) }
 
+  before do
+    stub_feature_flags(job_log_json: false)
+  end
+
   describe "Project should be internal" do
     describe '#internal?' do
       subject { project.internal? }
+
       it { is_expected.to be_truthy }
     end
   end
@@ -17,7 +24,7 @@ describe "Internal Project Access"  do
 
     it { is_expected.to be_allowed_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
-    it { is_expected.to be_allowed_for(:master).of(project) }
+    it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_allowed_for(:developer).of(project) }
     it { is_expected.to be_allowed_for(:reporter).of(project) }
     it { is_expected.to be_allowed_for(:guest).of(project) }
@@ -31,7 +38,7 @@ describe "Internal Project Access"  do
 
     it { is_expected.to be_allowed_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
-    it { is_expected.to be_allowed_for(:master).of(project) }
+    it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_allowed_for(:developer).of(project) }
     it { is_expected.to be_allowed_for(:reporter).of(project) }
     it { is_expected.to be_allowed_for(:guest).of(project) }
@@ -45,7 +52,7 @@ describe "Internal Project Access"  do
 
     it { is_expected.to be_allowed_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
-    it { is_expected.to be_allowed_for(:master).of(project) }
+    it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_allowed_for(:developer).of(project) }
     it { is_expected.to be_allowed_for(:reporter).of(project) }
     it { is_expected.to be_allowed_for(:guest).of(project) }
@@ -59,7 +66,7 @@ describe "Internal Project Access"  do
 
     it { is_expected.to be_allowed_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
-    it { is_expected.to be_allowed_for(:master).of(project) }
+    it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_allowed_for(:developer).of(project) }
     it { is_expected.to be_allowed_for(:reporter).of(project) }
     it { is_expected.to be_allowed_for(:guest).of(project) }
@@ -73,7 +80,7 @@ describe "Internal Project Access"  do
 
     it { is_expected.to be_allowed_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
-    it { is_expected.to be_allowed_for(:master).of(project) }
+    it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_allowed_for(:developer).of(project) }
     it { is_expected.to be_allowed_for(:reporter).of(project) }
     it { is_expected.to be_allowed_for(:guest).of(project) }
@@ -87,7 +94,7 @@ describe "Internal Project Access"  do
 
     it { is_expected.to be_allowed_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
-    it { is_expected.to be_allowed_for(:master).of(project) }
+    it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_allowed_for(:developer).of(project) }
     it { is_expected.to be_allowed_for(:reporter).of(project) }
     it { is_expected.to be_allowed_for(:guest).of(project) }
@@ -101,7 +108,7 @@ describe "Internal Project Access"  do
 
     it { is_expected.to be_allowed_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
-    it { is_expected.to be_allowed_for(:master).of(project) }
+    it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_denied_for(:developer).of(project) }
     it { is_expected.to be_denied_for(:reporter).of(project) }
     it { is_expected.to be_denied_for(:guest).of(project) }
@@ -115,7 +122,7 @@ describe "Internal Project Access"  do
 
     it { is_expected.to be_allowed_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
-    it { is_expected.to be_allowed_for(:master).of(project) }
+    it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_denied_for(:developer).of(project) }
     it { is_expected.to be_denied_for(:reporter).of(project) }
     it { is_expected.to be_denied_for(:guest).of(project) }
@@ -130,7 +137,7 @@ describe "Internal Project Access"  do
 
     it { is_expected.to be_allowed_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
-    it { is_expected.to be_allowed_for(:master).of(project) }
+    it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_allowed_for(:developer).of(project) }
     it { is_expected.to be_allowed_for(:reporter).of(project) }
     it { is_expected.to be_allowed_for(:guest).of(project) }
@@ -144,7 +151,7 @@ describe "Internal Project Access"  do
 
     it { is_expected.to be_allowed_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
-    it { is_expected.to be_allowed_for(:master).of(project) }
+    it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_denied_for(:developer).of(project) }
     it { is_expected.to be_denied_for(:reporter).of(project) }
     it { is_expected.to be_denied_for(:guest).of(project) }
@@ -158,7 +165,7 @@ describe "Internal Project Access"  do
 
     it { is_expected.to be_allowed_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
-    it { is_expected.to be_allowed_for(:master).of(project) }
+    it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_denied_for(:developer).of(project) }
     it { is_expected.to be_denied_for(:reporter).of(project) }
     it { is_expected.to be_denied_for(:guest).of(project) }
@@ -172,7 +179,7 @@ describe "Internal Project Access"  do
 
     it { is_expected.to be_allowed_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
-    it { is_expected.to be_allowed_for(:master).of(project) }
+    it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_allowed_for(:developer).of(project) }
     it { is_expected.to be_allowed_for(:reporter).of(project) }
     it { is_expected.to be_allowed_for(:guest).of(project) }
@@ -187,7 +194,7 @@ describe "Internal Project Access"  do
 
     it { is_expected.to be_allowed_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
-    it { is_expected.to be_allowed_for(:master).of(project) }
+    it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_allowed_for(:developer).of(project) }
     it { is_expected.to be_allowed_for(:reporter).of(project) }
     it { is_expected.to be_denied_for(:guest).of(project) }
@@ -201,7 +208,7 @@ describe "Internal Project Access"  do
 
     it { is_expected.to be_allowed_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
-    it { is_expected.to be_allowed_for(:master).of(project) }
+    it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_allowed_for(:developer).of(project) }
     it { is_expected.to be_allowed_for(:reporter).of(project) }
     it { is_expected.to be_allowed_for(:guest).of(project) }
@@ -215,7 +222,7 @@ describe "Internal Project Access"  do
 
     it { is_expected.to be_allowed_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
-    it { is_expected.to be_allowed_for(:master).of(project) }
+    it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_allowed_for(:developer).of(project) }
     it { is_expected.to be_allowed_for(:reporter).of(project) }
     it { is_expected.to be_denied_for(:guest).of(project) }
@@ -229,7 +236,7 @@ describe "Internal Project Access"  do
 
     it { is_expected.to be_allowed_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
-    it { is_expected.to be_allowed_for(:master).of(project) }
+    it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_allowed_for(:developer).of(project) }
     it { is_expected.to be_allowed_for(:reporter).of(project) }
     it { is_expected.to be_allowed_for(:guest).of(project) }
@@ -243,7 +250,7 @@ describe "Internal Project Access"  do
 
     it { is_expected.to be_allowed_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
-    it { is_expected.to be_allowed_for(:master).of(project) }
+    it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_allowed_for(:developer).of(project) }
     it { is_expected.to be_denied_for(:reporter).of(project) }
     it { is_expected.to be_denied_for(:guest).of(project) }
@@ -262,7 +269,7 @@ describe "Internal Project Access"  do
 
     it { is_expected.to be_allowed_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
-    it { is_expected.to be_allowed_for(:master).of(project) }
+    it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_allowed_for(:developer).of(project) }
     it { is_expected.to be_allowed_for(:reporter).of(project) }
     it { is_expected.to be_allowed_for(:guest).of(project) }
@@ -281,7 +288,7 @@ describe "Internal Project Access"  do
 
     it { is_expected.to be_allowed_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
-    it { is_expected.to be_allowed_for(:master).of(project) }
+    it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_allowed_for(:developer).of(project) }
     it { is_expected.to be_allowed_for(:reporter).of(project) }
     it { is_expected.to be_allowed_for(:guest).of(project) }
@@ -295,7 +302,7 @@ describe "Internal Project Access"  do
 
     it { is_expected.to be_allowed_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
-    it { is_expected.to be_allowed_for(:master).of(project) }
+    it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_denied_for(:developer).of(project) }
     it { is_expected.to be_denied_for(:reporter).of(project) }
     it { is_expected.to be_denied_for(:guest).of(project) }
@@ -309,7 +316,7 @@ describe "Internal Project Access"  do
 
     it { is_expected.to be_allowed_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
-    it { is_expected.to be_allowed_for(:master).of(project) }
+    it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_allowed_for(:developer).of(project) }
     it { is_expected.to be_allowed_for(:reporter).of(project) }
     it { is_expected.to be_allowed_for(:guest).of(project) }
@@ -324,7 +331,7 @@ describe "Internal Project Access"  do
 
     it { is_expected.to be_allowed_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
-    it { is_expected.to be_allowed_for(:master).of(project) }
+    it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_allowed_for(:developer).of(project) }
     it { is_expected.to be_allowed_for(:reporter).of(project) }
     it { is_expected.to be_allowed_for(:guest).of(project) }
@@ -343,7 +350,7 @@ describe "Internal Project Access"  do
 
       it { is_expected.to be_allowed_for(:admin) }
       it { is_expected.to be_allowed_for(:owner).of(project) }
-      it { is_expected.to be_allowed_for(:master).of(project) }
+      it { is_expected.to be_allowed_for(:maintainer).of(project) }
       it { is_expected.to be_allowed_for(:developer).of(project) }
       it { is_expected.to be_allowed_for(:reporter).of(project) }
       it { is_expected.to be_allowed_for(:guest).of(project) }
@@ -359,7 +366,7 @@ describe "Internal Project Access"  do
 
       it { is_expected.to be_allowed_for(:admin) }
       it { is_expected.to be_allowed_for(:owner).of(project) }
-      it { is_expected.to be_allowed_for(:master).of(project) }
+      it { is_expected.to be_allowed_for(:maintainer).of(project) }
       it { is_expected.to be_allowed_for(:developer).of(project) }
       it { is_expected.to be_allowed_for(:reporter).of(project) }
       it { is_expected.to be_denied_for(:guest).of(project) }
@@ -381,7 +388,7 @@ describe "Internal Project Access"  do
 
       it { is_expected.to be_allowed_for(:admin) }
       it { is_expected.to be_allowed_for(:owner).of(project) }
-      it { is_expected.to be_allowed_for(:master).of(project) }
+      it { is_expected.to be_allowed_for(:maintainer).of(project) }
       it { is_expected.to be_allowed_for(:developer).of(project) }
       it { is_expected.to be_allowed_for(:reporter).of(project) }
       it { is_expected.to be_allowed_for(:guest).of(project) }
@@ -397,7 +404,7 @@ describe "Internal Project Access"  do
 
       it { is_expected.to be_allowed_for(:admin) }
       it { is_expected.to be_allowed_for(:owner).of(project) }
-      it { is_expected.to be_allowed_for(:master).of(project) }
+      it { is_expected.to be_allowed_for(:maintainer).of(project) }
       it { is_expected.to be_allowed_for(:developer).of(project) }
       it { is_expected.to be_allowed_for(:reporter).of(project) }
       it { is_expected.to be_denied_for(:guest).of(project) }
@@ -419,7 +426,7 @@ describe "Internal Project Access"  do
 
       it { is_expected.to be_allowed_for(:admin) }
       it { is_expected.to be_allowed_for(:owner).of(project) }
-      it { is_expected.to be_allowed_for(:master).of(project) }
+      it { is_expected.to be_allowed_for(:maintainer).of(project) }
       it { is_expected.to be_allowed_for(:developer).of(project) }
       it { is_expected.to be_allowed_for(:reporter).of(project) }
       it { is_expected.to be_allowed_for(:guest).of(project) }
@@ -435,7 +442,7 @@ describe "Internal Project Access"  do
 
       it { is_expected.to be_allowed_for(:admin) }
       it { is_expected.to be_allowed_for(:owner).of(project) }
-      it { is_expected.to be_allowed_for(:master).of(project) }
+      it { is_expected.to be_allowed_for(:maintainer).of(project) }
       it { is_expected.to be_allowed_for(:developer).of(project) }
       it { is_expected.to be_allowed_for(:reporter).of(project) }
       it { is_expected.to be_denied_for(:guest).of(project) }
@@ -450,11 +457,11 @@ describe "Internal Project Access"  do
 
     it { is_expected.to be_allowed_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
-    it { is_expected.to be_allowed_for(:master).of(project) }
+    it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_allowed_for(:developer).of(project) }
-    it { is_expected.to be_allowed_for(:reporter).of(project) }
-    it { is_expected.to be_allowed_for(:guest).of(project) }
-    it { is_expected.to be_allowed_for(:user) }
+    it { is_expected.to be_denied_for(:reporter).of(project) }
+    it { is_expected.to be_denied_for(:guest).of(project) }
+    it { is_expected.to be_denied_for(:user) }
     it { is_expected.to be_denied_for(:external) }
     it { is_expected.to be_denied_for(:visitor) }
   end
@@ -464,7 +471,7 @@ describe "Internal Project Access"  do
 
     it { is_expected.to be_allowed_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
-    it { is_expected.to be_allowed_for(:master).of(project) }
+    it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_allowed_for(:developer).of(project) }
     it { is_expected.to be_allowed_for(:reporter).of(project) }
     it { is_expected.to be_denied_for(:guest).of(project) }
@@ -479,7 +486,7 @@ describe "Internal Project Access"  do
 
     it { is_expected.to be_allowed_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
-    it { is_expected.to be_allowed_for(:master).of(project) }
+    it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_allowed_for(:developer).of(project) }
     it { is_expected.to be_allowed_for(:reporter).of(project) }
     it { is_expected.to be_denied_for(:guest).of(project) }
@@ -494,7 +501,7 @@ describe "Internal Project Access"  do
 
     it { is_expected.to be_allowed_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
-    it { is_expected.to be_allowed_for(:master).of(project) }
+    it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_allowed_for(:developer).of(project) }
     it { is_expected.to be_allowed_for(:reporter).of(project) }
     it { is_expected.to be_denied_for(:guest).of(project) }
@@ -508,7 +515,7 @@ describe "Internal Project Access"  do
 
     it { is_expected.to be_allowed_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
-    it { is_expected.to be_allowed_for(:master).of(project) }
+    it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_allowed_for(:developer).of(project) }
     it { is_expected.to be_denied_for(:reporter).of(project) }
     it { is_expected.to be_denied_for(:guest).of(project) }
@@ -530,7 +537,7 @@ describe "Internal Project Access"  do
 
     it { is_expected.to be_allowed_for(:admin) }
     it { is_expected.to be_allowed_for(:owner).of(project) }
-    it { is_expected.to be_allowed_for(:master).of(project) }
+    it { is_expected.to be_allowed_for(:maintainer).of(project) }
     it { is_expected.to be_allowed_for(:developer).of(project) }
     it { is_expected.to be_allowed_for(:reporter).of(project) }
     it { is_expected.to be_allowed_for(:guest).of(project) }

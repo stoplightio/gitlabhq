@@ -1,67 +1,70 @@
 <script>
-  import pdfjsLib from 'vendor/pdf';
-  import workerSrc from 'vendor/pdf.worker.min';
+import pdfjsLib from 'pdfjs-dist/build/pdf';
+import workerSrc from 'pdfjs-dist/build/pdf.worker.min';
 
-  import page from './page/index.vue';
+import page from './page/index.vue';
 
-  export default {
-    components: { page },
-    props: {
-      pdf: {
-        type: [String, Uint8Array],
-        required: true,
-      },
+export default {
+  components: { page },
+  props: {
+    pdf: {
+      type: [String, Uint8Array],
+      required: true,
     },
-    data() {
-      return {
-        loading: false,
-        pages: [],
-      };
+  },
+  data() {
+    return {
+      pages: [],
+    };
+  },
+  computed: {
+    document() {
+      return typeof this.pdf === 'string' ? this.pdf : { data: this.pdf };
     },
-    computed: {
-      document() {
-        return typeof this.pdf === 'string' ? this.pdf : { data: this.pdf };
-      },
-      hasPDF() {
-        return this.pdf && this.pdf.length > 0;
-      },
+    hasPDF() {
+      return this.pdf && this.pdf.length > 0;
     },
-    watch: { pdf: 'load' },
-    mounted() {
-      pdfjsLib.PDFJS.workerSrc = workerSrc;
-      if (this.hasPDF) this.load();
+  },
+  watch: { pdf: 'load' },
+  mounted() {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
+    if (this.hasPDF) this.load();
+  },
+  methods: {
+    load() {
+      this.pages = [];
+      return pdfjsLib
+        .getDocument({
+          url: this.document,
+          cMapUrl: '/assets/webpack/cmaps/',
+          cMapPacked: true,
+        })
+        .promise.then(this.renderPages)
+        .then(pages => {
+          this.pages = pages;
+          this.$emit('pdflabload');
+        })
+        .catch(error => {
+          this.$emit('pdflaberror', error);
+        });
     },
-    methods: {
-      load() {
-        this.pages = [];
-        return pdfjsLib.getDocument(this.document)
-          .then(this.renderPages)
-          .then(() => this.$emit('pdflabload'))
-          .catch(error => this.$emit('pdflaberror', error))
-          .then(() => { this.loading = false; });
-      },
-      renderPages(pdf) {
-        const pagePromises = [];
-        this.loading = true;
-        for (let num = 1; num <= pdf.numPages; num += 1) {
-          pagePromises.push(
-            pdf.getPage(num).then(p => this.pages.push(p)),
-          );
-        }
-        return Promise.all(pagePromises);
-      },
+    renderPages(pdf) {
+      const pagePromises = [];
+      for (let num = 1; num <= pdf.numPages; num += 1) {
+        pagePromises.push(pdf.getPage(num));
+      }
+      return Promise.all(pagePromises);
     },
-  };
+  },
+};
 </script>
 
 <template>
-  <div
-    class="pdf-viewer"
-    v-if="hasPDF">
+  <div v-if="hasPDF" class="pdf-viewer">
     <page
       v-for="(page, index) in pages"
+      v-if="page"
       :key="index"
-      :v-if="!loading"
       :page="page"
       :number="index + 1"
     />
@@ -69,9 +72,9 @@
 </template>
 
 <style>
-  .pdf-viewer {
-    background: url('./assets/img/bg.gif');
-    display: flex;
-    flex-flow: column nowrap;
-  }
+.pdf-viewer {
+  background: url('./assets/img/bg.gif');
+  display: flex;
+  flex-flow: column nowrap;
+}
 </style>

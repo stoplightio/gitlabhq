@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module ProtectedBranches
   class UpdateService < BaseService
     def execute(protected_branch)
@@ -8,3 +10,5 @@ module ProtectedBranches
     end
   end
 end
+
+ProtectedBranches::UpdateService.prepend_if_ee('EE::ProtectedBranches::UpdateService')

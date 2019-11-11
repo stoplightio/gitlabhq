@@ -1,11 +1,11 @@
 import $ from 'jquery';
 import BlobFileDropzone from '~/blob/blob_file_dropzone';
 
-describe('BlobFileDropzone', function () {
-  preloadFixtures('blob/show.html.raw');
+describe('BlobFileDropzone', function() {
+  preloadFixtures('blob/show.html');
 
   beforeEach(() => {
-    loadFixtures('blob/show.html.raw');
+    loadFixtures('blob/show.html');
     const form = $('.js-upload-blob-form');
     this.blobFileDropzone = new BlobFileDropzone(form, 'POST');
     this.dropzone = $('.js-upload-blob-form .dropzone').get(0).dropzone;
@@ -24,10 +24,7 @@ describe('BlobFileDropzone', function () {
     it('is disabled while uploading', () => {
       spyOn(window, 'alert');
 
-      const file = {
-        name: 'some-file.jpg',
-        type: 'jpg',
-      };
+      const file = new File([], 'some-file.jpg');
       const fakeEvent = $.Event('drop', {
         dataTransfer: { files: [file] },
       });

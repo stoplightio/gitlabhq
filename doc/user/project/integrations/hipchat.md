@@ -18,12 +18,12 @@ allow GitLab to send messages only to *one* room.
 
 ### Complete these steps in HipChat
 
-1. Go to: https://admin.hipchat.com/admin
+1. Go to: `https://admin.hipchat.com/admin`
 1. Click on "Group Admin" -> "Integrations".
 1. Find "Build Your Own!" and click "Create".
 1. Select the desired room, name the integration "GitLab", and click "Create".
 1. In the "Send messages to this room by posting this URL" column, you should
-see a URL in the format:
+   see a URL in the format:
 
 ```
 https://api.hipchat.com/v2/room/<room>/notification?auth_token=<token>

@@ -1,6 +1,8 @@
+# frozen_string_literal: true
+
 FactoryBot.define do
   factory :user_callout do
-    feature_name :gke_cluster_integration
+    feature_name { :gke_cluster_integration }
 
     user
   end

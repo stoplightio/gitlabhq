@@ -14,7 +14,12 @@ export default {
   },
   computed: {
     labelsList() {
-      const labelsString = this.labels.slice(0, 5).map(label => label.title).join(', ');
+      const labelsString = this.labels.length
+        ? this.labels
+            .slice(0, 5)
+            .map(label => label.title)
+            .join(', ')
+        : s__('LabelSelect|Labels');
 
       if (this.labels.length > 5) {
         return sprintf(s__('LabelSelect|%{labelsString}, and %{remainingLabelCount} more'), {
@@ -37,18 +42,14 @@ export default {
 <template>
   <div
     v-tooltip
+    :title="labelsList"
     class="sidebar-collapsed-icon"
     data-placement="left"
     data-container="body"
-    :title="labelsList"
+    data-boundary="viewport"
     @click="handleClick"
   >
-    <i
-      aria-hidden="true"
-      data-hidden="true"
-      class="fa fa-tags"
-    >
-    </i>
+    <i aria-hidden="true" data-hidden="true" class="fa fa-tags"> </i>
     <span>{{ labels.length }}</span>
   </div>
 </template>

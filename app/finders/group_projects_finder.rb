@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # GroupProjectsFinder
 #
 # Used to filter Projects  by set of params
@@ -21,8 +23,12 @@ class GroupProjectsFinder < ProjectsFinder
   attr_reader :group, :options
 
   def initialize(group:, params: {}, options: {}, current_user: nil, project_ids_relation: nil)
-    super(params: params, current_user: current_user, project_ids_relation: project_ids_relation)
-    @group   = group
+    super(
+      params: params,
+      current_user: current_user,
+      project_ids_relation: project_ids_relation
+    )
+    @group = group
     @options = options
   end
 
@@ -84,7 +90,7 @@ class GroupProjectsFinder < ProjectsFinder
 
   def owned_projects
     if include_subgroups?
-      Project.where(namespace_id: group.self_and_descendants.select(:id))
+      Project.for_group_and_its_subgroups(group)
     else
       group.projects
     end
@@ -94,3 +100,5 @@ class GroupProjectsFinder < ProjectsFinder
     group.shared_projects
   end
 end
+
+GroupProjectsFinder.prepend_if_ee('EE::GroupProjectsFinder')
