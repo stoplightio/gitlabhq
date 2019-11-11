@@ -1,11 +1,13 @@
 require 'rails_helper'
 
-feature 'Profile > Active Sessions', :clean_gitlab_redis_shared_state do
+describe 'Profile > Active Sessions', :clean_gitlab_redis_shared_state do
   let(:user) do
     create(:user).tap do |user|
       user.current_sign_in_at = Time.current
     end
   end
+
+  let(:admin) { create(:admin) }
 
   around do |example|
     Timecop.freeze(Time.zone.parse('2018-03-12 09:06')) do
@@ -13,9 +15,10 @@ feature 'Profile > Active Sessions', :clean_gitlab_redis_shared_state do
     end
   end
 
-  scenario 'User sees their active sessions' do
+  it 'User sees their active sessions' do
     Capybara::Session.new(:session1)
     Capybara::Session.new(:session2)
+    Capybara::Session.new(:session3)
 
     # note: headers can only be set on the non-js (aka. rack-test) driver
     using_session :session1 do
@@ -37,8 +40,26 @@ feature 'Profile > Active Sessions', :clean_gitlab_redis_shared_state do
       gitlab_sign_in(user)
     end
 
+    # set an admin session impersonating the user
+    using_session :session3 do
+      Capybara.page.driver.header(
+        'User-Agent',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.113 Safari/537.36'
+      )
+
+      gitlab_sign_in(admin)
+
+      visit admin_user_path(user)
+
+      click_link 'Impersonate'
+    end
+
     using_session :session1 do
       visit profile_active_sessions_path
+
+      expect(page).to(
+        have_selector('ul.list-group li.list-group-item', { text: 'Signed in on',
+                                                            count: 2 }))
 
       expect(page).to have_content(
         '127.0.0.1 ' \
@@ -57,33 +78,8 @@ feature 'Profile > Active Sessions', :clean_gitlab_redis_shared_state do
       )
 
       expect(page).to have_selector '[title="Smartphone"]', count: 1
-    end
-  end
 
-  scenario 'User can revoke a session', :js, :redis_session_store do
-    Capybara::Session.new(:session1)
-    Capybara::Session.new(:session2)
-
-    # set an additional session in another browser
-    using_session :session2 do
-      gitlab_sign_in(user)
-    end
-
-    using_session :session1 do
-      gitlab_sign_in(user)
-      visit profile_active_sessions_path
-
-      expect(page).to have_link('Revoke', count: 1)
-
-      accept_confirm { click_on 'Revoke' }
-
-      expect(page).not_to have_link('Revoke')
-    end
-
-    using_session :session2 do
-      visit profile_active_sessions_path
-
-      expect(page).to have_content('You need to sign in or sign up before continuing.')
+      expect(page).not_to have_content('Chrome on Windows')
     end
   end
 end

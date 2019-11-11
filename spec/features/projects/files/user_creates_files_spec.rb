@@ -12,11 +12,13 @@ describe 'Projects > Files > User creates files' do
   let(:user) { create(:user) }
 
   before do
-    project.add_master(user)
+    stub_feature_flags(web_ide_default: false)
+
+    project.add_maintainer(user)
     sign_in(user)
   end
 
-  context 'without commiting a new file' do
+  context 'without committing a new file' do
     context 'when an user has write access' do
       before do
         visit(project_tree_path_root_ref)
@@ -49,7 +51,7 @@ describe 'Projects > Files > User creates files' do
     end
   end
 
-  context 'with commiting a new file' do
+  context 'with committing a new file' do
     context 'when an user has write access' do
       before do
         visit(project_tree_path_root_ref)

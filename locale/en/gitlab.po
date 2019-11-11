@@ -52,9 +52,6 @@ msgid_plural "%d pipelines"
 msgstr[0] ""
 msgstr[1] ""
 
-msgid "A collection of graphs regarding Continuous Integration"
-msgstr ""
-
 msgid "About auto deploy"
 msgstr ""
 
@@ -880,9 +877,6 @@ msgid "Set a password on your account to pull or push via %{protocol}."
 msgstr ""
 
 msgid "Set up CI"
-msgstr ""
-
-msgid "Set up Koding"
 msgstr ""
 
 msgid "Set up auto deploy"

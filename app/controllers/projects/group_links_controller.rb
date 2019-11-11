@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Projects::GroupLinksController < Projects::ApplicationController
   layout 'project_settings'
   before_action :authorize_admin_project!
@@ -11,11 +13,12 @@ class Projects::GroupLinksController < Projects::ApplicationController
     group = Group.find(params[:link_group_id]) if params[:link_group_id].present?
 
     if group
-      return render_404 unless can?(current_user, :read_group, group)
+      result = Projects::GroupLinks::CreateService.new(project, current_user, group_link_create_params).execute(group)
+      return render_404 if result[:http_status] == 404
 
-      Projects::GroupLinks::CreateService.new(project, current_user, group_link_create_params).execute(group)
+      flash[:alert] = result[:message] if result[:http_status] == 409
     else
-      flash[:alert] = 'Please select a group.'
+      flash[:alert] = _('Please select a group.')
     end
 
     redirect_to project_project_members_path(project)
@@ -24,7 +27,7 @@ class Projects::GroupLinksController < Projects::ApplicationController
   def update
     @group_link = @project.project_group_links.find(params[:id])
 
-    @group_link.update_attributes(group_link_params)
+    @group_link.update(group_link_params)
   end
 
   def destroy
@@ -34,7 +37,7 @@ class Projects::GroupLinksController < Projects::ApplicationController
 
     respond_to do |format|
       format.html do
-        redirect_to project_project_members_path(project), status: 302
+        redirect_to project_project_members_path(project), status: :found
       end
       format.js { head :ok }
     end

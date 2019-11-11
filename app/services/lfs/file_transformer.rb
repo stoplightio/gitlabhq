@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Lfs
   # Usage: Calling `new_file` check to see if a file should be in LFS and
   #        return a transformed result with `content` and `encoding` to commit.
@@ -22,7 +24,7 @@ module Lfs
 
     def new_file(file_path, file_content, encoding: nil)
       if project.lfs_enabled? && lfs_file?(file_path)
-        file_content = Base64.decode64(file_content) if encoding == 'base64'
+        file_content = parse_file_content(file_content, encoding: encoding)
         lfs_pointer_file = Gitlab::Git::LfsPointerFile.new(file_content)
         lfs_object = create_lfs_object!(lfs_pointer_file, file_content)
 
@@ -53,14 +55,23 @@ module Lfs
       @cached_attributes ||= Gitlab::Git::AttributesAtRefParser.new(repository, branch_name)
     end
 
+    # rubocop: disable CodeReuse/ActiveRecord
     def create_lfs_object!(lfs_pointer_file, file_content)
       LfsObject.find_or_create_by(oid: lfs_pointer_file.sha256, size: lfs_pointer_file.size) do |lfs_object|
         lfs_object.file = CarrierWaveStringFile.new(file_content)
       end
     end
+    # rubocop: enable CodeReuse/ActiveRecord
 
     def link_lfs_object!(lfs_object)
       project.lfs_objects << lfs_object
+    end
+
+    def parse_file_content(file_content, encoding: nil)
+      return file_content.read if file_content.respond_to?(:read)
+      return Base64.decode64(file_content) if encoding == 'base64'
+
+      file_content
     end
   end
 end

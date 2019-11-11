@@ -1,7 +1,8 @@
-/* eslint-disable func-names, space-before-function-paren, no-var, prefer-rest-params, wrap-iife, quotes, no-underscore-dangle, one-var, one-var-declaration-per-line, consistent-return, dot-notation, quote-props, comma-dangle, object-shorthand, max-len, prefer-arrow-callback */
+/* eslint-disable func-names, no-var, no-underscore-dangle, one-var, consistent-return, prefer-arrow-callback */
 
 import $ from 'jquery';
 import { __ } from '~/locale';
+import createFlash from '~/flash';
 import TaskList from './task_list';
 import MergeRequestTabs from './merge_request_tabs';
 import IssuablesHelper from './helpers/issuables_helper';
@@ -16,26 +17,37 @@ function MergeRequest(opts) {
   this.opts = opts != null ? opts : {};
   this.submitNoteForm = this.submitNoteForm.bind(this);
   this.$el = $('.merge-request');
-  this.$('.show-all-commits').on('click', (function(_this) {
-    return function() {
-      return _this.showAllCommits();
-    };
-  })(this));
+  this.$('.show-all-commits').on(
+    'click',
+    (function(_this) {
+      return function() {
+        return _this.showAllCommits();
+      };
+    })(this),
+  );
 
   this.initTabs();
   this.initMRBtnListeners();
   this.initCommitMessageListeners();
   this.closeReopenReportToggle = IssuablesHelper.initCloseReopenReport();
 
-  if ($("a.btn-close").length) {
+  if ($('a.btn-close').length) {
     this.taskList = new TaskList({
       dataType: 'merge_request',
       fieldName: 'description',
       selector: '.detail-page-description',
-      onSuccess: (result) => {
+      lockVersion: this.$el.data('lockVersion'),
+      onSuccess: result => {
         document.querySelector('#task_status').innerText = result.task_status;
         document.querySelector('#task_status_short').innerText = result.task_status_short;
-      }
+      },
+      onError: () => {
+        createFlash(
+          __(
+            'Someone edited this merge request at the same time you did. Please refresh the page to see changes.',
+          ),
+        );
+      },
     });
   }
 }
@@ -49,6 +61,7 @@ MergeRequest.prototype.initTabs = function() {
   if (window.mrTabs) {
     window.mrTabs.unbindEvents();
   }
+
   window.mrTabs = new MergeRequestTabs(this.opts);
 };
 
@@ -83,7 +96,7 @@ MergeRequest.prototype.initMRBtnListeners = function() {
 
 MergeRequest.prototype.submitNoteForm = function(form, $button) {
   var noteText;
-  noteText = form.find("textarea.js-note-text").val();
+  noteText = form.find('textarea.js-note-text').val();
   if (noteText.trim().length > 0) {
     form.submit();
     $button.data('submitted', true);
@@ -121,7 +134,7 @@ MergeRequest.setStatusBoxToMerged = function() {
 
 MergeRequest.decreaseCounter = function(by = 1) {
   const $el = $('.js-merge-counter');
-  const count = Math.max((parseInt($el.text().replace(/[^\d]/, ''), 10) - by), 0);
+  const count = Math.max(parseInt($el.text().replace(/[^\d]/, ''), 10) - by, 0);
 
   $el.text(addDelimiter(count));
 };

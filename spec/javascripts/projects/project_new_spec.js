@@ -4,12 +4,24 @@ import projectNew from '~/projects/project_new';
 describe('New Project', () => {
   let $projectImportUrl;
   let $projectPath;
+  let $projectName;
 
   beforeEach(() => {
     setFixtures(`
       <div class='toggle-import-form'>
         <div class='import-url-data'>
-          <input id="project_import_url" />
+          <div class="form-group">
+            <input id="project_import_url" />
+          </div>
+          <div id="import-url-auth-method">
+            <div class="form-group">
+              <input id="project-import-url-user" />
+            </div>
+            <div class="form-group">
+              <input id="project_import_url_password" />
+            </div>
+          </div>
+          <input id="project_name" />
           <input id="project_path" />
         </div>
       </div>
@@ -17,6 +29,7 @@ describe('New Project', () => {
 
     $projectImportUrl = $('#project_import_url');
     $projectPath = $('#project_path');
+    $projectName = $('#project_name');
   });
 
   describe('deriveProjectPathFromUrl', () => {
@@ -24,7 +37,10 @@ describe('New Project', () => {
 
     beforeEach(() => {
       projectNew.bindEvents();
-      $projectPath.val('').keyup().val(dummyImportUrl);
+      $projectPath
+        .val('')
+        .keyup()
+        .val(dummyImportUrl);
     });
 
     it('does not change project path for disabled $projectImportUrl', () => {
@@ -113,7 +129,7 @@ describe('New Project', () => {
       });
 
       it('changes project path for HTTPS URL in $projectImportUrl', () => {
-        $projectImportUrl.val('https://username:password@gitlab.company.com/group/project.git');
+        $projectImportUrl.val('https://gitlab.company.com/group/project.git');
 
         projectNew.deriveProjectPathFromUrl($projectImportUrl);
 
@@ -127,6 +143,33 @@ describe('New Project', () => {
 
         expect($projectPath.val()).toEqual('gitlab-ce');
       });
+    });
+  });
+
+  describe('deriveSlugFromProjectName', () => {
+    beforeEach(() => {
+      projectNew.bindEvents();
+      $projectName.val('').keyup();
+    });
+
+    it('converts project name to lower case and dash-limited slug', () => {
+      const dummyProjectName = 'My Awesome Project';
+
+      $projectName.val(dummyProjectName);
+
+      projectNew.onProjectNameChange($projectName, $projectPath);
+
+      expect($projectPath.val()).toEqual('my-awesome-project');
+    });
+
+    it('does not add additional dashes in the slug if the project name already contains dashes', () => {
+      const dummyProjectName = 'My-Dash-Delimited Awesome Project';
+
+      $projectName.val(dummyProjectName);
+
+      projectNew.onProjectNameChange($projectName, $projectPath);
+
+      expect($projectPath.val()).toEqual('my-dash-delimited-awesome-project');
     });
   });
 });

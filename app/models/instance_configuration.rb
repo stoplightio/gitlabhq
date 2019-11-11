@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'resolv'
 
 class InstanceConfiguration
@@ -37,7 +39,7 @@ class InstanceConfiguration
   def gitlab_ci
     Settings.gitlab_ci
             .to_h
-            .merge(artifacts_max_size: { value: Settings.artifacts.max_size&.megabytes,
+            .merge(artifacts_max_size: { value: Gitlab::CurrentSettings.max_artifacts_size.megabytes,
                                          default: 100.megabytes })
   end
 
@@ -62,10 +64,10 @@ class InstanceConfiguration
   end
 
   def ssh_algorithm_md5(ssh_file_content)
-    OpenSSL::Digest::MD5.hexdigest(ssh_file_content).scan(/../).join(':')
+    Gitlab::SSHPublicKey.new(ssh_file_content).fingerprint
   end
 
   def ssh_algorithm_sha256(ssh_file_content)
-    OpenSSL::Digest::SHA256.hexdigest(ssh_file_content)
+    Gitlab::SSHPublicKey.new(ssh_file_content).fingerprint('SHA256')
   end
 end

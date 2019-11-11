@@ -1,9 +1,17 @@
+# frozen_string_literal: true
+
 module API
   class Wikis < Grape::API
     helpers do
-      params :wiki_page_params do
-        requires :content, type: String, desc: 'Content of a wiki page'
-        requires :title, type: String, desc: 'Title of a wiki page'
+      def commit_params(attrs)
+        {
+          file_name: attrs[:file][:filename],
+          file_content: attrs[:file][:tempfile].read,
+          branch_name: attrs[:branch]
+        }
+      end
+
+      params :common_wiki_page_params do
         optional :format,
           type: String,
           values: ProjectWiki::MARKUPS.values.map(&:to_s),
@@ -12,7 +20,9 @@ module API
       end
     end
 
-    resource :projects, requirements: API::PROJECT_ENDPOINT_REQUIREMENTS do
+    WIKI_ENDPOINT_REQUIREMENTS = API::NAMESPACE_OR_PROJECT_REQUIREMENTS.merge(slug: API::NO_SLASH_URL_PART_REGEX)
+
+    resource :projects, requirements: WIKI_ENDPOINT_REQUIREMENTS do
       desc 'Get a list of wiki pages' do
         success Entities::WikiPageBasic
       end
@@ -23,7 +33,8 @@ module API
         authorize! :read_wiki, user_project
 
         entity = params[:with_content] ? Entities::WikiPage : Entities::WikiPageBasic
-        present user_project.wiki.pages, with: entity
+
+        present user_project.wiki.list_pages(load_content: params[:with_content]), with: entity
       end
 
       desc 'Get a wiki page' do
@@ -42,7 +53,9 @@ module API
         success Entities::WikiPage
       end
       params do
-        use :wiki_page_params
+        requires :title, type: String, desc: 'Title of a wiki page'
+        requires :content, type: String, desc: 'Content of a wiki page'
+        use :common_wiki_page_params
       end
       post ':id/wikis' do
         authorize! :create_wiki, user_project
@@ -60,7 +73,10 @@ module API
         success Entities::WikiPage
       end
       params do
-        use :wiki_page_params
+        optional :title, type: String, desc: 'Title of a wiki page'
+        optional :content, type: String, desc: 'Content of a wiki page'
+        use :common_wiki_page_params
+        at_least_one_of :content, :title, :format
       end
       put ':id/wikis/:slug' do
         authorize! :create_wiki, user_project
@@ -83,6 +99,29 @@ module API
 
         status 204
         WikiPages::DestroyService.new(user_project, current_user).execute(wiki_page)
+      end
+
+      desc 'Upload an attachment to the wiki repository' do
+        detail 'This feature was introduced in GitLab 11.3.'
+        success Entities::WikiAttachment
+      end
+      params do
+        requires :file, type: ::API::Validations::Types::SafeFile, desc: 'The attachment file to be uploaded'
+        optional :branch, type: String, desc: 'The name of the branch'
+      end
+      post ":id/wikis/attachments" do
+        authorize! :create_wiki, user_project
+
+        result = ::Wikis::CreateAttachmentService.new(user_project,
+                                                      current_user,
+                                                      commit_params(declared_params(include_missing: false))).execute
+
+        if result[:status] == :success
+          status(201)
+          present OpenStruct.new(result[:result]), with: Entities::WikiAttachment
+        else
+          render_api_error!(result[:message], 400)
+        end
       end
     end
   end

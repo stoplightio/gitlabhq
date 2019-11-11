@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module Ci
     class Config
@@ -6,14 +8,17 @@ module Gitlab
         # This class represents a global entry - root Entry for entire
         # GitLab CI Configuration file.
         #
-        class Global < Node
-          include Configurable
+        class Global < ::Gitlab::Config::Entry::Node
+          include ::Gitlab::Config::Entry::Configurable
 
           entry :before_script, Entry::Script,
             description: 'Script that will be executed before each job.'
 
           entry :image, Entry::Image,
             description: 'Docker image that will be used to execute jobs.'
+
+          entry :include, Entry::Includes,
+                description: 'List of external YAML files to include.'
 
           entry :services, Entry::Services,
             description: 'Docker images that will be linked to the container.'
@@ -45,14 +50,16 @@ module Gitlab
 
           private
 
+          # rubocop: disable CodeReuse/ActiveRecord
           def compose_jobs!
-            factory = Entry::Factory.new(Entry::Jobs)
+            factory = ::Gitlab::Config::Entry::Factory.new(Entry::Jobs)
               .value(@config.except(*self.class.nodes.keys))
               .with(key: :jobs, parent: self,
                     description: 'Jobs definition for this pipeline')
 
             @entries[:jobs] = factory.create!
           end
+          # rubocop: enable CodeReuse/ActiveRecord
 
           def compose_deprecated_entries!
             ##

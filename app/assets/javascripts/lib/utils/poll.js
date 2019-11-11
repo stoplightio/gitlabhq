@@ -1,4 +1,4 @@
-import httpStatusCodes from './http_status';
+import httpStatusCodes, { successCodes } from './http_status';
 import { normalizeHeaders } from './common_utils';
 
 /**
@@ -38,7 +38,7 @@ import { normalizeHeaders } from './common_utils';
  *  } else {
  *   poll.stop();
  *  }
-* });
+ * });
  *
  * 1. Checks for response and headers before start polling
  * 2. Interval is provided by `Poll-Interval` header.
@@ -51,8 +51,8 @@ export default class Poll {
   constructor(options = {}) {
     this.options = options;
     this.options.data = options.data || {};
-    this.options.notificationCallback = options.notificationCallback ||
-      function notificationCallback() {};
+    this.options.notificationCallback =
+      options.notificationCallback || function notificationCallback() {};
 
     this.intervalHeader = 'POLL-INTERVAL';
     this.timeoutID = null;
@@ -62,7 +62,11 @@ export default class Poll {
   checkConditions(response) {
     const headers = normalizeHeaders(response.headers);
     const pollInterval = parseInt(headers[this.intervalHeader], 10);
-    if (pollInterval > 0 && response.status === httpStatusCodes.OK && this.canPoll) {
+    if (pollInterval > 0 && successCodes.indexOf(response.status) !== -1 && this.canPoll) {
+      if (this.timeoutID) {
+        clearTimeout(this.timeoutID);
+      }
+
       this.timeoutID = setTimeout(() => {
         this.makeRequest();
       }, pollInterval);
@@ -77,11 +81,11 @@ export default class Poll {
     notificationCallback(true);
 
     return resource[method](data)
-      .then((response) => {
+      .then(response => {
         this.checkConditions(response);
         notificationCallback(false);
       })
-      .catch((error) => {
+      .catch(error => {
         notificationCallback(false);
         if (error.status === httpStatusCodes.ABORTED) {
           return;
@@ -101,15 +105,25 @@ export default class Poll {
   }
 
   /**
-   * Restarts polling after it has been stoped
+   * Enables polling after it has been stopped
    */
-  restart(options) {
-    // update data
+  enable(options) {
     if (options && options.data) {
       this.options.data = options.data;
     }
 
     this.canPoll = true;
+
+    if (options && options.response) {
+      this.checkConditions(options.response);
+    }
+  }
+
+  /**
+   * Restarts polling after it has been stopped and makes a request
+   */
+  restart(options) {
+    this.enable(options);
     this.makeRequest();
   }
 }

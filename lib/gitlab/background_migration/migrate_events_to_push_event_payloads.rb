@@ -1,5 +1,4 @@
 # frozen_string_literal: true
-# rubocop:disable Metrics/LineLength
 # rubocop:disable Style/Documentation
 
 module Gitlab
@@ -25,7 +24,7 @@ module Gitlab
         def commit_title
           commit = commits.last
 
-          return nil unless commit && commit[:message]
+          return unless commit && commit[:message]
 
           index = commit[:message].index("\n")
           message = index ? commit[:message][0..index] : commit[:message]

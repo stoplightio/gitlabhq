@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module GitalyClient
     # This is a chokepoint that is meant to help us stop remove all places
@@ -13,7 +15,7 @@ module Gitlab
         Storage is invalid because it has no `path` key.
 
         For source installations, update your config/gitlab.yml Refer to gitlab.yml.example for an updated example.
-        If you're using the Gitlab Development Kit, you can update your configuration running `gdk reconfigure`.
+        If you're using the GitLab Development Kit, you can update your configuration running `gdk reconfigure`.
       MSG
 
       # This class will give easily recognizable NoMethodErrors
@@ -30,9 +32,17 @@ module Gitlab
       end
 
       def self.disk_access_denied?
+        return false if rugged_enabled?
+
         !temporarily_allowed?(ALLOW_KEY) && GitalyClient.feature_enabled?(DISK_ACCESS_DENIED_FLAG)
       rescue
         false # Err on the side of caution, don't break gitlab for people
+      end
+
+      def self.rugged_enabled?
+        Gitlab::Git::RuggedImpl::Repository::FEATURE_FLAGS.any? do |flag|
+          Feature.enabled?(flag)
+        end
       end
 
       def initialize(storage)
@@ -60,8 +70,8 @@ module Gitlab
 
       private
 
-      def method_missing(m, *args, &block)
-        @hash.public_send(m, *args, &block) # rubocop:disable GitlabSecurity/PublicSend
+      def method_missing(msg, *args, &block)
+        @hash.public_send(msg, *args, &block) # rubocop:disable GitlabSecurity/PublicSend
       end
     end
   end

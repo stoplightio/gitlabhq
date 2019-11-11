@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module QA
   module Runtime
     ##
@@ -13,7 +15,7 @@ module QA
       end
 
       def version
-        @version ||= File.directory?("#{__dir__}/../ee") ? :EE : :CE
+        @version ||= ::File.directory?("#{__dir__}/../ee") ? :EE : :CE
       end
 
       def strategy
@@ -21,7 +23,7 @@ module QA
       end
 
       def self.method_missing(name, *args)
-        self.new.strategy.public_send(name, *args) # rubocop:disable GitlabSecurity/PublicSend
+        self.new.strategy.public_send(name, *args)
       end
     end
   end

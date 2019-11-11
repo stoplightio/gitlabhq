@@ -1,10 +1,13 @@
+# frozen_string_literal: true
+
 class PasswordsController < Devise::PasswordsController
   skip_before_action :require_no_authentication, only: [:edit, :update]
 
   before_action :resource_from_email, only: [:create]
   before_action :check_password_authentication_available, only: [:create]
-  before_action :throttle_reset,      only: [:create]
+  before_action :throttle_reset, only: [:create]
 
+  # rubocop: disable CodeReuse/ActiveRecord
   def edit
     super
     reset_password_token = Devise.token_generator.digest(
@@ -19,11 +22,12 @@ class PasswordsController < Devise::PasswordsController
       ).first_or_initialize
 
       unless user.reset_password_period_valid?
-        flash[:alert] = 'Your password reset token has expired.'
+        flash[:alert] = _('Your password reset token has expired.')
         redirect_to(new_user_password_url(user_email: user['email']))
       end
     end
   end
+  # rubocop: enable CodeReuse/ActiveRecord
 
   def update
     super do |resource|
@@ -48,7 +52,7 @@ class PasswordsController < Devise::PasswordsController
     end
 
     redirect_to after_sending_reset_password_instructions_path_for(resource_name),
-      alert: "Password authentication is unavailable."
+      alert: _("Password authentication is unavailable.")
   end
 
   def throttle_reset

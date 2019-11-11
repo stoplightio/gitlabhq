@@ -14,12 +14,15 @@ export default class CreateLabelDropdown {
     this.$newLabelField = $('#new_label_name', this.$el);
     this.$newColorField = $('#new_label_color', this.$el);
     this.$colorPreview = $('.js-dropdown-label-color-preview', this.$el);
+    this.$addList = $('.js-add-list', this.$el);
     this.$newLabelError = $('.js-label-error', this.$el);
     this.$newLabelCreateButton = $('.js-new-label-btn', this.$el);
     this.$colorSuggestions = $('.suggest-colors-dropdown a', this.$el);
 
     this.$newLabelError.hide();
     this.$newLabelCreateButton.disable();
+
+    this.addListDefault = this.$addList.is(':checked');
 
     this.cleanBinding();
     this.addBinding();
@@ -37,7 +40,7 @@ export default class CreateLabelDropdown {
   addBinding() {
     const self = this;
 
-    this.$colorSuggestions.on('click', function (e) {
+    this.$colorSuggestions.on('click', function(e) {
       const $this = $(this);
       self.addColorValue(e, $this);
     });
@@ -47,7 +50,7 @@ export default class CreateLabelDropdown {
 
     this.$dropdownBack.on('click', this.resetForm.bind(this));
 
-    this.$cancelButton.on('click', function (e) {
+    this.$cancelButton.on('click', function(e) {
       e.preventDefault();
       e.stopPropagation();
 
@@ -79,13 +82,11 @@ export default class CreateLabelDropdown {
   }
 
   resetForm() {
-    this.$newLabelField
-      .val('')
-      .trigger('change');
+    this.$newLabelField.val('').trigger('change');
 
-    this.$newColorField
-      .val('')
-      .trigger('change');
+    this.$newColorField.val('').trigger('change');
+
+    this.$addList.prop('checked', this.addListDefault);
 
     this.$colorPreview
       .css('background-color', '')
@@ -97,31 +98,34 @@ export default class CreateLabelDropdown {
     e.preventDefault();
     e.stopPropagation();
 
-    Api.newLabel(this.namespacePath, this.projectPath, {
-      title: this.$newLabelField.val(),
-      color: this.$newColorField.val(),
-    }, (label) => {
-      this.$newLabelCreateButton.enable();
+    Api.newLabel(
+      this.namespacePath,
+      this.projectPath,
+      {
+        title: this.$newLabelField.val(),
+        color: this.$newColorField.val(),
+      },
+      label => {
+        this.$newLabelCreateButton.enable();
 
-      if (label.message) {
-        let errors;
+        if (label.message) {
+          let errors;
 
-        if (typeof label.message === 'string') {
-          errors = label.message;
+          if (typeof label.message === 'string') {
+            errors = label.message;
+          } else {
+            errors = Object.keys(label.message)
+              .map(key => `${humanize(key)} ${label.message[key].join(', ')}`)
+              .join('<br/>');
+          }
+
+          this.$newLabelError.html(errors).show();
         } else {
-          errors = Object.keys(label.message).map(key =>
-            `${humanize(key)} ${label.message[key].join(', ')}`,
-          ).join('<br/>');
+          const addNewList = this.$addList.is(':checked');
+          this.$dropdownBack.trigger('click');
+          $(document).trigger('created.label', [label, addNewList]);
         }
-
-        this.$newLabelError
-          .html(errors)
-          .show();
-      } else {
-        this.$dropdownBack.trigger('click');
-
-        $(document).trigger('created.label', label);
-      }
-    });
+      },
+    );
   }
 }

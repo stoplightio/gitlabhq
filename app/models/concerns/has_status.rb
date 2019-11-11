@@ -1,15 +1,18 @@
+# frozen_string_literal: true
+
 module HasStatus
   extend ActiveSupport::Concern
 
   DEFAULT_STATUS = 'created'.freeze
-  BLOCKED_STATUS = 'manual'.freeze
-  AVAILABLE_STATUSES = %w[created pending running success failed canceled skipped manual].freeze
-  STARTED_STATUSES = %w[running success failed skipped manual].freeze
-  ACTIVE_STATUSES = %w[pending running].freeze
+  BLOCKED_STATUS = %w[manual scheduled].freeze
+  AVAILABLE_STATUSES = %w[created preparing pending running success failed canceled skipped manual scheduled].freeze
+  STARTED_STATUSES = %w[running success failed skipped manual scheduled].freeze
+  ACTIVE_STATUSES = %w[preparing pending running].freeze
   COMPLETED_STATUSES = %w[success failed canceled skipped].freeze
-  ORDERED_STATUSES = %w[failed pending running manual canceled success skipped created].freeze
+  ORDERED_STATUSES = %w[failed preparing pending running manual scheduled canceled success skipped created].freeze
   STATUSES_ENUM = { created: 0, pending: 1, running: 2, success: 3,
-                    failed: 4, canceled: 5, skipped: 6, manual: 7 }.freeze
+                    failed: 4, canceled: 5, skipped: 6, manual: 7,
+                    scheduled: 8, preparing: 9 }.freeze
 
   UnknownStatusError = Class.new(StandardError)
 
@@ -22,6 +25,8 @@ module HasStatus
       created = scope_relevant.created.select('count(*)').to_sql
       success = scope_relevant.success.select('count(*)').to_sql
       manual = scope_relevant.manual.select('count(*)').to_sql
+      scheduled = scope_relevant.scheduled.select('count(*)').to_sql
+      preparing = scope_relevant.preparing.select('count(*)').to_sql
       pending = scope_relevant.pending.select('count(*)').to_sql
       running = scope_relevant.running.select('count(*)').to_sql
       skipped = scope_relevant.skipped.select('count(*)').to_sql
@@ -33,11 +38,14 @@ module HasStatus
         WHEN (#{builds})=(#{skipped}) THEN 'skipped'
         WHEN (#{builds})=(#{success}) THEN 'success'
         WHEN (#{builds})=(#{created}) THEN 'created'
+        WHEN (#{builds})=(#{preparing}) THEN 'preparing'
         WHEN (#{builds})=(#{success})+(#{skipped}) THEN 'success'
         WHEN (#{builds})=(#{success})+(#{skipped})+(#{canceled}) THEN 'canceled'
         WHEN (#{builds})=(#{created})+(#{skipped})+(#{pending}) THEN 'pending'
         WHEN (#{running})+(#{pending})>0 THEN 'running'
         WHEN (#{manual})>0 THEN 'manual'
+        WHEN (#{scheduled})>0 THEN 'scheduled'
+        WHEN (#{preparing})>0 THEN 'preparing'
         WHEN (#{created})>0 THEN 'running'
         ELSE 'failed'
       END)"
@@ -58,6 +66,10 @@ module HasStatus
     def all_state_names
       state_machines.values.flat_map(&:states).flat_map { |s| s.map(&:name) }
     end
+
+    def completed_statuses
+      COMPLETED_STATUSES.map(&:to_sym)
+    end
   end
 
   included do
@@ -65,6 +77,7 @@ module HasStatus
 
     state_machine :status, initial: :created do
       state :created, value: 'created'
+      state :preparing, value: 'preparing'
       state :pending, value: 'pending'
       state :running, value: 'running'
       state :failed, value: 'failed'
@@ -72,25 +85,28 @@ module HasStatus
       state :canceled, value: 'canceled'
       state :skipped, value: 'skipped'
       state :manual, value: 'manual'
+      state :scheduled, value: 'scheduled'
     end
 
     scope :created, -> { where(status: 'created') }
+    scope :preparing, -> { where(status: 'preparing') }
     scope :relevant, -> { where(status: AVAILABLE_STATUSES - ['created']) }
     scope :running, -> { where(status: 'running') }
     scope :pending, -> { where(status: 'pending') }
     scope :success, -> { where(status: 'success') }
-    scope :failed, -> { where(status: 'failed')  }
-    scope :canceled, -> { where(status: 'canceled')  }
-    scope :skipped, -> { where(status: 'skipped')  }
-    scope :manual, -> { where(status: 'manual')  }
-    scope :alive, -> { where(status: [:created, :pending, :running]) }
+    scope :failed, -> { where(status: 'failed') }
+    scope :canceled, -> { where(status: 'canceled') }
+    scope :skipped, -> { where(status: 'skipped') }
+    scope :manual, -> { where(status: 'manual') }
+    scope :scheduled, -> { where(status: 'scheduled') }
+    scope :alive, -> { where(status: [:created, :preparing, :pending, :running]) }
     scope :created_or_pending, -> { where(status: [:created, :pending]) }
     scope :running_or_pending, -> { where(status: [:running, :pending]) }
     scope :finished, -> { where(status: [:success, :failed, :canceled]) }
     scope :failed_or_canceled, -> { where(status: [:failed, :canceled]) }
 
     scope :cancelable, -> do
-      where(status: [:running, :pending, :created])
+      where(status: [:running, :preparing, :pending, :created, :scheduled])
     end
   end
 
@@ -107,7 +123,7 @@ module HasStatus
   end
 
   def blocked?
-    BLOCKED_STATUS == status
+    BLOCKED_STATUS.include?(status)
   end
 
   private

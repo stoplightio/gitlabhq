@@ -40,14 +40,13 @@ migrations _unless_ schema changes are absolutely required to solve a problem.
 ## What Requires Downtime?
 
 The document ["What Requires Downtime?"](what_requires_downtime.md) specifies
-various database operations, such as 
+various database operations, such as
 
 - [adding, dropping, and renaming columns](what_requires_downtime.md#adding-columns)
 - [changing column constraints and types](what_requires_downtime.md#changing-column-constraints)
 - [adding and dropping indexes, tables, and foreign keys](what_requires_downtime.md#adding-indexes)
 
 and whether they require downtime and how to work around that whenever possible.
-
 
 ## Downtime Tagging
 
@@ -59,15 +58,15 @@ the migrations that _do_ require downtime.
 To tag a migration, add the following two constants to the migration class'
 body:
 
-* `DOWNTIME`: a boolean that when set to `true` indicates the migration requires
+- `DOWNTIME`: a boolean that when set to `true` indicates the migration requires
   downtime.
-* `DOWNTIME_REASON`: a String containing the reason for the migration requiring
+- `DOWNTIME_REASON`: a String containing the reason for the migration requiring
   downtime. This constant **must** be set when `DOWNTIME` is set to `true`.
 
 For example:
 
 ```ruby
-class MyMigration < ActiveRecord::Migration
+class MyMigration < ActiveRecord::Migration[4.2]
   DOWNTIME = true
   DOWNTIME_REASON = 'This migration requires downtime because ...'
 
@@ -95,7 +94,7 @@ migration. For this to work your migration needs to include the module
 `Gitlab::Database::MultiThreadedMigration`:
 
 ```ruby
-class MyMigration < ActiveRecord::Migration
+class MyMigration < ActiveRecord::Migration[4.2]
   include Gitlab::Database::MigrationHelpers
   include Gitlab::Database::MultiThreadedMigration
 end
@@ -105,7 +104,7 @@ You can then use the method `with_multiple_threads` to perform work in separate
 threads. For example:
 
 ```ruby
-class MyMigration < ActiveRecord::Migration
+class MyMigration < ActiveRecord::Migration[4.2]
   include Gitlab::Database::MigrationHelpers
   include Gitlab::Database::MultiThreadedMigration
 
@@ -134,12 +133,12 @@ should be more than enough.
 When removing an index make sure to use the method `remove_concurrent_index` instead
 of the regular `remove_index` method. The `remove_concurrent_index` method
 automatically drops concurrent indexes when using PostgreSQL, removing the
-need for downtime. To use this method you must disable transactions by calling
-the method `disable_ddl_transaction!` in the body of your migration class like
-so:
+need for downtime. To use this method you must disable single-transaction mode
+by calling the method `disable_ddl_transaction!` in the body of your migration
+class like so:
 
 ```ruby
-class MyMigration < ActiveRecord::Migration
+class MyMigration < ActiveRecord::Migration[4.2]
   include Gitlab::Database::MigrationHelpers
   disable_ddl_transaction!
 
@@ -167,7 +166,7 @@ the method `disable_ddl_transaction!` in the body of your migration class like
 so:
 
 ```ruby
-class MyMigration < ActiveRecord::Migration
+class MyMigration < ActiveRecord::Migration[4.2]
   include Gitlab::Database::MigrationHelpers
 
   disable_ddl_transaction!
@@ -182,6 +181,29 @@ class MyMigration < ActiveRecord::Migration
 end
 ```
 
+## Adding foreign-key constraints
+
+When adding a foreign-key constraint to either an existing or new
+column remember to also add a index on the column.
+
+This is _required_ for all foreign-keys.
+
+Here's an example where we add a new column with a foreign key
+constraint. Note it includes `index: true` to create an index for it.
+
+```ruby
+class Migration < ActiveRecord::Migration[4.2]
+
+  def change
+    add_reference :model, :other_model, index: true, foreign_key: { on_delete: :cascade }
+  end
+end
+```
+
+When adding a foreign-key constraint to an existing column, we
+have to employ `add_concurrent_foreign_key` and `add_concurrent_index`
+instead of `add_reference`.
+
 ## Adding Columns With Default Values
 
 When adding columns with default values you must use the method
@@ -193,7 +215,7 @@ For example, to add the column `foo` to the `projects` table with a default
 value of `10` you'd write the following:
 
 ```ruby
-class MyMigration < ActiveRecord::Migration
+class MyMigration < ActiveRecord::Migration[4.2]
   include Gitlab::Database::MigrationHelpers
   disable_ddl_transaction!
 
@@ -295,13 +317,38 @@ end
 
 Instead of using these methods one should use the following methods to store timestamps with timezones:
 
-* `add_timestamps_with_timezone`
-* `timestamps_with_timezone`
+- `add_timestamps_with_timezone`
+- `timestamps_with_timezone`
 
 This ensures all timestamps have a time zone specified. This in turn means existing timestamps won't
 suddenly use a different timezone when the system's timezone changes. It also makes it very clear which
 timezone was used in the first place.
 
+## Storing JSON in database
+
+The Rails 5 natively supports `JSONB` (binary JSON) column type.
+Example migration adding this column:
+
+```ruby
+class AddOptionsToBuildMetadata < ActiveRecord::Migration[5.0]
+  DOWNTIME = false
+
+  def change
+    add_column :ci_builds_metadata, :config_options, :jsonb
+  end
+end
+```
+
+On MySQL the `JSON` and `JSONB` is translated to `TEXT 1MB`, as `JSONB` is PostgreSQL only feature.
+
+For above reason you have to use a serializer to provide a translation layer
+in order to support PostgreSQL and MySQL seamlessly:
+
+```ruby
+class BuildMetadata
+  serialize :config_options, Serializers::JSON # rubocop:disable Cop/ActiveRecordSerialize
+end
+```
 
 ## Testing
 
@@ -342,7 +389,7 @@ If you need more complex logic you can define and use models local to a
 migration. For example:
 
 ```ruby
-class MyMigration < ActiveRecord::Migration
+class MyMigration < ActiveRecord::Migration[4.2]
   class Project < ActiveRecord::Base
     self.table_name = 'projects'
   end
@@ -376,3 +423,9 @@ _namespaces_ that have a `project_id`.
 
 The `path` column for these rows will be renamed to their previous value followed
 by an integer. For example: `users` would turn into `users0`
+
+### Moving migrations from EE to CE
+
+When migrations need to be moved from GitLab Enterprise Edition to GitLab Community Edition,
+a migration file should be moved from `ee/db/{post_,}migrate` directory in the `gitlab-ee` project to `db/{post_,}migrate` directory in the `gitlab-ce` project. This way
+the schema number remains intact, there is no need to modify old migrations, and proper columns, tables or data are added in the Community Edition.

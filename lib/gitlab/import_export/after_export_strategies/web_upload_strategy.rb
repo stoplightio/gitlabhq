@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module ImportExport
     module AfterExportStrategies
@@ -6,7 +8,7 @@ module Gitlab
         POST_METHOD = 'POST'.freeze
         INVALID_HTTP_METHOD = 'invalid. Only PUT and POST methods allowed.'.freeze
 
-        validates :url, url: true
+        validates :url, addressable_url: true
 
         validate do
           unless [PUT_METHOD, POST_METHOD].include?(http_method.upcase)
@@ -23,29 +25,28 @@ module Gitlab
         def strategy_execute
           handle_response_error(send_file)
 
-          project.remove_exported_project_file
+          project.remove_exports
         end
 
         def handle_response_error(response)
           unless response.success?
-            error_code = response.dig('Error', 'Code') || response.code
-            error_message = response.dig('Error', 'Message') || response.message
-
-            raise StrategyError.new("Error uploading the project. Code #{error_code}: #{error_message}")
+            raise StrategyError.new("Error uploading the project. Code #{response.code}: #{response.message}")
           end
         end
 
         private
 
         def send_file
-          export_file = File.open(project.export_project_path)
-
-          Gitlab::HTTP.public_send(http_method.downcase, url, send_file_options(export_file)) # rubocop:disable GitlabSecurity/PublicSend
+          Gitlab::HTTP.public_send(http_method.downcase, url, send_file_options) # rubocop:disable GitlabSecurity/PublicSend
         ensure
           export_file.close if export_file
         end
 
-        def send_file_options(export_file)
+        def export_file
+          project.export_file.open
+        end
+
+        def send_file_options
           {
             body_stream: export_file,
             headers: headers
@@ -53,7 +54,11 @@ module Gitlab
         end
 
         def headers
-          { 'Content-Length' => File.size(project.export_project_path).to_s }
+          { 'Content-Length' => export_size.to_s }
+        end
+
+        def export_size
+          project.export_file.file.size
         end
       end
     end

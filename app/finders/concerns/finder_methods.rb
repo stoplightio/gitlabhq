@@ -1,11 +1,17 @@
-module FinderMethods
-  def find_by!(*args)
-    raise_not_found_unless_authorized execute.find_by!(*args)
-  end
+# frozen_string_literal: true
 
-  def find_by(*args)
-    if_authorized execute.find_by(*args)
+module FinderMethods
+  # rubocop: disable CodeReuse/ActiveRecord
+  def find_by!(*args)
+    raise_not_found_unless_authorized execute.reorder(nil).find_by!(*args)
   end
+  # rubocop: enable CodeReuse/ActiveRecord
+
+  # rubocop: disable CodeReuse/ActiveRecord
+  def find_by(*args)
+    if_authorized execute.reorder(nil).find_by(*args)
+  end
+  # rubocop: enable CodeReuse/ActiveRecord
 
   def find(*args)
     raise_not_found_unless_authorized model.find(*args)

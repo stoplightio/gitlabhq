@@ -7,7 +7,7 @@ projects.
 GitLab offers a [continuous integration][ci] service. If you
 [add a `.gitlab-ci.yml` file][yaml] to the root directory of your repository,
 and configure your GitLab project to use a [Runner], then each commit or
-push, triggers your CI [pipeline].
+push triggers your CI [pipeline].
 
 The `.gitlab-ci.yml` file tells the GitLab runner what to do. By default it runs
 a pipeline with three [stages]: `build`, `test`, and `deploy`. You don't need to
@@ -77,7 +77,7 @@ before_script:
   - apt-get update -qq && apt-get install -y -qq sqlite3 libsqlite3-dev nodejs
   - ruby -v
   - which ruby
-  - gem install bundler --no-ri --no-rdoc
+  - gem install bundler --no-document
   - bundle install --jobs $(nproc)  "${FLAGS[@]}"
 
 rspec:
@@ -105,7 +105,7 @@ Jobs are used to create jobs, which are then picked by
 What is important is that each job is run independently from each other.
 
 If you want to check whether the `.gitlab-ci.yml` of your project is valid, there is a
-Lint tool under the page `/ci/lint` of your project namespace. You can also find
+Lint tool under the page `/-/ci/lint` of your project namespace. You can also find
 a "CI Lint" button to go to this page under **CI/CD ➔ Pipelines** and
 **Pipelines ➔ Jobs** in your project.
 
@@ -127,7 +127,7 @@ Now if you go to the **Pipelines** page you will see that the pipeline is
 pending.
 
 NOTE: **Note:**
-If you have a [mirrored repository where GitLab pulls from](https://docs.gitlab.com/ee/workflow/repository_mirroring.html#pulling-from-a-remote-repository),
+If you have a [mirrored repository where GitLab pulls from](../../workflow/repository_mirroring.md#pulling-from-a-remote-repository-starter),
 you may need to enable pipeline triggering in your project's
 **Settings > Repository > Pull from a remote repository > Trigger pipelines for mirror updates**.
 
@@ -168,7 +168,7 @@ can be found at <https://docs.gitlab.com/runner/>.
 In order to have a functional Runner you need to follow two steps:
 
 1. [Install it][runner-install]
-2. [Configure it](../runners/README.md#registering-a-specific-runner)
+1. [Configure it](../runners/README.md#registering-a-specific-runner)
 
 Follow the links above to set up your own Runner or use a Shared Runner as
 described in the next section.

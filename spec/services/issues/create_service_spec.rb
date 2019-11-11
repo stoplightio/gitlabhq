@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Issues::CreateService do
@@ -13,8 +15,8 @@ describe Issues::CreateService do
       let(:labels) { create_pair(:label, project: project) }
 
       before do
-        project.add_master(user)
-        project.add_master(assignee)
+        project.add_maintainer(user)
+        project.add_maintainer(assignee)
       end
 
       let(:opts) do
@@ -130,11 +132,25 @@ describe Issues::CreateService do
         end
 
         it 'invalidates open issues counter for assignees when issue is assigned' do
-          project.add_master(assignee)
+          project.add_maintainer(assignee)
 
           described_class.new(project, user, opts).execute
 
           expect(assignee.assigned_open_issues_count).to eq 1
+        end
+      end
+
+      context 'when duplicate label titles are given' do
+        let(:label) { create(:label, project: project) }
+
+        let(:opts) do
+          { title: 'Title',
+            description: 'Description',
+            labels: [label.title, label.title] }
+        end
+
+        it 'assigns the label once' do
+          expect(issue.labels).to contain_exactly(label)
         end
       end
 
@@ -160,7 +176,7 @@ describe Issues::CreateService do
     context 'issue create service' do
       context 'assignees' do
         before do
-          project.add_master(user)
+          project.add_maintainer(user)
         end
 
         it 'removes assignee when user id is invalid' do
@@ -172,7 +188,7 @@ describe Issues::CreateService do
         end
 
         it 'removes assignee when user id is 0' do
-          opts = { title: 'Title', description: 'Description',  assignee_ids: [0] }
+          opts = { title: 'Title', description: 'Description', assignee_ids: [0] }
 
           issue = described_class.new(project, user, opts).execute
 
@@ -180,7 +196,7 @@ describe Issues::CreateService do
         end
 
         it 'saves assignee when user id is valid' do
-          project.add_master(assignee)
+          project.add_maintainer(assignee)
           opts = { title: 'Title', description: 'Description', assignee_ids: [assignee.id] }
 
           issue = described_class.new(project, user, opts).execute
@@ -224,8 +240,8 @@ describe Issues::CreateService do
         end
 
         before do
-          project.add_master(user)
-          project.add_master(assignee)
+          project.add_maintainer(user)
+          project.add_maintainer(assignee)
         end
 
         it 'assigns and sets milestone to issuable from command' do
@@ -242,7 +258,7 @@ describe Issues::CreateService do
       let(:project) { merge_request.source_project }
 
       before do
-        project.add_master(user)
+        project.add_maintainer(user)
       end
 
       describe 'for a single discussion' do

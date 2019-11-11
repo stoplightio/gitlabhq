@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class SessionsController < Devise::SessionsController
   include InternalRedirect
   include AuthenticatesWithTwoFactor
@@ -6,6 +8,8 @@ class SessionsController < Devise::SessionsController
   include Recaptcha::Verify
 
   skip_before_action :check_two_factor_requirement, only: [:destroy]
+  # replaced with :require_no_authentication_without_flash
+  skip_before_action :require_no_authentication, only: [:new, :create]
 
   prepend_before_action :check_initial_setup, only: [:new]
   prepend_before_action :authenticate_with_two_factor,
@@ -13,6 +17,9 @@ class SessionsController < Devise::SessionsController
   prepend_before_action :check_captcha, only: [:create]
   prepend_before_action :store_redirect_uri, only: [:new]
   prepend_before_action :ldap_servers, only: [:new, :create]
+  prepend_before_action :require_no_authentication_without_flash, only: [:new, :create]
+  prepend_before_action :ensure_password_authentication_enabled!, if: :password_based_login?, only: [:create]
+
   before_action :auto_sign_in_with_provider, only: [:new]
   before_action :load_recaptcha
 
@@ -32,8 +39,8 @@ class SessionsController < Devise::SessionsController
     super do |resource|
       # User has successfully signed in, so clear any unused reset token
       if resource.reset_password_token.present?
-        resource.update_attributes(reset_password_token: nil,
-                                   reset_password_sent_at: nil)
+        resource.update(reset_password_token: nil,
+                        reset_password_sent_at: nil)
       end
 
       # hide the signed-in notification
@@ -52,6 +59,14 @@ class SessionsController < Devise::SessionsController
 
   private
 
+  def require_no_authentication_without_flash
+    require_no_authentication
+
+    if flash[:alert] == I18n.t('devise.failure.already_authenticated')
+      flash[:alert] = nil
+    end
+  end
+
   def captcha_enabled?
     request.headers[CAPTCHA_HEADER] && Gitlab::Recaptcha.enabled?
   end
@@ -62,13 +77,39 @@ class SessionsController < Devise::SessionsController
     return unless captcha_enabled?
     return unless Gitlab::Recaptcha.load_configurations!
 
-    unless verify_recaptcha
+    if verify_recaptcha
+      increment_successful_login_captcha_counter
+    else
+      increment_failed_login_captcha_counter
+
       self.resource = resource_class.new
-      flash[:alert] = 'There was an error with the reCAPTCHA. Please solve the reCAPTCHA again.'
+      flash[:alert] = _('There was an error with the reCAPTCHA. Please solve the reCAPTCHA again.')
       flash.delete :recaptcha_error
 
       respond_with_navigational(resource) { render :new }
     end
+  end
+
+  def increment_failed_login_captcha_counter
+    Gitlab::Metrics.counter(
+      :failed_login_captcha_total,
+      'Number of failed CAPTCHA attempts for logins'.freeze
+    ).increment
+  end
+
+  def increment_successful_login_captcha_counter
+    Gitlab::Metrics.counter(
+      :successful_login_captcha_total,
+      'Number of successful CAPTCHA attempts for logins'.freeze
+    ).increment
+  end
+
+  ##
+  # We do have some duplication between lib/gitlab/auth/activity.rb here, but
+  # leaving this method here because of backwards compatibility.
+  #
+  def login_counter
+    @login_counter ||= Gitlab::Metrics.counter(:user_session_logins_total, 'User sign in count')
   end
 
   def log_failed_login
@@ -76,15 +117,12 @@ class SessionsController < Devise::SessionsController
   end
 
   def failed_login?
-    (options = env["warden.options"]) && options[:action] == "unauthenticated"
-  end
-
-  def login_counter
-    @login_counter ||= Gitlab::Metrics.counter(:user_session_logins_total, 'User sign in count')
+    (options = request.env["warden.options"]) && options[:action] == "unauthenticated"
   end
 
   # Handle an "initial setup" state, where there's only one user, it's an admin,
   # and they require a password change.
+  # rubocop: disable CodeReuse/ActiveRecord
   def check_initial_setup
     return unless User.limit(2).count == 1 # Count as much 2 to know if we have exactly one
 
@@ -97,7 +135,16 @@ class SessionsController < Devise::SessionsController
     end
 
     redirect_to edit_user_password_path(reset_password_token: @token),
-      notice: "Please create a password for your new account."
+      notice: _("Please create a password for your new account.")
+  end
+  # rubocop: enable CodeReuse/ActiveRecord
+
+  def ensure_password_authentication_enabled!
+    render_403 unless Gitlab::CurrentSettings.password_authentication_enabled_for_web?
+  end
+
+  def password_based_login?
+    user_params[:login].present? || user_params[:password].present?
   end
 
   def user_params
@@ -139,6 +186,8 @@ class SessionsController < Devise::SessionsController
   end
 
   def auto_sign_in_with_provider
+    return unless Gitlab::Auth.omniauth_enabled?
+
     provider = Gitlab.config.omniauth.auto_sign_in_with_provider
     return unless provider.present?
 

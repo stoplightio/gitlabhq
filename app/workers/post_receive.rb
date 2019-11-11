@@ -1,8 +1,12 @@
+# frozen_string_literal: true
+
 class PostReceive
   include ApplicationWorker
 
-  def perform(gl_repository, identifier, changes)
-    project, is_wiki = Gitlab::GlRepository.parse(gl_repository)
+  PIPELINE_PROCESS_LIMIT = 4
+
+  def perform(gl_repository, identifier, changes, push_options = {})
+    project, repo_type = Gitlab::GlRepository.parse(gl_repository)
 
     if project.nil?
       log("Triggered hook for non-existing project with gl_repository \"#{gl_repository}\"")
@@ -13,12 +17,14 @@ class PostReceive
     # Use Sidekiq.logger so arguments can be correlated with execution
     # time and thread ID's.
     Sidekiq.logger.info "changes: #{changes.inspect}" if ENV['SIDEKIQ_LOG_ARGUMENTS']
-    post_received = Gitlab::GitPostReceive.new(project, identifier, changes)
+    post_received = Gitlab::GitPostReceive.new(project, identifier, changes, push_options)
 
-    if is_wiki
+    if repo_type.wiki?
       process_wiki_changes(post_received)
-    else
+    elsif repo_type.project?
       process_project_changes(post_received)
+    else
+      # Other repos don't have hooks for now
     end
   end
 
@@ -27,19 +33,31 @@ class PostReceive
   def process_project_changes(post_received)
     changes = []
     refs = Set.new
+    @user = post_received.identify
 
-    post_received.changes_refs do |oldrev, newrev, ref|
-      @user ||= post_received.identify(newrev)
+    unless @user
+      log("Triggered hook for non-existing user \"#{post_received.identifier}\"")
+      return false
+    end
 
-      unless @user
-        log("Triggered hook for non-existing user \"#{post_received.identifier}\"")
-        return false # rubocop:disable Cop/AvoidReturnFromBlocks
-      end
+    post_received.enum_for(:changes_refs).with_index do |(oldrev, newrev, ref), index|
+      service_klass =
+        if Gitlab::Git.tag_ref?(ref)
+          Git::TagPushService
+        elsif Gitlab::Git.branch_ref?(ref)
+          Git::BranchPushService
+        end
 
-      if Gitlab::Git.tag_ref?(ref)
-        GitTagPushService.new(post_received.project, @user, oldrev: oldrev, newrev: newrev, ref: ref).execute
-      elsif Gitlab::Git.branch_ref?(ref)
-        GitPushService.new(post_received.project, @user, oldrev: oldrev, newrev: newrev, ref: ref).execute
+      if service_klass
+        service_klass.new(
+          post_received.project,
+          @user,
+          oldrev: oldrev,
+          newrev: newrev,
+          ref: ref,
+          push_options: post_received.push_options,
+          create_pipelines: index < PIPELINE_PROCESS_LIMIT || Feature.enabled?(:git_push_create_all_pipelines, post_received.project)
+        ).execute
       end
 
       changes << Gitlab::DataBuilder::Repository.single_change(oldrev, newrev, ref)

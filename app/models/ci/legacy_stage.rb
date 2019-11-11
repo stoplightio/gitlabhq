@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Ci
   # Currently this is artificial object, constructed dynamically
   # We should migrate this object to actual database record in the future
@@ -55,6 +57,10 @@ module Ci
       else
         statuses.latest.failed_but_allowed.any?
       end
+    end
+
+    def manual_playable?
+      %[manual scheduled skipped].include?(status.to_s)
     end
   end
 end

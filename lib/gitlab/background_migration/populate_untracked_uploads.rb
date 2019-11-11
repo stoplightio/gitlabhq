@@ -4,7 +4,7 @@ module Gitlab
   module BackgroundMigration
     # This class processes a batch of rows in `untracked_files_for_uploads` by
     # adding each file to the `uploads` table if it does not exist.
-    class PopulateUntrackedUploads # rubocop:disable Metrics/ClassLength
+    class PopulateUntrackedUploads
       def perform(start_id, end_id)
         return unless migrate?
 
@@ -34,18 +34,16 @@ module Gitlab
 
       def filter_error_files(files)
         files.partition do |file|
-          begin
-            file.to_h
-            true
-          rescue => e
-            msg = <<~MSG
+          file.to_h
+          true
+        rescue => e
+          msg = <<~MSG
               Error parsing path "#{file.path}":
                 #{e.message}
                 #{e.backtrace.join("\n  ")}
             MSG
-            Rails.logger.error(msg)
-            false
-          end
+          Rails.logger.error(msg)
+          false
         end
       end
 

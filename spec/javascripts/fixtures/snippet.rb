@@ -16,14 +16,17 @@ describe SnippetsController, '(JavaScript fixtures)', type: :controller do
 
   before do
     sign_in(admin)
+    allow(Discussion).to receive(:build_discussion_id).and_return(['discussionid:ceterumcenseo'])
   end
 
   after do
     remove_repository(project)
   end
 
-  it 'snippets/show.html.raw' do |example|
-    get(:show, id: snippet.to_param)
+  it 'snippets/show.html' do |example|
+    create(:discussion_note_on_snippet, noteable: snippet, project: project, author: admin, note: '- [ ] Task List Item')
+
+    get(:show, params: { id: snippet.to_param })
 
     expect(response).to be_success
     store_frontend_fixture(response, example.description)

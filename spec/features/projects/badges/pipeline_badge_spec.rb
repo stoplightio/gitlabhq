@@ -1,6 +1,6 @@
 require 'spec_helper'
 
-feature 'Pipeline Badge' do
+describe 'Pipeline Badge' do
   set(:project) { create(:project, :repository, :public) }
   let(:ref) { project.default_branch }
 
@@ -19,7 +19,7 @@ feature 'Pipeline Badge' do
     let!(:pipeline) { create(:ci_empty_pipeline, project: project, ref: ref, sha: project.commit(ref).sha) }
     let!(:job) { create(:ci_build, pipeline: pipeline) }
 
-    context 'when the pipeline was successfull' do
+    context 'when the pipeline was successful' do
       it 'displays so on the badge' do
         job.success
 
@@ -38,6 +38,25 @@ feature 'Pipeline Badge' do
 
         expect(page.status_code).to eq(200)
         expect_badge('failed')
+      end
+    end
+
+    context 'when the pipeline is preparing' do
+      let!(:job) { create(:ci_build, status: 'created', pipeline: pipeline) }
+
+      before do
+        # Prevent skipping directly to 'pending'
+        allow(Ci::BuildPrepareWorker).to receive(:perform_async)
+        allow(job).to receive(:prerequisites).and_return([double])
+      end
+
+      it 'displays the preparing badge' do
+        job.enqueue
+
+        visit pipeline_project_badges_path(project, ref: ref, format: :svg)
+
+        expect(page.status_code).to eq(200)
+        expect_badge('preparing')
       end
     end
 

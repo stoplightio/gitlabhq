@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe SearchService do
@@ -16,7 +18,7 @@ describe SearchService do
   let(:public_project) { create(:project, :public, name: 'public_project') }
 
   before do
-    accessible_project.add_master(user)
+    accessible_project.add_maintainer(user)
   end
 
   describe '#project' do

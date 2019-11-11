@@ -1,11 +1,13 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe BatchDestroyDependentAssociations do
   class TestProject < ActiveRecord::Base
     self.table_name = 'projects'
 
-    has_many :builds, dependent: :destroy # rubocop:disable Cop/ActiveRecordDependent
-    has_many :notification_settings, as: :source, dependent: :delete_all # rubocop:disable Cop/ActiveRecordDependent
+    has_many :builds, dependent: :destroy
+    has_many :notification_settings, as: :source, dependent: :delete_all
     has_many :pages_domains
     has_many :todos
 

@@ -2,6 +2,7 @@ import { visitUrl } from '../lib/utils/url_utility';
 import Flash from '../flash';
 import Service from './services/sidebar_service';
 import Store from './stores/sidebar_store';
+import { __ } from '~/locale';
 
 export default class SidebarMediator {
   constructor(options) {
@@ -39,12 +40,13 @@ export default class SidebarMediator {
   }
 
   fetch() {
-    return this.service.get()
+    return this.service
+      .get()
       .then(response => response.json())
-      .then((data) => {
+      .then(data => {
         this.processFetchedData(data);
       })
-      .catch(() => new Flash('Error occurred when fetching sidebar data'));
+      .catch(() => new Flash(__('Error occurred when fetching sidebar data')));
   }
 
   processFetchedData(data) {
@@ -56,31 +58,34 @@ export default class SidebarMediator {
 
   toggleSubscription() {
     this.store.setFetchingState('subscriptions', true);
-    return this.service.toggleSubscription()
+    return this.service
+      .toggleSubscription()
       .then(() => {
         this.store.setSubscribedState(!this.store.subscribed);
         this.store.setFetchingState('subscriptions', false);
       })
-      .catch((err) => {
+      .catch(err => {
         this.store.setFetchingState('subscriptions', false);
         throw err;
       });
   }
 
   fetchAutocompleteProjects(searchTerm) {
-    return this.service.getProjectsAutocomplete(searchTerm)
+    return this.service
+      .getProjectsAutocomplete(searchTerm)
       .then(response => response.json())
-      .then((data) => {
+      .then(data => {
         this.store.setAutocompleteProjects(data);
         return this.store.autocompleteProjects;
       });
   }
 
   moveIssue() {
-    return this.service.moveIssue(this.store.moveToProjectId)
+    return this.service
+      .moveIssue(this.store.moveToProjectId)
       .then(response => response.json())
-      .then((data) => {
-        if (location.pathname !== data.web_url) {
+      .then(data => {
+        if (window.location.pathname !== data.web_url) {
           visitUrl(data.web_url);
         }
       });

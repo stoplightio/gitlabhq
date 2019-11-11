@@ -43,8 +43,10 @@ the `author` field. GitLab team members **should not**.
   database records created during Cycle Analytics model spec."
 - _Any_ contribution from a community member, no matter how small, **may** have
   a changelog entry regardless of these guidelines if the contributor wants one.
-  Example: "Fixed a typo on the search results page. (Jane Smith)"
+  Example: "Fixed a typo on the search results page."
 - Performance improvements **should** have a changelog entry.
+- Any change that introduces a database migration **must** have a
+  changelog entry.
 
 ## Writing good changelog entries
 
@@ -108,7 +110,8 @@ At this point the script would ask you to select the category of the change (map
 4. New deprecation
 5. Feature removal
 6. Security fix
-7. Other
+7. Performance improvement
+8. Other
 ```
 
 The entry filename is based on the name of the current Git branch. If you run
@@ -130,23 +133,15 @@ If you're working on the GitLab EE repository, the entry will be added to
 
 ### Arguments
 
-| Argument            | Shorthand | Purpose                                                                                                    |
-| -----------------   | --------- | ---------------------------------------------------------------------------------------------------------- |
-| [`--amend`]         |           | Amend the previous commit                                                                                  |
-| [`--force`]         | `-f`      | Overwrite an existing entry                                                                                |
-| [`--merge-request`] | `-m`      | Set merge request ID                                                                                       |
-| [`--dry-run`]       | `-n`      | Don't actually write anything, just print                                                                  |
-| [`--git-username`]  | `-u`      | Use Git user.name configuration as the author                                                              |
-| [`--type`]          | `-t`      | The category of the change, valid options are: added, fixed, changed, deprecated, removed, security, other |
-| [`--help`]          | `-h`      | Print help message                                                                                         |
-
-[`--amend`]: #-amend
-[`--force`]: #-force-or-f
-[`--merge-request`]: #-merge-request-or-m
-[`--dry-run`]: #-dry-run-or-n
-[`--git-username`]: #-git-username-or-u
-[`--type`]: #-type-or-t
-[`--help`]: #-help
+| Argument            | Shorthand | Purpose                                                                                                                                 |
+| -----------------   | --------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| [`--amend`](#--amend)         |           | Amend the previous commit                                                                                                               |
+| [`--force`](#--force-or--f)         | `-f`      | Overwrite an existing entry                                                                                                             |
+| [`--merge-request`](#--merge-request-or--m) | `-m`      | Set merge request ID                                                                                                                    |
+| [`--dry-run`](#--dry-run-or--n)       | `-n`      | Don't actually write anything, just print                                                                                               |
+| [`--git-username`](#--git-username-or--u)  | `-u`      | Use Git user.name configuration as the author                                                                                           |
+| [`--type`](#--type-or--t)          | `-t`      | The category of the change, valid options are: `added`, `fixed`, `changed`, `deprecated`, `removed`, `security`, `performance`, `other` |
+| `--help`          | `-h`      | Print help message                                                                                                                      |
 
 ##### `--amend`
 

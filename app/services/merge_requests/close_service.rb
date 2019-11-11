@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module MergeRequests
   class CloseService < MergeRequests::BaseService
     def execute(merge_request, commit = nil)
@@ -15,6 +17,7 @@ module MergeRequests
         execute_hooks(merge_request, 'close')
         invalidate_cache_counts(merge_request, users: merge_request.assignees)
         merge_request.update_project_counter_caches
+        cleanup_environments(merge_request)
       end
 
       merge_request

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module API
   class Notes < Grape::API
     include PaginationParams
@@ -5,16 +7,14 @@ module API
 
     before { authenticate! }
 
-    NOTEABLE_TYPES = [Issue, MergeRequest, Snippet].freeze
-
-    NOTEABLE_TYPES.each do |noteable_type|
+    Helpers::NotesHelpers.noteable_types.each do |noteable_type|
       parent_type = noteable_type.parent_class.to_s.underscore
       noteables_str = noteable_type.to_s.underscore.pluralize
 
       params do
         requires :id, type: String, desc: "The ID of a #{parent_type}"
       end
-      resource parent_type.pluralize.to_sym, requirements: API::PROJECT_ENDPOINT_REQUIREMENTS do
+      resource parent_type.pluralize.to_sym, requirements: API::NAMESPACE_OR_PROJECT_REQUIREMENTS do
         noteables_str = noteable_type.to_s.underscore.pluralize
 
         desc "Get a list of #{noteable_type.to_s.downcase} notes" do
@@ -28,6 +28,7 @@ module API
                           desc: 'Return notes sorted in `asc` or `desc` order.'
           use :pagination
         end
+        # rubocop: disable CodeReuse/ActiveRecord
         get ":id/#{noteables_str}/:noteable_id/notes" do
           noteable = find_noteable(parent_type, noteables_str, params[:noteable_id])
 
@@ -36,7 +37,7 @@ module API
           # at the DB query level (which we cannot in that case), the current
           # page can have less elements than :per_page even if
           # there's more than one page.
-          raw_notes = noteable.notes.with_metadata.reorder(params[:order_by] => params[:sort])
+          raw_notes = noteable.notes.with_metadata.reorder(order_options_with_tie_breaker)
           notes =
             # paginate() only works with a relation. This could lead to a
             # mismatch between the pagination headers info and the actual notes
@@ -45,6 +46,7 @@ module API
             .reject { |n| n.cross_reference_not_visible_for?(current_user) }
           present notes, with: Entities::Note
         end
+        # rubocop: enable CodeReuse/ActiveRecord
 
         desc "Get a single #{noteable_type.to_s.downcase} note" do
           success Entities::Note

@@ -33,7 +33,7 @@ changes should be tested.
 
 ## [Testing best practices](best_practices.md)
 
-Everything you should know about how to write good tests: RSpec, FactoryBot,
+Everything you should know about how to write good tests: Test Design, RSpec, FactoryBot,
 system tests, parameterized tests etc.
 
 ---
@@ -56,6 +56,12 @@ we do about them.
 
 How GitLab test suite is run in the CI context: setup, caches, artifacts,
 parallelization, monitoring.
+
+---
+
+## [Review apps](review_apps.md)
+
+How review apps are set up for GitLab CE/EE and how to use them.
 
 ---
 

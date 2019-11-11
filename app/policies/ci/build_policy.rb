@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Ci
   class BuildPolicy < CommitStatusPolicy
     condition(:protected_ref) do
@@ -18,8 +20,17 @@ module Ci
       @subject.project.branch_allows_collaboration?(@user, @subject.ref)
     end
 
-    rule { protected_ref }.policy do
+    condition(:archived, scope: :subject) do
+      @subject.archived?
+    end
+
+    condition(:terminal, scope: :subject) do
+      @subject.has_terminal?
+    end
+
+    rule { protected_ref | archived }.policy do
       prevent :update_build
+      prevent :update_commit_status
       prevent :erase_build
     end
 
@@ -29,5 +40,7 @@ module Ci
       enable :update_build
       enable :update_commit_status
     end
+
+    rule { can?(:update_build) & terminal }.enable :create_build_terminal
   end
 end

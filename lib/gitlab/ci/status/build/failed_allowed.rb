@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module Ci
     module Status
@@ -12,7 +14,7 @@ module Gitlab
           end
 
           def group
-            'failed_with_warnings'
+            'failed-with-warnings'
           end
 
           def status_tooltip

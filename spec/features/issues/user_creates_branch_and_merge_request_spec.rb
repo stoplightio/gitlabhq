@@ -1,6 +1,7 @@
 require 'rails_helper'
 
 describe 'User creates branch and merge request on issue page', :js do
+  let(:membership_level) { :developer }
   let(:user) { create(:user) }
   let!(:project) { create(:project, :repository) }
   let(:issue) { create(:issue, project: project, title: 'Cherry-Coloured Funk') }
@@ -17,7 +18,7 @@ describe 'User creates branch and merge request on issue page', :js do
 
   context 'when signed in' do
     before do
-      project.add_developer(user)
+      project.add_user(user, membership_level)
 
       sign_in(user)
     end
@@ -28,7 +29,7 @@ describe 'User creates branch and merge request on issue page', :js do
       end
 
       # In order to improve tests performance, all UI checks are placed in this test.
-      it 'shows elements' do
+      it 'shows elements', :quarantine do
         button_create_merge_request = find('.js-create-merge-request')
         button_toggle_dropdown = find('.create-mr-dropdown-wrap .dropdown-toggle')
 
@@ -55,11 +56,11 @@ describe 'User creates branch and merge request on issue page', :js do
           test_branch_name_checking(input_branch_name)
           test_source_checking(input_source)
 
-          # The button inside dropdown should be disabled if any errors occured.
+          # The button inside dropdown should be disabled if any errors occurred.
           expect(page).to have_button('Create branch', disabled: true)
         end
 
-        # The top level button should be disabled if any errors occured.
+        # The top level button should be disabled if any errors occurred.
         expect(page).to have_button('Create branch', disabled: true)
       end
 
@@ -76,7 +77,7 @@ describe 'User creates branch and merge request on issue page', :js do
 
           visit project_issue_path(project, issue)
 
-          expect(page).to have_content('created branch 1-cherry-coloured-funk')
+          expect(page).to have_content("created merge request !1 to address this issue")
           expect(page).to have_content('mentioned in merge request !1')
         end
 
@@ -106,7 +107,7 @@ describe 'User creates branch and merge request on issue page', :js do
 
           visit project_issue_path(project, issue)
 
-          expect(page).to have_content('created branch custom-branch-name')
+          expect(page).to have_content("created merge request !1 to address this issue")
           expect(page).to have_content('mentioned in merge request !1')
         end
 
@@ -138,10 +139,10 @@ describe 'User creates branch and merge request on issue page', :js do
         visit project_issue_path(project, issue)
       end
 
-      it 'disables the create branch button' do
+      it 'disables the create branch button', :quarantine do
         expect(page).to have_css('.create-mr-dropdown-wrap .unavailable:not(.hidden)')
         expect(page).to have_css('.create-mr-dropdown-wrap .available.hidden', visible: false)
-        expect(page).to have_content /1 Related Merge Request/
+        expect(page).to have_content /Related merge requests/
       end
     end
 
@@ -165,6 +166,39 @@ describe 'User creates branch and merge request on issue page', :js do
         visit project_issue_path(project, issue)
 
         expect(page).not_to have_css('.create-mr-dropdown-wrap')
+      end
+    end
+
+    context 'when related branch exists' do
+      let!(:project) { create(:project, :repository, :private) }
+      let(:branch_name) { "#{issue.iid}-foo" }
+
+      before do
+        project.repository.create_branch(branch_name, 'master')
+
+        visit project_issue_path(project, issue)
+      end
+
+      context 'when user is developer' do
+        it 'shows related branches' do
+          expect(page).to have_css('#related-branches')
+
+          wait_for_requests
+
+          expect(page).to have_content(branch_name)
+        end
+      end
+
+      context 'when user is guest' do
+        let(:membership_level) { :guest }
+
+        it 'does not show related branches' do
+          expect(page).not_to have_css('#related-branches')
+
+          wait_for_requests
+
+          expect(page).not_to have_content(branch_name)
+        end
       end
     end
   end

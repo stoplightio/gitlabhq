@@ -1,4 +1,6 @@
-class SpamLog < ActiveRecord::Base
+# frozen_string_literal: true
+
+class SpamLog < ApplicationRecord
   belongs_to :user
 
   validates :user, presence: true

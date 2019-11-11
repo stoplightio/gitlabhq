@@ -1,6 +1,6 @@
 require 'spec_helper'
 
-describe 'Dashboard Issues Calendar Feed'  do
+describe 'Dashboard Issues Calendar Feed' do
   describe 'GET /issues' do
     let!(:user)     { create(:user, email: 'private1@example.com', public_email: 'public1@example.com') }
     let!(:assignee) { create(:user, email: 'private2@example.com', public_email: 'public2@example.com') }
@@ -8,7 +8,7 @@ describe 'Dashboard Issues Calendar Feed'  do
     let(:milestone) { create(:milestone, project_id: project.id, title: 'v1.0') }
 
     before do
-      project.add_master(user)
+      project.add_maintainer(user)
     end
 
     context 'when authenticated' do

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe KubernetesService, :use_clean_rails_memory_store_caching do
@@ -68,11 +70,11 @@ describe KubernetesService, :use_clean_rails_memory_store_caching do
         kubernetes_service.properties['namespace'] = "foo"
       end
 
-      it 'should not update attributes' do
+      it 'does not update attributes' do
         expect(kubernetes_service.save).to be_falsy
       end
 
-      it 'should include an error with a deprecation message' do
+      it 'includes an error with a deprecation message' do
         kubernetes_service.valid?
         expect(kubernetes_service.errors[:base].first).to match(/Kubernetes service integration has been deprecated/)
       end
@@ -81,7 +83,7 @@ describe KubernetesService, :use_clean_rails_memory_store_caching do
     context 'with a non-deprecated service' do
       let(:kubernetes_service) { create(:kubernetes_service) }
 
-      it 'should update attributes' do
+      it 'updates attributes' do
         kubernetes_service.properties['namespace'] = 'foo'
         expect(kubernetes_service.save).to be_truthy
       end
@@ -96,15 +98,15 @@ describe KubernetesService, :use_clean_rails_memory_store_caching do
         kubernetes_service.save
       end
 
-      it 'should deactive the service' do
+      it 'deactivates the service' do
         expect(kubernetes_service.active?).to be_falsy
       end
 
-      it 'should not include a deprecation message as error' do
+      it 'does not include a deprecation message as error' do
         expect(kubernetes_service.errors.messages.count).to eq(0)
       end
 
-      it 'should update attributes' do
+      it 'updates attributes' do
         expect(kubernetes_service.properties['namespace']).to eq("foo")
       end
     end
@@ -116,7 +118,7 @@ describe KubernetesService, :use_clean_rails_memory_store_caching do
         kubernetes_service.properties['namespace'] = 'foo'
       end
 
-      it 'should update attributes' do
+      it 'updates attributes' do
         expect(kubernetes_service.save).to be_truthy
         expect(kubernetes_service.properties['namespace']).to eq('foo')
       end
@@ -253,7 +255,7 @@ describe KubernetesService, :use_clean_rails_memory_store_caching do
     end
   end
 
-  describe '#predefined_variables' do
+  describe '#predefined_variable' do
     let(:kubeconfig) do
       config_file = expand_fixture_path('config/kubeconfig.yml')
       config = YAML.load(File.read(config_file))
@@ -274,9 +276,9 @@ describe KubernetesService, :use_clean_rails_memory_store_caching do
 
     shared_examples 'setting variables' do
       it 'sets the variables' do
-        expect(subject.predefined_variables).to include(
+        expect(subject.predefined_variables(project: project)).to include(
           { key: 'KUBE_URL', value: 'https://kube.domain.com', public: true },
-          { key: 'KUBE_TOKEN', value: 'token', public: false },
+          { key: 'KUBE_TOKEN', value: 'token', public: false, masked: true },
           { key: 'KUBE_NAMESPACE', value: namespace, public: true },
           { key: 'KUBECONFIG', value: kubeconfig, public: false, file: true },
           { key: 'KUBE_CA_PEM', value: 'CA PEM DATA', public: true },
@@ -301,7 +303,7 @@ describe KubernetesService, :use_clean_rails_memory_store_caching do
       it_behaves_like 'setting variables'
 
       it 'sets the KUBE_NAMESPACE' do
-        kube_namespace = subject.predefined_variables.find { |h| h[:key] == 'KUBE_NAMESPACE' }
+        kube_namespace = subject.predefined_variables(project: project).find { |h| h[:key] == 'KUBE_NAMESPACE' }
 
         expect(kube_namespace).not_to be_nil
         expect(kube_namespace[:value]).to match(/\A#{Gitlab::PathRegex::PATH_REGEX_STR}-\d+\z/)
@@ -323,13 +325,14 @@ describe KubernetesService, :use_clean_rails_memory_store_caching do
     end
 
     context 'with valid pods' do
-      let(:pod) { kube_pod(app: environment.slug) }
+      let(:pod) { kube_pod(environment_slug: environment.slug, project_slug: project.full_path_slug) }
+      let(:pod_with_no_terminal) { kube_pod(environment_slug: environment.slug, project_slug: project.full_path_slug, status: "Pending") }
       let(:terminals) { kube_terminals(service, pod) }
 
       before do
         stub_reactive_cache(
           service,
-          pods: [pod, pod, kube_pod(app: "should-be-filtered-out")]
+          pods: [pod, pod, pod_with_no_terminal, kube_pod(environment_slug: "should-be-filtered-out")]
         )
       end
 
@@ -360,14 +363,16 @@ describe KubernetesService, :use_clean_rails_memory_store_caching do
     context 'when kubernetes responds with valid pods' do
       before do
         stub_kubeclient_pods
+        stub_kubeclient_deployments # Used by EE
       end
 
-      it { is_expected.to eq(pods: [kube_pod]) }
+      it { is_expected.to include(pods: [kube_pod]) }
     end
 
     context 'when kubernetes responds with 500s' do
       before do
         stub_kubeclient_pods(status: 500)
+        stub_kubeclient_deployments(status: 500) # Used by EE
       end
 
       it { expect { subject }.to raise_error(Kubeclient::HttpError) }
@@ -376,9 +381,10 @@ describe KubernetesService, :use_clean_rails_memory_store_caching do
     context 'when kubernetes responds with 404s' do
       before do
         stub_kubeclient_pods(status: 404)
+        stub_kubeclient_deployments(status: 404) # Used by EE
       end
 
-      it { is_expected.to eq(pods: []) }
+      it { is_expected.to include(pods: []) }
     end
   end
 
@@ -386,13 +392,13 @@ describe KubernetesService, :use_clean_rails_memory_store_caching do
     let(:kubernetes_service) { create(:kubernetes_service) }
 
     context 'with an active kubernetes service' do
-      it 'should return false' do
+      it 'returns false' do
         expect(kubernetes_service.deprecated?).to be_falsy
       end
     end
 
     context 'with a inactive kubernetes service' do
-      it 'should return true' do
+      it 'returns true' do
         kubernetes_service.update_attribute(:active, false)
         expect(kubernetes_service.deprecated?).to be_truthy
       end
@@ -402,18 +408,18 @@ describe KubernetesService, :use_clean_rails_memory_store_caching do
   describe "#deprecation_message" do
     let(:kubernetes_service) { create(:kubernetes_service) }
 
-    it 'should indicate the service is deprecated' do
+    it 'indicates the service is deprecated' do
       expect(kubernetes_service.deprecation_message).to match(/Kubernetes service integration has been deprecated/)
     end
 
     context 'if the services is active' do
-      it 'should return a message' do
+      it 'returns a message' do
         expect(kubernetes_service.deprecation_message).to match(/Your Kubernetes cluster information on this page is still editable/)
       end
     end
 
     context 'if the service is not active' do
-      it 'should return a message' do
+      it 'returns a message' do
         kubernetes_service.update_attribute(:active, false)
         expect(kubernetes_service.deprecation_message).to match(/Fields on this page are now uneditable/)
       end

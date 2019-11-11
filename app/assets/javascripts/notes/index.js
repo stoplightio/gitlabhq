@@ -1,46 +1,60 @@
 import Vue from 'vue';
+import { isEE } from '~/lib/utils/common_utils';
+import initNoteStats from 'ee_else_ce/event_tracking/notes';
 import notesApp from './components/notes_app.vue';
+import initDiscussionFilters from './discussion_filters';
+import createStore from './stores';
 
-document.addEventListener(
-  'DOMContentLoaded',
-  () =>
-    new Vue({
-      el: '#js-vue-notes',
-      components: {
-        notesApp,
-      },
-      data() {
-        const notesDataset = document.getElementById('js-vue-notes').dataset;
-        const parsedUserData = JSON.parse(notesDataset.currentUserData);
-        const noteableData = JSON.parse(notesDataset.noteableData);
-        let currentUserData = {};
+document.addEventListener('DOMContentLoaded', () => {
+  const store = createStore();
 
-        noteableData.noteableType = notesDataset.noteableType;
+  // eslint-disable-next-line no-new
+  new Vue({
+    el: '#js-vue-notes',
+    components: {
+      notesApp,
+    },
+    store,
+    data() {
+      const notesDataset = document.getElementById('js-vue-notes').dataset;
+      const parsedUserData = JSON.parse(notesDataset.currentUserData);
+      const noteableData = JSON.parse(notesDataset.noteableData);
+      let currentUserData = {};
 
-        if (parsedUserData) {
-          currentUserData = {
-            id: parsedUserData.id,
-            name: parsedUserData.name,
-            username: parsedUserData.username,
-            avatar_url: parsedUserData.avatar_path || parsedUserData.avatar_url,
-            path: parsedUserData.path,
-          };
-        }
+      noteableData.noteableType = notesDataset.noteableType;
+      noteableData.targetType = notesDataset.targetType;
 
-        return {
-          noteableData,
-          currentUserData,
-          notesData: JSON.parse(notesDataset.notesData),
+      if (parsedUserData) {
+        currentUserData = {
+          id: parsedUserData.id,
+          name: parsedUserData.name,
+          username: parsedUserData.username,
+          avatar_url: parsedUserData.avatar_path || parsedUserData.avatar_url,
+          path: parsedUserData.path,
         };
-      },
-      render(createElement) {
-        return createElement('notes-app', {
-          props: {
-            noteableData: this.noteableData,
-            notesData: this.notesData,
-            userData: this.currentUserData,
-          },
-        });
-      },
-    }),
-);
+      }
+
+      return {
+        noteableData,
+        currentUserData,
+        notesData: JSON.parse(notesDataset.notesData),
+      };
+    },
+    mounted() {
+      if (isEE) {
+        initNoteStats();
+      }
+    },
+    render(createElement) {
+      return createElement('notes-app', {
+        props: {
+          noteableData: this.noteableData,
+          notesData: this.notesData,
+          userData: this.currentUserData,
+        },
+      });
+    },
+  });
+
+  initDiscussionFilters(store);
+});

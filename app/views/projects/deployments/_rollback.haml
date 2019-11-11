@@ -1,6 +1,8 @@
-- if can?(current_user, :create_deployment, deployment) && deployment.deployable
-  = link_to [:retry, @project.namespace.becomes(Namespace), @project, deployment.deployable], method: :post, class: 'btn btn-build' do
+- if can?(current_user, :create_deployment, deployment)
+  - tooltip = deployment.last? ? s_('Environments|Re-deploy to environment') : s_('Environments|Rollback environment')
+  = button_tag class: 'btn btn-default btn-build has-tooltip', type: 'button', data: { toggle: 'modal', target: "#confirm-rollback-modal-#{deployment.id}" }, title: tooltip do
     - if deployment.last?
-      Re-deploy
+      = sprite_icon('repeat')
     - else
-      Rollback
+      = sprite_icon('redo')
+  = render 'projects/deployments/confirm_rollback_modal', deployment: deployment

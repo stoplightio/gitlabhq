@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module LegacyGithubImport
     class Importer
@@ -78,8 +80,7 @@ module Gitlab
       def handle_errors
         return unless errors.any?
 
-        project.ensure_import_state
-        project.import_state&.update_column(:last_error, {
+        project.import_state.update_column(:last_error, {
           message: 'The remote data could not be fully imported.',
           errors: errors
         }.to_json)
@@ -88,12 +89,10 @@ module Gitlab
       def import_labels
         fetch_resources(:labels, repo, per_page: 100) do |labels|
           labels.each do |raw|
-            begin
-              gh_label = LabelFormatter.new(project, raw)
-              gh_label.create!
-            rescue => e
-              errors << { type: :label, url: Gitlab::UrlSanitizer.sanitize(gh_label.url), errors: e.message }
-            end
+            gh_label = LabelFormatter.new(project, raw)
+            gh_label.create!
+          rescue => e
+            errors << { type: :label, url: Gitlab::UrlSanitizer.sanitize(gh_label.url), errors: e.message }
           end
         end
 
@@ -103,16 +102,15 @@ module Gitlab
       def import_milestones
         fetch_resources(:milestones, repo, state: :all, per_page: 100) do |milestones|
           milestones.each do |raw|
-            begin
-              gh_milestone = MilestoneFormatter.new(project, raw)
-              gh_milestone.create!
-            rescue => e
-              errors << { type: :milestone, url: Gitlab::UrlSanitizer.sanitize(gh_milestone.url), errors: e.message }
-            end
+            gh_milestone = MilestoneFormatter.new(project, raw)
+            gh_milestone.create!
+          rescue => e
+            errors << { type: :milestone, url: Gitlab::UrlSanitizer.sanitize(gh_milestone.url), errors: e.message }
           end
         end
       end
 
+      # rubocop: disable CodeReuse/ActiveRecord
       def import_issues
         fetch_resources(:issues, repo, state: :all, sort: :created, direction: :asc, per_page: 100) do |issues|
           issues.each do |raw|
@@ -133,6 +131,7 @@ module Gitlab
           end
         end
       end
+      # rubocop: enable CodeReuse/ActiveRecord
 
       def import_pull_requests
         fetch_resources(:pull_requests, repo, state: :all, sort: :created, direction: :asc, per_page: 100) do |pull_requests|
@@ -193,6 +192,7 @@ module Gitlab
         issuable.update_attribute(:label_ids, label_ids)
       end
 
+      # rubocop: disable CodeReuse/ActiveRecord
       def import_comments(issuable_type)
         resource_type = "#{issuable_type}_comments".to_sym
 
@@ -213,31 +213,32 @@ module Gitlab
           create_comments(comments)
         end
       end
+      # rubocop: enable CodeReuse/ActiveRecord
 
+      # rubocop: disable CodeReuse/ActiveRecord
       def create_comments(comments)
         ActiveRecord::Base.no_touching do
           comments.each do |raw|
-            begin
-              comment = CommentFormatter.new(project, raw, client)
+            comment = CommentFormatter.new(project, raw, client)
 
-              # GH does not return info about comment's parent, so we guess it by checking its URL!
-              *_, parent, iid = URI(raw.html_url).path.split('/')
+            # GH does not return info about comment's parent, so we guess it by checking its URL!
+            *_, parent, iid = URI(raw.html_url).path.split('/')
 
-              issuable = if parent == 'issues'
-                           Issue.find_by(project_id: project.id, iid: iid)
-                         else
-                           MergeRequest.find_by(target_project_id: project.id, iid: iid)
-                         end
+            issuable = if parent == 'issues'
+                         Issue.find_by(project_id: project.id, iid: iid)
+                       else
+                         MergeRequest.find_by(target_project_id: project.id, iid: iid)
+                       end
 
-              next unless issuable
+            next unless issuable
 
-              issuable.notes.create!(comment.attributes)
-            rescue => e
-              errors << { type: :comment, url: Gitlab::UrlSanitizer.sanitize(raw.url), errors: e.message }
-            end
+            issuable.notes.create!(comment.attributes)
+          rescue => e
+            errors << { type: :comment, url: Gitlab::UrlSanitizer.sanitize(raw.url), errors: e.message }
           end
         end
       end
+      # rubocop: enable CodeReuse/ActiveRecord
 
       def discard_inserted_comments(comments, last_note)
         last_note_attrs = nil
@@ -260,7 +261,7 @@ module Gitlab
       def import_wiki
         unless project.wiki.repository_exists?
           wiki = WikiFormatter.new(project)
-          gitlab_shell.import_repository(project.repository_storage, wiki.disk_path, wiki.import_url)
+          gitlab_shell.import_wiki_repository(project, wiki)
         end
       rescue Gitlab::Shell::Error => e
         # GitHub error message when the wiki repo has not been created,
@@ -274,12 +275,10 @@ module Gitlab
       def import_releases
         fetch_resources(:releases, repo, per_page: 100) do |releases|
           releases.each do |raw|
-            begin
-              gh_release = ReleaseFormatter.new(project, raw)
-              gh_release.create! if gh_release.valid?
-            rescue => e
-              errors << { type: :release, url: Gitlab::UrlSanitizer.sanitize(gh_release.url), errors: e.message }
-            end
+            gh_release = ReleaseFormatter.new(project, raw)
+            gh_release.create! if gh_release.valid?
+          rescue => e
+            errors << { type: :release, url: Gitlab::UrlSanitizer.sanitize(gh_release.url), errors: e.message }
           end
         end
       end

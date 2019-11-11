@@ -1,8 +1,8 @@
 import Vue from 'vue';
-import { convertPermissionToBoolean } from '~/lib/utils/common_utils';
-import Dashboard from './components/dashboard.vue';
+import { parseBoolean } from '~/lib/utils/common_utils';
+import Dashboard from 'ee_else_ce/monitoring/components/dashboard.vue';
 
-export default () => {
+export default (props = {}) => {
   const el = document.getElementById('prometheus-graphs');
 
   if (el && el.dataset) {
@@ -13,7 +13,9 @@ export default () => {
         return createElement(Dashboard, {
           props: {
             ...el.dataset,
-            hasMetrics: convertPermissionToBoolean(el.dataset.hasMetrics),
+            hasMetrics: parseBoolean(el.dataset.hasMetrics),
+            showTimeWindowDropdown: gon.features.metricsTimeWindow,
+            ...props,
           },
         });
       },

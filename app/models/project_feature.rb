@@ -1,4 +1,6 @@
-class ProjectFeature < ActiveRecord::Base
+# frozen_string_literal: true
+
+class ProjectFeature < ApplicationRecord
   # == Project features permissions
   #
   # Grants access level to project tools
@@ -11,19 +13,21 @@ class ProjectFeature < ActiveRecord::Base
   # Disabled: not enabled for anyone
   # Private:  enabled only for team members
   # Enabled:  enabled for everyone able to access the project
+  # Public:   enabled for everyone (only allowed for pages)
   #
 
   # Permission levels
   DISABLED = 0
   PRIVATE  = 10
   ENABLED  = 20
+  PUBLIC   = 30
 
-  FEATURES = %i(issues merge_requests wiki snippets builds repository).freeze
+  FEATURES = %i(issues merge_requests wiki snippets builds repository pages).freeze
+  PRIVATE_FEATURES_MIN_ACCESS_LEVEL = { merge_requests: Gitlab::Access::REPORTER }.freeze
 
   class << self
     def access_level_attribute(feature)
-      feature = feature.model_name.plural.to_sym if feature.respond_to?(:model_name)
-      raise ArgumentError, "invalid project feature: #{feature}" unless FEATURES.include?(feature)
+      feature = ensure_feature!(feature)
 
       "#{feature}_access_level".to_sym
     end
@@ -33,6 +37,21 @@ class ProjectFeature < ActiveRecord::Base
       table = connection.quote_table_name(table_name)
 
       "#{table}.#{attribute}"
+    end
+
+    def required_minimum_access_level(feature)
+      feature = ensure_feature!(feature)
+
+      PRIVATE_FEATURES_MIN_ACCESS_LEVEL.fetch(feature, Gitlab::Access::GUEST)
+    end
+
+    private
+
+    def ensure_feature!(feature)
+      feature = feature.model_name.plural.to_sym if feature.respond_to?(:model_name)
+      raise ArgumentError, "invalid project feature: #{feature}" unless FEATURES.include?(feature)
+
+      feature
     end
   end
 
@@ -44,6 +63,7 @@ class ProjectFeature < ActiveRecord::Base
   validates :project, presence: true
 
   validate :repository_children_level
+  validate :allowed_access_levels
 
   default_value_for :builds_access_level,         value: ENABLED, allows_nil: false
   default_value_for :issues_access_level,         value: ENABLED, allows_nil: false
@@ -53,7 +73,10 @@ class ProjectFeature < ActiveRecord::Base
   default_value_for :repository_access_level,     value: ENABLED, allows_nil: false
 
   def feature_available?(feature, user)
-    get_permission(user, access_level(feature))
+    # This feature might not be behind a feature flag at all, so default to true
+    return false unless ::Feature.enabled?(feature, user, default_enabled: true)
+
+    get_permission(user, feature)
   end
 
   def access_level(feature)
@@ -76,6 +99,16 @@ class ProjectFeature < ActiveRecord::Base
     issues_access_level > DISABLED
   end
 
+  def pages_enabled?
+    pages_access_level > DISABLED
+  end
+
+  def public_pages?
+    return true unless Gitlab.config.pages.access_control
+
+    pages_access_level == PUBLIC || pages_access_level == ENABLED && project.public?
+  end
+
   private
 
   # Validates builds and merge requests access level
@@ -90,16 +123,36 @@ class ProjectFeature < ActiveRecord::Base
     %i(merge_requests_access_level builds_access_level).each(&validator)
   end
 
-  def get_permission(user, level)
-    case level
+  # Validates access level for other than pages cannot be PUBLIC
+  def allowed_access_levels
+    validator = lambda do |field|
+      level = public_send(field) || ProjectFeature::ENABLED # rubocop:disable GitlabSecurity/PublicSend
+      not_allowed = level > ProjectFeature::ENABLED
+      self.errors.add(field, "cannot have public visibility level") if not_allowed
+    end
+
+    (FEATURES - %i(pages)).each {|f| validator.call("#{f}_access_level")}
+  end
+
+  def get_permission(user, feature)
+    case access_level(feature)
     when DISABLED
       false
     when PRIVATE
-      user && (project.team.member?(user) || user.full_private_access?)
+      team_access?(user, feature)
     when ENABLED
+      true
+    when PUBLIC
       true
     else
       true
     end
+  end
+
+  def team_access?(user, feature)
+    return unless user
+    return true if user.full_private_access?
+
+    project.team.member?(user, ProjectFeature.required_minimum_access_level(feature))
   end
 end

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Projects::PipelinesSettingsController do
@@ -6,14 +8,14 @@ describe Projects::PipelinesSettingsController do
   let(:project) { project_auto_devops.project }
 
   before do
-    project.add_master(user)
+    project.add_maintainer(user)
 
     sign_in(user)
   end
 
   describe 'GET show' do
     it 'redirects with 302 status code' do
-      get :show, namespace_id: project.namespace, project_id: project
+      get :show, params: { namespace_id: project.namespace, project_id: project }
 
       expect(response).to have_gitlab_http_status(302)
     end

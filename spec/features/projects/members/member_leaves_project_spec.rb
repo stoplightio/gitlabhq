@@ -1,18 +1,29 @@
 require 'spec_helper'
 
-feature 'Projects > Members > Member leaves project' do
+describe 'Projects > Members > Member leaves project' do
   let(:user) { create(:user) }
   let(:project) { create(:project, :repository) }
 
-  background do
+  before do
     project.add_developer(user)
     sign_in(user)
-    visit project_path(project)
   end
 
-  scenario 'user leaves project' do
+  it 'user leaves project' do
+    visit project_path(project)
+
     click_link 'Leave project'
 
+    expect(current_path).to eq(dashboard_projects_path)
+    expect(project.users.exists?(user.id)).to be_falsey
+  end
+
+  it 'user leaves project by url param', :js do
+    visit project_path(project, leave: 1)
+
+    page.accept_confirm
+
+    expect(find('.flash-notice')).to have_content "You left the \"#{project.full_name}\" project"
     expect(current_path).to eq(dashboard_projects_path)
     expect(project.users.exists?(user.id)).to be_falsey
   end

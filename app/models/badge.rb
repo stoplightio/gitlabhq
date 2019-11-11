@@ -1,4 +1,8 @@
-class Badge < ActiveRecord::Base
+# frozen_string_literal: true
+
+class Badge < ApplicationRecord
+  include FromUnion
+
   # This structure sets the placeholders that the urls
   # can have. This hash also sets which action to ask when
   # the placeholder is found.
@@ -18,7 +22,7 @@ class Badge < ActiveRecord::Base
 
   scope :order_created_at_asc, -> { reorder(created_at: :asc) }
 
-  validates :link_url, :image_url, url: { protocols: %w(http https) }
+  validates :link_url, :image_url, addressable_url: true
   validates :type, presence: true
 
   def rendered_link_url(project = nil)

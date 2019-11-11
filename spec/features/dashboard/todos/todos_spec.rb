@@ -1,6 +1,6 @@
 require 'spec_helper'
 
-feature 'Dashboard Todos' do
+describe 'Dashboard Todos' do
   let(:user)    { create(:user) }
   let(:author)  { create(:user) }
   let(:project) { create(:project, :public) }
@@ -14,6 +14,26 @@ feature 'Dashboard Todos' do
 
     it 'shows "All done" message' do
       expect(page).to have_content 'Todos let you see what you should do next'
+    end
+  end
+
+  context 'when the todo references a merge request' do
+    let(:referenced_mr) { create(:merge_request, source_project: project) }
+    let(:note) { create(:note, project: project, note: "Check out #{referenced_mr.to_reference}") }
+    let!(:todo) { create(:todo, :mentioned, user: user, project: project, author: author, note: note) }
+
+    before do
+      sign_in(user)
+      visit dashboard_todos_path
+    end
+
+    it 'renders the mr link with the extra attributes' do
+      link = page.find_link(referenced_mr.to_reference)
+
+      expect(link).not_to be_nil
+      expect(link['data-iid']).to eq(referenced_mr.iid.to_s)
+      expect(link['data-project-path']).to eq(referenced_mr.project.full_path)
+      expect(link['data-mr-title']).to eq(referenced_mr.title)
     end
   end
 
@@ -112,7 +132,7 @@ feature 'Dashboard Todos' do
       end
 
       it 'shows issue assigned to yourself message' do
-        page.within('.js-todos-all')  do
+        page.within('.js-todos-all') do
           expect(page).to have_content("You assigned issue #{issue.to_reference(full: true)} to yourself")
         end
       end
@@ -125,8 +145,8 @@ feature 'Dashboard Todos' do
       end
 
       it 'shows you added a todo message' do
-        page.within('.js-todos-all')  do
-          expect(page).to have_content("You added a todo for issue #{issue.to_reference(full: true)}")
+        page.within('.js-todos-all') do
+          expect(page).to have_content("You added a todo for issue #{issue.to_reference(full: true)}")
           expect(page).not_to have_content('to yourself')
         end
       end
@@ -139,8 +159,8 @@ feature 'Dashboard Todos' do
       end
 
       it 'shows you mentioned yourself message' do
-        page.within('.js-todos-all')  do
-          expect(page).to have_content("You mentioned yourself on issue #{issue.to_reference(full: true)}")
+        page.within('.js-todos-all') do
+          expect(page).to have_content("You mentioned yourself on issue #{issue.to_reference(full: true)}")
           expect(page).not_to have_content('to yourself')
         end
       end
@@ -153,8 +173,8 @@ feature 'Dashboard Todos' do
       end
 
       it 'shows you directly addressed yourself message' do
-        page.within('.js-todos-all')  do
-          expect(page).to have_content("You directly addressed yourself on issue #{issue.to_reference(full: true)}")
+        page.within('.js-todos-all') do
+          expect(page).to have_content("You directly addressed yourself on issue #{issue.to_reference(full: true)}")
           expect(page).not_to have_content('to yourself')
         end
       end
@@ -169,8 +189,8 @@ feature 'Dashboard Todos' do
       end
 
       it 'shows you set yourself as an approver message' do
-        page.within('.js-todos-all')  do
-          expect(page).to have_content("You set yourself as an approver for merge request #{merge_request.to_reference(full: true)}")
+        page.within('.js-todos-all') do
+          expect(page).to have_content("You set yourself as an approver for merge request #{merge_request.to_reference(full: true)}")
           expect(page).not_to have_content('to yourself')
         end
       end
@@ -332,7 +352,7 @@ feature 'Dashboard Todos' do
     it 'links to the pipelines for the merge request' do
       href = pipelines_project_merge_request_path(project, todo.target)
 
-      expect(page).to have_link "merge request #{todo.target.to_reference(full: true)}", href
+      expect(page).to have_link "merge request #{todo.target.to_reference(full: true)}", href: href
     end
   end
 end

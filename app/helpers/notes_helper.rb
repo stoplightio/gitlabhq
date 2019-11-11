@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module NotesHelper
   def note_target_fields(note)
     if note.noteable
@@ -83,7 +85,7 @@ module NotesHelper
 
       diffs_project_merge_request_path(discussion.project, discussion.noteable, path_params)
     elsif discussion.for_commit?
-      anchor = discussion.line_code if discussion.diff_discussion?
+      anchor = discussion.diff_discussion? ? discussion.line_code : "note_#{discussion.first_note.id}"
 
       project_commit_path(discussion.project, discussion.noteable, anchor: anchor)
     end
@@ -108,7 +110,7 @@ module NotesHelper
   end
 
   def noteable_note_url(note)
-    Gitlab::UrlBuilder.build(note)
+    Gitlab::UrlBuilder.build(note) if note.id
   end
 
   def form_resources
@@ -120,30 +122,32 @@ module NotesHelper
   end
 
   def new_form_url
-    return nil unless @snippet.is_a?(PersonalSnippet)
+    return unless @snippet.is_a?(PersonalSnippet)
 
     snippet_notes_path(@snippet)
   end
 
   def can_create_note?
-    issuable = @issue || @merge_request
+    noteable = @issue || @merge_request || @snippet || @project
 
-    if @snippet.is_a?(PersonalSnippet)
-      can?(current_user, :comment_personal_snippet, @snippet)
-    elsif issuable
-      can?(current_user, :create_note, issuable)
-    else
-      can?(current_user, :create_note, @project)
-    end
+    can?(current_user, :create_note, noteable)
   end
 
   def initial_notes_data(autocomplete)
     {
       notesUrl: notes_url,
-      notesIds: @notes.map(&:id),
+      notesIds: @noteable.notes.pluck(:id), # rubocop: disable CodeReuse/ActiveRecord
       now: Time.now.to_i,
       diffView: diff_view,
-      autocomplete: autocomplete
+      enableGFM: {
+        emojis: true,
+        members: autocomplete,
+        issues: autocomplete,
+        mergeRequests: autocomplete,
+        epics: autocomplete,
+        milestones: autocomplete,
+        labels: autocomplete
+      }
     }
   end
 
@@ -167,18 +171,18 @@ module NotesHelper
       notesPath: notes_url,
       totalNotes: issuable.discussions.length,
       lastFetchedAt: Time.now.to_i
-    }.to_json
+    }
   end
 
   def discussion_resolved_intro(discussion)
     discussion.resolved_by_push? ? 'Automatically resolved' : 'Resolved'
   end
 
-  def has_vue_discussions_cookie?
-    cookies[:vue_mr_discussions] == 'true'
+  def rendered_for_merge_request?
+    params[:from_merge_request].present?
   end
 
   def serialize_notes?
-    has_vue_discussions_cookie? && !params['html']
+    rendered_for_merge_request? || params['html'].nil?
   end
 end

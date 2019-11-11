@@ -23,7 +23,10 @@
 }
 
 .settings {
-  border-bottom: 1px solid $gray-darker;
+  // border-top for each item except the top one
+  + .settings {
+    border-top: 1px solid $border-color;
+  }
 
   &:first-of-type {
     margin-top: 10px;
@@ -36,10 +39,14 @@
 
 .settings-header {
   position: relative;
-  padding: 20px 110px 10px 0;
+  padding: 20px 110px 0 0;
 
   h4 {
     margin-top: 0;
+  }
+
+  .settings-title {
+    cursor: pointer;
   }
 
   button {
@@ -52,7 +59,7 @@
 
 .settings-content {
   max-height: 1px;
-  overflow-y: scroll;
+  overflow-y: hidden;
   padding-right: 110px;
   animation: collapseMaxHeight 300ms ease-out;
   // Keep the section from expanding when we scroll over it
@@ -106,25 +113,25 @@
 
 .settings-list-icon {
   color: $gl-text-color-secondary;
-  font-size: $settings-icon-size;
+  font-size: $default-icon-size;
   line-height: 42px;
 }
 
 .settings-message {
   padding: 5px;
   line-height: 1.3;
-  color: $warning-message-color;
-  background-color: $warning-message-bg;
-  border: 1px solid $warning-message-border;
+  color: $orange-700;
+  background-color: $orange-100;
+  border: 1px solid $orange-200;
   border-radius: $border-radius-base;
 }
 
 .warning-title {
-  color: $gl-warning;
+  color: $orange-500;
 }
 
 .danger-title {
-  color: $gl-danger;
+  color: $red-500;
 }
 
 .integration-settings-form {
@@ -163,12 +170,14 @@
       font-weight: $gl-font-weight-normal;
       display: inline-block;
       color: $gl-text-color;
+      vertical-align: top;
     }
 
     .option-description,
     .option-disabled-reason {
       margin-left: 30px;
       color: $project-option-descr-color;
+      margin-top: -5px;
     }
 
     .option-disabled-reason {
@@ -188,6 +197,47 @@
         display: block;
       }
     }
+  }
+}
+
+.initialize-with-readme-setting {
+  .form-check {
+    margin-bottom: 10px;
+
+    .option-title {
+      font-weight: $gl-font-weight-normal;
+      display: inline-block;
+      color: $gl-text-color;
+    }
+
+    .option-description {
+      color: $project-option-descr-color;
+    }
+  }
+}
+
+.nested-settings {
+  padding-left: 20px;
+}
+
+.input-btn-group {
+  display: flex;
+
+  .input-large {
+    flex: 1;
+  }
+
+  .btn {
+    margin-left: 10px;
+  }
+}
+
+.content-list > .settings-flex-row {
+  display: flex;
+  align-items: center;
+
+  .float-right {
+    margin-left: auto;
   }
 }
 
@@ -221,6 +271,27 @@
     }
   }
 
+  .custom-monitored-metrics {
+    .card-title {
+      display: flex;
+      align-items: center;
+
+      > .btn-success {
+        margin-left: auto;
+      }
+    }
+
+    .custom-metric {
+      display: flex;
+      align-items: center;
+    }
+
+    .custom-metric-link-bold {
+      font-weight: $gl-font-weight-bold;
+      text-decoration: none;
+    }
+  }
+
   .loading-metrics,
   .empty-metrics {
     padding: 30px 10px;
@@ -233,7 +304,7 @@
   }
 
   .loading-metrics .metrics-load-spinner {
-    color: $loading-color;
+    color: $gl-gray-700;
   }
 
   .metrics-list {
@@ -255,22 +326,15 @@
   }
 }
 
-.modal-doorkeepr-auth,
-.doorkeeper-app-form {
-  .scope-description {
-    color: $theme-gray-700;
+.saml-settings.info-well {
+  .form-control[readonly] {
+    background: $white-light;
   }
 }
 
 .modal-doorkeepr-auth {
   .modal-body {
     padding: $gl-padding;
-  }
-}
-
-.doorkeeper-app-form {
-  .scope-description {
-    margin: 0 0 5px 17px;
   }
 }
 
@@ -289,11 +353,22 @@
   }
 
   .btn-clipboard {
-    margin-left: 5px;
+    background-color: $white-light;
+    border: 1px solid $gray-200;
   }
 
   .deploy-token-help-block {
     display: block;
     margin-bottom: 0;
   }
+}
+
+.mirror-error-badge {
+  background-color: $red-400;
+  border-radius: $border-radius-default;
+  color: $white-light;
+}
+
+.push-pull-table {
+  margin-top: 1em;
 }

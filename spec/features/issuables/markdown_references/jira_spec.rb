@@ -1,6 +1,6 @@
 require "rails_helper"
 
-describe "Jira", :js do
+describe "Jira", :js, :quarantine do
   let(:user) { create(:user) }
   let(:actual_project) { create(:project, :public, :repository) }
   let(:merge_request) { create(:merge_request, target_project: actual_project, source_project: actual_project) }
@@ -163,7 +163,7 @@ describe "Jira", :js do
     HEREDOC
 
     page.within("#diff-notes-app") do
-      fill_in("note_note", with: markdown)
+      fill_in("note-body", with: markdown)
     end
   end
 

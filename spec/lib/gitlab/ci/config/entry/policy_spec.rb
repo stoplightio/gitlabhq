@@ -1,4 +1,6 @@
-require 'spec_helper'
+require 'fast_spec_helper'
+require 'support/helpers/stub_feature_flags'
+require_dependency 'active_model'
 
 describe Gitlab::Ci::Config::Entry::Policy do
   let(:entry) { described_class.new(config) }
@@ -32,6 +34,44 @@ describe Gitlab::Ci::Config::Entry::Policy do
           end
         end
 
+        context 'when config is an empty regexp' do
+          let(:config) { ['//'] }
+
+          describe '#valid?' do
+            it 'is valid' do
+              expect(entry).to be_valid
+            end
+          end
+        end
+
+        context 'when using unsafe regexp' do
+          include StubFeatureFlags
+
+          let(:config) { ['/^(?!master).+/'] }
+
+          subject { described_class.new([regexp]) }
+
+          context 'when allow_unsafe_ruby_regexp is disabled' do
+            before do
+              stub_feature_flags(allow_unsafe_ruby_regexp: false)
+            end
+
+            it 'is not valid' do
+              expect(entry).not_to be_valid
+            end
+          end
+
+          context 'when allow_unsafe_ruby_regexp is enabled' do
+            before do
+              stub_feature_flags(allow_unsafe_ruby_regexp: true)
+            end
+
+            it 'is valid' do
+              expect(entry).to be_valid
+            end
+          end
+        end
+
         context 'when config is a special keyword' do
           let(:config) { %w[tags triggers branches] }
 
@@ -57,12 +97,40 @@ describe Gitlab::Ci::Config::Entry::Policy do
   end
 
   context 'when using complex policy' do
-    context 'when specifiying refs policy' do
+    context 'when specifying refs policy' do
       let(:config) { { refs: ['master'] } }
 
       it 'is a correct configuraton' do
         expect(entry).to be_valid
         expect(entry.value).to eq(refs: %w[master])
+      end
+    end
+
+    context 'when using unsafe regexp' do
+      include StubFeatureFlags
+
+      let(:config) { { refs: ['/^(?!master).+/'] } }
+
+      subject { described_class.new([regexp]) }
+
+      context 'when allow_unsafe_ruby_regexp is disabled' do
+        before do
+          stub_feature_flags(allow_unsafe_ruby_regexp: false)
+        end
+
+        it 'is not valid' do
+          expect(entry).not_to be_valid
+        end
+      end
+
+      context 'when allow_unsafe_ruby_regexp is enabled' do
+        before do
+          stub_feature_flags(allow_unsafe_ruby_regexp: true)
+        end
+
+        it 'is valid' do
+          expect(entry).to be_valid
+        end
       end
     end
 
@@ -124,6 +192,23 @@ describe Gitlab::Ci::Config::Entry::Policy do
       end
     end
 
+    context 'when specifying a valid changes policy' do
+      let(:config) { { changes: %w[some/* paths/**/*.rb] } }
+
+      it 'is a correct configuraton' do
+        expect(entry).to be_valid
+        expect(entry.value).to eq(config)
+      end
+    end
+
+    context 'when changes policy is invalid' do
+      let(:config) { { changes: [1, 2] } }
+
+      it 'returns errors' do
+        expect(entry.errors).to include /changes should be an array of strings/
+      end
+    end
+
     context 'when specifying unknown policy' do
       let(:config) { { refs: ['master'], invalid: :something } }
 
@@ -150,8 +235,33 @@ describe Gitlab::Ci::Config::Entry::Policy do
     end
   end
 
+  describe '#value' do
+    context 'when default value has been provided' do
+      before do
+        entry.default = { refs: %w[branches tags] }
+      end
+
+      context 'when user overrides default values' do
+        let(:config) { { refs: %w[feature], variables: %w[$VARIABLE] } }
+
+        it 'does not include default values' do
+          expect(entry.value).to eq config
+        end
+      end
+
+      context 'when default value has not been defined' do
+        let(:config) { { variables: %w[$VARIABLE] } }
+
+        it 'includes default values' do
+          expect(entry.value).to eq(refs: %w[branches tags],
+                                    variables: %w[$VARIABLE])
+        end
+      end
+    end
+  end
+
   describe '.default' do
-    it 'does not have a default value' do
+    it 'does not have default policy' do
       expect(described_class.default).to be_nil
     end
   end

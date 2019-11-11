@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class UploadsController < ApplicationController
   include UploadsActions
 
@@ -26,20 +28,24 @@ class UploadsController < ApplicationController
   end
 
   def find_model
-    return nil unless params[:id]
+    return unless params[:id]
 
     upload_model_class.find(params[:id])
   end
 
   def authorize_access!
-    return nil unless model
+    return unless model
 
     authorized =
       case model
       when Note
         can?(current_user, :read_project, model.project)
       when User
-        true
+        # We validate the current user has enough (writing)
+        # access to itself when a secret is given.
+        # For instance, user avatars are readable by anyone,
+        # while temporary, user snippet uploads are not.
+        !secret? || can?(current_user, :update_user, model)
       when Appearance
         true
       else
@@ -52,10 +58,15 @@ class UploadsController < ApplicationController
   end
 
   def authorize_create_access!
-    return nil unless model
+    return unless model
 
-    # for now we support only personal snippets comments
-    authorized = can?(current_user, :comment_personal_snippet, model)
+    authorized =
+      case model
+      when User
+        can?(current_user, :update_user, model)
+      else
+        can?(current_user, :create_note, model)
+      end
 
     render_unauthorized unless authorized
   end
@@ -66,6 +77,14 @@ class UploadsController < ApplicationController
     else
       authenticate_user!
     end
+  end
+
+  def cache_publicly?
+    User === model || Appearance === model
+  end
+
+  def secret?
+    params[:secret].present?
   end
 
   def upload_model_class

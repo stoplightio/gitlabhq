@@ -1,10 +1,12 @@
+# frozen_string_literal: true
+
 # == Strip Attribute module
 #
 # Contains functionality to clean attributes before validation
 #
 # Usage:
 #
-#     class Milestone < ActiveRecord::Base
+#     class Milestone < ApplicationRecord
 #       strip_attributes :title
 #     end
 #
@@ -12,7 +14,7 @@
 module StripAttribute
   extend ActiveSupport::Concern
 
-  module ClassMethods
+  class_methods do
     def strip_attributes(*attrs)
       strip_attrs.concat(attrs)
     end

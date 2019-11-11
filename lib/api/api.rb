@@ -1,12 +1,15 @@
+# frozen_string_literal: true
+
 module API
   class API < Grape::API
     include APIGuard
 
     LOG_FILENAME = Rails.root.join("log", "api_json.log")
 
-    NO_SLASH_URL_PART_REGEX = %r{[^/]+}
-    PROJECT_ENDPOINT_REQUIREMENTS = { id: NO_SLASH_URL_PART_REGEX }.freeze
-    COMMIT_ENDPOINT_REQUIREMENTS = PROJECT_ENDPOINT_REQUIREMENTS.merge(sha: NO_SLASH_URL_PART_REGEX).freeze
+    NO_SLASH_URL_PART_REGEX = %r{[^/]+}.freeze
+    NAMESPACE_OR_PROJECT_REQUIREMENTS = { id: NO_SLASH_URL_PART_REGEX }.freeze
+    COMMIT_ENDPOINT_REQUIREMENTS = NAMESPACE_OR_PROJECT_REQUIREMENTS.merge(sha: NO_SLASH_URL_PART_REGEX).freeze
+    USER_REQUIREMENTS = { user_id: NO_SLASH_URL_PART_REGEX }.freeze
 
     insert_before Grape::Middleware::Error,
                   GrapeLogging::Middleware::RequestLogger,
@@ -15,8 +18,11 @@ module API
                   include: [
                     GrapeLogging::Loggers::FilterParameters.new,
                     GrapeLogging::Loggers::ClientEnv.new,
+                    Gitlab::GrapeLogging::Loggers::RouteLogger.new,
                     Gitlab::GrapeLogging::Loggers::UserLogger.new,
-                    Gitlab::GrapeLogging::Loggers::QueueDurationLogger.new
+                    Gitlab::GrapeLogging::Loggers::QueueDurationLogger.new,
+                    Gitlab::GrapeLogging::Loggers::PerfLogger.new,
+                    Gitlab::GrapeLogging::Loggers::CorrelationIdLogger.new
                   ]
 
     allow_access_with_scope :api
@@ -44,6 +50,10 @@ module API
 
     rescue_from ActiveRecord::RecordNotFound do
       rack_response({ 'message' => '404 Not found' }.to_json, 404)
+    end
+
+    rescue_from ::Gitlab::ExclusiveLeaseHelpers::FailedToObtainLockError do
+      rack_response({ 'message' => '409 Conflict: Resource lock' }.to_json, 409)
     end
 
     rescue_from UploadedFile::InvalidPathError do |e|
@@ -76,7 +86,6 @@ module API
     content_type :txt, "text/plain"
 
     # Ensure the namespace is right, otherwise we might load Grape::API::Helpers
-    helpers ::SentryHelper
     helpers ::API::Helpers
     helpers ::API::Helpers::CommonHelpers
 
@@ -92,6 +101,7 @@ module API
     mount ::API::CircuitBreakers
     mount ::API::Commits
     mount ::API::CommitStatuses
+    mount ::API::ContainerRegistry
     mount ::API::DeployKeys
     mount ::API::Deployments
     mount ::API::Environments
@@ -99,12 +109,15 @@ module API
     mount ::API::Features
     mount ::API::Files
     mount ::API::GroupBoards
-    mount ::API::Groups
+    mount ::API::GroupLabels
     mount ::API::GroupMilestones
+    mount ::API::Groups
+    mount ::API::GroupVariables
+    mount ::API::ImportGithub
     mount ::API::Internal
     mount ::API::Issues
-    mount ::API::Jobs
     mount ::API::JobArtifacts
+    mount ::API::Jobs
     mount ::API::Keys
     mount ::API::Labels
     mount ::API::Lint
@@ -115,18 +128,26 @@ module API
     mount ::API::Namespaces
     mount ::API::Notes
     mount ::API::Discussions
+    mount ::API::ResourceLabelEvents
     mount ::API::NotificationSettings
     mount ::API::PagesDomains
     mount ::API::Pipelines
     mount ::API::PipelineSchedules
+    mount ::API::ProjectClusters
+    mount ::API::ProjectEvents
     mount ::API::ProjectExport
     mount ::API::ProjectImport
     mount ::API::ProjectHooks
-    mount ::API::Projects
     mount ::API::ProjectMilestones
+    mount ::API::Projects
     mount ::API::ProjectSnapshots
     mount ::API::ProjectSnippets
+    mount ::API::ProjectStatistics
+    mount ::API::ProjectTemplates
     mount ::API::ProtectedBranches
+    mount ::API::ProtectedTags
+    mount ::API::Releases
+    mount ::API::Release::Links
     mount ::API::Repositories
     mount ::API::Runner
     mount ::API::Runners
@@ -136,7 +157,9 @@ module API
     mount ::API::Settings
     mount ::API::SidekiqMetrics
     mount ::API::Snippets
+    mount ::API::Submodules
     mount ::API::Subscriptions
+    mount ::API::Suggestions
     mount ::API::SystemHooks
     mount ::API::Tags
     mount ::API::Templates
@@ -144,7 +167,6 @@ module API
     mount ::API::Triggers
     mount ::API::Users
     mount ::API::Variables
-    mount ::API::GroupVariables
     mount ::API::Version
     mount ::API::Wikis
 

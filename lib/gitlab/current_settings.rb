@@ -1,16 +1,14 @@
+# frozen_string_literal: true
+
 module Gitlab
   module CurrentSettings
     class << self
       def current_application_settings
-        if RequestStore.active?
-          RequestStore.fetch(:current_application_settings) { ensure_application_settings! }
-        else
-          ensure_application_settings!
-        end
+        Gitlab::SafeRequestStore.fetch(:current_application_settings) { ensure_application_settings! }
       end
 
-      def fake_application_settings(attributes = {})
-        Gitlab::FakeApplicationSettings.new(::ApplicationSetting.defaults.merge(attributes || {}))
+      def clear_in_memory_application_settings!
+        @in_memory_application_settings = nil
       end
 
       def method_missing(name, *args, &block)
@@ -48,28 +46,21 @@ module Gitlab
         # and other callers from failing, use any loaded settings and return
         # defaults for missing columns.
         if ActiveRecord::Migrator.needs_migration?
-          return fake_application_settings(current_settings&.attributes)
+          db_attributes = current_settings&.attributes || {}
+          fake_application_settings(db_attributes)
+        elsif current_settings.present?
+          current_settings
+        else
+          ::ApplicationSetting.create_from_defaults
         end
+      end
 
-        return current_settings if current_settings.present?
-
-        with_fallback_to_fake_application_settings do
-          ::ApplicationSetting.create_from_defaults || in_memory_application_settings
-        end
+      def fake_application_settings(attributes = {})
+        Gitlab::FakeApplicationSettings.new(::ApplicationSetting.defaults.merge(attributes || {}))
       end
 
       def in_memory_application_settings
-        with_fallback_to_fake_application_settings do
-          @in_memory_application_settings ||= ::ApplicationSetting.build_from_defaults # rubocop:disable Gitlab/ModuleWithInstanceVariables
-        end
-      end
-
-      def with_fallback_to_fake_application_settings(&block)
-        yield
-      rescue
-        # In case the application_settings table is not created yet, or if a new
-        # ApplicationSetting column is not yet migrated we fallback to a simple OpenStruct
-        fake_application_settings
+        @in_memory_application_settings ||= ::ApplicationSetting.build_from_defaults
       end
 
       def connect_to_db?

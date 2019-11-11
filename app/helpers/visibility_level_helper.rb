@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module VisibilityLevelHelper
   def visibility_level_color(level)
     case level
@@ -40,11 +42,11 @@ module VisibilityLevelHelper
   def group_visibility_level_description(level)
     case level
     when Gitlab::VisibilityLevel::PRIVATE
-      "The group and its projects can only be viewed by members."
+      _("The group and its projects can only be viewed by members.")
     when Gitlab::VisibilityLevel::INTERNAL
-      "The group and any internal projects can be viewed by any logged in user."
+      _("The group and any internal projects can be viewed by any logged in user.")
     when Gitlab::VisibilityLevel::PUBLIC
-      "The group and any public projects can be viewed without any authentication."
+      _("The group and any public projects can be viewed without any authentication.")
     end
   end
 
@@ -52,20 +54,20 @@ module VisibilityLevelHelper
     case level
     when Gitlab::VisibilityLevel::PRIVATE
       if snippet.is_a? ProjectSnippet
-        "The snippet is visible only to project members."
+        _("The snippet is visible only to project members.")
       else
-        "The snippet is visible only to me."
+        _("The snippet is visible only to me.")
       end
     when Gitlab::VisibilityLevel::INTERNAL
-      "The snippet is visible to any logged in user."
+      _("The snippet is visible to any logged in user.")
     when Gitlab::VisibilityLevel::PUBLIC
-      "The snippet can be accessed without any authentication."
+      _("The snippet can be accessed without any authentication.")
     end
   end
 
   def restricted_visibility_level_description(level)
     level_name = Gitlab::VisibilityLevel.level_name(level)
-    "#{level_name.capitalize} visibility has been restricted by the administrator."
+    _("%{level_name} visibility has been restricted by the administrator.") % { level_name: level_name.capitalize }
   end
 
   def disallowed_visibility_level_description(level, form_model)
@@ -82,7 +84,7 @@ module VisibilityLevelHelper
   def disallowed_project_visibility_level_description(level, project)
     level_name = Gitlab::VisibilityLevel.level_name(level).downcase
     reasons = []
-    instructions = ''
+    instructions = []
 
     unless project.visibility_level_allowed_as_fork?(level)
       reasons << "the fork source project has lower visibility"
@@ -96,7 +98,7 @@ module VisibilityLevelHelper
     end
 
     reasons = reasons.any? ? ' because ' + reasons.to_sentence : ''
-    "This project cannot be #{level_name}#{reasons}.#{instructions}".html_safe
+    "This project cannot be #{level_name}#{reasons}.#{instructions.join}".html_safe
   end
 
   # Note: these messages closely mirror the form validation strings found in the group
@@ -104,7 +106,7 @@ module VisibilityLevelHelper
   def disallowed_group_visibility_level_description(level, group)
     level_name = Gitlab::VisibilityLevel.level_name(level).downcase
     reasons = []
-    instructions = ''
+    instructions = []
 
     unless group.visibility_level_allowed_by_projects?(level)
       reasons << "it contains projects with higher visibility"
@@ -122,14 +124,13 @@ module VisibilityLevelHelper
     end
 
     reasons = reasons.any? ? ' because ' + reasons.to_sentence : ''
-    "This group cannot be #{level_name}#{reasons}.#{instructions}".html_safe
+    "This group cannot be #{level_name}#{reasons}.#{instructions.join}".html_safe
   end
 
   def visibility_icon_description(form_model)
-    case form_model
-    when Project
+    if form_model.respond_to?(:visibility_level_allowed_as_fork?)
       project_visibility_icon_description(form_model.visibility_level)
-    when Group
+    elsif form_model.respond_to?(:visibility_level_allowed_by_sub_groups?)
       group_visibility_icon_description(form_model.visibility_level)
     end
   end

@@ -10,7 +10,6 @@ This feature evolved out of [Protected Branches](protected_branches.md)
 
 Protected tags will prevent anyone from updating or deleting the tag, as and will prevent creation of matching tags based on the permissions you have selected. By default, anyone without Maintainer permission will be prevented from creating tags.
 
-
 ## Configuring protected tags
 
 To protect a tag, you need to have at least Maintainer permission level.
@@ -37,12 +36,11 @@ You can specify a wildcard protected tag, which will protect all tags
 matching the wildcard. For example:
 
 | Wildcard Protected Tag | Matching Tags                 |
-|------------------------+-------------------------------|
+|------------------------|-------------------------------|
 | `v*`                   | `v1.0.0`, `version-9.1`       |
 | `*-deploy`             | `march-deploy`, `1.0-deploy`  |
 | `*gitlab*`             | `gitlab`, `gitlab/v1`         |
 | `*`                    | `v1.0.1rc2`, `accidental-tag` |
-
 
 Two different wildcards can potentially match the same tag. For example,
 `*-stable` and `production-*` would both match a `production-stable` tag.
@@ -53,7 +51,6 @@ If you click on a protected tag's name, you will be presented with a list of
 all matching tags:
 
 ![Protected tag matches](img/protected_tag_matches.png)
-
 
 ---
 

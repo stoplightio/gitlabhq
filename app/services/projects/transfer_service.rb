@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # Projects::TransferService class
 #
 # Used for transfer project to another namespace
@@ -15,11 +17,11 @@ module Projects
       @new_namespace = new_namespace
 
       if @new_namespace.blank?
-        raise TransferError, 'Please select a new namespace for your project.'
+        raise TransferError, s_('TransferProject|Please select a new namespace for your project.')
       end
 
       unless allowed_transfer?(current_user, project)
-        raise TransferError, 'Transfer failed, please contact an admin.'
+        raise TransferError, s_('TransferProject|Transfer failed, please contact an admin.')
       end
 
       transfer(project)
@@ -28,30 +30,33 @@ module Projects
 
       true
     rescue Projects::TransferService::TransferError => ex
-      project.reload
+      project.reset
       project.errors.add(:new_namespace, ex.message)
       false
     end
 
     private
 
+    # rubocop: disable CodeReuse/ActiveRecord
     def transfer(project)
       @old_path = project.full_path
       @old_group = project.group
       @new_path = File.join(@new_namespace.try(:full_path) || '', project.path)
       @old_namespace = project.namespace
 
-      if Project.where(path: project.path, namespace_id: @new_namespace.try(:id)).exists?
-        raise TransferError.new("Project with same path in target namespace already exists")
+      if Project.where(namespace_id: @new_namespace.try(:id)).where('path = ? or name = ?', project.path, project.name).exists?
+        raise TransferError.new(s_("TransferProject|Project with same name or path in target namespace already exists"))
       end
 
       if project.has_container_registry_tags?
         # We currently don't support renaming repository if it contains tags in container registry
-        raise TransferError.new('Project cannot be transferred, because tags are present in its container registry')
+        raise TransferError.new(s_('TransferProject|Project cannot be transferred, because tags are present in its container registry'))
       end
 
       attempt_transfer_transaction
+      configure_group_clusters_for_project
     end
+    # rubocop: enable CodeReuse/ActiveRecord
 
     def attempt_transfer_transaction
       Project.transaction do
@@ -75,9 +80,8 @@ module Projects
         Gitlab::PagesTransfer.new.move_project(project.path, @old_namespace.full_path, @new_namespace.full_path)
 
         project.old_path_with_namespace = @old_path
-        project.expires_full_path_cache
 
-        write_repository_config(@new_path)
+        update_repository_configuration(@new_path)
 
         execute_system_hooks
       end
@@ -102,8 +106,9 @@ module Projects
       project.save!
     end
 
-    def write_repository_config(full_path)
+    def update_repository_configuration(full_path)
       project.write_repository_config(gl_full_path: full_path)
+      project.track_project_repository
     end
 
     def refresh_permissions
@@ -117,8 +122,9 @@ module Projects
 
     def rollback_side_effects
       rollback_folder_move
+      project.reset
       update_namespace_and_visibility(@old_namespace)
-      write_repository_config(@old_path)
+      update_repository_configuration(@old_path)
     end
 
     def rollback_folder_move
@@ -139,7 +145,7 @@ module Projects
 
       # Move main repository
       unless move_repo_folder(@old_path, @new_path)
-        raise TransferError.new("Cannot move project")
+        raise TransferError.new(s_("TransferProject|Cannot move project"))
       end
 
       # Disk path is changed; we need to ensure we reload it
@@ -157,6 +163,10 @@ module Projects
         @old_namespace.full_path,
         @new_namespace.full_path
       )
+    end
+
+    def configure_group_clusters_for_project
+      ClusterProjectConfigureWorker.perform_async(project.id)
     end
   end
 end

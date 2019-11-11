@@ -11,10 +11,6 @@ describe Backup::Manager do
     allow(progress).to receive(:puts)
     allow(progress).to receive(:print)
 
-    allow_any_instance_of(String).to receive(:color) do |string, _color|
-      string
-    end
-
     @old_progress = $progress # rubocop:disable Style/GlobalVars
     $progress = progress # rubocop:disable Style/GlobalVars
   end
@@ -270,6 +266,7 @@ describe Backup::Manager do
           remote_directory: 'directory',
           multipart_chunk_size: 104857600,
           encryption: nil,
+          encryption_key: nil,
           storage_class: nil
         }
       )

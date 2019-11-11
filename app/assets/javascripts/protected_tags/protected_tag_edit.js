@@ -1,6 +1,7 @@
 import flash from '../flash';
 import axios from '../lib/utils/axios_utils';
 import ProtectedTagAccessDropdown from './protected_tag_access_dropdown';
+import { __ } from '~/locale';
 
 export default class ProtectedTagEdit {
   constructor(options) {
@@ -21,26 +22,37 @@ export default class ProtectedTagEdit {
   }
 
   onSelect() {
-    const $allowedToCreateInput = this.$wrap.find(`input[name="${this.$allowedToCreateDropdownButton.data('fieldName')}"]`);
+    const $allowedToCreateInput = this.$wrap.find(
+      `input[name="${this.$allowedToCreateDropdownButton.data('fieldName')}"]`,
+    );
 
     // Do not update if one dropdown has not selected any option
     if (!$allowedToCreateInput.length) return;
 
     this.$allowedToCreateDropdownButton.disable();
 
-    axios.patch(this.$wrap.data('url'), {
-      protected_tag: {
-        create_access_levels_attributes: [{
-          id: this.$allowedToCreateDropdownButton.data('accessLevelId'),
-          access_level: $allowedToCreateInput.val(),
-        }],
-      },
-    }).then(() => {
-      this.$allowedToCreateDropdownButton.enable();
-    }).catch(() => {
-      this.$allowedToCreateDropdownButton.enable();
+    axios
+      .patch(this.$wrap.data('url'), {
+        protected_tag: {
+          create_access_levels_attributes: [
+            {
+              id: this.$allowedToCreateDropdownButton.data('accessLevelId'),
+              access_level: $allowedToCreateInput.val(),
+            },
+          ],
+        },
+      })
+      .then(() => {
+        this.$allowedToCreateDropdownButton.enable();
+      })
+      .catch(() => {
+        this.$allowedToCreateDropdownButton.enable();
 
-      flash('Failed to update tag!', 'alert', document.querySelector('.js-protected-tags-list'));
-    });
+        flash(
+          __('Failed to update tag!'),
+          'alert',
+          document.querySelector('.js-protected-tags-list'),
+        );
+      });
   }
 }

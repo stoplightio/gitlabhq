@@ -1,12 +1,14 @@
 require 'spec_helper'
 
 describe API::SystemHooks do
+  include StubRequests
+
   let(:user) { create(:user) }
   let(:admin) { create(:admin) }
   let!(:hook) { create(:system_hook, url: "http://example.com") }
 
   before do
-    stub_request(:post, hook.url)
+    stub_full_request(hook.url, method: :post)
   end
 
   describe "GET /hooks" do
@@ -45,7 +47,7 @@ describe API::SystemHooks do
   describe "POST /hooks" do
     it "creates new hook" do
       expect do
-        post api("/hooks", admin), url: 'http://example.com'
+        post api("/hooks", admin), params: { url: 'http://example.com' }
       end.to change { SystemHook.count }.by(1)
     end
 
@@ -56,7 +58,7 @@ describe API::SystemHooks do
     end
 
     it "responds with 400 if url is invalid" do
-      post api("/hooks", admin), url: 'hp://mep.mep'
+      post api("/hooks", admin), params: { url: 'hp://mep.mep' }
 
       expect(response).to have_gitlab_http_status(400)
     end
@@ -68,7 +70,9 @@ describe API::SystemHooks do
     end
 
     it 'sets default values for events' do
-      post api('/hooks', admin), url: 'http://mep.mep'
+      stub_full_request('http://mep.mep', method: :post)
+
+      post api('/hooks', admin), params: { url: 'http://mep.mep' }
 
       expect(response).to have_gitlab_http_status(201)
       expect(json_response['enable_ssl_verification']).to be true
@@ -78,12 +82,16 @@ describe API::SystemHooks do
     end
 
     it 'sets explicit values for events' do
+      stub_full_request('http://mep.mep', method: :post)
+
       post api('/hooks', admin),
-        url: 'http://mep.mep',
-        enable_ssl_verification: false,
-        push_events: true,
-        tag_push_events: true,
-        merge_requests_events: true
+        params: {
+          url: 'http://mep.mep',
+          enable_ssl_verification: false,
+          push_events: true,
+          tag_push_events: true,
+          merge_requests_events: true
+        }
 
       expect(response).to have_http_status(201)
       expect(json_response['enable_ssl_verification']).to be false

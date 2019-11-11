@@ -5,9 +5,7 @@ describe 'Merge request > User scrolls to note on load', :js do
   let(:user) { project.creator }
   let(:merge_request) { create(:merge_request, source_project: project, author: user) }
   let(:note) { create(:diff_note_on_merge_request, noteable: merge_request, project: project) }
-  let(:resolved_note) { create(:diff_note_on_merge_request, :resolved, noteable: merge_request, project: project) }
   let(:fragment_id) { "#note_#{note.id}" }
-  let(:collapsed_fragment_id) { "#note_#{resolved_note.id}" }
 
   before do
     sign_in(user)
@@ -17,11 +15,12 @@ describe 'Merge request > User scrolls to note on load', :js do
   it 'scrolls note into view' do
     visit "#{project_merge_request_path(project, merge_request)}#{fragment_id}"
 
+    wait_for_requests
+
     page_height = page.current_window.size[1]
     page_scroll_y = page.evaluate_script("window.scrollY")
     fragment_position_top = page.evaluate_script("Math.round($('#{fragment_id}').offset().top)")
 
-    expect(find('.js-toggle-content').visible?).to eq true
     expect(find(fragment_id).visible?).to eq true
     expect(fragment_position_top).to be >= page_scroll_y
     expect(fragment_position_top).to be < (page_scroll_y + page_height)
@@ -35,7 +34,7 @@ describe 'Merge request > User scrolls to note on load', :js do
     page.execute_script "window.scrollTo(0,0)"
 
     note_element = find(fragment_id)
-    note_container = note_element.ancestor('.js-toggle-container')
+    note_container = note_element.ancestor('.js-discussion-container')
 
     expect(note_element.visible?).to eq true
 
@@ -44,12 +43,35 @@ describe 'Merge request > User scrolls to note on load', :js do
     end
   end
 
-  it 'expands collapsed notes' do
-    visit "#{project_merge_request_path(project, merge_request)}#{collapsed_fragment_id}"
-    note_element = find(collapsed_fragment_id)
-    note_container = note_element.ancestor('.js-toggle-container')
+  context 'resolved notes' do
+    let(:collapsed_fragment_id) { "#note_#{resolved_note.id}" }
 
-    expect(note_element.visible?).to eq true
-    expect(note_container.find('.line_content.noteable_line.old', match: :first).visible?).to eq true
+    context 'when diff note' do
+      let(:resolved_note) { create(:diff_note_on_merge_request, :resolved, noteable: merge_request, project: project) }
+
+      it 'expands collapsed notes' do
+        visit "#{project_merge_request_path(project, merge_request)}#{collapsed_fragment_id}"
+
+        note_element = find(collapsed_fragment_id)
+        diff_container = note_element.ancestor('.diff-content')
+
+        expect(note_element.visible?).to eq(true)
+        expect(diff_container.visible?).to eq(true)
+      end
+    end
+
+    context 'when non-diff note' do
+      let(:non_diff_discussion) { create(:discussion_note_on_merge_request, :resolved, noteable: merge_request, project: project) }
+      let(:resolved_note) { create(:discussion_note_on_merge_request, :resolved, noteable: merge_request, project: project, in_reply_to: non_diff_discussion) }
+
+      it 'expands collapsed replies' do
+        visit "#{project_merge_request_path(project, merge_request)}#{collapsed_fragment_id}"
+
+        note_element = find(collapsed_fragment_id)
+
+        expect(note_element.visible?).to eq(true)
+        expect(note_element.sibling('.replies-toggle')[:class]).to include('expanded')
+      end
+    end
   end
 end

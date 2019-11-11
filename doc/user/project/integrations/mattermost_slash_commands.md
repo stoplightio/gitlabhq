@@ -102,7 +102,7 @@ in a new slash command.
 
     ![Mattermost add command configuration](img/mattermost_slash_command_configuration.png)
 
-1. After you setup all the values, copy the token (we will use it below) and
+1. After you set up all the values, copy the token (we will use it below) and
    click **Done**.
 
     ![Mattermost slash command token](img/mattermost_slash_command_token.png)
@@ -152,7 +152,7 @@ trigger word followed by <kbd>help</kbd>. Example: <samp>/gitlab help</samp>
 ## Permissions
 
 The permissions to run the [available commands](#available-slash-commands) derive from
-the [permissions you have on the project](../../permissions.md#project).
+the [permissions you have on the project](../../permissions.md#project-members-permissions).
 
 ## Further reading
 

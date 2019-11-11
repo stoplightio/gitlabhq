@@ -1,3 +1,5 @@
+import { commitActionTypes } from '../constants';
+
 export const dataStructure = () => ({
   id: '',
   // Key will contain a mixture of ID and path
@@ -17,6 +19,7 @@ export const dataStructure = () => ({
   changed: false,
   staged: false,
   lastCommitPath: '',
+  lastCommitSha: '',
   lastCommit: {
     id: '',
     url: '',
@@ -39,12 +42,16 @@ export const dataStructure = () => ({
   editorColumn: 1,
   fileLanguage: '',
   eol: '',
-  viewMode: 'edit',
+  viewMode: 'editor',
   previewMode: null,
   size: 0,
   parentPath: null,
   lastOpenedAt: 0,
   mrChange: null,
+  deleted: false,
+  prevPath: '',
+  movedPath: '',
+  moved: false,
 });
 
 export const decorateData = entity => {
@@ -64,14 +71,15 @@ export const decorateData = entity => {
     changed = false,
     parentTreeUrl = '',
     base64 = false,
+    binary = false,
+    rawPath = '',
     previewMode,
     file_lock,
     html,
     parentPath = '',
   } = entity;
 
-  return {
-    ...dataStructure(),
+  return Object.assign(dataStructure(), {
     id,
     projectId,
     branchId,
@@ -88,11 +96,13 @@ export const decorateData = entity => {
     renderError,
     content,
     base64,
+    binary,
+    rawPath,
     previewMode,
     file_lock,
     html,
     parentPath,
-  };
+  });
 };
 
 export const findEntry = (tree, type, name, prop = 'name') =>
@@ -104,16 +114,46 @@ export const setPageTitle = title => {
   document.title = title;
 };
 
-export const createCommitPayload = (branch, newBranch, state, rootState) => ({
+export const commitActionForFile = file => {
+  if (file.prevPath) {
+    return commitActionTypes.move;
+  } else if (file.deleted) {
+    return commitActionTypes.delete;
+  } else if (file.tempFile) {
+    return commitActionTypes.create;
+  }
+
+  return commitActionTypes.update;
+};
+
+export const getCommitFiles = stagedFiles =>
+  stagedFiles.reduce((acc, file) => {
+    if (file.moved) return acc;
+
+    return acc.concat({
+      ...file,
+    });
+  }, []);
+
+export const createCommitPayload = ({
   branch,
-  commit_message: state.commitMessage,
-  actions: rootState.stagedFiles.map(f => ({
-    action: f.tempFile ? 'create' : 'update',
+  getters,
+  newBranch,
+  state,
+  rootState,
+  rootGetters,
+}) => ({
+  branch,
+  commit_message: state.commitMessage || getters.preBuiltCommitMessage,
+  actions: getCommitFiles(rootState.stagedFiles).map(f => ({
+    action: commitActionForFile(f),
     file_path: f.path,
-    content: f.content,
+    previous_path: f.prevPath === '' ? undefined : f.prevPath,
+    content: f.content || undefined,
     encoding: f.base64 ? 'base64' : 'text',
+    last_commit_id: newBranch || f.deleted || f.prevPath ? undefined : f.lastCommitSha,
   })),
-  start_branch: newBranch ? rootState.currentBranchId : undefined,
+  start_sha: newBranch ? rootGetters.lastCommit.short_id : undefined,
 });
 
 export const createNewMergeRequestUrl = (projectUrl, source, target) =>
@@ -139,8 +179,35 @@ export const sortTree = sortedTree =>
     )
     .sort(sortTreesByTypeAndName);
 
-export const filePathMatches = (f, path) =>
-  f.path.replace(new RegExp(`${f.name}$`), '').indexOf(`${path}/`) === 0;
+export const filePathMatches = (filePath, path) => filePath.indexOf(`${path}/`) === 0;
 
 export const getChangesCountForFiles = (files, path) =>
-  files.filter(f => filePathMatches(f, path)).length;
+  files.filter(f => filePathMatches(f.path, path)).length;
+
+export const mergeTrees = (fromTree, toTree) => {
+  if (!fromTree || !fromTree.length) {
+    return toTree;
+  }
+
+  const recurseTree = (n, t) => {
+    if (!n) {
+      return t;
+    }
+    const existingTreeNode = t.find(el => el.path === n.path);
+
+    if (existingTreeNode && n.tree.length > 0) {
+      existingTreeNode.opened = true;
+      recurseTree(n.tree[0], existingTreeNode.tree);
+    } else if (!existingTreeNode) {
+      const sorted = sortTree(t.concat(n));
+      t.splice(0, t.length + 1, ...sorted);
+    }
+    return t;
+  };
+
+  for (let i = 0, l = fromTree.length; i < l; i += 1) {
+    recurseTree(fromTree[i], toTree);
+  }
+
+  return toTree;
+};

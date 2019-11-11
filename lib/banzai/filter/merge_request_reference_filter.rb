@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Banzai
   module Filter
     # HTML filter that replaces merge request references with links. References
@@ -18,14 +20,19 @@ module Banzai
       end
 
       def object_link_title(object, matches)
-        object_link_commit_title(object, matches) || super
+        # The method will return `nil` if object is not a commit
+        # allowing for properly handling the extended MR Tooltip
+        object_link_commit_title(object, matches)
       end
 
       def object_link_text_extras(object, matches)
         extras = super
 
         if commit_ref = object_link_commit_ref(object, matches)
-          return extras.unshift(commit_ref)
+          klass = reference_class(:commit, tooltip: false)
+          commit_ref_tag = %(<span class="#{klass}">#{commit_ref}</span>)
+
+          return extras.unshift(commit_ref_tag)
         end
 
         path = matches[:path] if matches.names.include?("path")
@@ -46,6 +53,14 @@ module Banzai
         parent.merge_requests
           .where(iid: ids.to_a)
           .includes(target_project: :namespace)
+      end
+
+      def reference_class(object_sym, options = {})
+        super(object_sym, tooltip: false)
+      end
+
+      def data_attributes_for(text, parent, object, data = {})
+        super.merge(project_path: parent.full_path, iid: object.iid, mr_title: object.title)
       end
 
       private

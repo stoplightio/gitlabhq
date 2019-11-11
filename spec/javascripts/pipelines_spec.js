@@ -1,10 +1,10 @@
 import Pipelines from '~/pipelines';
 
 describe('Pipelines', () => {
-  preloadFixtures('static/pipeline_graph.html.raw');
+  preloadFixtures('static/pipeline_graph.html');
 
   beforeEach(() => {
-    loadFixtures('static/pipeline_graph.html.raw');
+    loadFixtures('static/pipeline_graph.html');
   });
 
   it('should be defined', () => {
@@ -12,6 +12,8 @@ describe('Pipelines', () => {
   });
 
   it('should create a `Pipelines` instance without options', () => {
-    expect(() => { new Pipelines(); }).not.toThrow(); //eslint-disable-line
+    expect(() => {
+      new Pipelines(); // eslint-disable-line no-new
+    }).not.toThrow();
   });
 });

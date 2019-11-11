@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Clusters::Gcp::FetchOperationService do
@@ -24,7 +26,7 @@ describe Clusters::Gcp::FetchOperationService do
       end
     end
 
-    context 'when suceeded to fetch operation' do
+    context 'when succeeded to fetch operation' do
       before do
         stub_cloud_platform_get_zone_operation(gcp_project_id, zone, operation_id)
       end

@@ -1,4 +1,4 @@
-# Test and Deploy a ruby application with GitLab CI/CD
+# Test and deploy a Ruby application with GitLab CI/CD
 
 This example will guide you how to run tests in your Ruby on Rails application and deploy it automatically as Heroku application.
 
@@ -36,16 +36,17 @@ production:
 ```
 
 This project has three jobs:
-1. `test` - used to test Rails application,
-2. `staging` - used to automatically deploy staging environment every push to `master` branch
-3. `production` - used to automatically deploy production environment for every created tag
+
+- `test` - used to test Rails application.
+- `staging` - used to automatically deploy staging environment every push to `master` branch.
+- `production` - used to automatically deploy production environment for every created tag.
 
 ## Store API keys
 
-You'll need to create two variables in your project's **Settings > CI/CD > Variables**:
+You'll need to create two variables in your project's **Settings > CI/CD > Environment variables**:
 
-1. `HEROKU_STAGING_API_KEY` - Heroku API key used to deploy staging app,
-2. `HEROKU_PRODUCTION_API_KEY` - Heroku API key used to deploy production app.
+- `HEROKU_STAGING_API_KEY` - Heroku API key used to deploy staging app.
+- `HEROKU_PRODUCTION_API_KEY` - Heroku API key used to deploy production app.
 
 Find your Heroku API key in [Manage Account](https://dashboard.heroku.com/account).
 
@@ -57,10 +58,10 @@ You can do this through the [Dashboard](https://dashboard.heroku.com/).
 ## Create Runner
 
 First install [Docker Engine](https://docs.docker.com/installation/).
-To build this project you also need to have [GitLab Runner](https://about.gitlab.com/gitlab-ci/#gitlab-runner).
+To build this project you also need to have [GitLab Runner](https://docs.gitlab.com/runner/).
 You can use public runners available on `gitlab.com`, but you can register your own:
 
-```
+```sh
 gitlab-runner register \
   --non-interactive \
   --url "https://gitlab.com/" \

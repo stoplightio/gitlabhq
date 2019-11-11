@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Users
   # Service for refreshing the authorized projects of a user.
   #
@@ -23,7 +25,7 @@ module Users
       # We need an up to date User object that has access to all relations that
       # may have been created earlier. The only way to ensure this is to reload
       # the User object.
-      user.reload
+      user.reset
     end
 
     def execute
@@ -82,7 +84,7 @@ module Users
 
       # Since we batch insert authorization rows, Rails' associations may get
       # out of sync. As such we force a reload of the User object.
-      user.reload
+      user.reset
     end
 
     def fresh_access_levels_per_project
@@ -100,7 +102,7 @@ module Users
     end
 
     def fresh_authorizations
-      klass = if Group.supports_nested_groups?
+      klass = if Group.supports_nested_objects?
                 Gitlab::ProjectAuthorizations::WithNestedGroups
               else
                 Gitlab::ProjectAuthorizations::WithoutNestedGroups

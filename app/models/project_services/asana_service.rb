@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'asana'
 
 class AsanaService < Service
@@ -9,7 +11,7 @@ class AsanaService < Service
   end
 
   def description
-    'Asana - Teamwork without email'
+    s_('AsanaService|Asana - Teamwork without email')
   end
 
   def help
@@ -34,13 +36,13 @@ http://app.asana.com/-/account_api'
       {
         type: 'text',
         name: 'api_key',
-        placeholder: 'User Personal Access Token. User must have access to task, all comments will be attributed to this user.',
+        placeholder: s_('AsanaService|User Personal Access Token. User must have access to task, all comments will be attributed to this user.'),
         required: true
       },
       {
         type: 'text',
         name: 'restrict_to_branch',
-        placeholder: 'Comma-separated list of branches which will be automatically inspected. Leave blank to include all branches.'
+        placeholder: s_('AsanaService|Comma-separated list of branches which will be automatically inspected. Leave blank to include all branches.')
       }
     ]
   end
@@ -63,7 +65,7 @@ http://app.asana.com/-/account_api'
     # check the branch restriction is poplulated and branch is not included
     branch = Gitlab::Git.ref_name(data[:ref])
     branch_restriction = restrict_to_branch.to_s
-    if branch_restriction.length > 0 && branch_restriction.index(branch).nil?
+    if branch_restriction.present? && branch_restriction.index(branch).nil?
       return
     end
 
@@ -71,7 +73,7 @@ http://app.asana.com/-/account_api'
     project_name = project.full_name
 
     data[:commits].each do |commit|
-      push_msg = "#{user} pushed to branch #{branch} of #{project_name} ( #{commit[:url]} ):"
+      push_msg = s_("AsanaService|%{user} pushed to branch %{branch} of %{project_name} ( %{commit_url} ):") % { user: user, branch: branch, project_name: project_name, commit_url: commit[:url] }
       check_commit(commit[:message], push_msg)
     end
   end
@@ -99,7 +101,7 @@ http://app.asana.com/-/account_api'
           task.update(completed: true)
         end
       rescue => e
-        Rails.logger.error(e.message)
+        log_error(e.message)
         next
       end
     end

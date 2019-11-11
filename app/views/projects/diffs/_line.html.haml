@@ -30,11 +30,11 @@
         = link_text
       - else
         %a{ href: "##{line_code}", data: { linenumber: link_text } }
-    %td.line_content.noteable_line{ class: type }<
+    %td.line_content{ class: type }<
       - if email
-        %pre= line.text
+        %pre= line.rich_text
       - else
-        = diff_line_content(line.text)
+        = diff_line_content(line.rich_text)
 
 - if line_discussions&.any?
   - discussion_expanded = local_assigns.fetch(:discussion_expanded, line_discussions.any?(&:expanded?))

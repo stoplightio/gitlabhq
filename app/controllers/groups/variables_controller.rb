@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Groups
   class VariablesController < Groups::ApplicationController
     before_action :authorize_admin_build!
@@ -39,7 +41,7 @@ module Groups
     end
 
     def variable_params_attributes
-      %i[id key secret_value protected _destroy]
+      %i[id variable_type key secret_value protected masked _destroy]
     end
 
     def authorize_admin_build!

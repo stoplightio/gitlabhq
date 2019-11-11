@@ -13,6 +13,7 @@
 
   &.diff-collapsed {
     padding: 5px;
+    line-height: 34px;
 
     .click-to-expand {
       cursor: pointer;
@@ -85,11 +86,8 @@
   }
 
   .block-controls {
-    display: -webkit-flex;
     display: flex;
-    -webkit-justify-content: flex-end;
     justify-content: flex-end;
-    -webkit-flex: 1;
     flex: 1;
 
     .control {
@@ -152,7 +150,7 @@
       display: inline-block;
       margin-left: 5px;
       font-size: 18px;
-      color: color("gray");
+      color: color('gray');
     }
 
     p {
@@ -227,7 +225,6 @@
   }
 
   .group-info {
-
     h1 {
       display: inline;
       font-weight: $gl-font-weight-normal;
@@ -282,18 +279,20 @@
 
   .dismiss-button {
     position: absolute;
-    right: 6px;
-    top: 6px;
+    right: $gl-padding-8;
+    top: $gl-padding-8;
     cursor: pointer;
-    color: $blue-300;
+    color: $blue-500;
     z-index: 1;
     border: 0;
     background-color: transparent;
+    padding: $gl-padding-8;
+    line-height: 0;
 
     &:hover,
     &:focus {
       border: 0;
-      color: $blue-400;
+      color: $blue-700;
     }
   }
 
@@ -345,15 +344,26 @@
 
     @include media-breakpoint-down(xs) {
       width: 100%;
+      margin: $btn-side-margin 0;
     }
   }
 }
 
-.flex-container-block {
-  display: -webkit-flex;
-  display: flex;
-}
-
 .flex-right {
   margin-left: auto;
+}
+
+.code-block {
+  background: $black;
+  color: $gray-darkest;
+  white-space: pre;
+  overflow-x: auto;
+  font-size: 12px;
+  border: 0;
+  padding: $grid-size;
+
+  code {
+    background-color: inherit;
+    padding: inherit;
+  }
 }

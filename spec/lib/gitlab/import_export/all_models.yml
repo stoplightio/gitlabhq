@@ -7,6 +7,7 @@ issues:
 - updated_by
 - milestone
 - notes
+- resource_label_events
 - label_links
 - labels
 - last_edited_by
@@ -36,6 +37,7 @@ notes:
 - events
 - system_note_metadata
 - note_diff_file
+- suggestions
 label_links:
 - target
 - label
@@ -62,7 +64,11 @@ snippets:
 - award_emoji
 - user_agent_detail
 releases:
+- author
 - project
+- links
+links:
+- release
 project_members:
 - created_by
 - user
@@ -76,6 +82,7 @@ merge_requests:
 - updated_by
 - milestone
 - notes
+- resource_label_events
 - label_links
 - labels
 - last_edited_by
@@ -87,10 +94,15 @@ merge_requests:
 - merge_request_diff
 - events
 - merge_requests_closing_issues
+- cached_closes_issues
 - metrics
 - timelogs
 - head_pipeline
 - latest_merge_request_diff
+- pipelines_for_merge_request
+- merge_request_assignees
+- suggestions
+- assignees
 merge_request_diff:
 - merge_request
 - merge_request_diff_commits
@@ -99,12 +111,13 @@ merge_request_diff_commits:
 - merge_request_diff
 merge_request_diff_files:
 - merge_request_diff
-pipelines:
+ci_pipelines:
 - project
 - user
 - stages
 - statuses
 - builds
+- processables
 - trigger_requests
 - variables
 - auto_canceled_by
@@ -114,9 +127,14 @@ pipelines:
 - retryable_builds
 - cancelable_statuses
 - manual_actions
+- scheduled_actions
 - artifacts
 - pipeline_schedule
-- merge_requests
+- merge_requests_as_head_pipeline
+- merge_request
+- deployments
+- environments
+- chat_data
 pipeline_variables:
 - pipeline
 stages:
@@ -124,6 +142,7 @@ stages:
 - pipeline
 - statuses
 - builds
+- bridges
 statuses:
 - project
 - pipeline
@@ -194,6 +213,7 @@ project:
 - last_event
 - services
 - campfire_service
+- discord_service
 - drone_ci_service
 - emails_on_push_service
 - pipelines_email_service
@@ -207,16 +227,17 @@ project:
 - flowdock_service
 - assembla_service
 - asana_service
-- gemnasium_service
 - slack_service
 - microsoft_teams_service
 - mattermost_service
+- hangouts_chat_service
 - buildkite_service
 - bamboo_service
 - teamcity_service
 - pushover_service
 - jira_service
 - redmine_service
+- youtrack_service
 - custom_issue_tracker_service
 - bugzilla_service
 - gitlab_issue_tracker_service
@@ -225,9 +246,8 @@ project:
 - mock_ci_service
 - mock_deployment_service
 - mock_monitoring_service
-- forked_project_link
+- forked_to_members
 - forked_from_project
-- forked_project_links
 - forks
 - merge_requests
 - fork_merge_requests
@@ -241,6 +261,7 @@ project:
 - protected_branches
 - protected_tags
 - project_members
+- project_repository
 - users
 - requesters
 - deploy_keys_projects
@@ -256,7 +277,8 @@ project:
 - notification_settings
 - import_data
 - commit_statuses
-- pipelines
+- ci_pipelines
+- all_pipelines
 - stages
 - builds
 - runner_projects
@@ -277,6 +299,7 @@ project:
 - statistics
 - container_repositories
 - uploads
+- file_uploads
 - import_state
 - members_and_requesters
 - build_trace_section_names
@@ -285,6 +308,7 @@ project:
 - fork_network_member
 - fork_network
 - custom_attributes
+- prometheus_metrics
 - lfs_file_locks
 - project_badges
 - source_of_merge_requests
@@ -293,11 +317,19 @@ project:
 - deploy_tokens
 - settings
 - ci_cd_settings
+- import_export_upload
+- repository_languages
+- pool_repository
+- kubernetes_namespaces
+- error_tracking_setting
+- metrics_setting
 award_emoji:
 - awardable
 - user
 priorities:
 - label
+prometheus_metrics:
+- project
 timelogs:
 - issue
 - merge_request
@@ -306,6 +338,9 @@ push_event_payload:
 - event
 issue_assignees:
 - issue
+- assignee
+merge_request_assignees:
+- merge_request
 - assignee
 lfs_file_locks:
 - user
@@ -316,3 +351,15 @@ metrics:
 - latest_closed_by
 - merged_by
 - pipeline
+resource_label_events:
+- user
+- issue
+- merge_request
+- epic
+- label
+error_tracking_setting:
+- project
+suggestions:
+- note
+metrics_setting:
+- project

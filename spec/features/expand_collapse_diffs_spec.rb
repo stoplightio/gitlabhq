@@ -1,6 +1,6 @@
 require 'spec_helper'
 
-feature 'Expand and collapse diffs', :js do
+describe 'Expand and collapse diffs', :js do
   let(:branch) { 'expand-collapse-diffs' }
   let(:project) { create(:project, :repository) }
 
@@ -34,7 +34,7 @@ feature 'Expand and collapse diffs', :js do
     define_method(file.split('.').first) { file_container(file) }
   end
 
-  it 'should show the diff content with a highlighted line when linking to line' do
+  it 'shows the diff content with a highlighted line when linking to line' do
     expect(large_diff).not_to have_selector('.code')
     expect(large_diff).to have_selector('.nothing-here-block')
 
@@ -48,7 +48,7 @@ feature 'Expand and collapse diffs', :js do
     expect(large_diff).to have_selector('.hll')
   end
 
-  it 'should show the diff content when linking to file' do
+  it 'shows the diff content when linking to file' do
     expect(large_diff).not_to have_selector('.code')
     expect(large_diff).to have_selector('.nothing-here-block')
 

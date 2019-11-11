@@ -1,4 +1,4 @@
-# GraphQL API (Beta)
+# GraphQL API (Alpha)
 
 > [Introduced][ce-19008] in GitLab 11.0.
 
@@ -24,14 +24,16 @@ feature flag. You can enable the feature using the [features api][features-api] 
 For example:
 
 ```shell
-curl --data "value=100" --header "PRIVATE-TOKEN: 9koXpg98eAheJpvBs5tK" https://gitlab.example.com/api/v4/features/graphql
+curl --data "value=100" --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/features/graphql
 ```
 
 ## Available queries
 
-A first iteration of a GraphQL API includes only 2 queries: `project` and
-`merge_request` and only returns scalar fields, or fields of the type `Project`
-or `MergeRequest`.
+A first iteration of a GraphQL API includes the following queries
+
+1. `project` : Within a project it is also possible to fetch a `mergeRequest` by IID.
+
+1. `group` : Only basic group information is currently supported.
 
 ## GraphiQL
 

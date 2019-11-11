@@ -15,7 +15,7 @@ describe('Badge component', () => {
     const buttons = vm.$el.querySelectorAll('button');
     return {
       badgeImage: vm.$el.querySelector('img.project-badge'),
-      loadingIcon: vm.$el.querySelector('.fa-spinner'),
+      loadingIcon: vm.$el.querySelector('.spinner'),
       reloadButton: buttons[buttons.length - 1],
     };
   };
@@ -107,6 +107,7 @@ describe('Badge component', () => {
       expect(vm.isLoading).toBe(false);
       expect(vm.hasError).toBe(false);
       const { badgeImage, loadingIcon, reloadButton } = findElements();
+
       expect(badgeImage).toBeVisible();
       expect(loadingIcon).toBeHidden();
       expect(reloadButton).toBeHidden();
@@ -119,6 +120,7 @@ describe('Badge component', () => {
       Vue.nextTick()
         .then(() => {
           const { badgeImage, loadingIcon, reloadButton } = findElements();
+
           expect(badgeImage).toBeHidden();
           expect(loadingIcon).toBeVisible();
           expect(reloadButton).toBeHidden();
@@ -134,6 +136,7 @@ describe('Badge component', () => {
       Vue.nextTick()
         .then(() => {
           const { badgeImage, loadingIcon, reloadButton } = findElements();
+
           expect(badgeImage).toBeHidden();
           expect(loadingIcon).toBeHidden();
           expect(reloadButton).toBeVisible();

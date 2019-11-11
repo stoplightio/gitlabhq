@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # Base class for Chat notifications services
 # This class is not meant to be used directly, but only to inherit from.
 class ChatNotificationService < Service
@@ -31,7 +33,7 @@ class ChatNotificationService < Service
 
   def self.supported_events
     %w[push issue confidential_issue merge_request note confidential_note tag_push
-       pipeline wiki_page]
+       pipeline wiki_page deployment]
   end
 
   def fields
@@ -120,6 +122,8 @@ class ChatNotificationService < Service
       ChatMessage::PipelineMessage.new(data) if should_pipeline_be_notified?(data)
     when "wiki_page"
       ChatMessage::WikiPageMessage.new(data)
+    when "deployment"
+      ChatMessage::DeploymentMessage.new(data)
     end
   end
 
@@ -155,6 +159,7 @@ class ChatNotificationService < Service
   end
 
   def notify_for_ref?(data)
+    return true if data[:object_kind] == 'tag_push'
     return true if data.dig(:object_attributes, :tag)
     return true unless notify_only_default_branch?
 

@@ -3,8 +3,9 @@ SimpleCovEnv.start!
 
 ENV["RAILS_ENV"] = 'test'
 ENV["IN_MEMORY_APPLICATION_SETTINGS"] = 'true'
+ENV["RSPEC_ALLOW_INVALID_URLS"] = 'true'
 
-require File.expand_path("../../config/environment", __FILE__)
+require File.expand_path('../config/environment', __dir__)
 require 'rspec/rails'
 require 'shoulda/matchers'
 require 'rspec/retry'
@@ -22,17 +23,23 @@ if rspec_profiling_is_configured && (!ENV.key?('CI') || branch_can_be_profiled)
   require 'rspec_profiling/rspec'
 end
 
-if ENV['CI'] && !ENV['NO_KNAPSACK']
+if ENV['CI'] && ENV['KNAPSACK_GENERATE_REPORT'] && !ENV['NO_KNAPSACK']
   require 'knapsack'
   Knapsack::Adapters::RSpecAdapter.bind
 end
 
 # require rainbow gem String monkeypatch, so we can test SystemChecks
 require 'rainbow/ext/string'
+Rainbow.enabled = false
 
 # Requires supporting ruby files with custom matchers and macros, etc,
 # in spec/support/ and its subdirectories.
 # Requires helpers, and shared contexts/examples first since they're used in other support files
+
+# Load these first since they may be required by other helpers
+require Rails.root.join("spec/support/helpers/git_helpers.rb")
+
+# Then the rest
 Dir[Rails.root.join("spec/support/helpers/*.rb")].each { |f| require f }
 Dir[Rails.root.join("spec/support/shared_contexts/*.rb")].each { |f| require f }
 Dir[Rails.root.join("spec/support/shared_examples/*.rb")].each { |f| require f }
@@ -41,11 +48,13 @@ Dir[Rails.root.join("spec/support/**/*.rb")].each { |f| require f }
 RSpec.configure do |config|
   config.use_transactional_fixtures = false
   config.use_instantiated_fixtures  = false
+  config.fixture_path = Rails.root
 
   config.verbose_retry = true
   config.display_try_failure_messages = true
 
   config.infer_spec_type_from_file_location!
+  config.full_backtrace = !!ENV['CI']
 
   config.define_derived_metadata(file_path: %r{/spec/}) do |metadata|
     location = metadata[:location]
@@ -59,6 +68,7 @@ RSpec.configure do |config|
     metadata[:type] = match[1].singularize.to_sym if match
   end
 
+  config.include LicenseHelpers
   config.include ActiveJob::TestHelper
   config.include ActiveSupport::Testing::TimeHelpers
   config.include CycleAnalyticsHelpers
@@ -69,11 +79,13 @@ RSpec.configure do |config|
   config.include StubFeatureFlags
   config.include StubGitlabCalls
   config.include StubGitlabData
+  config.include ExpectNextInstanceOf
   config.include TestEnv
   config.include Devise::Test::ControllerHelpers, type: :controller
   config.include Devise::Test::IntegrationHelpers, type: :feature
   config.include LoginHelpers, type: :feature
   config.include SearchHelpers, type: :feature
+  config.include WaitHelpers, type: :feature
   config.include EmailHelpers, :mailer, type: :mailer
   config.include Warden::Test::Helpers, type: :request
   config.include Gitlab::Routing, type: :routing
@@ -87,6 +99,8 @@ RSpec.configure do |config|
   config.include LiveDebugger, :js
   config.include MigrationsHelpers, :migration
   config.include RedisHelpers
+  config.include Rails.application.routes.url_helpers, type: :routing
+  config.include PolicyHelpers, type: :policy
 
   if ENV['CI']
     # This includes the first try, i.e. tests will be run 4 times before failing.
@@ -106,22 +120,28 @@ RSpec.configure do |config|
     TestEnv.clean_test_path
   end
 
-  config.before(:example) do
-    # Skip pre-receive hook check so we can use the web editor and merge.
-    allow_any_instance_of(Gitlab::Git::Hook).to receive(:trigger).and_return([true, nil])
-
-    allow_any_instance_of(Gitlab::Git::GitlabProjects).to receive(:fork_repository).and_wrap_original do |m, *args|
-      m.call(*args)
-
-      shard_name, repository_relative_path = args
-      # We can't leave the hooks in place after a fork, as those would fail in tests
-      # The "internal" API is not available
-      Gitlab::Shell.new.rm_directory(shard_name,
-                                     File.join(repository_relative_path, 'hooks'))
-    end
-
+  config.before do |example|
     # Enable all features by default for testing
     allow(Feature).to receive(:enabled?) { true }
+
+    enabled = example.metadata[:enable_rugged].present?
+
+    # Disable Rugged features by default
+    Gitlab::Git::RuggedImpl::Repository::FEATURE_FLAGS.each do |flag|
+      allow(Feature).to receive(:enabled?).with(flag).and_return(enabled)
+    end
+
+    # The following can be removed when we remove the staged rollout strategy
+    # and we can just enable it using instance wide settings
+    # (ie. ApplicationSetting#auto_devops_enabled)
+    allow(Feature).to receive(:enabled?)
+      .with(:force_autodevops_on_by_default, anything)
+      .and_return(false)
+  end
+
+  config.before(:example, :quarantine) do
+    # Skip tests in quarantine unless we explicitly focus on them.
+    skip('In quarantine') unless config.inclusion_filter[:quarantine]
   end
 
   config.before(:example, :request_store) do
@@ -133,8 +153,12 @@ RSpec.configure do |config|
     RequestStore.clear!
   end
 
-  config.after(:example) do
+  config.after do
     Fog.unmock! if Fog.mock?
+  end
+
+  config.after do
+    Gitlab::CurrentSettings.clear_in_memory_application_settings!
   end
 
   config.before(:example, :mailer) do
@@ -181,6 +205,23 @@ RSpec.configure do |config|
     redis_queues_cleanup!
   end
 
+  config.around(:each, :use_clean_rails_memory_store_fragment_caching) do |example|
+    caching_store = ActionController::Base.cache_store
+    ActionController::Base.cache_store = ActiveSupport::Cache::MemoryStore.new
+    ActionController::Base.perform_caching = true
+
+    example.run
+
+    ActionController::Base.perform_caching = false
+    ActionController::Base.cache_store = caching_store
+  end
+
+  config.around(:each, :use_sql_query_cache) do |example|
+    ActiveRecord::Base.cache do
+      example.run
+    end
+  end
+
   # The :each scope runs "inside" the example, so this hook ensures the DB is in the
   # correct state before any examples' before hooks are called. This prevents a
   # problem where `ScheduleIssuesClosedAtTypeChange` (or any migration that depends
@@ -198,15 +239,19 @@ RSpec.configure do |config|
 
   # Each example may call `migrate!`, so we must ensure we are migrated down every time
   config.before(:each, :migration) do
+    use_fake_application_settings
+
     schema_migrate_down!
   end
 
   config.after(:context, :migration) do
     schema_migrate_up!
+
+    Gitlab::CurrentSettings.clear_in_memory_application_settings!
   end
 
   config.around(:each, :nested_groups) do |example|
-    example.run if Group.supports_nested_groups?
+    example.run if Group.supports_nested_objects?
   end
 
   config.around(:each, :postgresql) do |example|

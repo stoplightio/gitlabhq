@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # This class extends an OpenStruct object by adding predicate methods to mimic
 # ActiveRecord access. We rely on the initial values being true or false to
 # determine whether to define a predicate method because for a newly-added
@@ -5,11 +7,7 @@
 # column type without parsing db/schema.rb.
 module Gitlab
   class FakeApplicationSettings < OpenStruct
-    def initialize(options = {})
-      super
-
-      FakeApplicationSettings.define_predicate_methods(options)
-    end
+    include ApplicationSettingImplementation
 
     # Mimic ActiveRecord predicate methods for boolean values
     def self.define_predicate_methods(options)
@@ -23,5 +21,14 @@ module Gitlab
         end
       end
     end
+
+    def initialize(options = {})
+      super
+
+      FakeApplicationSettings.define_predicate_methods(options)
+    end
+
+    alias_method :read_attribute, :[]
+    alias_method :has_attribute?, :[]
   end
 end

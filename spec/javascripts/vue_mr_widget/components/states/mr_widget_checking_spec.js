@@ -20,10 +20,12 @@ describe('MRWidgetChecking', () => {
   });
 
   it('renders loading icon', () => {
-    expect(vm.$el.querySelector('.mr-widget-icon i').classList).toContain('fa-spinner');
+    expect(vm.$el.querySelector('.mr-widget-icon span').classList).toContain('spinner');
   });
 
   it('renders information about merging', () => {
-    expect(vm.$el.querySelector('.media-body').textContent.trim()).toEqual('Checking ability to merge automatically');
+    expect(vm.$el.querySelector('.media-body').textContent.trim()).toEqual(
+      'Checking ability to merge automatically',
+    );
   });
 });

@@ -5,6 +5,7 @@ existing routes used by GitLab.
 
 For a list of words that are not allowed to be used as group or project names, see the
 [`path_regex.rb` file][reserved] under the `TOP_LEVEL_ROUTES`, `PROJECT_WILDCARD_ROUTES` and `GROUP_ROUTES` lists:
+
 - `TOP_LEVEL_ROUTES`: are names that are reserved as usernames or top level groups
 - `PROJECT_WILDCARD_ROUTES`: are names that are reserved for child groups or projects.
 - `GROUP_ROUTES`: are names that are reserved for all groups or projects.
@@ -13,7 +14,7 @@ For a list of words that are not allowed to be used as group or project names, s
 
 It is currently not possible to create a project with the following names:
 
-- -
+- \-
 - badges
 - blame
 - blob
@@ -40,7 +41,7 @@ It is currently not possible to create a project with the following names:
 Currently the following names are reserved as top level groups:
 
 - 503.html
-- -
+- \-
 - .well-known
 - 404.html
 - 422.html
@@ -61,14 +62,11 @@ Currently the following names are reserved as top level groups:
 - favicon.ico
 - favicon.png
 - groups
-- header_logo_dark.png
-- header_logo_light.png
 - health_check
 - help
 - import
 - invites
 - jwt
-- koding
 - notification_settings
 - oauth
 - profile
@@ -85,10 +83,11 @@ Currently the following names are reserved as top level groups:
 - unsubscribes
 - uploads
 - users
+- v2
 
 These group names are unavailable as subgroup names:
 
-- -
+- \-
 - activity
 - analytics
 - audit_events

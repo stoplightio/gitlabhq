@@ -1,4 +1,6 @@
-class LfsObjectsProject < ActiveRecord::Base
+# frozen_string_literal: true
+
+class LfsObjectsProject < ApplicationRecord
   belongs_to :project
   belongs_to :lfs_object
 

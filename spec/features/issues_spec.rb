@@ -8,6 +8,17 @@ describe 'Issues' do
   let(:user) { create(:user) }
   let(:project) { create(:project, :public) }
 
+  shared_examples_for 'empty state with filters' do
+    it 'user sees empty state with filters' do
+      create(:issue, author: user, project: project)
+
+      visit project_issues_path(project, milestone_title: "1.0")
+
+      expect(page).to have_content('Sorry, your filter produced no results')
+      expect(page).to have_content('To widen your search, change or remove filters above')
+    end
+  end
+
   describe 'while user is signed out' do
     describe 'empty state' do
       it 'user sees empty state' do
@@ -17,6 +28,8 @@ describe 'Issues' do
         expect(page).to have_content('The Issue Tracker is the place to add things that need to be improved or solved in a project.')
         expect(page).to have_content('You can register or sign in to create issues for this project.')
       end
+
+      it_behaves_like 'empty state with filters'
     end
   end
 
@@ -37,6 +50,8 @@ describe 'Issues' do
         expect(page).to have_content('Issues can be bugs, tasks or ideas to be discussed. Also, issues are searchable and filterable.')
         expect(page).to have_content('New issue')
       end
+
+      it_behaves_like 'empty state with filters'
     end
 
     describe 'Edit issue' do
@@ -76,7 +91,7 @@ describe 'Issues' do
         click_button 'Save changes'
 
         page.within('.assignee') do
-          expect(page).to have_content 'No assignee - assign yourself'
+          expect(page).to have_content 'None - assign yourself'
         end
 
         expect(issue.reload.assignees).to be_empty
@@ -218,8 +233,8 @@ describe 'Issues' do
                          created_at: Time.now - (index * 60))
         end
       end
-      let(:newer_due_milestone) { create(:milestone, due_date: '2013-12-11') }
-      let(:later_due_milestone) { create(:milestone, due_date: '2013-12-12') }
+      let(:newer_due_milestone) { create(:milestone, project: project, due_date: '2013-12-11') }
+      let(:later_due_milestone) { create(:milestone, project: project, due_date: '2013-12-12') }
 
       it 'sorts by newest' do
         visit project_issues_path(project, sort: sort_value_created_date)
@@ -398,7 +413,7 @@ describe 'Issues' do
 
       before do
         stub_incoming_email_setting(enabled: true, address: "p+%{key}@gl.ab")
-        project1.add_master(user)
+        project1.add_maintainer(user)
         visit namespace_project_issues_path(user.namespace, project1)
       end
 
@@ -450,7 +465,7 @@ describe 'Issues' do
             click_link 'Edit'
             click_link 'Unassigned'
             first('.title').click
-            expect(page).to have_content 'No assignee'
+            expect(page).to have_content 'None'
           end
 
           # wait_for_requests does not work with vue-resource at the moment
@@ -464,7 +479,7 @@ describe 'Issues' do
           visit project_issue_path(project, issue2)
 
           page.within('.assignee') do
-            expect(page).to have_content "No assignee"
+            expect(page).to have_content "None"
           end
 
           page.within '.assignee' do
@@ -482,11 +497,20 @@ describe 'Issues' do
 
         it 'allows user to unselect themselves', :js do
           issue2 = create(:issue, project: project, author: user)
+
           visit project_issue_path(project, issue2)
+
+          def close_dropdown_menu_if_visible
+            find('.dropdown-menu-toggle', visible: :all).tap do |toggle|
+              toggle.click if toggle.visible?
+            end
+          end
 
           page.within '.assignee' do
             click_link 'Edit'
             click_link user.name
+
+            close_dropdown_menu_if_visible
 
             page.within '.value .author' do
               expect(page).to have_content user.name
@@ -495,8 +519,10 @@ describe 'Issues' do
             click_link 'Edit'
             click_link user.name
 
+            close_dropdown_menu_if_visible
+
             page.within '.value .assign-yourself' do
-              expect(page).to have_content "No assignee"
+              expect(page).to have_content "None"
             end
           end
         end
@@ -667,6 +693,18 @@ describe 'Issues' do
           expect(find('.js-issuable-selector .dropdown-toggle-text')).to have_content('bug')
         end
       end
+
+      context 'suggestions', :js do
+        it 'displays list of related issues' do
+          create(:issue, project: project, title: 'test issue')
+
+          visit new_project_issue_path(project)
+
+          fill_in 'issue_title', with: issue.title
+
+          expect(page).to have_selector('.suggestion-item', count: 1)
+        end
+      end
     end
 
     describe 'new issue by email' do
@@ -737,10 +775,10 @@ describe 'Issues' do
 
             wait_for_requests
 
-            expect(page).to have_no_content 'No due date'
+            expect(page).to have_no_content 'None'
 
             click_link 'remove due date'
-            expect(page).to have_content 'No due date'
+            expect(page).to have_content 'None'
           end
         end
       end

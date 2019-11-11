@@ -35,9 +35,6 @@ msgid_plural "%d pipelines"
 msgstr[0] "1 pipeline"
 msgstr[1] "%d pipelines"
 
-msgid "A collection of graphs regarding Continuous Integration"
-msgstr "Una colección de gráficos sobre Integración Continua"
-
 msgid "About auto deploy"
 msgstr "Acerca del auto despliegue"
 
@@ -789,9 +786,6 @@ msgstr "Establezca una contraseña en su cuenta para actualizar o enviar a trav�
 
 msgid "Set up CI"
 msgstr "Configurar CI"
-
-msgid "Set up Koding"
-msgstr "Configurar Koding"
 
 msgid "Set up auto deploy"
 msgstr "Configurar auto despliegue"

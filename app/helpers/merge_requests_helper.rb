@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module MergeRequestsHelper
   def new_mr_path_from_push_event(event)
     target_project = event.project.default_merge_request_target
@@ -19,15 +21,15 @@ module MergeRequestsHelper
   end
 
   def mr_css_classes(mr)
-    classes = "merge-request"
-    classes << " closed" if mr.closed?
-    classes << " merged" if mr.merged?
-    classes
+    classes = ["merge-request"]
+    classes << "closed" if mr.closed?
+    classes << "merged" if mr.merged?
+    classes.join(' ')
   end
 
   def ci_build_details_path(merge_request)
     build_url = merge_request.source_project.ci_service.build_page(merge_request.diff_head_sha, merge_request.source_branch)
-    return nil unless build_url
+    return unless build_url
 
     parsed_url = URI.parse(build_url)
 
@@ -78,7 +80,11 @@ module MergeRequestsHelper
   end
 
   def merge_request_button_visibility(merge_request, closed)
-    return 'hidden' if merge_request.closed? == closed || (merge_request.merged? == closed && !merge_request.closed?) || merge_request.closed_without_fork?
+    return 'hidden' if merge_request_button_hidden?(merge_request, closed)
+  end
+
+  def merge_request_button_hidden?(merge_request, closed)
+    merge_request.closed? == closed || (merge_request.merged? == closed && !merge_request.closed?) || merge_request.closed_without_fork?
   end
 
   def merge_request_version_path(project, merge_request, merge_request_diff, start_sha = nil)
@@ -86,6 +92,8 @@ module MergeRequestsHelper
   end
 
   def version_index(merge_request_diff)
+    return if @merge_request_diffs.empty?
+
     @merge_request_diffs.size - @merge_request_diffs.index(merge_request_diff)
   end
 
@@ -106,7 +114,7 @@ module MergeRequestsHelper
     data_attrs = {
       action: tab.to_s,
       target: "##{tab}",
-      toggle: options.fetch(:force_link, false) ? '' : 'tab'
+      toggle: options.fetch(:force_link, false) ? '' : 'tabvue'
     }
 
     url = case tab
@@ -141,7 +149,7 @@ module MergeRequestsHelper
 
   def merge_request_source_project_for_project(project = @project)
     unless can?(current_user, :create_merge_request_in, project)
-      return nil
+      return
     end
 
     if can?(current_user, :create_merge_request_from, project)

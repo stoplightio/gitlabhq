@@ -1,8 +1,12 @@
+# frozen_string_literal: true
+
 module API
   class Todos < Grape::API
     include PaginationParams
 
     before { authenticate! }
+
+    helpers ::Gitlab::IssuableMetadata
 
     ISSUABLE_TYPES = {
       'merge_requests' => ->(iid) { find_merge_request_with_access(iid) },
@@ -12,7 +16,7 @@ module API
     params do
       requires :id, type: String, desc: 'The ID of a project'
     end
-    resource :projects, requirements: API::PROJECT_ENDPOINT_REQUIREMENTS  do
+    resource :projects, requirements: API::NAMESPACE_OR_PROJECT_REQUIREMENTS do
       ISSUABLE_TYPES.each do |type, finder|
         type_id_str = "#{type.singularize}_iid".to_sym
 
@@ -40,6 +44,30 @@ module API
         def find_todos
           TodosFinder.new(current_user, params).execute
         end
+
+        def issuable_and_awardable?(type)
+          obj_type = Object.const_get(type)
+
+          (obj_type < Issuable) && (obj_type < Awardable)
+        rescue NameError
+          false
+        end
+
+        def batch_load_issuable_metadata(todos, options)
+          # This should be paginated and will cause Rails to SELECT for all the Todos
+          todos_by_type = todos.group_by(&:target_type)
+
+          todos_by_type.keys.each do |type|
+            next unless issuable_and_awardable?(type)
+
+            collection = todos_by_type[type]
+
+            next unless collection
+
+            targets = collection.map(&:target)
+            options[type] = { issuable_metadata: issuable_meta_data(targets, type, current_user) }
+          end
+        end
       end
 
       desc 'Get a todo list' do
@@ -49,7 +77,11 @@ module API
         use :pagination
       end
       get do
-        present paginate(find_todos), with: Entities::Todo, current_user: current_user
+        todos = paginate(find_todos.with_api_entity_associations)
+        options = { with: Entities::Todo, current_user: current_user }
+        batch_load_issuable_metadata(todos, options)
+
+        present todos, options
       end
 
       desc 'Mark a todo as done' do

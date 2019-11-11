@@ -4,8 +4,10 @@ const chalk = require('chalk');
 const webpack = require('webpack');
 const argumentsParser = require('commander');
 const webpackConfig = require('./webpack.config.js');
+const IS_EE = require('./helpers/is_ee_env');
 
 const ROOT_PATH = path.resolve(__dirname, '..');
+const SPECS_PATH = /^(?:\.[\\\/])?(ee[\\\/])?spec[\\\/]javascripts[\\\/]/;
 
 function fatalError(message) {
   console.error(chalk.red(`\nError: ${message}\n`));
@@ -22,6 +24,13 @@ webpackConfig.optimization.splitChunks = false;
 // use quicker sourcemap option
 webpackConfig.devtool = 'cheap-inline-source-map';
 
+// set BABEL_ENV to indicate when we're running code coverage
+webpackConfig.plugins.push(
+  new webpack.DefinePlugin({
+    'process.env.BABEL_ENV': JSON.stringify(process.env.BABEL_ENV || process.env.NODE_ENV || null),
+  }),
+);
+
 const specFilters = argumentsParser
   .option(
     '-f, --filter-spec [filter]',
@@ -30,13 +39,23 @@ const specFilters = argumentsParser
       memo.push(filter, filter.replace(/\/?$/, '/**/*.js'));
       return memo;
     },
-    []
+    [],
   )
   .parse(process.argv).filterSpec;
 
-if (specFilters.length) {
-  const specsPath = /^(?:\.[\\\/])?spec[\\\/]javascripts[\\\/]/;
+const createContext = (specFiles, regex, suffix) => {
+  const newContext = specFiles.reduce((context, file) => {
+    const relativePath = file.replace(SPECS_PATH, '');
+    context[file] = `./${relativePath}`;
+    return context;
+  }, {});
 
+  webpackConfig.plugins.push(
+    new webpack.ContextReplacementPlugin(regex, path.join(ROOT_PATH, suffix), newContext),
+  );
+};
+
+if (specFilters.length) {
   // resolve filters
   let filteredSpecFiles = specFilters.map(filter =>
     glob
@@ -44,7 +63,7 @@ if (specFilters.length) {
         root: ROOT_PATH,
         matchBase: true,
       })
-      .filter(path => path.endsWith('spec.js'))
+      .filter(path => path.endsWith('spec.js')),
   );
 
   // flatten
@@ -57,34 +76,29 @@ if (specFilters.length) {
     fatalError('Your filter did not match any test files.');
   }
 
-  if (!filteredSpecFiles.every(file => specsPath.test(file))) {
+  if (!filteredSpecFiles.every(file => SPECS_PATH.test(file))) {
     fatalError('Test files must be located within /spec/javascripts.');
   }
 
-  const newContext = filteredSpecFiles.reduce((context, file) => {
-    const relativePath = file.replace(specsPath, '');
-    context[file] = `./${relativePath}`;
-    return context;
-  }, {});
+  const CE_FILES = filteredSpecFiles.filter(file => !file.startsWith('ee'));
+  createContext(CE_FILES, /[^e]{2}[\\\/]spec[\\\/]javascripts$/, 'spec/javascripts');
 
-  webpackConfig.plugins.push(
-    new webpack.ContextReplacementPlugin(
-      /spec[\\\/]javascripts$/,
-      path.join(ROOT_PATH, 'spec/javascripts'),
-      newContext
-    )
-  );
+  const EE_FILES = filteredSpecFiles.filter(file => file.startsWith('ee'));
+  createContext(EE_FILES, /ee[\\\/]spec[\\\/]javascripts$/, 'ee/spec/javascripts');
 }
 
 // Karma configuration
 module.exports = function(config) {
   process.env.TZ = 'Etc/UTC';
 
-  const progressReporter = process.env.CI ? 'mocha' : 'progress';
+  const fixturesPath = `${IS_EE ? 'ee/' : ''}spec/javascripts/fixtures`;
 
   const karmaConfig = {
     basePath: ROOT_PATH,
     browsers: ['ChromeHeadlessCustom'],
+    client: {
+      color: !process.env.CI,
+    },
     customLaunchers: {
       ChromeHeadlessCustom: {
         base: 'ChromeHeadless',
@@ -99,15 +113,46 @@ module.exports = function(config) {
     frameworks: ['jasmine'],
     files: [
       { pattern: 'spec/javascripts/test_bundle.js', watched: false },
-      { pattern: 'spec/javascripts/fixtures/**/*@(.json|.html|.html.raw|.png)', included: false },
+      { pattern: `${fixturesPath}/**/*@(.json|.html|.png|.bmpr|.pdf)`, included: false },
     ],
     preprocessors: {
       'spec/javascripts/**/*.js': ['webpack', 'sourcemap'],
+      'ee/spec/javascripts/**/*.js': ['webpack', 'sourcemap'],
     },
-    reporters: [progressReporter],
+    reporters: ['mocha'],
     webpack: webpackConfig,
     webpackMiddleware: { stats: 'errors-only' },
+    plugins: [
+      'karma-chrome-launcher',
+      'karma-coverage-istanbul-reporter',
+      'karma-jasmine',
+      'karma-junit-reporter',
+      'karma-mocha-reporter',
+      'karma-sourcemap-loader',
+      'karma-webpack',
+    ],
   };
+
+  if (process.env.CI) {
+    karmaConfig.reporters.push('junit');
+    karmaConfig.junitReporter = {
+      outputFile: 'junit_karma.xml',
+      useBrowserName: false,
+    };
+  } else {
+    // ignore 404s in local environment because we are not fixing them and they bloat the log
+    function ignore404() {
+      return (request, response /* next */) => {
+        response.writeHead(404);
+        return response.end('NOT FOUND');
+      };
+    }
+
+    karmaConfig.middleware = ['ignore-404'];
+    karmaConfig.plugins.push({
+      'middleware:ignore-404': ['factory', ignore404],
+    });
+  }
 
   if (process.env.BABEL_ENV === 'coverage' || process.env.NODE_ENV === 'coverage') {
     karmaConfig.reporters.push('coverage-istanbul');

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module Ci
     module Pipeline
@@ -13,7 +15,9 @@ module Gitlab
             Expression::Lexeme::Pattern,
             Expression::Lexeme::Null,
             Expression::Lexeme::Equals,
-            Expression::Lexeme::Matches
+            Expression::Lexeme::Matches,
+            Expression::Lexeme::NotEquals,
+            Expression::Lexeme::NotMatches
           ].freeze
 
           MAX_TOKENS = 100

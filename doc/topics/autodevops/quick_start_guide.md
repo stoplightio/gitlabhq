@@ -15,7 +15,7 @@ need to ensure your own [Runners are configured](../../ci/runners/README.md) and
 
 Before creating and connecting your Kubernetes cluster to your GitLab project,
 you need a Google Cloud Platform account. If you don't already have one,
-sign up at https://console.cloud.google.com. You'll need to either sign in with an existing
+sign up at <https://console.cloud.google.com>. You'll need to either sign in with an existing
 Google account (for example, one that you use to access Gmail, Drive, etc.) or create a new one.
 
 1. Follow the steps as outlined in the ["Before you begin" section of the Kubernetes Engine docs](https://cloud.google.com/kubernetes-engine/docs/quickstart#before-you-begin)
@@ -84,6 +84,9 @@ under which this application will be deployed.
 
 1. Once ready, click **Create Kubernetes cluster**.
 
+NOTE: **Note:**
+Do not select `f1-micro` from the **Machine type** dropdown. `f1-micro` machines cannot support a full GitLab installation.
+
 After a couple of minutes, the cluster will be created. You can also see its
 status on your [GCP dashboard](https://console.cloud.google.com/kubernetes).
 
@@ -143,7 +146,7 @@ In the next section we'll break down the pipeline and explain what each job does
 
 By now you should see the pipeline running, but what is it running exactly?
 
-To navigate inside the pipeline, click its status badge. (It's status should be "running").
+To navigate inside the pipeline, click its status badge. (Its status should be "running").
 The pipeline is split into 4 stages, each running a couple of jobs.
 
 ![Pipeline stages](img/guide_pipeline_stages.png)
@@ -156,15 +159,15 @@ In the **test** stage, GitLab runs various checks on the application:
 - The `test` job runs unit and integration tests by detecting the language and
   framework ([Auto Test](index.md#auto-test))
 - The `code_quality` job checks the code quality and is allowed to fail
-  ([Auto Code Quality](index.md#auto-code-quality)) **[STARTER]**
+  ([Auto Code Quality](index.md#auto-code-quality-starter)) **[STARTER]**
 - The `container_scanning` job checks the Docker container if it has any
   vulnerabilities and is allowed to fail ([Auto Container Scanning](index.md#auto-container-scanning))
 - The `dependency_scanning` job checks if the application has any dependencies
-  susceptible to vulnerabilities and is allowed to fail ([Auto Dependency Scanning](index.md#auto-dependency-scanning)) **[ULTIMATE]**
+  susceptible to vulnerabilities and is allowed to fail ([Auto Dependency Scanning](index.md#auto-dependency-scanning-ultimate)) **[ULTIMATE]**
 - The `sast` job runs static analysis on the current code to check for potential
-  security issues and is allowed to fail([Auto SAST](index.md#auto-sast)) **[ULTIMATE]**
+  security issues and is allowed to fail([Auto SAST](index.md#auto-sast-ultimate)) **[ULTIMATE]**
 - The `license_management` job searches the application's dependencies to determine each of their
-  licenses and is allowed to fail ([Auto License Management](index.md#auto-license-management)) **[ULTIMATE]**
+  licenses and is allowed to fail ([Auto License Management](index.md#auto-license-management-ultimate)) **[ULTIMATE]**
 
 NOTE: **Note:**
 As you might have noticed, all jobs except `test` are allowed to fail in the
@@ -175,7 +178,7 @@ deploys the application in Kubernetes ([Auto Deploy](index.md#auto-deploy)).
 
 Lastly, in the **performance** stage, some performance tests will run
 on the deployed application
-([Auto Browser Performance Testing](index.md#auto-browser-performance-testing)). **[PREMIUM]**
+([Auto Browser Performance Testing](index.md#auto-browser-performance-testing-premium)). **[PREMIUM]**
 
 ---
 
@@ -194,7 +197,7 @@ applications. In the rightmost column for the production environment, you can ma
 
 - The first icon will open the URL of the application that is deployed in
   production. It's a very simple page, but the important part is that it works!
-- The next icon with the small graph will take you to the metrics page where
+- The next icon, with the small graph, will take you to the metrics page where
   Prometheus collects data about the Kubernetes cluster and how the application
   affects it (in terms of memory/CPU usage, latency, etc.).
 
@@ -205,7 +208,7 @@ applications. In the rightmost column for the production environment, you can ma
   application is running.
 
 Right below, there is the
-[Deploy Board](https://docs.gitlab.com/ee/user/project/deploy_boards.md).
+[Deploy Board](https://docs.gitlab.com/ee/user/project/deploy_boards.html).
 The squares represent pods in your Kubernetes cluster that are associated with
 the given environment. Hovering above each square you can see the state of a
 deployment and clicking a square will take you to the pod's logs page.
@@ -213,11 +216,11 @@ deployment and clicking a square will take you to the pod's logs page.
 TIP: **Tip:**
 There is only one pod hosting the application at the moment, but you can add
 more pods by defining the [`REPLICAS` variable](index.md#environment-variables)
-under **Settings > CI/CD > Variables**.
+under **Settings > CI/CD > Environment variables**.
 
 ### Working with branches
 
-Following the [GitLab flow](../../workflow/gitlab_flow.md#working-with-feature-branches)
+Following the [GitLab flow](../../workflow/gitlab_flow.md#working-with-feature-branches),
 let's create a feature branch that will add some content to the application.
 
 Under your repository, navigate to the following file: `app/views/welcome/index.html.erb`.
@@ -235,7 +238,7 @@ by clicking **Commit**.
 ![Web IDE commit](img/guide_ide_commit.png)
 
 Once you submit the merge request, you'll see the pipeline running. This will
-run all the jobs as [described previously](#deploying-the-application), as well
+run all the jobs as [described previously](#deploying-the-application), as well as
 a few more that run only on branches other than `master`.
 
 ![Merge request](img/guide_merge_request.png)
@@ -264,8 +267,8 @@ Let's fix that:
    to stage the changes.
 1. Write a commit message and click **Commit**.
 
-Now, if you go back to the merge request you should not only see the test passing,
-but also the application deployed as a [review app](index.md#auto-review-apps). You
+Now, if you go back to the merge request you should not only see the test passing, but
+also the application deployed as a [review app](index.md#auto-review-apps). You
 can visit it by following the URL in the merge request. The changes that we
 previously made should be there.
 
@@ -278,12 +281,12 @@ and the application will be eventually deployed straight to production.
 
 After implementing this project, you should now have a solid understanding of the basics of Auto DevOps.
 We started from building and testing to deploying and monitoring an application
-all within GitLab. Despite its automatic nature, Audo DevOps can also be configured
+all within GitLab. Despite its automatic nature, Auto DevOps can also be configured
 and customized to fit your workflow. Here are some helpful resources for further reading:
 
 1. [Auto DevOps](index.md)
-1. [Multiple Kubernetes clusters](index.md#using-multiple-kubernetes-clusters) **[PREMIUM]**
-1. [Incremental rollout to production](index.md#incremental-rollout-to-production) **[PREMIUM]**
+1. [Multiple Kubernetes clusters](index.md#using-multiple-kubernetes-clusters-premium) **[PREMIUM]**
+1. [Incremental rollout to production](index.md#incremental-rollout-to-production-premium) **[PREMIUM]**
 1. [Disable jobs you don't need with environment variables](index.md#environment-variables)
 1. [Use a static IP for your cluster](../../user/project/clusters/index.md#using-a-static-ip)
 1. [Use your own buildpacks to build your application](index.md#custom-buildpacks)

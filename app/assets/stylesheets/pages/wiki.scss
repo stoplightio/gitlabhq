@@ -179,9 +179,3 @@ ul.wiki-pages-list.content-list {
     }
   }
 }
-
-.wiki {
-  table {
-    @include markdown-table;
-  }
-}

@@ -1,4 +1,6 @@
-class MergeRequestDiffCommit < ActiveRecord::Base
+# frozen_string_literal: true
+
+class MergeRequestDiffCommit < ApplicationRecord
   include ShaAttribute
 
   belongs_to :merge_request_diff

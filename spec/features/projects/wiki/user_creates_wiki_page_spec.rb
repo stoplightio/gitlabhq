@@ -2,16 +2,22 @@ require "spec_helper"
 
 describe "User creates wiki page" do
   let(:user) { create(:user) }
+  let(:wiki) { ProjectWiki.new(project, user) }
+  let(:project) { create(:project) }
 
   before do
-    project.add_master(user)
-    sign_in(user)
+    project.add_maintainer(user)
 
-    visit(project_wikis_path(project))
-    click_link "Create your first page"
+    sign_in(user)
   end
 
   context "when wiki is empty" do
+    before do
+      visit(project_wikis_path(project))
+
+      click_link "Create your first page"
+    end
+
     context "in a user namespace" do
       let(:project) { create(:project, :wiki_repo, namespace: user.namespace) }
 
@@ -37,14 +43,8 @@ describe "User creates wiki page" do
         expect(page).to have_content("Create Page")
       end
 
-      it "shows non-escaped link in the pages list", :js do
-        click_link("New page")
-
-        page.within("#modal-new-wiki") do
-          fill_in(:new_wiki_path, with: "one/two/three-test")
-
-          click_on("Create page")
-        end
+      it "shows non-escaped link in the pages list", :js, :quarantine do
+        fill_in(:wiki_title, with: "one/two/three-test")
 
         page.within(".wiki-form") do
           fill_in(:wiki_content, with: "wiki content")
@@ -79,7 +79,7 @@ describe "User creates wiki page" do
         expect(current_path).to eq(project_wiki_path(project, "test"))
 
         page.within(:css, ".nav-text") do
-          expect(page).to have_content("Test").and have_content("Create Page")
+          expect(page).to have_content("test").and have_content("Create Page")
         end
 
         click_link("Home")
@@ -91,7 +91,7 @@ describe "User creates wiki page" do
         expect(current_path).to eq(project_wiki_path(project, "api"))
 
         page.within(:css, ".nav-text") do
-          expect(page).to have_content("Create").and have_content("Api")
+          expect(page).to have_content("Create").and have_content("api")
         end
 
         click_link("Home")
@@ -103,7 +103,7 @@ describe "User creates wiki page" do
         expect(current_path).to eq(project_wiki_path(project, "raketasks"))
 
         page.within(:css, ".nav-text") do
-          expect(page).to have_content("Create").and have_content("Rake")
+          expect(page).to have_content("Create").and have_content("rake")
         end
       end
 
@@ -136,10 +136,12 @@ describe "User creates wiki page" do
           click_button("Create page")
         end
 
-        page.within ".wiki" do
+        page.within ".md" do
           expect(page).to have_selector(".katex", count: 3).and have_content("2+2 is 4")
         end
       end
+
+      it_behaves_like 'wiki file attachments', :quarantine
     end
 
     context "in a group namespace", :js do
@@ -149,7 +151,7 @@ describe "User creates wiki page" do
         expect(page).to have_field("wiki[message]", with: "Create home")
       end
 
-      it "creates a page from from the home page" do
+      it "creates a page from the home page", :quarantine do
         page.within(".wiki-form") do
           fill_in(:wiki_content, with: "My awesome wiki!")
 
@@ -165,7 +167,9 @@ describe "User creates wiki page" do
 
   context "when wiki is not empty", :js do
     before do
-      create(:wiki_page, wiki: create(:project, :wiki_repo, namespace: user.namespace).wiki, attrs: { title: "home", content: "Home page" })
+      create(:wiki_page, wiki: wiki, attrs: { title: 'home', content: 'Home page' })
+
+      visit(project_wikis_path(project))
     end
 
     context "in a user namespace" do
@@ -190,7 +194,7 @@ describe "User creates wiki page" do
             click_button("Create page")
           end
 
-          expect(page).to have_content("Foo")
+          expect(page).to have_content("foo")
                      .and have_content("Last edited by #{user.name}")
                      .and have_content("My awesome wiki!")
         end
@@ -205,7 +209,7 @@ describe "User creates wiki page" do
           end
 
           # Commit message field should have correct value.
-          expect(page).to have_field("wiki[message]", with: "Create spaces in the name")
+          expect(page).to have_field("wiki[message]", with: "Create Spaces in the name")
 
           page.within(".wiki-form") do
             fill_in(:wiki_content, with: "My awesome wiki!")
@@ -236,13 +240,13 @@ describe "User creates wiki page" do
             click_button("Create page")
           end
 
-          expect(page).to have_content("Hyphens in the name")
+          expect(page).to have_content("hyphens in the name")
                      .and have_content("Last edited by #{user.name}")
                      .and have_content("My awesome wiki!")
         end
       end
 
-      it "shows the autocompletion dropdown" do
+      it "shows the emoji autocompletion dropdown" do
         click_link("New page")
 
         page.within("#modal-new-wiki") do
@@ -254,7 +258,7 @@ describe "User creates wiki page" do
         page.within(".wiki-form") do
           find("#wiki_content").native.send_keys("")
 
-          fill_in(:wiki_content, with: "@")
+          fill_in(:wiki_content, with: ":")
         end
 
         expect(page).to have_selector(".atwho-view")
@@ -283,9 +287,39 @@ describe "User creates wiki page" do
             click_button("Create page")
           end
 
-          expect(page).to have_content("Foo")
+          expect(page).to have_content("foo")
                      .and have_content("Last edited by #{user.name}")
                      .and have_content("My awesome wiki!")
+        end
+      end
+    end
+  end
+
+  describe 'sidebar feature' do
+    context 'when there are some existing pages' do
+      before do
+        create(:wiki_page, wiki: wiki, attrs: { title: 'home', content: 'home' })
+        create(:wiki_page, wiki: wiki, attrs: { title: 'another', content: 'another' })
+      end
+
+      it 'renders a default sidebar when there is no customized sidebar' do
+        visit(project_wikis_path(project))
+
+        expect(page).to have_content('another')
+        expect(page).to have_content('More Pages')
+      end
+
+      context 'when there is a customized sidebar' do
+        before do
+          create(:wiki_page, wiki: wiki, attrs: { title: '_sidebar', content: 'My customized sidebar' })
+        end
+
+        it 'renders my customized sidebar instead of the default one' do
+          visit(project_wikis_path(project))
+
+          expect(page).to have_content('My customized sidebar')
+          expect(page).to have_content('More Pages')
+          expect(page).not_to have_content('Another')
         end
       end
     end

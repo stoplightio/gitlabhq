@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class SearchController < ApplicationController
   include ControllerWithCrossProjectAccessCheck
   include SearchHelper
@@ -12,8 +14,6 @@ class SearchController < ApplicationController
   layout 'search'
 
   def show
-    search_service = SearchService.new(current_user, params)
-
     @project = search_service.project
     @group = search_service.group
 
@@ -27,10 +27,12 @@ class SearchController < ApplicationController
     @search_objects = search_service.search_objects
 
     render_commits if @scope == 'commits'
+    eager_load_user_status if @scope == 'users'
 
     check_single_commit_result
   end
 
+  # rubocop: disable CodeReuse/ActiveRecord
   def autocomplete
     term = params[:term]
 
@@ -43,11 +45,18 @@ class SearchController < ApplicationController
 
     render json: search_autocomplete_opts(term).to_json
   end
+  # rubocop: enable CodeReuse/ActiveRecord
 
   private
 
   def render_commits
     @search_objects = prepare_commits_for_rendering(@search_objects)
+  end
+
+  def eager_load_user_status
+    return if Feature.disabled?(:users_search, default_enabled: true)
+
+    @search_objects = @search_objects.eager_load(:status) # rubocop:disable CodeReuse/ActiveRecord
   end
 
   def check_single_commit_result

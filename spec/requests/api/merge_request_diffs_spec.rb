@@ -8,7 +8,7 @@ describe API::MergeRequestDiffs, 'MergeRequestDiffs' do
   before do
     merge_request.merge_request_diffs.create(head_commit_sha: '6f6d7e7ed97bb5f0054f2b1df789b39ca89b6ff9')
     merge_request.merge_request_diffs.create(head_commit_sha: '5937ac0a7beb003549fc5fd26fc247adbce4a52e')
-    project.add_master(user)
+    project.add_maintainer(user)
   end
 
   describe 'GET /projects/:id/merge_requests/:merge_request_iid/versions' do
@@ -30,7 +30,7 @@ describe API::MergeRequestDiffs, 'MergeRequestDiffs' do
     end
 
     it 'returns a 404 when merge_request_iid not found' do
-      get api("/projects/#{project.id}/merge_requests/999/versions", user)
+      get api("/projects/#{project.id}/merge_requests/0/versions", user)
       expect(response).to have_gitlab_http_status(404)
     end
   end
@@ -53,7 +53,7 @@ describe API::MergeRequestDiffs, 'MergeRequestDiffs' do
     end
 
     it 'returns a 404 when merge_request version_id is not found' do
-      get api("/projects/#{project.id}/merge_requests/#{merge_request.iid}/versions/999", user)
+      get api("/projects/#{project.id}/merge_requests/#{merge_request.iid}/versions/0", user)
       expect(response).to have_gitlab_http_status(404)
     end
 

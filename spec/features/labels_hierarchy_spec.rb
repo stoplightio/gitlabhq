@@ -1,6 +1,6 @@
 require 'spec_helper'
 
-feature 'Labels Hierarchy', :js, :nested_groups do
+describe 'Labels Hierarchy', :js, :nested_groups do
   include FilteredSearchHelpers
 
   let!(:user) { create(:user) }
@@ -21,7 +21,7 @@ feature 'Labels Hierarchy', :js, :nested_groups do
   end
 
   shared_examples 'assigning labels from sidebar' do
-    it 'can assign all ancestors labels' do
+    it 'can assign all ancestors labels', :quarantine do
       [grandparent_group_label, parent_group_label, project_label_1].each do |label|
         page.within('.block.labels') do
           find('.edit-link').click
@@ -145,7 +145,7 @@ feature 'Labels Hierarchy', :js, :nested_groups do
       visit new_project_issue_path(project_1)
     end
 
-    it 'should be able to assign ancestor group labels' do
+    it 'is able to assign ancestor group labels' do
       fill_in 'issue_title', with: 'new created issue'
       fill_in 'issue_description', with: 'new issue description'
 
@@ -156,7 +156,7 @@ feature 'Labels Hierarchy', :js, :nested_groups do
       find('a.label-item', text: parent_group_label.title).click
       find('a.label-item', text: project_label_1.title).click
 
-      find('.btn-create').click
+      find('.btn-success').click
 
       expect(page.find('.issue-details h2.title')).to have_content('new created issue')
       expect(page).to have_selector('span.badge', text: grandparent_group_label.title)
@@ -179,7 +179,7 @@ feature 'Labels Hierarchy', :js, :nested_groups do
     end
 
     context 'on project board issue sidebar' do
-      let(:board)   { create(:board, project: project_1) }
+      let(:board) { create(:board, project: project_1) }
 
       before do
         project_1.add_developer(user)
@@ -195,7 +195,7 @@ feature 'Labels Hierarchy', :js, :nested_groups do
     end
 
     context 'on group board issue sidebar' do
-      let(:board)   { create(:board, group: parent) }
+      let(:board) { create(:board, group: parent) }
 
       before do
         parent.add_developer(user)

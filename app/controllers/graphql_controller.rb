@@ -1,8 +1,19 @@
+# frozen_string_literal: true
+
 class GraphqlController < ApplicationController
   # Unauthenticated users have access to the API for public data
   skip_before_action :authenticate_user!
 
+  # Allow missing CSRF tokens, this would mean that if a CSRF is invalid or missing,
+  # the user won't be authenticated but can proceed as an anonymous user.
+  #
+  # If a CSRF is valid, the user is authenticated. This makes it easier to play
+  # around in GraphiQL.
+  protect_from_forgery with: :null_session, only: :execute
+
   before_action :check_graphql_feature_flag!
+  before_action :authorize_access_api!
+  before_action(only: [:execute]) { authenticate_sessionless_user!(:api) }
 
   def execute
     variables = Gitlab::Graphql::Variables.new(params[:variables]).to_h
@@ -27,6 +38,10 @@ class GraphqlController < ApplicationController
 
   private
 
+  def authorize_access_api!
+    access_denied!("API not accessible for user.") unless can?(current_user, :access_api)
+  end
+
   # Overridden from the ApplicationController to make the response look like
   # a GraphQL response. That is nicely picked up in Graphiql.
   def render_404
@@ -40,6 +55,6 @@ class GraphqlController < ApplicationController
   end
 
   def check_graphql_feature_flag!
-    render_404 unless Feature.enabled?(:graphql)
+    render_404 unless Gitlab::Graphql.enabled?
   end
 end

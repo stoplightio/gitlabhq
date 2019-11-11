@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module API
   class GroupVariables < Grape::API
     include PaginationParams
@@ -9,7 +11,7 @@ module API
       requires :id, type: String, desc: 'The ID of a group'
     end
 
-    resource :groups, requirements: API::PROJECT_ENDPOINT_REQUIREMENTS do
+    resource :groups, requirements: API::NAMESPACE_OR_PROJECT_REQUIREMENTS do
       desc 'Get group-level variables' do
         success Entities::Variable
       end
@@ -27,6 +29,7 @@ module API
       params do
         requires :key, type: String, desc: 'The key of the variable'
       end
+      # rubocop: disable CodeReuse/ActiveRecord
       get ':id/variables/:key' do
         key = params[:key]
         variable = user_group.variables.find_by(key: key)
@@ -35,6 +38,7 @@ module API
 
         present variable, with: Entities::Variable
       end
+      # rubocop: enable CodeReuse/ActiveRecord
 
       desc 'Create a new variable in a group' do
         success Entities::Variable
@@ -43,6 +47,7 @@ module API
         requires :key, type: String, desc: 'The key of the variable'
         requires :value, type: String, desc: 'The value of the variable'
         optional :protected, type: String, desc: 'Whether the variable is protected'
+        optional :variable_type, type: String, values: Ci::GroupVariable.variable_types.keys, desc: 'The type of variable, must be one of env_var or file. Defaults to env_var'
       end
       post ':id/variables' do
         variable_params = declared_params(include_missing: false)
@@ -63,7 +68,9 @@ module API
         optional :key, type: String, desc: 'The key of the variable'
         optional :value, type: String, desc: 'The value of the variable'
         optional :protected, type: String, desc: 'Whether the variable is protected'
+        optional :variable_type, type: String, values: Ci::GroupVariable.variable_types.keys, desc: 'The type of variable, must be one of env_var or file'
       end
+      # rubocop: disable CodeReuse/ActiveRecord
       put ':id/variables/:key' do
         variable = user_group.variables.find_by(key: params[:key])
 
@@ -77,6 +84,7 @@ module API
           render_validation_error!(variable)
         end
       end
+      # rubocop: enable CodeReuse/ActiveRecord
 
       desc 'Delete an existing variable from a group' do
         success Entities::Variable
@@ -84,12 +92,14 @@ module API
       params do
         requires :key, type: String, desc: 'The key of the variable'
       end
+      # rubocop: disable CodeReuse/ActiveRecord
       delete ':id/variables/:key' do
         variable = user_group.variables.find_by(key: params[:key])
         not_found!('GroupVariable') unless variable
 
         destroy_conditionally!(variable)
       end
+      # rubocop: enable CodeReuse/ActiveRecord
     end
   end
 end

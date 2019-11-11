@@ -1,15 +1,27 @@
+# frozen_string_literal: true
+
 module Gitlab
   module Ci
-    ##
+    #
     # Base GitLab CI Configuration facade
     #
     class Config
-      # EE would override this and utilize opts argument
-      def initialize(config, opts = {})
-        @config = Loader.new(config).load!
+      ConfigError = Class.new(StandardError)
+
+      def initialize(config, project: nil, sha: nil, user: nil)
+        @config = Config::Extendable
+          .new(build_config(config, project: project, sha: sha, user: user))
+          .to_hash
 
         @global = Entry::Global.new(@config)
         @global.compose!
+      rescue Gitlab::Config::Loader::Yaml::DataTooLargeError => e
+        Gitlab::Sentry.track_exception(e, extra: { user: user.inspect, project: project.inspect })
+        raise Config::ConfigError, e.message
+      rescue Gitlab::Config::Loader::FormatError,
+             Extendable::ExtensionError,
+             External::Processor::IncludeError => e
+        raise Config::ConfigError, e.message
       end
 
       def valid?
@@ -57,6 +69,22 @@ module Gitlab
 
       def jobs
         @global.jobs_value
+      end
+
+      private
+
+      def build_config(config, project:, sha:, user:)
+        initial_config = Gitlab::Config::Loader::Yaml.new(config).load!
+
+        process_external_files(initial_config, project: project, sha: sha, user: user)
+      end
+
+      def process_external_files(config, project:, sha:, user:)
+        Config::External::Processor.new(config,
+          project: project,
+          sha: sha || project&.repository&.root_ref_sha,
+          user: user,
+          expandset: Set.new).perform
       end
     end
   end

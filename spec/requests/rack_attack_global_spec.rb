@@ -177,7 +177,7 @@ describe 'Rack Attack global throttles' do
       context 'when the request is to the api internal endpoints' do
         it 'allows requests over the rate limit' do
           (1 + requests_per_period).times do
-            get url_api_internal, secret_token: Gitlab::Shell.secret_token
+            get url_api_internal, params: { secret_token: Gitlab::Shell.secret_token }
             expect(response).to have_http_status 200
           end
         end
@@ -251,8 +251,8 @@ describe 'Rack Attack global throttles' do
     let(:throttle_setting_prefix) { 'throttle_authenticated_web' }
 
     context 'with the token in the query string' do
-      let(:get_args) { [rss_url(user), nil] }
-      let(:other_user_get_args) { [rss_url(other_user), nil] }
+      let(:get_args) { [rss_url(user), params: nil] }
+      let(:other_user_get_args) { [rss_url(other_user), params: nil] }
 
       it_behaves_like 'rate-limited token-authenticated requests'
     end
@@ -345,7 +345,7 @@ describe 'Rack Attack global throttles' do
   end
 
   def api_get_args_with_token_headers(partial_url, token_headers)
-    ["/api/#{API::API.version}#{partial_url}", nil, token_headers]
+    ["/api/#{API::API.version}#{partial_url}", params: nil, headers: token_headers]
   end
 
   def rss_url(user)

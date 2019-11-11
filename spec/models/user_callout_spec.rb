@@ -1,7 +1,11 @@
+# frozen_string_literal: true
+
 require 'rails_helper'
 
 describe UserCallout do
   let!(:callout) { create(:user_callout) }
+
+  it_behaves_like 'having unique enum values'
 
   describe 'relationships' do
     it { is_expected.to belong_to(:user) }

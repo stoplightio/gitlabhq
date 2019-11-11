@@ -1,12 +1,15 @@
+# frozen_string_literal: true
+
 module Clusters
   module Applications
-    class Jupyter < ActiveRecord::Base
-      VERSION = '0.0.1'.freeze
+    class Jupyter < ApplicationRecord
+      VERSION = '0.9-174bbd5'.freeze
 
       self.table_name = 'clusters_applications_jupyter'
 
       include ::Clusters::Concerns::ApplicationCore
       include ::Clusters::Concerns::ApplicationStatus
+      include ::Clusters::Concerns::ApplicationVersion
       include ::Clusters::Concerns::ApplicationData
 
       belongs_to :oauth_application, class_name: 'Doorkeeper::Application'
@@ -15,8 +18,10 @@ module Clusters
 
       def set_initial_status
         return unless not_installable?
+        return unless cluster&.application_ingress_available?
 
-        if cluster&.application_ingress_installed? && cluster.application_ingress.external_ip
+        ingress = cluster.application_ingress
+        if ingress.external_ip || ingress.external_hostname
           self.status = 'installable'
         end
       end
@@ -33,11 +38,19 @@ module Clusters
         content_values.to_yaml
       end
 
+      # Will be addressed in future MRs
+      # We need to investigate and document what will be permenantly deleted.
+      def allowed_to_uninstall?
+        false
+      end
+
       def install_command
         Gitlab::Kubernetes::Helm::InstallCommand.new(
-          name,
+          name: name,
+          version: VERSION,
+          rbac: cluster.platform_kubernetes_rbac?,
           chart: chart,
-          values: values,
+          files: files,
           repository: repository
         )
       end
@@ -51,7 +64,11 @@ module Clusters
       def specification
         {
           "ingress" => {
-            "hosts" => [hostname]
+            "hosts" => [hostname],
+            "tls" => [{
+              "hosts" => [hostname],
+              "secretName" => "jupyter-cert"
+            }]
           },
           "hub" => {
             "extraEnv" => {
@@ -66,10 +83,20 @@ module Clusters
             "gitlab" => {
               "clientId" => oauth_application.uid,
               "clientSecret" => oauth_application.secret,
-              "callbackUrl" => callback_url
+              "callbackUrl" => callback_url,
+              "gitlabProjectIdWhitelist" => [project_id]
+            }
+          },
+          "singleuser" => {
+            "extraEnv" => {
+              "GITLAB_CLUSTER_ID" => cluster.id.to_s
             }
           }
         }
+      end
+
+      def project_id
+        cluster&.project&.id
       end
 
       def gitlab_url

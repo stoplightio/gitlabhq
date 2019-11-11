@@ -8,7 +8,7 @@ describe 'Navigation bar counter', :use_clean_rails_memory_store_caching do
 
   before do
     issue.assignees = [user]
-    merge_request.update(assignee: user)
+    merge_request.update(assignees: [user])
     sign_in(user)
   end
 
@@ -33,7 +33,7 @@ describe 'Navigation bar counter', :use_clean_rails_memory_store_caching do
 
     expect_counters('merge_requests', '1')
 
-    merge_request.update(assignee: nil)
+    merge_request.update(assignees: [])
 
     user.invalidate_cache_counts
 
@@ -45,11 +45,11 @@ describe 'Navigation bar counter', :use_clean_rails_memory_store_caching do
   end
 
   def issues_path
-    issues_dashboard_path(assignee_id: user.id)
+    issues_dashboard_path(assignee_username: user.username)
   end
 
   def merge_requests_path
-    merge_requests_dashboard_path(assignee_id: user.id)
+    merge_requests_dashboard_path(assignee_username: user.username)
   end
 
   def expect_counters(issuable_type, count)

@@ -17,9 +17,16 @@ describe Gitlab::GitalyClient::CommitService do
           repository: repository_message,
           left_commit_id: 'cfe32cf61b73a0d5e9f13e774abde7ff789b1660',
           right_commit_id: commit.id,
-          collapse_diffs: true,
+          collapse_diffs: false,
           enforce_limits: true,
-          **Gitlab::Git::DiffCollection.collection_limits.to_h
+          # Tests limitation parameters explicitly
+          max_files: 100,
+          max_lines: 5000,
+          max_bytes: 512000,
+          safe_max_files: 100,
+          safe_max_lines: 5000,
+          safe_max_bytes: 512000,
+          max_patch_bytes: 102400
         )
 
         expect_any_instance_of(Gitaly::DiffService::Stub).to receive(:commit_diff).with(request, kind_of(Hash))
@@ -35,9 +42,16 @@ describe Gitlab::GitalyClient::CommitService do
           repository: repository_message,
           left_commit_id: Gitlab::Git::EMPTY_TREE_ID,
           right_commit_id: initial_commit.id,
-          collapse_diffs: true,
+          collapse_diffs: false,
           enforce_limits: true,
-          **Gitlab::Git::DiffCollection.collection_limits.to_h
+          # Tests limitation parameters explicitly
+          max_files: 100,
+          max_lines: 5000,
+          max_bytes: 512000,
+          safe_max_files: 100,
+          safe_max_lines: 5000,
+          safe_max_bytes: 512000,
+          max_patch_bytes: 102400
         )
 
         expect_any_instance_of(Gitaly::DiffService::Stub).to receive(:commit_diff).with(request, kind_of(Hash))
@@ -101,6 +115,22 @@ describe Gitlab::GitalyClient::CommitService do
         .with(request, kind_of(Hash)).and_return([])
 
       described_class.new(repository).between(from, to)
+    end
+  end
+
+  describe '#diff_stats' do
+    let(:left_commit_id) { 'master' }
+    let(:right_commit_id) { 'cfe32cf61b73a0d5e9f13e774abde7ff789b1660' }
+
+    it 'sends an RPC request' do
+      request = Gitaly::DiffStatsRequest.new(repository: repository_message,
+                                             left_commit_id: left_commit_id,
+                                             right_commit_id: right_commit_id)
+
+      expect_any_instance_of(Gitaly::DiffService::Stub).to receive(:diff_stats)
+        .with(request, kind_of(Hash)).and_return([])
+
+      described_class.new(repository).diff_stats(left_commit_id, right_commit_id)
     end
   end
 
@@ -187,6 +217,21 @@ describe Gitlab::GitalyClient::CommitService do
 
           commit = nil
           2.times { commit = described_class.new(repository).find_commit('f01b' * 10) }
+
+          expect(commit).to eq(commit_dbl)
+        end
+      end
+
+      context 'when caching of the ref name is enabled' do
+        it 'returns a cached commit' do
+          expect_any_instance_of(Gitaly::CommitService::Stub).to receive(:find_commit).once.and_return(double(commit: commit_dbl))
+
+          commit = nil
+          2.times do
+            ::Gitlab::GitalyClient.allow_ref_name_caching do
+              commit = described_class.new(repository).find_commit('master')
+            end
+          end
 
           expect(commit).to eq(commit_dbl)
         end

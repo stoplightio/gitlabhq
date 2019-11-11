@@ -1,14 +1,16 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe MergeRequests::ReopenService do
   let(:user) { create(:user) }
   let(:user2) { create(:user) }
   let(:guest) { create(:user) }
-  let(:merge_request) { create(:merge_request, :closed, assignee: user2, author: create(:user)) }
+  let(:merge_request) { create(:merge_request, :closed, assignees: [user2], author: create(:user)) }
   let(:project) { merge_request.project }
 
   before do
-    project.add_master(user)
+    project.add_maintainer(user)
     project.add_developer(user2)
     project.add_guest(guest)
   end
@@ -45,6 +47,12 @@ describe MergeRequests::ReopenService do
         note = merge_request.notes.last
         expect(note.note).to include 'reopened'
       end
+    end
+
+    it 'caches merge request closing issues' do
+      expect(merge_request).to receive(:cache_merge_request_closes_issues!)
+
+      described_class.new(project, user, {}).execute(merge_request)
     end
 
     it 'updates metrics' do

@@ -4,7 +4,9 @@ shared_examples 'issues move service' do |group|
     let(:params) { { board_id: board1.id, from_list_id: list1.id, to_list_id: list2.id } }
 
     it 'delegates the label changes to Issues::UpdateService' do
-      expect_any_instance_of(Issues::UpdateService).to receive(:execute).with(issue).once
+      service = double(:service)
+      expect(Issues::UpdateService).to receive(:new).and_return(service)
+      expect(service).to receive(:execute).with(issue).once
 
       described_class.new(parent, user, params).execute(issue)
     end
@@ -32,8 +34,24 @@ shared_examples 'issues move service' do |group|
       described_class.new(parent, user, params).execute(issue)
       issue.reload
 
-      expect(issue.labels).to contain_exactly(bug)
+      expect(issue.labels).to contain_exactly(bug, regression)
       expect(issue).to be_closed
+    end
+  end
+
+  context 'when moving to backlog' do
+    let(:milestone) { create(:milestone, project: project) }
+    let!(:backlog)  { create(:backlog_list, board: board1) }
+
+    let(:issue)  { create(:labeled_issue, project: project, labels: [bug, development, testing, regression], milestone: milestone) }
+    let(:params) { { board_id: board1.id, from_list_id: list2.id, to_list_id: backlog.id } }
+
+    it 'keeps labels and milestone' do
+      described_class.new(parent, user, params).execute(issue)
+      issue.reload
+
+      expect(issue.labels).to contain_exactly(bug, regression)
+      expect(issue.milestone).to eq(milestone)
     end
   end
 

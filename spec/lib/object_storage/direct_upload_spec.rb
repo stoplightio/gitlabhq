@@ -61,6 +61,8 @@ describe ObjectStorage::DirectUpload do
         expect(subject[:GetURL]).to start_with(storage_url)
         expect(subject[:StoreURL]).to start_with(storage_url)
         expect(subject[:DeleteURL]).to start_with(storage_url)
+        expect(subject[:CustomPutHeaders]).to be_truthy
+        expect(subject[:PutHeaders]).to eq({})
       end
     end
 
@@ -80,6 +82,16 @@ describe ObjectStorage::DirectUpload do
         expect(subject[:MultipartUpload][:CompleteURL]).to include('uploadId=myUpload')
         expect(subject[:MultipartUpload][:AbortURL]).to start_with(storage_url)
         expect(subject[:MultipartUpload][:AbortURL]).to include('uploadId=myUpload')
+      end
+
+      it 'uses only strings in query parameters' do
+        expect(direct_upload.send(:connection)).to receive(:signed_url).at_least(:once) do |params|
+          if params[:query]
+            expect(params[:query].keys.all? { |key| key.is_a?(String) }).to be_truthy
+          end
+        end
+
+        subject
       end
     end
 
@@ -109,7 +121,7 @@ describe ObjectStorage::DirectUpload do
               expect(subject[:MultipartUpload][:PartURLs].length).to eq(2)
             end
 
-            it 'part size is mimimum, 5MB' do
+            it 'part size is minimum, 5MB' do
               expect(subject[:MultipartUpload][:PartSize]).to eq(5.megabyte)
             end
           end

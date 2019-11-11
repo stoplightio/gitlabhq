@@ -35,12 +35,13 @@ describe('pipeline graph action component', () => {
   it('should update bootstrap tooltip when title changes', done => {
     component.tooltipText = 'changed';
 
-    component.$nextTick()
-    .then(() => {
-      expect(component.$el.getAttribute('data-original-title')).toBe('changed');
-    })
-    .then(done)
-    .catch(done.fail);
+    component
+      .$nextTick()
+      .then(() => {
+        expect(component.$el.getAttribute('data-original-title')).toBe('changed');
+      })
+      .then(done)
+      .catch(done.fail);
   });
 
   it('should render an svg', () => {
@@ -49,17 +50,32 @@ describe('pipeline graph action component', () => {
   });
 
   describe('on click', () => {
-    it('emits `pipelineActionRequestComplete` after a successfull request', done => {
+    it('emits `pipelineActionRequestComplete` after a successful request', done => {
       spyOn(component, '$emit');
 
       component.$el.click();
 
-      component.$nextTick()
-        .then(() => {
-          expect(component.$emit).toHaveBeenCalledWith('pipelineActionRequestComplete');
-        })
-        .then(done)
-        .catch(done.fail);
+      setTimeout(() => {
+        component
+          .$nextTick()
+          .then(() => {
+            expect(component.$emit).toHaveBeenCalledWith('pipelineActionRequestComplete');
+          })
+          .catch(done.fail);
+
+        done();
+      }, 0);
+    });
+
+    it('renders a loading icon while waiting for request', done => {
+      component.$el.click();
+
+      component.$nextTick(() => {
+        expect(component.$el.querySelector('.js-action-icon-loading')).not.toBeNull();
+        setTimeout(() => {
+          done();
+        });
+      });
     });
   });
 });

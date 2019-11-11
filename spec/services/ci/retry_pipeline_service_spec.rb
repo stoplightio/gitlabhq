@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Ci::RetryPipelineService, '#execute' do
@@ -237,7 +239,7 @@ describe Ci::RetryPipelineService, '#execute' do
   context 'when user is not allowed to trigger manual action' do
     before do
       project.add_developer(user)
-      create(:protected_branch, :masters_can_push,
+      create(:protected_branch, :maintainers_can_push,
              name: pipeline.ref, project: project)
     end
 
@@ -275,7 +277,7 @@ describe Ci::RetryPipelineService, '#execute' do
     let(:pipeline) { create(:ci_pipeline, project: forked_project, ref: 'fixes') }
 
     before do
-      project.add_master(user)
+      project.add_maintainer(user)
       create(:merge_request,
         source_project: forked_project,
         target_project: project,
@@ -285,7 +287,7 @@ describe Ci::RetryPipelineService, '#execute' do
     end
 
     it 'allows to retry failed pipeline' do
-      allow_any_instance_of(Project).to receive(:fetch_branch_allows_collaboration?).and_return(true)
+      allow_any_instance_of(Project).to receive(:branch_allows_collaboration?).and_return(true)
       allow_any_instance_of(Project).to receive(:empty_repo?).and_return(false)
 
       service.execute(pipeline)

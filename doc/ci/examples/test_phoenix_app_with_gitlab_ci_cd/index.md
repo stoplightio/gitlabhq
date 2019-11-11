@@ -4,13 +4,14 @@ author_gitlab: Hostert
 level: beginner
 article_type: tutorial
 date: 2018-02-20
+last_updated: 2019-03-06
 ---
 
 # Testing a Phoenix application with GitLab CI/CD
 
 [Phoenix][phoenix-site] is a web development framework written in [Elixir][elixir-site], which is a
 functional language designed for productivity and maintainability that runs on the
-[Erlang VM][erlang-site]. Erlang VM is really really fast and can handle very large numbers of
+[Erlang VM](https://www.erlang.org). Erlang VM is really really fast and can handle very large numbers of
 simultaneous users.
 
 That's why we're hearing so much about Phoenix today.
@@ -26,7 +27,7 @@ and GitLab UI._
 ### What is Phoenix?
 
 [Phoenix][phoenix-site] is a web development framework written in [Elixir][elixir-site] very useful
- to build fast, reliable, and high-performance applications, as it uses [Erlang VM][erlang-site].
+ to build fast, reliable, and high-performance applications, as it uses [Erlang VM](https://www.erlang.org).
 
 Many components and concepts are similar to Ruby on Rails or Python's Django. High developer
 productivity and high application performance are only a few advantages on learning how to use it.
@@ -75,7 +76,7 @@ When we call `mix` command, we'll pass two arguments:
 
 - The task we want it to run: `phoenix.new`
 - And the parameter `phoenix.new` requires, which is the name of the new project. In this case,
-we're calling it `hello_gitlab_ci`, but you're free to set your own name:
+  we're calling it `hello_gitlab_ci`, but you're free to set your own name:
 
 ```bash
 mix phoenix.new hello_gitlab_ci
@@ -85,7 +86,7 @@ When asked, answer `Y` to fetch and install dependencies.
 
 If everything went fine, you'll get an output like this:
 
-![`mix phoenix.new`](img/mix-phoenix-new.png)
+![mix phoenix.new](img/mix-phoenix-new.png)
 
 Now, our project is located inside the directory with the same name we pass to `mix` command, for
 example, `~/GitLab/hello_gitlab_ci`.
@@ -145,7 +146,7 @@ Now, we have our app running locally. We can preview it directly on our browser.
 not work, open [`127.0.0.1:4000`](http://127.0.0.1:4000) instead and later, configure your OS to
 point `localhost` to `127.0.0.1`.
 
-![`mix phoenix.server`](img/mix-phoenix-server.png)
+![mix phoenix.server](img/mix-phoenix-server.png)
 
 Great, now we have a local Phoenix Server running our app.
 
@@ -177,7 +178,7 @@ environment it can run. Since we will work with a single environment, we'll edit
 configuration file (`test.exs`).
 
 But, why do we need to adjust our configuration? Well, GitLab CI/CD builds and tests our code in one
-isolated virtual machine, called [Runner][runner-site], using Docker technology. In this Runner,
+isolated virtual machine, called [Runner](../../runners/README.md), using Docker technology. In this Runner,
 GitLab CI/CD has access to everything our Phoenix application need to run, exactly as we have in our
 `localhost`, but we have to tell GitLab CI/CD where to create and find this database using system
 variables. This way, GitLab CI/CD will create our test database inside the Runner, just like we do
@@ -249,7 +250,7 @@ project.
     ![Set up CI](img/setup-ci.png)
 
 - On next screen, we can select a template ready to go. Click on **Apply a GitLab CI/CD Yaml
-template** and select **Elixir**:
+  template** and select **Elixir**:
 
     ![Select template](img/select-template.png)
 
@@ -398,14 +399,13 @@ other reasons][ci-reasons] to keep using GitLab CI/CD. The benefits to our teams
 - [Using Docker images documentation][using-docker]
 - [Example project: Hello GitLab CI/CD on GitLab][hello-gitlab]
 
-[phoenix-site]: http://phoenixframework.org/ "Phoenix Framework"
+[phoenix-site]: https://phoenixframework.org/ "Phoenix Framework"
 [phoenix-learning-guide]: https://hexdocs.pm/phoenix/learning.html "Phoenix Learning Guide"
-[phoenix-install]: http://www.phoenixframework.org/docs/installation "Phoenix Installation"
-[phoenix-mysql]: http://www.phoenixframework.org/docs/using-mysql "Phoenix with MySQL"
+[phoenix-install]: https://hexdocs.pm/phoenix/installation.html "Phoenix Installation"
+[phoenix-mysql]: https://hexdocs.pm/phoenix/ecto.html#using-mysql "Phoenix with MySQL"
 [elixir-site]: http://elixir-lang.org/ "Elixir"
 [elixir-mix]: http://elixir-lang.org/getting-started/mix-otp/introduction-to-mix.html "Introduction to mix"
 [elixir-docs]: http://elixir-lang.org/getting-started/introduction.html "Elixir Documentation"
-[erlang-site]: http://erlang.org "Erlang"
 [elixir-install]: https://elixir-lang.org/install.html "Elixir Installation"
 [ecto]: http://hexdocs.pm/ecto "Ecto"
 [ecto-repo]: https://hexdocs.pm/ecto/Ecto.html#module-repositories "Ecto Repositories"
@@ -417,7 +417,6 @@ other reasons][ci-reasons] to keep using GitLab CI/CD. The benefits to our teams
 [ci-docs]: ../../README.md "GitLab CI/CD Documentation"
 [skipping-jobs]: ../../yaml/README.md#skipping-jobs "Skipping Jobs"
 [gitlab-runners]: ../../runners/README.md "GitLab Runners Documentation"
-[runner-site]: ../../runners/README.md#runners "Runners"
 [docker-image]: https://hub.docker.com/r/trenpixster/elixir/ "Elixir Docker Image"
 [using-docker]: ../../docker/using_docker_images.md "Using Docker Images"
 [hello-gitlab]: https://gitlab.com/Hostert/hello_gitlab_ci "Hello GitLab CI/CD"

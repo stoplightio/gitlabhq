@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe SystemHooksService do
@@ -32,7 +34,7 @@ describe SystemHooksService do
     end
 
     it do
-      project.old_path_with_namespace = 'transfered_from_path'
+      project.old_path_with_namespace = 'transferred_from_path'
       expect(event_data(project, :transfer)).to include(
         :event_name, :name, :created_at, :updated_at, :path, :project_id,
         :owner_name, :owner_email, :project_visibility,
@@ -75,7 +77,7 @@ describe SystemHooksService do
     end
 
     it 'handles nil datetime columns' do
-      user.update_attributes(created_at: nil, updated_at: nil)
+      user.update(created_at: nil, updated_at: nil)
       data = event_data(user, :destroy)
 
       expect(data[:created_at]).to be(nil)
@@ -84,20 +86,20 @@ describe SystemHooksService do
 
     context 'group_rename' do
       it 'contains old and new path' do
-        allow(group).to receive(:path_was).and_return('old-path')
+        allow(group).to receive(:path_before_last_save).and_return('old-path')
 
         data = event_data(group, :rename)
 
         expect(data).to include(:event_name, :name, :created_at, :updated_at, :full_path, :path, :group_id, :old_path, :old_full_path)
         expect(data[:path]).to eq(group.path)
         expect(data[:full_path]).to eq(group.path)
-        expect(data[:old_path]).to eq(group.path_was)
-        expect(data[:old_full_path]).to eq(group.path_was)
+        expect(data[:old_path]).to eq(group.path_before_last_save)
+        expect(data[:old_full_path]).to eq(group.path_before_last_save)
       end
 
       it 'contains old and new full_path for subgroup' do
         subgroup = create(:group, parent: group)
-        allow(subgroup).to receive(:path_was).and_return('old-path')
+        allow(subgroup).to receive(:path_before_last_save).and_return('old-path')
 
         data = event_data(subgroup, :rename)
 
@@ -108,13 +110,13 @@ describe SystemHooksService do
 
     context 'user_rename' do
       it 'contains old and new username' do
-        allow(user).to receive(:username_was).and_return('old-username')
+        allow(user).to receive(:username_before_last_save).and_return('old-username')
 
         data = event_data(user, :rename)
 
         expect(data).to include(:event_name, :name, :created_at, :updated_at, :email, :user_id, :username, :old_username)
         expect(data[:username]).to eq(user.username)
-        expect(data[:old_username]).to eq(user.username_was)
+        expect(data[:old_username]).to eq(user.username_before_last_save)
       end
     end
 

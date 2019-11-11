@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 describe QA::Page::Validator do
   describe '#constants' do
     subject do
@@ -30,7 +32,7 @@ describe QA::Page::Validator do
     let(:view) { spy('view') }
 
     before do
-      allow(QA::Page::Admin::Settings::Main)
+      allow(QA::Page::Admin::Settings::Repository)
         .to receive(:views).and_return([view])
     end
 

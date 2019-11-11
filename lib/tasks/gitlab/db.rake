@@ -29,10 +29,14 @@ namespace :gitlab do
       # If MySQL, turn off foreign key checks
       connection.execute('SET FOREIGN_KEY_CHECKS=0') if Gitlab::Database.mysql?
 
-      tables = connection.tables
+      # connection.tables is deprecated in MySQLAdapter, but in PostgreSQLAdapter
+      # data_sources returns both views and tables, so use #tables instead
+      tables = Gitlab::Database.mysql? ? connection.data_sources : connection.tables
+
+      # Removes the entry from the array
       tables.delete 'schema_migrations'
       # Truncate schema_migrations to ensure migrations re-run
-      connection.execute('TRUNCATE schema_migrations')
+      connection.execute('TRUNCATE schema_migrations') if connection.data_source_exists? 'schema_migrations'
 
       # Drop tables with cascade to avoid dependent table errors
       # PG: http://www.postgresql.org/docs/current/static/ddl-depend.html
@@ -46,9 +50,13 @@ namespace :gitlab do
 
     desc 'Configures the database by running migrate, or by loading the schema and seeding if needed'
     task configure: :environment do
-      if ActiveRecord::Base.connection.tables.any?
+      # Check if we have existing db tables
+      # The schema_migrations table will still exist if drop_tables was called
+      if ActiveRecord::Base.connection.tables.count > 1
         Rake::Task['db:migrate'].invoke
       else
+        # Add post-migrate paths to ensure we mark all migrations as up
+        Gitlab::Database.add_post_migrate_path_to_rails(force: true)
         Rake::Task['db:schema:load'].invoke
         Rake::Task['db:seed_fu'].invoke
       end

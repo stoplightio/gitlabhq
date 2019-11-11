@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # Include atomic internal id generation scheme for a model
 #
 # This allows us to atomically generate internal ids that are
@@ -5,7 +7,7 @@
 #
 # For example, let's generate internal ids for Issue per Project:
 # ```
-# class Issue < ActiveRecord::Base
+# class Issue < ApplicationRecord
 #   has_internal_id :iid, scope: :project, init: ->(s) { s.project.issues.maximum(:iid) }
 # end
 # ```
@@ -24,20 +26,43 @@
 module AtomicInternalId
   extend ActiveSupport::Concern
 
-  module ClassMethods
+  class_methods do
     def has_internal_id(column, scope:, init:, presence: true) # rubocop:disable Naming/PredicateName
+      # We require init here to retain the ability to recalculate in the absence of a
+      # InternaLId record (we may delete records in `internal_ids` for example).
+      raise "has_internal_id requires a init block, none given." unless init
+
       before_validation :"ensure_#{scope}_#{column}!", on: :create
       validates column, presence: presence
 
       define_method("ensure_#{scope}_#{column}!") do
         scope_value = association(scope).reader
+        value = read_attribute(column)
 
-        if read_attribute(column).blank? && scope_value
+        return value unless scope_value
+
+        scope_attrs = { scope_value.class.table_name.singularize.to_sym => scope_value }
+        usage = self.class.table_name.to_sym
+
+        if value.present?
+          InternalId.track_greatest(self, scope_attrs, usage, value, init)
+        else
+          value = InternalId.generate_next(self, scope_attrs, usage, init)
+          write_attribute(column, value)
+        end
+
+        value
+      end
+
+      define_method("reset_#{scope}_#{column}") do
+        if value = read_attribute(column)
+          scope_value = association(scope).reader
           scope_attrs = { scope_value.class.table_name.singularize.to_sym => scope_value }
           usage = self.class.table_name.to_sym
 
-          new_iid = InternalId.generate_next(self, scope_attrs, usage, init)
-          write_attribute(column, new_iid)
+          if InternalId.reset(self, scope_attrs, usage, value)
+            write_attribute(column, nil)
+          end
         end
 
         read_attribute(column)

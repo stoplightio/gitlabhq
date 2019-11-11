@@ -1,9 +1,12 @@
 <script>
-import tooltip from '~/vue_shared/directives/tooltip';
+import DropdownValueScopedLabel from './dropdown_value_scoped_label.vue';
+import DropdownValueRegularLabel from './dropdown_value_regular_label.vue';
+import { isScopedLabel } from '~/lib/utils/common_utils';
 
 export default {
-  directives: {
-    tooltip,
+  components: {
+    DropdownValueScopedLabel,
+    DropdownValueRegularLabel,
   },
   props: {
     labels: {
@@ -13,6 +16,16 @@ export default {
     labelFilterBasePath: {
       type: String,
       required: true,
+    },
+    enableScopedLabels: {
+      type: Boolean,
+      required: false,
+      default: false,
+    },
+    scopedLabelsDocumentationLink: {
+      type: String,
+      required: false,
+      default: '#',
     },
   },
   computed: {
@@ -30,39 +43,44 @@ export default {
         backgroundColor: label.color,
       };
     },
+    scopedLabelsDescription({ description = '' }) {
+      return `<span class="font-weight-bold scoped-label-tooltip-title">Scoped label</span><br />${description}`;
+    },
+    showScopedLabels(label) {
+      return this.enableScopedLabels && isScopedLabel(label);
+    },
   },
 };
 </script>
 
 <template>
   <div
-    class="hide-collapsed value issuable-show-labels js-value"
     :class="{
-      'has-labels':!isEmpty,
+      'has-labels': !isEmpty,
     }"
+    class="hide-collapsed value issuable-show-labels js-value"
   >
-    <span
-      v-if="isEmpty"
-      class="text-secondary"
-    >
+    <span v-if="isEmpty" class="text-secondary">
       <slot>{{ __('None') }}</slot>
     </span>
-    <a
-      v-else
-      v-for="label in labels"
-      :key="label.id"
-      :href="labelFilterUrl(label)"
-    >
-      <span
-        v-tooltip
-        class="badge color-label"
-        data-placement="bottom"
-        data-container="body"
-        :style="labelStyle(label)"
-        :title="label.description"
-      >
-        {{ label.title }}
-      </span>
-    </a>
+
+    <template v-for="label in labels" v-else>
+      <dropdown-value-scoped-label
+        v-if="showScopedLabels(label)"
+        :key="label.id"
+        :label="label"
+        :label-filter-url="labelFilterUrl(label)"
+        :label-style="labelStyle(label)"
+        :scoped-labels-documentation-link="scopedLabelsDocumentationLink"
+      />
+
+      <dropdown-value-regular-label
+        v-else
+        :key="label.id"
+        :label="label"
+        :label-filter-url="labelFilterUrl(label)"
+        :label-style="labelStyle(label)"
+      />
+    </template>
   </div>
 </template>

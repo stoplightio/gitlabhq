@@ -1,6 +1,6 @@
 require 'spec_helper'
 
-feature 'User squashes a merge request', :js do
+describe 'User squashes a merge request', :js do
   let(:user) { create(:user) }
   let(:project) { create(:project, :repository) }
   let(:source_branch) { 'csv' }
@@ -14,7 +14,7 @@ feature 'User squashes a merge request', :js do
       latest_master_commits = project.repository.commits_between(original_head.sha, 'master').map(&:raw)
 
       squash_commit = an_object_having_attributes(sha: a_string_matching(/\h{40}/),
-                                                  message: "Csv\n",
+                                                  message: a_string_starting_with(project.merge_requests.first.default_squash_commit_message),
                                                   author_name: user.name,
                                                   committer_name: user.name)
 
@@ -38,7 +38,7 @@ feature 'User squashes a merge request', :js do
   def accept_mr
     expect(page).to have_button('Merge')
 
-    uncheck 'Remove source branch'
+    uncheck 'Delete source branch'
     click_on 'Merge'
   end
 
@@ -46,7 +46,7 @@ feature 'User squashes a merge request', :js do
     # Prevent source branch from being removed so we can use be_merged_to_root_ref
     # method to check if squash was performed or not
     allow_any_instance_of(MergeRequest).to receive(:force_remove_source_branch?).and_return(false)
-    project.add_master(user)
+    project.add_maintainer(user)
 
     sign_in user
   end

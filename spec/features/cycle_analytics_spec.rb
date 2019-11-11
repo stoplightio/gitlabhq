@@ -1,6 +1,6 @@
 require 'spec_helper'
 
-feature 'Cycle Analytics', :js do
+describe 'Cycle Analytics', :js do
   let(:user) { create(:user) }
   let(:guest) { create(:user) }
   let(:project) { create(:project, :repository) }
@@ -11,8 +11,8 @@ feature 'Cycle Analytics', :js do
 
   context 'as an allowed user' do
     context 'when project is new' do
-      before  do
-        project.add_master(user)
+      before do
+        project.add_maintainer(user)
 
         sign_in(user)
 
@@ -39,7 +39,7 @@ feature 'Cycle Analytics', :js do
     context "when there's cycle analytics data" do
       before do
         allow_any_instance_of(Gitlab::ReferenceExtractor).to receive(:issues).and_return([issue])
-        project.add_master(user)
+        project.add_maintainer(user)
 
         @build = create_cycle(user, project, issue, mr, milestone, pipeline)
         deploy_master(user, project)
@@ -88,25 +88,6 @@ feature 'Cycle Analytics', :js do
         it 'shows only relevant data' do
           expect(new_issues_counter).to have_content('1')
         end
-      end
-    end
-
-    context "when my preferred language is Spanish" do
-      before do
-        user.update_attribute(:preferred_language, 'es')
-
-        project.add_master(user)
-        sign_in(user)
-        visit project_cycle_analytics_path(project)
-        wait_for_requests
-      end
-
-      it 'shows the content in Spanish' do
-        expect(page).to have_content('Estado del Pipeline')
-      end
-
-      it 'resets the language to English' do
-        expect(I18n.locale).to eq(:en)
       end
     end
   end

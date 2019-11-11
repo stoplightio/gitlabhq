@@ -33,11 +33,11 @@
 
   @include media-breakpoint-up(sm) {
     &:not(.wiki-sidebar):not(.build-sidebar):not(.issuable-bulk-update-sidebar) .content-wrapper {
-      padding-right: $gutter_collapsed_width;
+      padding-right: $gutter-collapsed-width;
     }
 
     .merge-request-tabs-holder.affix {
-      right: $gutter_collapsed_width;
+      right: $gutter-collapsed-width;
     }
   }
 
@@ -67,21 +67,21 @@
 
   @include media-breakpoint-only(sm) {
     &:not(.wiki-sidebar):not(.build-sidebar):not(.issuable-bulk-update-sidebar) .content-wrapper {
-      padding-right: $gutter_collapsed_width;
+      padding-right: $gutter-collapsed-width;
     }
   }
 
   @include media-breakpoint-up(md) {
     .content-wrapper {
-      padding-right: $gutter_width;
+      padding-right: $gutter-width;
     }
 
     &:not(.with-overlay) .merge-request-tabs-holder.affix {
-      right: $gutter_width;
+      right: $gutter-width;
     }
 
     &.with-overlay .merge-request-tabs-holder.affix {
-      right: $gutter_collapsed_width;
+      right: $gutter-collapsed-width;
     }
   }
 }
@@ -156,4 +156,56 @@
 
 .sidebar-collapsed-icon .sidebar-collapsed-value {
   font-size: 12px;
+}
+
+.ancestor-tree {
+  .vertical-timeline {
+    position: relative;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+
+    &::before {
+      content: '';
+      border-left: 1px solid $gray-500;
+      position: absolute;
+      top: $gl-padding;
+      bottom: $gl-padding;
+      left: map-get($spacers, 2) - 1px;
+    }
+
+    &-row {
+      margin-top: map-get($spacers, 3);
+
+      &:nth-child(1) {
+        margin-top: 0;
+      }
+    }
+
+    &-icon {
+      /**
+      * 2px extra is to give a little more height than needed
+      * to hide timeline line before/after the element starts/ends
+      */
+      height: map-get($spacers, 4) + 2px;
+      z-index: 1;
+      position: relative;
+      top: -3px;
+      padding: $gl-padding-4 0;
+      background-color: $gray-light;
+
+      &.opened {
+        color: $green-500;
+      }
+
+      &.closed {
+        color: $blue-500;
+      }
+    }
+
+    &-content {
+      line-height: initial;
+      margin-left: $gl-padding-8;
+    }
+  }
 }

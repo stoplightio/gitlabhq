@@ -35,7 +35,11 @@ describe 'Explore Groups page', :js do
     fill_in 'filter', with: group.name
     wait_for_requests
 
+    expect(page).to have_content(group.full_name)
+    expect(page).not_to have_content(public_group.full_name)
+
     fill_in 'filter', with: ""
+    page.find('[name="filter"]').send_keys(:enter)
     wait_for_requests
 
     expect(page).to have_content(group.full_name)
@@ -49,14 +53,14 @@ describe 'Explore Groups page', :js do
     expect(find('.js-groups-list-holder .content-list li:first-child .stats .number-projects')).to have_text("1")
 
     # Archive project
-    empty_project.archive!
+    ::Projects::UpdateService.new(empty_project, user, archived: true).execute
     visit explore_groups_path
 
     # Check project count
     expect(find('.js-groups-list-holder .content-list li:first-child .stats .number-projects')).to have_text("0")
 
     # Unarchive project
-    empty_project.unarchive!
+    ::Projects::UpdateService.new(empty_project, user, archived: false).execute
     visit explore_groups_path
 
     # Check project count
@@ -64,17 +68,17 @@ describe 'Explore Groups page', :js do
   end
 
   describe 'landing component' do
-    it 'should show a landing component' do
+    it 'shows a landing component' do
       expect(page).to have_content('Below you will find all the groups that are public.')
     end
 
-    it 'should be dismissable' do
+    it 'is dismissable' do
       find('.dismiss-button').click
 
       expect(page).not_to have_content('Below you will find all the groups that are public.')
     end
 
-    it 'should persistently not show once dismissed' do
+    it 'does not show persistently once dismissed' do
       find('.dismiss-button').click
 
       visit explore_groups_path

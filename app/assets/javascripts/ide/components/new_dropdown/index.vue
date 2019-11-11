@@ -1,17 +1,18 @@
 <script>
 import { mapActions } from 'vuex';
 import icon from '~/vue_shared/components/icon.vue';
-import newModal from './modal.vue';
 import upload from './upload.vue';
+import ItemButton from './button.vue';
+import { modalTypes } from '../../constants';
 
 export default {
   components: {
     icon,
-    newModal,
     upload,
+    ItemButton,
   },
   props: {
-    branch: {
+    type: {
       type: String,
       required: true,
     },
@@ -20,101 +21,93 @@ export default {
       required: false,
       default: '',
     },
-  },
-  data() {
-    return {
-      openModal: false,
-      modalType: '',
-      dropdownOpen: false,
-    };
+    isOpen: {
+      type: Boolean,
+      required: false,
+      default: false,
+    },
   },
   watch: {
-    dropdownOpen() {
+    isOpen() {
       this.$nextTick(() => {
-        this.$refs.dropdownMenu.scrollIntoView();
+        this.$refs.dropdownMenu.scrollIntoView({
+          block: 'nearest',
+        });
       });
     },
   },
   methods: {
-    ...mapActions(['createTempEntry']),
+    ...mapActions(['createTempEntry', 'openNewEntryModal', 'deleteEntry']),
     createNewItem(type) {
-      this.modalType = type;
-      this.openModal = true;
-      this.dropdownOpen = false;
-    },
-    hideModal() {
-      this.openModal = false;
+      this.openNewEntryModal({ type, path: this.path });
+      this.$emit('toggle', false);
     },
     openDropdown() {
-      this.dropdownOpen = !this.dropdownOpen;
+      this.$emit('toggle', !this.isOpen);
     },
   },
+  modalTypes,
 };
 </script>
 
 <template>
   <div class="ide-new-btn">
     <div
-      class="dropdown"
       :class="{
-        show: dropdownOpen,
+        show: isOpen,
       }"
+      class="dropdown d-flex"
     >
       <button
+        :aria-label="__('Create new file or directory')"
         type="button"
-        class="btn btn-sm btn-default dropdown-toggle add-to-tree"
-        aria-label="Create new file or directory"
+        class="rounded border-0 d-flex ide-entry-dropdown-toggle"
         @click.stop="openDropdown()"
       >
-        <icon
-          name="plus"
-          :size="12"
-          css-classes="float-left"
-        />
-        <icon
-          name="arrow-down"
-          :size="12"
-          css-classes="float-left"
-        />
+        <icon name="ellipsis_v" /> <icon name="arrow-down" />
       </button>
-      <ul
-        class="dropdown-menu dropdown-menu-right"
-        ref="dropdownMenu"
-      >
+      <ul ref="dropdownMenu" class="dropdown-menu dropdown-menu-right">
+        <template v-if="type === 'tree'">
+          <li>
+            <item-button
+              :label="__('New file')"
+              class="d-flex"
+              icon="doc-new"
+              icon-classes="mr-2"
+              @click="createNewItem('blob')"
+            />
+          </li>
+          <li><upload :path="path" @create="createTempEntry" /></li>
+          <li>
+            <item-button
+              :label="__('New directory')"
+              class="d-flex"
+              icon="folder-new"
+              icon-classes="mr-2"
+              @click="createNewItem($options.modalTypes.tree)"
+            />
+          </li>
+          <li class="divider"></li>
+        </template>
         <li>
-          <a
-            href="#"
-            role="button"
-            @click.stop.prevent="createNewItem('blob')"
-          >
-            {{ __('New file') }}
-          </a>
-        </li>
-        <li>
-          <upload
-            :branch-id="branch"
-            :path="path"
-            @create="createTempEntry"
+          <item-button
+            :label="__('Rename')"
+            class="d-flex"
+            icon="pencil"
+            icon-classes="mr-2"
+            @click="createNewItem($options.modalTypes.rename)"
           />
         </li>
         <li>
-          <a
-            href="#"
-            role="button"
-            @click.stop.prevent="createNewItem('tree')"
-          >
-            {{ __('New directory') }}
-          </a>
+          <item-button
+            :label="__('Delete')"
+            class="d-flex"
+            icon="remove"
+            icon-classes="mr-2"
+            @click="deleteEntry(path)"
+          />
         </li>
       </ul>
     </div>
-    <new-modal
-      v-if="openModal"
-      :type="modalType"
-      :branch-id="branch"
-      :path="path"
-      @hide="hideModal"
-      @create="createTempEntry"
-    />
   </div>
 </template>

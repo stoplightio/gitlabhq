@@ -1,5 +1,5 @@
 import commitState from '~/ide/stores/modules/commit/state';
-import * as consts from '~/ide/stores/modules/commit/constants';
+import consts from '~/ide/stores/modules/commit/constants';
 import * as getters from '~/ide/stores/modules/commit/getters';
 
 describe('IDE commit module getters', () => {
@@ -29,51 +29,11 @@ describe('IDE commit module getters', () => {
     });
   });
 
-  describe('commitButtonDisabled', () => {
-    const localGetters = {
-      discardDraftButtonDisabled: false,
-    };
-    const rootState = {
-      stagedFiles: ['a'],
-    };
-
-    it('returns false when discardDraftButtonDisabled is false & stagedFiles is not empty', () => {
-      expect(
-        getters.commitButtonDisabled(state, localGetters, rootState),
-      ).toBeFalsy();
-    });
-
-    it('returns true when discardDraftButtonDisabled is false & stagedFiles is empty', () => {
-      rootState.stagedFiles.length = 0;
-
-      expect(
-        getters.commitButtonDisabled(state, localGetters, rootState),
-      ).toBeTruthy();
-    });
-
-    it('returns true when discardDraftButtonDisabled is true', () => {
-      localGetters.discardDraftButtonDisabled = true;
-
-      expect(
-        getters.commitButtonDisabled(state, localGetters, rootState),
-      ).toBeTruthy();
-    });
-
-    it('returns true when discardDraftButtonDisabled is false & changedFiles is not empty', () => {
-      localGetters.discardDraftButtonDisabled = false;
-      rootState.stagedFiles.length = 0;
-
-      expect(
-        getters.commitButtonDisabled(state, localGetters, rootState),
-      ).toBeTruthy();
-    });
-  });
-
-  describe('newBranchName', () => {
+  describe('placeholderBranchName', () => {
     it('includes username, currentBranchId, patch & random number', () => {
       gon.current_username = 'username';
 
-      const branch = getters.newBranchName(state, null, {
+      const branch = getters.placeholderBranchName(state, null, {
         currentBranchId: 'testing',
       });
 
@@ -86,7 +46,7 @@ describe('IDE commit module getters', () => {
       currentBranchId: 'master',
     };
     const localGetters = {
-      newBranchName: 'newBranchName',
+      placeholderBranchName: 'placeholder-branch-name',
     };
 
     beforeEach(() => {
@@ -99,30 +59,118 @@ describe('IDE commit module getters', () => {
       expect(getters.branchName(state, null, rootState)).toBe('master');
     });
 
-    ['COMMIT_TO_NEW_BRANCH', 'COMMIT_TO_NEW_BRANCH_MR'].forEach(type => {
-      describe(type, () => {
-        beforeEach(() => {
-          Object.assign(state, {
-            commitAction: consts[type],
-          });
-        });
-
-        it('uses newBranchName when not empty', () => {
-          expect(getters.branchName(state, localGetters, rootState)).toBe(
-            'state-newBranchName',
-          );
-        });
-
-        it('uses getters newBranchName when state newBranchName is empty', () => {
-          Object.assign(state, {
-            newBranchName: '',
-          });
-
-          expect(getters.branchName(state, localGetters, rootState)).toBe(
-            'newBranchName',
-          );
+    describe('COMMIT_TO_NEW_BRANCH', () => {
+      beforeEach(() => {
+        Object.assign(state, {
+          commitAction: consts.COMMIT_TO_NEW_BRANCH,
         });
       });
+
+      it('uses newBranchName when not empty', () => {
+        const newBranchName = 'nonempty-branch-name';
+        Object.assign(state, {
+          newBranchName,
+        });
+
+        expect(getters.branchName(state, localGetters, rootState)).toBe(newBranchName);
+      });
+
+      it('uses placeholderBranchName when state newBranchName is empty', () => {
+        Object.assign(state, {
+          newBranchName: '',
+        });
+
+        expect(getters.branchName(state, localGetters, rootState)).toBe('placeholder-branch-name');
+      });
+    });
+  });
+
+  describe('preBuiltCommitMessage', () => {
+    let rootState = {};
+
+    beforeEach(() => {
+      rootState.changedFiles = [];
+      rootState.stagedFiles = [];
+    });
+
+    afterEach(() => {
+      rootState = {};
+    });
+
+    it('returns commitMessage when set', () => {
+      state.commitMessage = 'test commit message';
+
+      expect(getters.preBuiltCommitMessage(state, null, rootState)).toBe('test commit message');
+    });
+
+    ['changedFiles', 'stagedFiles'].forEach(key => {
+      it('returns commitMessage with updated file', () => {
+        rootState[key].push({
+          path: 'test-file',
+        });
+
+        expect(getters.preBuiltCommitMessage(state, null, rootState)).toBe('Update test-file');
+      });
+
+      it('returns commitMessage with updated files', () => {
+        rootState[key].push(
+          {
+            path: 'test-file',
+          },
+          {
+            path: 'index.js',
+          },
+        );
+
+        expect(getters.preBuiltCommitMessage(state, null, rootState)).toBe(
+          'Update test-file, index.js files',
+        );
+      });
+
+      it('returns commitMessage with deleted files', () => {
+        rootState[key].push(
+          {
+            path: 'test-file',
+            deleted: true,
+          },
+          {
+            path: 'index.js',
+          },
+        );
+
+        expect(getters.preBuiltCommitMessage(state, null, rootState)).toBe(
+          'Update index.js\nDeleted test-file',
+        );
+      });
+    });
+  });
+
+  describe('shouldDisableNewMrOption', () => {
+    it('returns false if commitAction `COMMIT_TO_NEW_BRANCH`', () => {
+      state.commitAction = consts.COMMIT_TO_NEW_BRANCH;
+      const rootState = {
+        currentMergeRequest: { foo: 'bar' },
+      };
+
+      expect(getters.shouldDisableNewMrOption(state, null, null, rootState)).toBeFalsy();
+    });
+
+    it('returns false if there is no current merge request', () => {
+      state.commitAction = consts.COMMIT_TO_CURRENT_BRANCH;
+      const rootState = {
+        currentMergeRequest: null,
+      };
+
+      expect(getters.shouldDisableNewMrOption(state, null, null, rootState)).toBeFalsy();
+    });
+
+    it('returns true an MR exists and commit action is `COMMIT_TO_CURRENT_BRANCH`', () => {
+      state.commitAction = consts.COMMIT_TO_CURRENT_BRANCH;
+      const rootState = {
+        currentMergeRequest: { foo: 'bar' },
+      };
+
+      expect(getters.shouldDisableNewMrOption(state, null, null, rootState)).toBeTruthy();
     });
   });
 });

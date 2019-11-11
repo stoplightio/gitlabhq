@@ -1,6 +1,24 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe GroupMember do
+  describe '.count_users_by_group_id' do
+    it 'counts users by group ID' do
+      user_1 = create(:user)
+      user_2 = create(:user)
+      group_1 = create(:group)
+      group_2 = create(:group)
+
+      group_1.add_owner(user_1)
+      group_1.add_owner(user_2)
+      group_2.add_owner(user_1)
+
+      expect(described_class.count_users_by_group_id).to eq(group_1.id => 2,
+                                                            group_2.id => 1)
+    end
+  end
+
   describe '.access_level_roles' do
     it 'returns Gitlab::Access.options_with_owner' do
       expect(described_class.access_level_roles).to eq(Gitlab::Access.options_with_owner)
@@ -21,7 +39,7 @@ describe GroupMember do
       described_class.add_users(
         group,
         [users.first.id, users.second],
-        described_class::MASTER
+        described_class::MAINTAINER
       )
 
       expect(group.users).to include(users.first, users.second)
@@ -48,6 +66,28 @@ describe GroupMember do
       expect(user).to receive(:update_two_factor_requirement)
 
       group_member.destroy
+    end
+  end
+
+  context 'access levels', :nested_groups do
+    context 'with parent group' do
+      it_behaves_like 'inherited access level as a member of entity' do
+        let(:entity) { create(:group, parent: parent_entity) }
+      end
+    end
+
+    context 'with parent group and a sub subgroup' do
+      it_behaves_like 'inherited access level as a member of entity' do
+        let(:subgroup) { create(:group, parent: parent_entity) }
+        let(:entity) { create(:group, parent: subgroup) }
+      end
+
+      context 'when only the subgroup has the member' do
+        it_behaves_like 'inherited access level as a member of entity' do
+          let(:parent_entity) { create(:group, parent: create(:group)) }
+          let(:entity) { create(:group, parent: parent_entity) }
+        end
+      end
     end
   end
 end

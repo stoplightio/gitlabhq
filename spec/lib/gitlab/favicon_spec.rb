@@ -18,7 +18,7 @@ RSpec.describe Gitlab::Favicon, :request_store do
     end
 
     it 'uses the custom favicon if a favicon appearance is present' do
-      create :appearance, favicon: fixture_file_upload(Rails.root.join('spec/fixtures/dk.png'))
+      create :appearance, favicon: fixture_file_upload('spec/fixtures/dk.png')
       expect(described_class.main).to match %r{/uploads/-/system/appearance/favicon/\d+/dk.png}
     end
 
@@ -58,6 +58,7 @@ RSpec.describe Gitlab::Favicon, :request_store do
         favicon_status_not_found
         favicon_status_pending
         favicon_status_running
+        favicon_status_scheduled
         favicon_status_skipped
         favicon_status_success
         favicon_status_warning

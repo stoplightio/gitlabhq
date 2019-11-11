@@ -15,17 +15,19 @@ describe Projects::BlobController, '(JavaScript fixtures)', type: :controller do
 
   before do
     sign_in(admin)
+    allow(SecureRandom).to receive(:hex).and_return('securerandomhex:thereisnospoon')
   end
 
   after do
     remove_repository(project)
   end
 
-  it 'blob/show.html.raw' do |example|
-    get(:show,
-        namespace_id: project.namespace,
-        project_id: project,
-        id: 'add-ipython-files/files/ipython/basic.ipynb')
+  it 'blob/show.html' do |example|
+    get(:show, params: {
+      namespace_id: project.namespace,
+      project_id: project,
+      id: 'add-ipython-files/files/ipython/basic.ipynb'
+    })
 
     expect(response).to be_success
     store_frontend_fixture(response, example.description)

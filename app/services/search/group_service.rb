@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Search
   class GroupService < Search::GlobalService
     attr_accessor :group
@@ -7,6 +9,12 @@ module Search
 
       @default_project_filter = false
       @group = group
+    end
+
+    def execute
+      Gitlab::GroupSearchResults.new(
+        current_user, projects, group, params[:search], default_project_filter: default_project_filter
+      )
     end
 
     def projects

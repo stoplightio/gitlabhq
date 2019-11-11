@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class SystemHooksService
   def execute_hooks_for(model, event)
     data = build_event_data(model, event)
@@ -45,7 +47,7 @@ class SystemHooksService
 
       case event
       when :rename
-        data[:old_username] = model.username_was
+        data[:old_username] = model.username_before_last_save
       when :failed_login
         data[:state] = model.state
       end
@@ -56,8 +58,8 @@ class SystemHooksService
 
       if event == :rename
         data.merge!(
-          old_path: model.path_was,
-          old_full_path: model.full_path_was
+          old_path: model.path_before_last_save,
+          old_full_path: model.full_path_before_last_save
         )
       end
     when GroupMember

@@ -1,6 +1,7 @@
 # Automatic issue closing
 
 >**Notes:**
+>
 > - This is the user docs. In order to change the default issue closing pattern,
 >   follow the steps in the [administration docs].
 > - For performance reasons, automatic issue closing is disabled for the very
@@ -26,9 +27,12 @@ used:
 ```
 
 Note that `%{issue_ref}` is a complex regular expression defined inside GitLab's
-source code that can match a reference to 1) a local issue (`#123`),
-2) a cross-project issue (`group/project#123`) or 3) a link to an issue
-(`https://gitlab.example.com/group/project/issues/123`).
+source code that can match references to:
+
+- A local issue (`#123`).
+- A cross-project issue (`group/project#123`).
+- A link to an issue
+  (`https://gitlab.example.com/group/project/issues/123`).
 
 ---
 

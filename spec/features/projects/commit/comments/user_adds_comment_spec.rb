@@ -28,19 +28,19 @@ describe "User adds a comment on a commit", :js do
         fill_in("note[note]", with: "#{comment_text} #{emoji}")
 
         # Check on `Preview` tab
-        click_link("Preview")
+        click_button("Preview")
 
         expect(find(".js-md-preview")).to have_content(comment_text).and have_css("gl-emoji")
         expect(page).not_to have_css(".js-note-text")
 
         # Check on the `Write` tab
-        click_link("Write")
+        click_button("Write")
 
         expect(page).to have_field("note[note]", with: "#{comment_text} #{emoji}")
 
         # Submit comment from the `Preview` tab to get rid of a separate `it` block
         # which would specially tests if everything gets cleared from the note form.
-        click_link("Preview")
+        click_button("Preview")
         click_button("Comment")
       end
 
@@ -88,13 +88,13 @@ describe "User adds a comment on a commit", :js do
 
           # Test Preview feature for both forms.
           page.within("form[data-line-code='#{sample_commit.line_code}']") do
-            click_link("Preview")
+            click_button("Preview")
           end
 
           page.within("form[data-line-code='#{sample_commit.del_line_code}']") do
             fill_in("note[note]", with: another_comment_text)
 
-            click_link("Preview")
+            click_button("Preview")
           end
 
           expect(page).to have_css(".js-md-preview", visible: true, count: 2)
@@ -138,7 +138,7 @@ describe "User adds a comment on a commit", :js do
         click_button("Comment")
       end
 
-      page.within(".diff-file:nth-of-type(1) .notes_content.parallel.old") do
+      page.within(".diff-file:nth-of-type(1) .notes-content.parallel.old") do
         expect(page).to have_content(old_comment)
       end
 
@@ -152,7 +152,7 @@ describe "User adds a comment on a commit", :js do
 
       wait_for_requests
 
-      expect(all(".diff-file:nth-of-type(1) .notes_content.parallel.new")[1].text).to have_content(new_comment)
+      expect(all(".diff-file:nth-of-type(1) .notes-content.parallel.new")[1].text).to have_content(new_comment)
     end
   end
 

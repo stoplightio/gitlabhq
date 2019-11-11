@@ -1,14 +1,19 @@
+# frozen_string_literal: true
+
 class ReactiveCachingWorker
   include ApplicationWorker
 
   def perform(class_name, id, *args)
     klass = begin
-      Kernel.const_get(class_name)
+      class_name.constantize
     rescue NameError
       nil
     end
     return unless klass
 
-    klass.find_by(id: id).try(:exclusively_update_reactive_cache!, *args)
+    klass
+      .reactive_cache_worker_finder
+      .call(id, *args)
+      .try(:exclusively_update_reactive_cache!, *args)
   end
 end

@@ -1,7 +1,10 @@
-class PersonalAccessToken < ActiveRecord::Base
+# frozen_string_literal: true
+
+class PersonalAccessToken < ApplicationRecord
   include Expirable
   include TokenAuthenticatable
-  add_authentication_token_field :token
+
+  add_authentication_token_field :token, digest: true
 
   REDIS_EXPIRY_TIME = 3.minutes
 
@@ -31,23 +34,29 @@ class PersonalAccessToken < ActiveRecord::Base
 
   def self.redis_getdel(user_id)
     Gitlab::Redis::SharedState.with do |redis|
-      token = redis.get(redis_shared_state_key(user_id))
+      encrypted_token = redis.get(redis_shared_state_key(user_id))
       redis.del(redis_shared_state_key(user_id))
-      token
+      begin
+        Gitlab::CryptoHelper.aes256_gcm_decrypt(encrypted_token)
+      rescue => ex
+        logger.warn "Failed to decrypt PersonalAccessToken value stored in Redis for User ##{user_id}: #{ex.class}"
+        encrypted_token
+      end
     end
   end
 
   def self.redis_store!(user_id, token)
+    encrypted_token = Gitlab::CryptoHelper.aes256_gcm_encrypt(token)
+
     Gitlab::Redis::SharedState.with do |redis|
-      redis.set(redis_shared_state_key(user_id), token, ex: REDIS_EXPIRY_TIME)
-      token
+      redis.set(redis_shared_state_key(user_id), encrypted_token, ex: REDIS_EXPIRY_TIME)
     end
   end
 
   protected
 
   def validate_scopes
-    unless revoked || scopes.all? { |scope| Gitlab::Auth.available_scopes.include?(scope.to_sym) }
+    unless revoked || scopes.all? { |scope| Gitlab::Auth.all_available_scopes.include?(scope.to_sym) }
       errors.add :scopes, "can only contain available scopes"
     end
   end

@@ -1,8 +1,9 @@
-/* eslint-disable no-useless-return, max-len */
+/* eslint-disable no-useless-return */
 
 import $ from 'jquery';
 import Api from '../api';
 import TemplateSelector from '../blob/template_selector';
+import { __ } from '~/locale';
 
 export default class IssuableTemplateSelector extends TemplateSelector {
   constructor(...args) {
@@ -25,18 +26,24 @@ export default class IssuableTemplateSelector extends TemplateSelector {
     $('.no-template', this.dropdown.parent()).on('click', () => {
       this.currentTemplate.content = '';
       this.setInputValueToTemplateContent();
-      $('.dropdown-toggle-text', this.dropdown).text('Choose a template');
+      $('.dropdown-toggle-text', this.dropdown).text(__('Choose a template'));
     });
   }
 
   requestFile(query) {
     this.startLoadingSpinner();
-    Api.issueTemplate(this.namespacePath, this.projectPath, query.name, this.issuableType, (err, currentTemplate) => {
-      this.currentTemplate = currentTemplate;
-      this.stopLoadingSpinner();
-      if (err) return; // Error handled by global AJAX error handler
-      this.setInputValueToTemplateContent();
-    });
+    Api.issueTemplate(
+      this.namespacePath,
+      this.projectPath,
+      query.name,
+      this.issuableType,
+      (err, currentTemplate) => {
+        this.currentTemplate = currentTemplate;
+        this.stopLoadingSpinner();
+        if (err) return; // Error handled by global AJAX error handler
+        this.setInputValueToTemplateContent();
+      },
+    );
     return;
   }
 

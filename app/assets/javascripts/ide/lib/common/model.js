@@ -7,18 +7,18 @@ export default class Model {
     this.disposable = new Disposable();
     this.file = file;
     this.head = head;
-    this.content = file.content !== '' ? file.content : file.raw;
+    this.content = file.content !== '' || file.deleted ? file.content : file.raw;
 
     this.disposable.add(
       (this.originalModel = monacoEditor.createModel(
         head ? head.content : this.file.raw,
         undefined,
-        new Uri(false, false, `original/${this.path}`),
+        new Uri('gitlab', false, `original/${this.path}`),
       )),
       (this.model = monacoEditor.createModel(
         this.content,
         undefined,
-        new Uri(false, false, this.path),
+        new Uri('gitlab', false, this.path),
       )),
     );
     if (this.file.mrChange) {
@@ -26,7 +26,7 @@ export default class Model {
         (this.baseModel = monacoEditor.createModel(
           this.file.baseRaw,
           undefined,
-          new Uri(false, false, `target/${this.path}`),
+          new Uri('gitlab', false, `target/${this.path}`),
         )),
       );
     }

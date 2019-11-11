@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Admin::ApplicationsController < Admin::ApplicationController
   include OauthApplications
 
@@ -5,7 +7,7 @@ class Admin::ApplicationsController < Admin::ApplicationController
   before_action :load_scopes, only: [:new, :create, :edit, :update]
 
   def index
-    @applications = Doorkeeper::Application.where("owner_id IS NULL")
+    @applications = ApplicationsFinder.new.execute
   end
 
   def show
@@ -32,7 +34,7 @@ class Admin::ApplicationsController < Admin::ApplicationController
 
   def update
     if @application.update(application_params)
-      redirect_to admin_application_path(@application), notice: 'Application was successfully updated.'
+      redirect_to admin_application_path(@application), notice: _('Application was successfully updated.')
     else
       render :edit
     end
@@ -40,13 +42,13 @@ class Admin::ApplicationsController < Admin::ApplicationController
 
   def destroy
     @application.destroy
-    redirect_to admin_applications_url, status: 302, notice: 'Application was successfully destroyed.'
+    redirect_to admin_applications_url, status: 302, notice: _('Application was successfully destroyed.')
   end
 
   private
 
   def set_application
-    @application = Doorkeeper::Application.where("owner_id IS NULL").find(params[:id])
+    @application = ApplicationsFinder.new(id: params[:id]).execute
   end
 
   # Only allow a trusted parameter "white list" through.

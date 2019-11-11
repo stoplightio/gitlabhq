@@ -1,13 +1,16 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Projects::MergeRequests::DiffsController do
   include ProjectForksHelper
 
   let(:project) { create(:project, :repository) }
-  let(:user)    { project.owner }
+  let(:user) { create(:user) }
   let(:merge_request) { create(:merge_request_with_diffs, target_project: project, source_project: project) }
 
   before do
+    project.add_maintainer(user)
     sign_in(user)
   end
 
@@ -20,18 +23,31 @@ describe Projects::MergeRequests::DiffsController do
         format: 'json'
       }
 
-      get :show, params.merge(extra_params)
+      get :show, params: params.merge(extra_params)
     end
 
     context 'with default params' do
       context 'for the same project' do
         before do
-          go
+          allow(controller).to receive(:rendered_for_merge_request?).and_return(true)
         end
 
-        it 'renders the diffs template to a string' do
-          expect(response).to render_template('projects/merge_requests/diffs/_diffs')
-          expect(json_response).to have_key('html')
+        it 'serializes merge request diff collection' do
+          expect_any_instance_of(DiffsSerializer).to receive(:represent).with(an_instance_of(Gitlab::Diff::FileCollection::MergeRequestDiff), an_instance_of(Hash))
+
+          go
+        end
+      end
+
+      context 'when note has no position' do
+        before do
+          create(:legacy_diff_note_on_merge_request, project: project, noteable: merge_request, position: nil)
+        end
+
+        it 'serializes merge request diff collection' do
+          expect_any_instance_of(DiffsSerializer).to receive(:represent).with(an_instance_of(Gitlab::Diff::FileCollection::MergeRequestDiff), an_instance_of(Hash))
+
+          go
         end
       end
 
@@ -56,17 +72,6 @@ describe Projects::MergeRequests::DiffsController do
       end
     end
 
-    context 'with ignore_whitespace_change' do
-      before do
-        go(w: 1)
-      end
-
-      it 'renders the diffs template to a string' do
-        expect(response).to render_template('projects/merge_requests/diffs/_diffs')
-        expect(json_response).to have_key('html')
-      end
-    end
-
     context 'with view' do
       before do
         go(view: 'parallel')
@@ -87,7 +92,7 @@ describe Projects::MergeRequests::DiffsController do
         format: 'json'
       }
 
-      get :diff_for_path, params.merge(extra_params)
+      get :diff_for_path, params: params.merge(extra_params)
     end
 
     let(:existing_path) { 'files/ruby/popen.rb' }
@@ -105,22 +110,11 @@ describe Projects::MergeRequests::DiffsController do
           end
 
           it 'only renders the diffs for the path given' do
-            expect(controller).to receive(:render_diff_for_path).and_wrap_original do |meth, diffs|
-              expect(diffs.diff_files.map(&:new_path)).to contain_exactly(existing_path)
-              meth.call(diffs)
-            end
-
             diff_for_path(old_path: existing_path, new_path: existing_path)
-          end
-        end
 
-        context 'when the path does not exist in the diff' do
-          before do
-            diff_for_path(old_path: 'files/ruby/nopen.rb', new_path: 'files/ruby/nopen.rb')
-          end
+            paths = JSON.parse(response.body)["diff_files"].map { |file| file['new_path'] }
 
-          it 'returns a 404' do
-            expect(response).to have_gitlab_http_status(404)
+            expect(paths).to include(existing_path)
           end
         end
       end
@@ -151,7 +145,7 @@ describe Projects::MergeRequests::DiffsController do
       let(:other_project) { create(:project) }
 
       before do
-        other_project.add_master(user)
+        other_project.add_maintainer(user)
         diff_for_path(old_path: existing_path, new_path: existing_path, project_id: other_project)
       end
 

@@ -3,21 +3,21 @@ import Todos from '~/pages/dashboard/todos/index/todos';
 import '~/lib/utils/common_utils';
 
 describe('Todos', () => {
-  preloadFixtures('todos/todos.html.raw');
+  preloadFixtures('todos/todos.html');
   let todoItem;
 
   beforeEach(() => {
-    loadFixtures('todos/todos.html.raw');
+    loadFixtures('todos/todos.html');
     todoItem = document.querySelector('.todos-list .todo');
 
     return new Todos();
   });
 
   describe('goToTodoUrl', () => {
-    it('opens the todo url', (done) => {
+    it('opens the todo url', done => {
       const todoLink = todoItem.dataset.url;
 
-      spyOnDependency(Todos, 'visitUrl').and.callFake((url) => {
+      spyOnDependency(Todos, 'visitUrl').and.callFake(url => {
         expect(url).toEqual(todoLink);
         done();
       });

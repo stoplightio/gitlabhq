@@ -1,9 +1,12 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe ApplicationSetting do
-  let(:setting) { described_class.create_from_defaults }
+  subject(:setting) { described_class.create_from_defaults }
 
   it { include(CacheableAttributes) }
+  it { include(ApplicationSettingImplementation) }
   it { expect(described_class.current_without_cache).to eq(described_class.last) }
 
   it { expect(setting).to be_valid }
@@ -25,13 +28,21 @@ describe ApplicationSetting do
     it { is_expected.to allow_value(https).for(:after_sign_out_path) }
     it { is_expected.not_to allow_value(ftp).for(:after_sign_out_path) }
 
-    describe 'disabled_oauth_sign_in_sources validations' do
+    it { is_expected.to allow_value("dev.gitlab.com").for(:commit_email_hostname) }
+    it { is_expected.not_to allow_value("@dev.gitlab").for(:commit_email_hostname) }
+
+    it { is_expected.to allow_value("myemail@gitlab.com").for(:lets_encrypt_notification_email) }
+    it { is_expected.to allow_value(nil).for(:lets_encrypt_notification_email) }
+    it { is_expected.not_to allow_value("notanemail").for(:lets_encrypt_notification_email) }
+    it { is_expected.not_to allow_value("myemail@example.com").for(:lets_encrypt_notification_email) }
+    it { is_expected.to allow_value("myemail@test.example.com").for(:lets_encrypt_notification_email) }
+
+    context "when user accepted let's encrypt terms of service" do
       before do
-        allow(Devise).to receive(:omniauth_providers).and_return([:github])
+        setting.update(lets_encrypt_terms_of_service_accepted: true)
       end
 
-      it { is_expected.to allow_value(['github']).for(:disabled_oauth_sign_in_sources) }
-      it { is_expected.not_to allow_value(['test']).for(:disabled_oauth_sign_in_sources) }
+      it { is_expected.not_to allow_value(nil).for(:lets_encrypt_notification_email) }
     end
 
     describe 'default_artifacts_expire_in' do
@@ -74,6 +85,13 @@ describe ApplicationSetting do
       is_expected.to validate_numericality_of(:max_attachment_size)
         .only_integer
         .is_greater_than(0)
+    end
+
+    it do
+      is_expected.to validate_numericality_of(:local_markdown_version)
+        .only_integer
+        .is_greater_than_or_equal_to(0)
+        .is_less_than(65536)
     end
 
     context 'key restrictions' do
@@ -150,19 +168,6 @@ describe ApplicationSetting do
       end
     end
 
-    context 'circuitbreaker settings' do
-      [:circuitbreaker_failure_count_threshold,
-       :circuitbreaker_check_interval,
-       :circuitbreaker_failure_reset_time,
-       :circuitbreaker_storage_timeout].each do |field|
-        it "Validates #{field} as number" do
-          is_expected.to validate_numericality_of(field)
-                           .only_integer
-                           .is_greater_than_or_equal_to(0)
-        end
-      end
-    end
-
     context 'repository storages' do
       before do
         storages = {
@@ -185,15 +190,6 @@ describe ApplicationSetting do
         it { is_expected.not_to allow_value([]).for(:repository_storages) }
         it { is_expected.not_to allow_value("").for(:repository_storages) }
         it { is_expected.not_to allow_value(nil).for(:repository_storages) }
-      end
-
-      describe '.pick_repository_storage' do
-        it 'uses Array#sample to pick a random storage' do
-          array = double('array', sample: 'random')
-          expect(setting).to receive(:repository_storages).and_return(array)
-
-          expect(setting.pick_repository_storage).to eq('random')
-        end
       end
     end
 
@@ -302,74 +298,116 @@ describe ApplicationSetting do
         expect(subject).to be_valid
       end
     end
+
+    describe 'when external authorization service is enabled' do
+      before do
+        setting.external_authorization_service_enabled = true
+      end
+
+      it { is_expected.not_to allow_value('not a URL').for(:external_authorization_service_url) }
+      it { is_expected.to allow_value('https://example.com').for(:external_authorization_service_url) }
+      it { is_expected.to allow_value('').for(:external_authorization_service_url) }
+      it { is_expected.not_to allow_value(nil).for(:external_authorization_service_default_label) }
+      it { is_expected.not_to allow_value(11).for(:external_authorization_service_timeout) }
+      it { is_expected.not_to allow_value(0).for(:external_authorization_service_timeout) }
+      it { is_expected.not_to allow_value('not a certificate').for(:external_auth_client_cert) }
+      it { is_expected.to allow_value('').for(:external_auth_client_cert) }
+      it { is_expected.to allow_value('').for(:external_auth_client_key) }
+
+      context 'when setting a valid client certificate for external authorization' do
+        let(:certificate_data) { File.read('spec/fixtures/passphrase_x509_certificate.crt') }
+
+        before do
+          setting.external_auth_client_cert = certificate_data
+        end
+
+        it 'requires a valid client key when a certificate is set' do
+          expect(setting).not_to allow_value('fefefe').for(:external_auth_client_key)
+        end
+
+        it 'requires a matching certificate' do
+          other_private_key = File.read('spec/fixtures/x509_certificate_pk.key')
+
+          expect(setting).not_to allow_value(other_private_key).for(:external_auth_client_key)
+        end
+
+        it 'the credentials are valid when the private key can be read and matches the certificate' do
+          tls_attributes = [:external_auth_client_key_pass,
+                            :external_auth_client_key,
+                            :external_auth_client_cert]
+          setting.external_auth_client_key = File.read('spec/fixtures/passphrase_x509_certificate_pk.key')
+          setting.external_auth_client_key_pass = '5iveL!fe'
+
+          setting.validate
+
+          expect(setting.errors).not_to include(*tls_attributes)
+        end
+      end
+    end
   end
 
   context 'restrict creating duplicates' do
+    let!(:current_settings) { described_class.create_from_defaults }
+
+    it 'returns the current settings' do
+      expect(described_class.create_from_defaults).to eq(current_settings)
+    end
+  end
+
+  describe 'setting Sentry DSNs' do
+    context 'server DSN' do
+      it 'strips leading and trailing whitespace' do
+        subject.update(sentry_dsn: ' http://test ')
+
+        expect(subject.sentry_dsn).to eq('http://test')
+      end
+
+      it 'handles nil values' do
+        subject.update(sentry_dsn: nil)
+
+        expect(subject.sentry_dsn).to be_nil
+      end
+    end
+
+    context 'client-side DSN' do
+      it 'strips leading and trailing whitespace' do
+        subject.update(clientside_sentry_dsn: ' http://test ')
+
+        expect(subject.clientside_sentry_dsn).to eq('http://test')
+      end
+
+      it 'handles nil values' do
+        subject.update(clientside_sentry_dsn: nil)
+
+        expect(subject.clientside_sentry_dsn).to be_nil
+      end
+    end
+  end
+
+  describe '#disabled_oauth_sign_in_sources=' do
     before do
-      described_class.create_from_defaults
+      allow(Devise).to receive(:omniauth_providers).and_return([:github])
     end
 
-    it 'raises an record creation violation if already created' do
-      expect { described_class.create_from_defaults }.to raise_error(ActiveRecord::RecordNotUnique)
-    end
-  end
+    it 'removes unknown sources (as strings) from the array' do
+      subject.disabled_oauth_sign_in_sources = %w[github test]
 
-  context 'restricted signup domains' do
-    it 'sets single domain' do
-      setting.domain_whitelist_raw = 'example.com'
-      expect(setting.domain_whitelist).to eq(['example.com'])
+      expect(subject).to be_valid
+      expect(subject.disabled_oauth_sign_in_sources).to eq ['github']
     end
 
-    it 'sets multiple domains with spaces' do
-      setting.domain_whitelist_raw = 'example.com *.example.com'
-      expect(setting.domain_whitelist).to eq(['example.com', '*.example.com'])
+    it 'removes unknown sources (as symbols) from the array' do
+      subject.disabled_oauth_sign_in_sources = %i[github test]
+
+      expect(subject).to be_valid
+      expect(subject.disabled_oauth_sign_in_sources).to eq ['github']
     end
 
-    it 'sets multiple domains with newlines and a space' do
-      setting.domain_whitelist_raw = "example.com\n *.example.com"
-      expect(setting.domain_whitelist).to eq(['example.com', '*.example.com'])
-    end
+    it 'ignores nil' do
+      subject.disabled_oauth_sign_in_sources = nil
 
-    it 'sets multiple domains with commas' do
-      setting.domain_whitelist_raw = "example.com, *.example.com"
-      expect(setting.domain_whitelist).to eq(['example.com', '*.example.com'])
-    end
-  end
-
-  context 'blacklisted signup domains' do
-    it 'sets single domain' do
-      setting.domain_blacklist_raw = 'example.com'
-      expect(setting.domain_blacklist).to contain_exactly('example.com')
-    end
-
-    it 'sets multiple domains with spaces' do
-      setting.domain_blacklist_raw = 'example.com *.example.com'
-      expect(setting.domain_blacklist).to contain_exactly('example.com', '*.example.com')
-    end
-
-    it 'sets multiple domains with newlines and a space' do
-      setting.domain_blacklist_raw = "example.com\n *.example.com"
-      expect(setting.domain_blacklist).to contain_exactly('example.com', '*.example.com')
-    end
-
-    it 'sets multiple domains with commas' do
-      setting.domain_blacklist_raw = "example.com, *.example.com"
-      expect(setting.domain_blacklist).to contain_exactly('example.com', '*.example.com')
-    end
-
-    it 'sets multiple domains with semicolon' do
-      setting.domain_blacklist_raw = "example.com; *.example.com"
-      expect(setting.domain_blacklist).to contain_exactly('example.com', '*.example.com')
-    end
-
-    it 'sets multiple domains with mixture of everything' do
-      setting.domain_blacklist_raw = "example.com; *.example.com\n test.com\sblock.com   yes.com"
-      expect(setting.domain_blacklist).to contain_exactly('example.com', '*.example.com', 'test.com', 'block.com', 'yes.com')
-    end
-
-    it 'sets multiple domain with file' do
-      setting.domain_blacklist_file = File.open(Rails.root.join('spec/fixtures/', 'domain_blacklist.txt'))
-      expect(setting.domain_blacklist).to contain_exactly('example.com', 'test.com', 'foo.bar')
+      expect(subject).to be_valid
+      expect(subject.disabled_oauth_sign_in_sources).to be_empty
     end
   end
 
@@ -409,115 +447,20 @@ describe ApplicationSetting do
     end
   end
 
-  describe 'usage ping settings' do
-    context 'when the usage ping is disabled in gitlab.yml' do
-      before do
-        allow(Settings.gitlab).to receive(:usage_ping_enabled).and_return(false)
-      end
+  context 'diff limit settings' do
+    describe '#diff_max_patch_bytes' do
+      context 'validations' do
+        it { is_expected.to validate_presence_of(:diff_max_patch_bytes) }
 
-      it 'does not allow the usage ping to be configured' do
-        expect(setting.usage_ping_can_be_configured?).to be_falsey
-      end
-
-      context 'when the usage ping is disabled in the DB' do
-        before do
-          setting.usage_ping_enabled = false
-        end
-
-        it 'returns false for usage_ping_enabled' do
-          expect(setting.usage_ping_enabled).to be_falsey
-        end
-      end
-
-      context 'when the usage ping is enabled in the DB' do
-        before do
-          setting.usage_ping_enabled = true
-        end
-
-        it 'returns false for usage_ping_enabled' do
-          expect(setting.usage_ping_enabled).to be_falsey
-        end
-      end
-    end
-
-    context 'when the usage ping is enabled in gitlab.yml' do
-      before do
-        allow(Settings.gitlab).to receive(:usage_ping_enabled).and_return(true)
-      end
-
-      it 'allows the usage ping to be configured' do
-        expect(setting.usage_ping_can_be_configured?).to be_truthy
-      end
-
-      context 'when the usage ping is disabled in the DB' do
-        before do
-          setting.usage_ping_enabled = false
-        end
-
-        it 'returns false for usage_ping_enabled' do
-          expect(setting.usage_ping_enabled).to be_falsey
-        end
-      end
-
-      context 'when the usage ping is enabled in the DB' do
-        before do
-          setting.usage_ping_enabled = true
-        end
-
-        it 'returns true for usage_ping_enabled' do
-          expect(setting.usage_ping_enabled).to be_truthy
+        it do
+          is_expected.to validate_numericality_of(:diff_max_patch_bytes)
+          .only_integer
+          .is_greater_than_or_equal_to(Gitlab::Git::Diff::DEFAULT_MAX_PATCH_BYTES)
+          .is_less_than_or_equal_to(Gitlab::Git::Diff::MAX_PATCH_BYTES_UPPER_BOUND)
         end
       end
     end
   end
 
-  describe '#allowed_key_types' do
-    it 'includes all key types by default' do
-      expect(setting.allowed_key_types).to contain_exactly(*described_class::SUPPORTED_KEY_TYPES)
-    end
-
-    it 'excludes disabled key types' do
-      expect(setting.allowed_key_types).to include(:ed25519)
-
-      setting.ed25519_key_restriction = described_class::FORBIDDEN_KEY_VALUE
-
-      expect(setting.allowed_key_types).not_to include(:ed25519)
-    end
-  end
-
-  describe '#key_restriction_for' do
-    it 'returns the restriction value for recognised types' do
-      setting.rsa_key_restriction = 1024
-
-      expect(setting.key_restriction_for(:rsa)).to eq(1024)
-    end
-
-    it 'allows types to be passed as a string' do
-      setting.rsa_key_restriction = 1024
-
-      expect(setting.key_restriction_for('rsa')).to eq(1024)
-    end
-
-    it 'returns forbidden for unrecognised type' do
-      expect(setting.key_restriction_for(:foo)).to eq(described_class::FORBIDDEN_KEY_VALUE)
-    end
-  end
-
-  describe '#allow_signup?' do
-    it 'returns true' do
-      expect(setting.allow_signup?).to be_truthy
-    end
-
-    it 'returns false if signup is disabled' do
-      allow(setting).to receive(:signup_enabled?).and_return(false)
-
-      expect(setting.allow_signup?).to be_falsey
-    end
-
-    it 'returns false if password authentication is disabled for the web interface' do
-      allow(setting).to receive(:password_authentication_enabled_for_web?).and_return(false)
-
-      expect(setting.allow_signup?).to be_falsey
-    end
-  end
+  it_behaves_like 'application settings examples'
 end

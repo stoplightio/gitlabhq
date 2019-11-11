@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module ApplicationSettingsHelper
   extend self
 
@@ -5,7 +7,6 @@ module ApplicationSettingsHelper
             :gravatar_enabled?,
             :password_authentication_enabled_for_web?,
             :akismet_enabled?,
-            :koding_enabled?,
             to: :'Gitlab::CurrentSettings.current_application_settings'
 
   def user_oauth_applications?
@@ -19,10 +20,22 @@ module ApplicationSettingsHelper
   def enabled_protocol
     case Gitlab::CurrentSettings.enabled_git_access_protocol
     when 'http'
-      gitlab_config.protocol
+      Gitlab.config.gitlab.protocol
     when 'ssh'
       'ssh'
     end
+  end
+
+  def all_protocols_enabled?
+    Gitlab::CurrentSettings.enabled_git_access_protocol.blank?
+  end
+
+  def ssh_enabled?
+    all_protocols_enabled? || enabled_protocol == 'ssh'
+  end
+
+  def http_enabled?
+    all_protocols_enabled? || Gitlab::CurrentSettings.enabled_git_access_protocol == 'http'
   end
 
   def enabled_project_button(project, protocol)
@@ -73,12 +86,12 @@ module ApplicationSettingsHelper
   def oauth_providers_checkboxes
     button_based_providers.map do |source|
       disabled = Gitlab::CurrentSettings.disabled_oauth_sign_in_sources.include?(source.to_s)
-      css_class = 'btn'
-      css_class << ' active' unless disabled
+      css_class = ['btn']
+      css_class << 'active' unless disabled
       checkbox_name = 'application_setting[enabled_oauth_sign_in_sources][]'
       name = Gitlab::Auth::OAuth::Provider.label_for(source)
 
-      label_tag(checkbox_name, class: css_class) do
+      label_tag(checkbox_name, class: css_class.join(' ')) do
         check_box_tag(checkbox_name, source, !disabled,
                       autocomplete: 'off',
                       id: name.tr(' ', '_')) + name
@@ -106,39 +119,37 @@ module ApplicationSettingsHelper
     options_for_select(options, selected)
   end
 
-  def sidekiq_queue_options_for_select
-    options_for_select(Sidekiq::Queue.all.map(&:name), @application_setting.sidekiq_throttling_queues)
+  def external_authorization_description
+    _("If enabled, access to projects will be validated on an external service"\
+        " using their classification label.")
   end
 
-  def circuitbreaker_failure_count_help_text
-    health_link = link_to(s_('AdminHealthPageLink|health page'), admin_health_check_path)
-    api_link = link_to(s_('CircuitBreakerApiLink|circuitbreaker api'), help_page_path("api/repository_storage_health"))
-    message = _("The number of failures of after which GitLab will completely "\
-                "prevent access to the storage. The number of failures can be "\
-                "reset in the admin interface: %{link_to_health_page} or using "\
-                "the %{api_documentation_link}.")
-    message = message % { link_to_health_page: health_link, api_documentation_link: api_link }
-
-    message.html_safe
+  def external_authorization_timeout_help_text
+    _("Time in seconds GitLab will wait for a response from the external "\
+        "service. When the service does not respond in time, access will be "\
+        "denied.")
   end
 
-  def circuitbreaker_access_retries_help_text
-    _('The number of attempts GitLab will make to access a storage.')
+  def external_authorization_url_help_text
+    _("When leaving the URL blank, classification labels can still be "\
+        "specified without disabling cross project features or performing "\
+        "external authorization checks.")
   end
 
-  def circuitbreaker_failure_reset_time_help_text
-    _("The time in seconds GitLab will keep failure information. When no "\
-      "failures occur during this time, information about the mount is reset.")
+  def external_authorization_client_certificate_help_text
+    _("The X509 Certificate to use when mutual TLS is required to communicate "\
+        "with the external authorization service. If left blank, the server "\
+        "certificate is still validated when accessing over HTTPS.")
   end
 
-  def circuitbreaker_storage_timeout_help_text
-    _("The time in seconds GitLab will try to access storage. After this time a "\
-      "timeout error will be raised.")
+  def external_authorization_client_key_help_text
+    _("The private key to use when a client certificate is provided. This value "\
+        "is encrypted at rest.")
   end
 
-  def circuitbreaker_check_interval_help_text
-    _("The time in seconds between storage checks. When a previous check did "\
-      "complete yet, GitLab will skip a check.")
+  def external_authorization_client_pass_help_text
+    _("The passphrase required to decrypt the private key. This is optional "\
+        "and the value is encrypted at rest.")
   end
 
   def visible_attributes
@@ -148,20 +159,19 @@ module ApplicationSettingsHelper
       :after_sign_up_text,
       :akismet_api_key,
       :akismet_enabled,
+      :allow_local_requests_from_hooks_and_services,
+      :dns_rebinding_protection_enabled,
+      :archive_builds_in_human_readable,
       :authorized_keys_enabled,
       :auto_devops_enabled,
       :auto_devops_domain,
-      :circuitbreaker_access_retries,
-      :circuitbreaker_check_interval,
-      :circuitbreaker_failure_count_threshold,
-      :circuitbreaker_failure_reset_time,
-      :circuitbreaker_storage_timeout,
       :clientside_sentry_dsn,
       :clientside_sentry_enabled,
       :container_registry_token_expire_delay,
       :default_artifacts_expire_in,
       :default_branch_protection,
       :default_group_visibility,
+      :default_project_creation,
       :default_project_visibility,
       :default_projects_limit,
       :default_snippet_visibility,
@@ -174,6 +184,8 @@ module ApplicationSettingsHelper
       :ed25519_key_restriction,
       :email_author_in_body,
       :enabled_git_access_protocol,
+      :enforce_terms,
+      :first_day_of_week,
       :gitaly_timeout_default,
       :gitaly_timeout_medium,
       :gitaly_timeout_fast,
@@ -182,6 +194,7 @@ module ApplicationSettingsHelper
       :help_page_hide_commercial_content,
       :help_page_support_url,
       :help_page_text,
+      :hide_third_party_offers,
       :home_page_url,
       :housekeeping_bitmaps_enabled,
       :housekeeping_enabled,
@@ -190,8 +203,6 @@ module ApplicationSettingsHelper
       :housekeeping_incremental_repack_period,
       :html_emails_enabled,
       :import_sources,
-      :koding_enabled,
-      :koding_url,
       :max_artifacts_size,
       :max_attachment_size,
       :max_pages_size,
@@ -203,6 +214,7 @@ module ApplicationSettingsHelper
       :metrics_port,
       :metrics_sample_interval,
       :metrics_timeout,
+      :mirror_available,
       :pages_domain_verification_enabled,
       :password_authentication_enabled_for_web,
       :password_authentication_enabled_for_git,
@@ -216,6 +228,7 @@ module ApplicationSettingsHelper
       :recaptcha_enabled,
       :recaptcha_private_key,
       :recaptcha_site_key,
+      :receive_max_input_size,
       :repository_checks_enabled,
       :repository_storages,
       :require_two_factor_authentication,
@@ -227,33 +240,55 @@ module ApplicationSettingsHelper
       :session_expire_delay,
       :shared_runners_enabled,
       :shared_runners_text,
-      :sidekiq_throttling_enabled,
-      :sidekiq_throttling_factor,
-      :sidekiq_throttling_queues,
       :sign_in_text,
       :signup_enabled,
       :terminal_max_session_time,
-      :throttle_unauthenticated_enabled,
-      :throttle_unauthenticated_requests_per_period,
-      :throttle_unauthenticated_period_in_seconds,
-      :throttle_authenticated_web_enabled,
-      :throttle_authenticated_web_requests_per_period,
-      :throttle_authenticated_web_period_in_seconds,
+      :terms,
       :throttle_authenticated_api_enabled,
-      :throttle_authenticated_api_requests_per_period,
       :throttle_authenticated_api_period_in_seconds,
+      :throttle_authenticated_api_requests_per_period,
+      :throttle_authenticated_web_enabled,
+      :throttle_authenticated_web_period_in_seconds,
+      :throttle_authenticated_web_requests_per_period,
+      :throttle_unauthenticated_enabled,
+      :throttle_unauthenticated_period_in_seconds,
+      :throttle_unauthenticated_requests_per_period,
       :two_factor_grace_period,
       :unique_ips_limit_enabled,
       :unique_ips_limit_per_user,
       :unique_ips_limit_time_window,
       :usage_ping_enabled,
+      :instance_statistics_visibility_private,
       :user_default_external,
+      :user_show_add_ssh_key_message,
+      :user_default_internal_regex,
       :user_oauth_applications,
       :version_check_enabled,
-      :allow_local_requests_from_hooks_and_services,
-      :enforce_terms,
-      :terms,
-      :mirror_available
+      :web_ide_clientside_preview_enabled,
+      :diff_max_patch_bytes,
+      :commit_email_hostname,
+      :protected_ci_variables,
+      :local_markdown_version
     ]
+  end
+
+  def external_authorization_service_attributes
+    [
+      :external_auth_client_cert,
+      :external_auth_client_key,
+      :external_auth_client_key_pass,
+      :external_authorization_service_default_label,
+      :external_authorization_service_enabled,
+      :external_authorization_service_timeout,
+      :external_authorization_service_url
+    ]
+  end
+
+  def expanded_by_default?
+    Rails.env.test?
+  end
+
+  def instance_clusters_enabled?
+    can?(current_user, :read_cluster, Clusters::Instance.new)
   end
 end

@@ -182,10 +182,10 @@ describe 'Branches' do
     end
   end
 
-  context 'logged in as master' do
+  context 'logged in as maintainer' do
     before do
       sign_in(user)
-      project.add_master(user)
+      project.add_maintainer(user)
     end
 
     describe 'Initial branches page' do
@@ -226,6 +226,38 @@ describe 'Branches' do
       page.within first('.all-branches li') do
         expect(page).not_to have_content 'Merge request'
       end
+    end
+  end
+
+  describe 'comparing branches' do
+    before do
+      sign_in(user)
+      project.add_developer(user)
+    end
+
+    shared_examples 'compares branches' do
+      it 'compares branches' do
+        visit project_branches_path(project)
+
+        page.within first('.all-branches li') do
+          click_link 'Compare'
+        end
+
+        expect(page).to have_content 'Commits'
+        expect(page).to have_link 'Create merge request'
+      end
+    end
+
+    context 'on a read-only instance' do
+      before do
+        allow(Gitlab::Database).to receive(:read_only?).and_return(true)
+      end
+
+      it_behaves_like 'compares branches'
+    end
+
+    context 'on a read-write instance' do
+      it_behaves_like 'compares branches'
     end
   end
 

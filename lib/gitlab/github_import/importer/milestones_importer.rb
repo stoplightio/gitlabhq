@@ -10,11 +10,13 @@ module Gitlab
 
         # project - An instance of `Project`
         # client - An instance of `Gitlab::GithubImport::Client`
+        # rubocop: disable CodeReuse/ActiveRecord
         def initialize(project, client)
           @project = project
           @client = client
           @existing_milestones = project.milestones.pluck(:iid).to_set
         end
+        # rubocop: enable CodeReuse/ActiveRecord
 
         def execute
           bulk_insert(Milestone, build_milestones)
@@ -40,6 +42,7 @@ module Gitlab
             description: milestone.description,
             project_id: project.id,
             state: state_for(milestone),
+            due_date: milestone.due_on&.to_date,
             created_at: milestone.created_at,
             updated_at: milestone.updated_at
           }

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module Ci
     module Pipeline
@@ -11,13 +13,13 @@ module Gitlab
             def initialize(regexp)
               @value = regexp
 
-              unless Gitlab::UntrustedRegexp.valid?(@value)
+              unless Gitlab::UntrustedRegexp::RubySyntax.valid?(@value)
                 raise Lexer::SyntaxError, 'Invalid regular expression!'
               end
             end
 
             def evaluate(variables = {})
-              Gitlab::UntrustedRegexp.fabricate(@value)
+              Gitlab::UntrustedRegexp::RubySyntax.fabricate!(@value)
             rescue RegexpError
               raise Expression::RuntimeError, 'Invalid regular expression!'
             end

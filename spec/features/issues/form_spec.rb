@@ -13,8 +13,10 @@ describe 'New/edit issue', :js do
   let!(:issue)     { create(:issue, project: project, assignees: [user], milestone: milestone) }
 
   before do
-    project.add_master(user)
-    project.add_master(user2)
+    stub_licensed_features(multiple_issue_assignees: false, issue_weights: false)
+
+    project.add_maintainer(user)
+    project.add_maintainer(user2)
     sign_in(user)
   end
 
@@ -27,11 +29,11 @@ describe 'New/edit issue', :js do
       before do
         # Using `allow_any_instance_of`/`and_wrap_original`, `original` would
         # somehow refer to the very block we defined to _wrap_ that method, instead of
-        # the original method, resulting in infinite recurison when called.
+        # the original method, resulting in infinite recursion when called.
         # This is likely a bug with helper modules included into dynamically generated view classes.
         # To work around this, we have to hold on to and call to the original implementation manually.
-        original_issue_dropdown_options = FormHelper.instance_method(:issue_assignees_dropdown_options)
-        allow_any_instance_of(FormHelper).to receive(:issue_assignees_dropdown_options).and_wrap_original do |original, *args|
+        original_issue_dropdown_options = FormHelper.instance_method(:assignees_dropdown_options)
+        allow_any_instance_of(FormHelper).to receive(:assignees_dropdown_options).and_wrap_original do |original, *args|
           options = original_issue_dropdown_options.bind(original.receiver).call(*args)
           options[:data][:per_page] = 2
 
@@ -45,7 +47,7 @@ describe 'New/edit issue', :js do
         wait_for_requests
       end
 
-      it 'should display selected users even if they are not part of the original API call' do
+      it 'displays selected users even if they are not part of the original API call' do
         find('.dropdown-input-field').native.send_keys user2.name
 
         page.within '.dropdown-menu-user' do
@@ -321,7 +323,7 @@ describe 'New/edit issue', :js do
     let(:sub_group_project) { create(:project, group: nested_group_1) }
 
     before do
-      sub_group_project.add_master(user)
+      sub_group_project.add_maintainer(user)
 
       visit new_project_issue_path(sub_group_project)
     end

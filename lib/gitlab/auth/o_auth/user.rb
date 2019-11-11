@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # OAuth extension for User model
 #
 # * Find GitLab user based on omniauth uid and provider
@@ -44,11 +46,11 @@ module Gitlab
 
           gl_user.block if block_after_save
 
-          log.info "(#{provider}) saving user #{auth_hash.email} from login with extern_uid => #{auth_hash.uid}"
+          log.info "(#{provider}) saving user #{auth_hash.email} from login with admin => #{gl_user.admin}, extern_uid => #{auth_hash.uid}"
           gl_user
         rescue ActiveRecord::RecordInvalid => e
           log.info "(#{provider}) Error saving user #{auth_hash.uid} (#{auth_hash.email}): #{gl_user.errors.full_messages}"
-          return self, e.record.errors
+          [self, e.record.errors]
         end
 
         def gl_user
@@ -72,6 +74,10 @@ module Gitlab
           save if should_save?
 
           gl_user
+        end
+
+        def bypass_two_factor?
+          false
         end
 
         protected
@@ -108,11 +114,13 @@ module Gitlab
           build_new_user
         end
 
+        # rubocop: disable CodeReuse/ActiveRecord
         def find_by_email
           return unless auth_hash.has_attribute?(:email)
 
           ::User.find_by(email: auth_hash.email.downcase)
         end
+        # rubocop: enable CodeReuse/ActiveRecord
 
         def auto_link_ldap_user?
           Gitlab.config.omniauth.auto_link_ldap_user
@@ -138,7 +146,6 @@ module Gitlab
           Gitlab::Auth::LDAP::Person.find_by_uid(auth_hash.uid, adapter) ||
             Gitlab::Auth::LDAP::Person.find_by_email(auth_hash.uid, adapter) ||
             Gitlab::Auth::LDAP::Person.find_by_dn(auth_hash.uid, adapter)
-
         rescue Gitlab::Auth::LDAP::LDAPConnectionError
           nil
         end
@@ -176,10 +183,12 @@ module Gitlab
           @auth_hash = AuthHash.new(auth_hash)
         end
 
+        # rubocop: disable CodeReuse/ActiveRecord
         def find_by_uid_and_provider
           identity = Identity.with_extern_uid(auth_hash.provider, auth_hash.uid).take
           identity&.user
         end
+        # rubocop: enable CodeReuse/ActiveRecord
 
         def build_new_user
           user_params = user_attributes.merge(skip_confirmation: true)
@@ -190,22 +199,19 @@ module Gitlab
           # Give preference to LDAP for sensitive information when creating a linked account
           if creating_linked_ldap_user?
             username = ldap_person.username.presence
+            name = ldap_person.name.presence
             email = ldap_person.email.first.presence
           end
 
           username ||= auth_hash.username
+          name ||= auth_hash.name
           email ||= auth_hash.email
 
           valid_username = ::Namespace.clean_path(username)
-
-          uniquify = Uniquify.new
-          valid_username = uniquify.string(valid_username) { |s| !NamespacePathValidator.valid_path?(s) }
-
-          name = auth_hash.name
-          name = valid_username if name.strip.empty?
+          valid_username = Uniquify.new.string(valid_username) { |s| !NamespacePathValidator.valid_path?(s) }
 
           {
-            name:                       name,
+            name:                       name.strip.presence || valid_username,
             username:                   valid_username,
             email:                      email,
             password:                   auth_hash.password,
@@ -238,8 +244,9 @@ module Gitlab
             metadata.provider = auth_hash.provider
           end
 
-          if creating_linked_ldap_user? && gl_user.email == ldap_person.email.first
-            metadata.set_attribute_synced(:email, true)
+          if creating_linked_ldap_user?
+            metadata.set_attribute_synced(:name, true) if gl_user.name == ldap_person.name
+            metadata.set_attribute_synced(:email, true) if gl_user.email == ldap_person.email.first
             metadata.provider = ldap_person.provider
           end
         end

@@ -7,7 +7,7 @@
   .top-area.scrolling-tabs-container.inner-page-scroll-tabs
     .prepend-top-default
       .search-holder
-        = render 'shared/projects/search_form', autofocus: true, icon: true
+        = render 'shared/projects/search_form', autofocus: true, icon: true, admin_view: true
         .dropdown
           - toggle_text = 'Namespace'
           - if params[:namespace_id].present?
@@ -21,7 +21,7 @@
             = dropdown_content
             = dropdown_loading
         = render 'shared/projects/dropdown'
-        = link_to new_project_path, class: 'btn btn-new' do
+        = link_to new_project_path, class: 'btn btn-success' do
           New Project
         = button_tag "Search", class: "btn btn-primary btn-search hide"
 

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe ProjectGroupLink do
@@ -41,7 +43,7 @@ describe ProjectGroupLink do
       project.project_group_links.create(group: group)
       group_users.each { |user| expect(user.authorized_projects).to include(project) }
 
-      project.project_group_links.destroy_all
+      project.project_group_links.destroy_all # rubocop: disable DestroyAll
       group_users.each { |user| expect(user.authorized_projects).not_to include(project) }
     end
   end

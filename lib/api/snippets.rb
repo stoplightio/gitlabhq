@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module API
   # Snippets API
   class Snippets < Grape::API
@@ -12,7 +14,11 @@ module API
         end
 
         def public_snippets
-          SnippetsFinder.new(current_user, visibility: Snippet::PUBLIC).execute
+          SnippetsFinder.new(current_user, scope: :are_public).execute
+        end
+
+        def snippets
+          SnippetsFinder.new(current_user).execute
         end
       end
 
@@ -46,7 +52,10 @@ module API
         requires :id, type: Integer, desc: 'The ID of a snippet'
       end
       get ':id' do
-        snippet = snippets_for_current_user.find(params[:id])
+        snippet = snippets.find_by_id(params[:id])
+
+        break not_found!('Snippet') unless snippet
+
         present snippet, with: Entities::PersonalSnippet
       end
 
@@ -93,7 +102,7 @@ module API
         at_least_one_of :title, :file_name, :content, :visibility
       end
       put ':id' do
-        snippet = snippets_for_current_user.find_by(id: params.delete(:id))
+        snippet = snippets_for_current_user.find_by_id(params.delete(:id))
         break not_found!('Snippet') unless snippet
 
         authorize! :update_personal_snippet, snippet
@@ -119,7 +128,7 @@ module API
         requires :id, type: Integer, desc: 'The ID of a snippet'
       end
       delete ':id' do
-        snippet = snippets_for_current_user.find_by(id: params.delete(:id))
+        snippet = snippets_for_current_user.find_by_id(params.delete(:id))
         break not_found!('Snippet') unless snippet
 
         authorize! :destroy_personal_snippet, snippet
@@ -134,11 +143,12 @@ module API
         requires :id, type: Integer, desc: 'The ID of a snippet'
       end
       get ":id/raw" do
-        snippet = snippets_for_current_user.find_by(id: params.delete(:id))
+        snippet = snippets.find_by_id(params.delete(:id))
         break not_found!('Snippet') unless snippet
 
         env['api.format'] = :txt
         content_type 'text/plain'
+        header['Content-Disposition'] = 'attachment'
         present snippet.content
       end
 
@@ -151,7 +161,7 @@ module API
       get ":id/user_agent_detail" do
         authenticated_as_admin!
 
-        snippet = Snippet.find_by!(id: params[:id])
+        snippet = Snippet.find_by_id!(params[:id])
 
         break not_found!('UserAgentDetail') unless snippet.user_agent_detail
 

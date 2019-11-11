@@ -1,4 +1,6 @@
-class GpgKeySubkey < ActiveRecord::Base
+# frozen_string_literal: true
+
+class GpgKeySubkey < ApplicationRecord
   include ShaAttribute
 
   sha_attribute :keyid

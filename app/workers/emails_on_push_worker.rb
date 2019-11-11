@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class EmailsOnPushWorker
   include ApplicationWorker
 
@@ -49,25 +51,23 @@ class EmailsOnPushWorker
       end
     end
 
-    recipients.split.each do |recipient|
-      begin
-        send_email(
-          recipient,
-          project_id,
-          author_id:                 author_id,
-          ref:                       ref,
-          action:                    action,
-          compare:                   compare,
-          reverse_compare:           reverse_compare,
-          diff_refs:                 diff_refs,
-          send_from_committer_email: send_from_committer_email,
-          disable_diffs:             disable_diffs
-        )
+    valid_recipients(recipients).each do |recipient|
+      send_email(
+        recipient,
+        project_id,
+        author_id:                 author_id,
+        ref:                       ref,
+        action:                    action,
+        compare:                   compare,
+        reverse_compare:           reverse_compare,
+        diff_refs:                 diff_refs,
+        send_from_committer_email: send_from_committer_email,
+        disable_diffs:             disable_diffs
+      )
 
-      # These are input errors and won't be corrected even if Sidekiq retries
-      rescue Net::SMTPFatalError, Net::SMTPSyntaxError => e
-        logger.info("Failed to send e-mail for project '#{project.full_name}' to #{recipient}: #{e}")
-      end
+    # These are input errors and won't be corrected even if Sidekiq retries
+    rescue Net::SMTPFatalError, Net::SMTPSyntaxError => e
+      logger.info("Failed to send e-mail for project '#{project.full_name}' to #{recipient}: #{e}")
     end
   ensure
     @email = nil
@@ -86,5 +86,11 @@ class EmailsOnPushWorker
     email.add_message_id
     email.header[:skip_premailer] = true if skip_premailer
     email.deliver_now
+  end
+
+  def valid_recipients(recipients)
+    recipients.split.select do |recipient|
+      recipient.include?('@')
+    end
   end
 end

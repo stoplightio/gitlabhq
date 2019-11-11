@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe MicrosoftTeamsService do
@@ -25,6 +27,12 @@ describe MicrosoftTeamsService do
       end
 
       it { is_expected.not_to validate_presence_of(:webhook) }
+    end
+  end
+
+  describe '.supported_events' do
+    it 'does not support deployment_events' do
+      expect(described_class.supported_events).not_to include('deployment')
     end
   end
 
@@ -225,10 +233,15 @@ describe MicrosoftTeamsService do
 
       it 'calls Microsoft Teams API for pipeline events' do
         data = Gitlab::DataBuilder::Pipeline.build(pipeline)
+        data[:markdown] = true
 
         chat_service.execute(data)
 
-        expect(WebMock).to have_requested(:post, webhook_url).once
+        message = ChatMessage::PipelineMessage.new(data)
+
+        expect(WebMock).to have_requested(:post, webhook_url)
+          .with(body: hash_including({ summary: message.summary }))
+          .once
       end
     end
 

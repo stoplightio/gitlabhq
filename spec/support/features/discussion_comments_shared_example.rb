@@ -7,7 +7,7 @@ shared_examples 'discussion comments' do |resource_name|
   let(:close_selector) { "#{form_selector} .btn-comment-and-close" }
   let(:comments_selector) { '.timeline > .note.timeline-entry' }
 
-  it 'clicking "Comment" will post a comment' do
+  it 'clicking "Comment" will post a comment', :quarantine do
     expect(page).to have_selector toggle_selector
 
     find("#{form_selector} .note-textarea").send_keys('a')
@@ -142,6 +142,14 @@ shared_examples 'discussion comments' do |resource_name|
           find(comments_selector, match: :first)
         end
 
+        def submit_reply(text)
+          find("#{comments_selector} .js-vue-discussion-reply").click
+          find("#{comments_selector} .note-textarea").send_keys(text)
+
+          click_button "Comment"
+          wait_for_requests
+        end
+
         it 'clicking "Start discussion" will post a discussion' do
           new_comment = all(comments_selector).last
 
@@ -149,18 +157,49 @@ shared_examples 'discussion comments' do |resource_name|
           expect(new_comment).to have_selector '.discussion'
         end
 
+        if resource_name =~ /(issue|merge request)/
+          it 'can be replied to' do
+            submit_reply('some text')
+
+            expect(page).to have_css('.discussion-notes .note', count: 2)
+            expect(page).to have_content 'Collapse replies'
+          end
+
+          it 'can be collapsed' do
+            submit_reply('another text')
+
+            find('.js-collapse-replies').click
+            expect(page).to have_css('.discussion-notes .note', count: 1)
+            expect(page).to have_content '1 reply'
+          end
+        end
+
         if resource_name == 'merge request'
-          let(:note_id) { find("#{comments_selector} .note", match: :first)['data-note-id'] }
+          let(:note_id) { find("#{comments_selector} .note:first-child", match: :first)['data-note-id'] }
+          let(:reply_id) { find("#{comments_selector} .note:last-child", match: :first)['data-note-id'] }
+
+          it 'can be replied to after resolving' do
+            click_button "Resolve discussion"
+            wait_for_requests
+
+            refresh
+            wait_for_requests
+
+            submit_reply('to reply or not reply')
+          end
 
           it 'shows resolved discussion when toggled' do
+            submit_reply('a')
+
             click_button "Resolve discussion"
+            wait_for_requests
 
             expect(page).to have_selector(".note-row-#{note_id}", visible: true)
 
             refresh
-            click_button "Toggle discussion"
+            click_button "1 reply"
 
-            expect(page).to have_selector(".note-row-#{note_id}", visible: true)
+            expect(page).to have_selector(".note-row-#{reply_id}", visible: true)
           end
         end
       end
@@ -185,7 +224,7 @@ shared_examples 'discussion comments' do |resource_name|
           find(toggle_selector).click
         end
 
-        it 'should have "Start discussion" selected' do
+        it 'has "Start discussion" selected' do
           find("#{menu_selector} li", match: :first)
           items = all("#{menu_selector} li")
 
@@ -228,7 +267,7 @@ shared_examples 'discussion comments' do |resource_name|
             end
           end
 
-          it 'should have "Comment" selected when opening the menu' do
+          it 'has "Comment" selected when opening the menu' do
             find(toggle_selector).click
 
             find("#{menu_selector} li", match: :first)

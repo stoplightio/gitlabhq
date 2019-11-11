@@ -1,6 +1,11 @@
 # Fast lookup of authorized SSH keys in the database
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-ee/issues/1631) in 
+NOTE: **Note:** This document describes a drop-in replacement for the
+`authorized_keys` file for normal (non-deploy key) users. Consider
+using [ssh certificates](ssh_certificates.md), they are even faster,
+but are not a drop-in replacement.
+
+> [Introduced](https://gitlab.com/gitlab-org/gitlab-ee/issues/1631) in
 > [GitLab Starter](https://about.gitlab.com/gitlab-ee) 9.3.
 >
 > [Available in](https://gitlab.com/gitlab-org/gitlab-ee/issues/3953) GitLab
@@ -24,6 +29,19 @@ lookup of authorized SSH keys.
 instructions will break installations using older versions of OpenSSH, such as
 those included with CentOS 6 as of September 2017. If you want to use this
 feature for CentOS 6, follow [the instructions on how to build and install a custom OpenSSH package](#compiling-a-custom-version-of-openssh-for-centos-6) before continuing.
+
+## Fast lookup is required for Geo **[PREMIUM]**
+
+By default, GitLab manages an `authorized_keys` file, which contains all the
+public SSH keys for users allowed to access GitLab. However, to maintain a
+single source of truth, [Geo](https://docs.gitlab.com/ee/administration/geo/replication/index.html) needs to be configured to perform SSH fingerprint
+lookups via database lookup.
+
+As part of [setting up Geo](https://docs.gitlab.com/ee/administration/geo/replication/index.html#setup-instructions),
+you will be required to follow the steps outlined below for both the primary and
+secondary nodes, but note that the `Write to "authorized keys" file` checkbox
+only needs to be unchecked on the primary node since it will be reflected
+automatically on the secondary if database replication is working.
 
 ## Setting up fast lookup via GitLab Shell
 
@@ -53,6 +71,9 @@ sudo service sshd reload
 Confirm that SSH is working by removing your user's SSH key in the UI, adding a
 new one, and attempting to pull a repo.
 
+> **Note:** For Omnibus Docker, `AuthorizedKeysCommand` is setup by default in
+GitLab 11.11 and later.
+
 > **Warning:** Do not disable writes until SSH is confirmed to be working
 perfectly, because the file will quickly become out-of-date.
 
@@ -61,7 +82,7 @@ file will still be scanned. So git SSH performance will still be slow for many
 users as long as a large file exists.
 
 You can disable any more writes to the `authorized_keys` file by unchecking
-`Write to "authorized_keys" file` in the Application Settings of your GitLab
+`Write to "authorized_keys" file` in the **Admin Area > Settings > Network > Performance optimization** of your GitLab
 installation.
 
 ![Write to authorized keys setting](img/write_to_authorized_keys_setting.png)
@@ -104,7 +125,7 @@ the database. The following instructions can be used to build OpenSSH 7.5:
     yum install rpm-build gcc make wget openssl-devel krb5-devel pam-devel libX11-devel xmkmf libXt-devel
     ```
 
-3. Prepare the build by copying files to the right place:
+1. Prepare the build by copying files to the right place:
 
     ```
     mkdir -p /root/rpmbuild/{SOURCES,SPECS}
@@ -113,7 +134,7 @@ the database. The following instructions can be used to build OpenSSH 7.5:
     cd /root/rpmbuild/SPECS
     ```
 
-3. Next, set the spec settings properly:
+1. Next, set the spec settings properly:
 
     ```
     sed -i -e "s/%define no_gnome_askpass 0/%define no_gnome_askpass 1/g" openssh.spec
@@ -121,13 +142,13 @@ the database. The following instructions can be used to build OpenSSH 7.5:
     sed -i -e "s/BuildPreReq/BuildRequires/g" openssh.spec
     ```
 
-3. Build the RPMs:
+1. Build the RPMs:
 
     ```
     rpmbuild -bb openssh.spec
     ```
 
-4. Ensure the RPMs were built:
+1. Ensure the RPMs were built:
 
     ```
     ls -al /root/rpmbuild/RPMS/x86_64/
@@ -145,7 +166,7 @@ the database. The following instructions can be used to build OpenSSH 7.5:
     -rw-r--r--. 1 root root 367516 Jun 20 19:37 openssh-server-7.5p1-1.x86_64.rpm
     ```
 
-5. Install the packages. OpenSSH packages will replace `/etc/pam.d/sshd`
+1. Install the packages. OpenSSH packages will replace `/etc/pam.d/sshd`
    with its own version, which may prevent users from logging in, so be sure
    that the file is backed up and restored after installation:
 
@@ -156,7 +177,7 @@ the database. The following instructions can be used to build OpenSSH 7.5:
     yes | cp pam-ssh-conf-$timestamp /etc/pam.d/sshd
     ```
 
-6. Verify the installed version. In another window, attempt to login to the server:
+1. Verify the installed version. In another window, attempt to login to the server:
 
     ```
     ssh -v <your-centos-machine>
@@ -166,7 +187,7 @@ the database. The following instructions can be used to build OpenSSH 7.5:
 
     If not, you may need to restart sshd (e.g. `systemctl restart sshd.service`).
 
-7.  *IMPORTANT!* Open a new SSH session to your server before exiting to make
+1.  *IMPORTANT!* Open a new SSH session to your server before exiting to make
     sure everything is working! If you need to downgrade, simple install the
     older package:
 

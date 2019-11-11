@@ -3,7 +3,8 @@ import Vue from 'vue';
 import { visitUrl } from '~/lib/utils/url_utility';
 import flash from '~/flash';
 import * as types from './mutation_types';
-import FilesDecoratorWorker from './workers/files_decorator_worker';
+import { decorateFiles } from '../lib/files';
+import { stageKeys } from '../constants';
 
 export const redirectToUrl = (_, url) => visitUrl(url);
 
@@ -52,10 +53,9 @@ export const setResizingStatus = ({ commit }, resizing) => {
 
 export const createTempEntry = (
   { state, commit, dispatch },
-  { branchId, name, type, content = '', base64 = false },
+  { name, type, content = '', base64 = false, binary = false, rawPath = '' },
 ) =>
   new Promise(resolve => {
-    const worker = new FilesDecoratorWorker();
     const fullName = name.slice(-1) !== '/' && type === 'tree' ? `${name}/` : name;
 
     if (state.entries[name]) {
@@ -73,39 +73,36 @@ export const createTempEntry = (
       return null;
     }
 
-    worker.addEventListener('message', ({ data }) => {
-      const { file, parentPath } = data;
-
-      worker.terminate();
-
-      commit(types.CREATE_TMP_ENTRY, {
-        data,
-        projectId: state.currentProjectId,
-        branchId,
-      });
-
-      if (type === 'blob') {
-        commit(types.TOGGLE_FILE_OPEN, file.path);
-        commit(types.ADD_FILE_TO_CHANGED, file.path);
-        dispatch('setFileActive', file.path);
-      }
-
-      if (parentPath && !state.entries[parentPath].opened) {
-        commit(types.TOGGLE_TREE_OPEN, parentPath);
-      }
-
-      resolve(file);
-    });
-
-    worker.postMessage({
+    const data = decorateFiles({
       data: [fullName],
       projectId: state.currentProjectId,
-      branchId,
+      branchId: state.currentBranchId,
       type,
       tempFile: true,
-      base64,
       content,
+      base64,
+      binary,
+      rawPath,
     });
+    const { file, parentPath } = data;
+
+    commit(types.CREATE_TMP_ENTRY, {
+      data,
+      projectId: state.currentProjectId,
+      branchId: state.currentBranchId,
+    });
+
+    if (type === 'blob') {
+      commit(types.TOGGLE_FILE_OPEN, file.path);
+      commit(types.ADD_FILE_TO_CHANGED, file.path);
+      dispatch('setFileActive', file.path);
+    }
+
+    if (parentPath && !state.entries[parentPath].opened) {
+      commit(types.TOGGLE_TREE_OPEN, parentPath);
+    }
+
+    resolve(file);
 
     return null;
   });
@@ -122,14 +119,28 @@ export const scrollToTab = () => {
   });
 };
 
-export const stageAllChanges = ({ state, commit }) => {
+export const stageAllChanges = ({ state, commit, dispatch }) => {
+  const openFile = state.openFiles[0];
+
   commit(types.SET_LAST_COMMIT_MSG, '');
 
   state.changedFiles.forEach(file => commit(types.STAGE_CHANGE, file.path));
+
+  dispatch('openPendingTab', {
+    file: state.stagedFiles.find(f => f.path === openFile.path),
+    keyPrefix: stageKeys.staged,
+  });
 };
 
-export const unstageAllChanges = ({ state, commit }) => {
+export const unstageAllChanges = ({ state, commit, dispatch }) => {
+  const openFile = state.openFiles[0];
+
   state.stagedFiles.forEach(file => commit(types.UNSTAGE_CHANGE, file.path));
+
+  dispatch('openPendingTab', {
+    file: state.changedFiles.find(f => f.path === openFile.path),
+    keyPrefix: stageKeys.unstaged,
+  });
 };
 
 export const updateViewer = ({ commit }, viewer) => {
@@ -169,11 +180,64 @@ export const burstUnusedSeal = ({ state, commit }) => {
   }
 };
 
-export const setRightPane = ({ commit }, view) => {
-  commit(types.SET_RIGHT_PANE, view);
+export const setLinks = ({ commit }, links) => commit(types.SET_LINKS, links);
+
+export const setErrorMessage = ({ commit }, errorMessage) =>
+  commit(types.SET_ERROR_MESSAGE, errorMessage);
+
+export const openNewEntryModal = ({ commit }, { type, path = '' }) => {
+  commit(types.OPEN_NEW_ENTRY_MODAL, { type, path });
+
+  // open the modal manually so we don't mess around with dropdown/rows
+  $('#ide-new-entry').modal('show');
 };
 
-export const setLinks = ({ commit }, links) => commit(types.SET_LINKS, links);
+export const deleteEntry = ({ commit, dispatch, state }, path) => {
+  const entry = state.entries[path];
+
+  if (state.unusedSeal) dispatch('burstUnusedSeal');
+  if (entry.opened) dispatch('closeFile', entry);
+
+  if (entry.type === 'tree') {
+    entry.tree.forEach(f => dispatch('deleteEntry', f.path));
+  }
+
+  commit(types.DELETE_ENTRY, path);
+
+  if (entry.parentPath && state.entries[entry.parentPath].tree.length === 0) {
+    dispatch('deleteEntry', entry.parentPath);
+  }
+};
+
+export const resetOpenFiles = ({ commit }) => commit(types.RESET_OPEN_FILES);
+
+export const renameEntry = (
+  { dispatch, commit, state },
+  { path, name, entryPath = null, parentPath },
+) => {
+  const entry = state.entries[entryPath || path];
+
+  commit(types.RENAME_ENTRY, { path, name, entryPath, parentPath });
+
+  if (entry.type === 'tree') {
+    const slashedParentPath = parentPath ? `${parentPath}/` : '';
+    const targetEntry = entryPath ? entryPath.split('/').pop() : name;
+    const newParentPath = `${slashedParentPath}${targetEntry}`;
+
+    state.entries[entryPath || path].tree.forEach(f => {
+      dispatch('renameEntry', {
+        path,
+        name,
+        entryPath: f.path,
+        parentPath: newParentPath,
+      });
+    });
+  }
+
+  if (!entryPath && !entry.tempFile) {
+    dispatch('deleteEntry', path);
+  }
+};
 
 export * from './actions/tree';
 export * from './actions/file';

@@ -10,6 +10,10 @@ There is a `Gitlab::Profiler.profile` method, and corresponding
 `bin/profile-url` script, that enable profiling a GET or POST request to a
 specific URL, either as an anonymous user (the default) or as a specific user.
 
+NOTE: **Note:** The first argument to the profiler is either a full URL
+(including the instance hostname) or an absolute path, including the
+leading slash.
+
 When using the script, command-line documentation is available by passing no
 arguments.
 
@@ -41,6 +45,45 @@ the GitLab instance.
 Passing a `logger:` keyword argument to `Gitlab::Profiler.profile` will send
 ActiveRecord and ActionController log output to that logger. Further options are
 documented with the method source.
+
+There is also a RubyProf printer available:
+`Gitlab::Profiler::TotalTimeFlatPrinter`. This acts like
+`RubyProf::FlatPrinter`, but its `min_percent` option works on the method's
+total time, not its self time. (This is because we often spend most of our time
+in library code, but this comes from calls in our application.) It also offers a
+`max_percent` option to help filter out outer calls that aren't useful (like
+`ActionDispatch::Integration::Session#process`).
+
+There is a convenience method for using this,
+`Gitlab::Profiler.print_by_total_time`:
+
+```ruby
+result = Gitlab::Profiler.profile('/my-user')
+Gitlab::Profiler.print_by_total_time(result, max_percent: 60, min_percent: 2)
+# Measure Mode: wall_time
+# Thread ID: 70005223698240
+# Fiber ID: 70004894952580
+# Total: 1.768912
+# Sort by: total_time
+#
+#  %self      total      self      wait     child     calls  name
+#   0.00      1.017     0.000     0.000     1.017       14  *ActionView::Helpers::RenderingHelper#render
+#   0.00      1.017     0.000     0.000     1.017       14  *ActionView::Renderer#render_partial
+#   0.00      1.017     0.000     0.000     1.017       14  *ActionView::PartialRenderer#render
+#   0.00      1.007     0.000     0.000     1.007       14  *ActionView::PartialRenderer#render_partial
+#   0.00      0.930     0.000     0.000     0.930       14   Hamlit::TemplateHandler#call
+#   0.00      0.928     0.000     0.000     0.928       14   Temple::Engine#call
+#   0.02      0.865     0.000     0.000     0.864      638  *Enumerable#inject
+```
+
+To print the profile in HTML format, use the following example:
+
+```ruby
+result = Gitlab::Profiler.profile('/my-user')
+
+printer = RubyProf::CallStackPrinter.new(result)
+printer.print(File.open('/tmp/profile.html', 'w'))
+```
 
 [GitLab-Profiler](https://gitlab.com/gitlab-com/gitlab-profiler) is a project
 that builds on this to add some additional niceties, such as allowing

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class IssueEntity < IssuableEntity
   include TimeTrackableEntity
 
@@ -14,8 +16,13 @@ class IssueEntity < IssuableEntity
   expose :discussion_locked
   expose :assignees, using: API::Entities::UserBasic
   expose :due_date
-  expose :moved_to_id
   expose :project_id
+
+  expose :moved_to_id do |issue|
+    if issue.moved_to_id.present? && can?(request.current_user, :read_issue, issue.moved_to)
+      issue.moved_to_id
+    end
+  end
 
   expose :web_url do |issue|
     project_issue_path(issue.project, issue)
@@ -40,6 +47,6 @@ class IssueEntity < IssuableEntity
   end
 
   expose :preview_note_path do |issue|
-    preview_markdown_path(issue.project, quick_actions_target_type: 'Issue', quick_actions_target_id: issue.id)
+    preview_markdown_path(issue.project, target_type: 'Issue', target_id: issue.iid)
   end
 end

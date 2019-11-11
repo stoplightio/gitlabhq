@@ -1,7 +1,7 @@
 ---
 author: Dylan Griffith
 author_gitlab: DylanGriffith
-level: intermediary
+level: intermediate
 article_type: tutorial
 date: 2018-06-07
 description: "Continuous Deployment of a Spring Boot application to Cloud Foundry with GitLab CI/CD"
@@ -64,7 +64,7 @@ applications:
 
 ## Configure GitLab CI/CD to deploy your application
 
-Now we need to add the the GitLab CI/CD configuration file
+Now we need to add the GitLab CI/CD configuration file
 ([`.gitlab-ci.yml`](../../yaml/README.md)) to our
 project's root. This is how GitLab figures out what commands need to be run whenever
 code is pushed to our repository. We will add the following `.gitlab-ci.yml`
@@ -99,20 +99,20 @@ We've used the `java:8` [docker
 image](../../docker/using_docker_images.md) to build
 our application as it provides the up-to-date Java 8 JDK on [Docker
 Hub](https://hub.docker.com/). We've also added the [`only`
-clause](../../yaml/README.md#only-and-except-simplified)
+clause](../../yaml/README.md#onlyexcept-basic)
 to ensure our deployments only happen when we push to the master branch.
 
 Now, since the steps defined in `.gitlab-ci.yml` require credentials to login
 to CF, you'll need to add your CF credentials as [environment
-variables](../../variables/README.md#predefined-variables-environment-variables)
+variables](../../variables/README.md#predefined-environment-variables)
 on GitLab CI/CD. To set the environment variables, navigate to your project's
-**Settings > CI/CD** and expand **Secret Variables**. Name the variables
+**Settings > CI/CD** and expand **Variables**. Name the variables
 `CF_USERNAME` and `CF_PASSWORD` and set them to the correct values.
 
-![Secret Variable Settings in GitLab](img/cloud_foundry_secret_variables.png)
+![Variable Settings in GitLab](img/cloud_foundry_variables.png)
 
 Once set up, GitLab CI/CD will deploy your app to CF at every push to your
-repository's deafult branch. To see the build logs or watch your builds running
+repository's default branch. To see the build logs or watch your builds running
 live, navigate to **CI/CD > Pipelines**.
 
 CAUTION: **Caution:**
@@ -138,5 +138,5 @@ buildpack: client-certificate-mapper=1.2.0_RELEASE container-security-provider=1
 ```
 
 You can then visit your deployed application (for this example,
-https://gitlab-hello-world-undissembling-hotchpot.cfapps.io/) and you should
+`https://gitlab-hello-world-undissembling-hotchpot.cfapps.io/`) and you should
 see the "Spring is here!" message.

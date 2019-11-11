@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Groups::GroupMembersController < Groups::ApplicationController
   include MembershipActions
   include MembersPresentation
@@ -10,6 +12,7 @@ class Groups::GroupMembersController < Groups::ApplicationController
   # Authorize
   before_action :authorize_admin_group_member!, except: admin_not_required_endpoints
 
+  skip_before_action :check_two_factor_requirement, only: :leave
   skip_cross_project_access_check :index, :create, :update, :destroy, :request_access,
                                   :approve_access_request, :leave, :resend_invite,
                                   :override
@@ -30,7 +33,7 @@ class Groups::GroupMembersController < Groups::ApplicationController
     end
 
     @members = @members.page(params[:page]).per(50)
-    @members = present_members(@members.includes(:user))
+    @members = present_members(@members)
 
     @requesters = present_members(
       AccessRequestsFinder.new(@group).execute(current_user))

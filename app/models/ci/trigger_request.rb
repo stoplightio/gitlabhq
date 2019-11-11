@@ -1,10 +1,14 @@
+# frozen_string_literal: true
+
 module Ci
-  class TriggerRequest < ActiveRecord::Base
+  class TriggerRequest < ApplicationRecord
     extend Gitlab::Ci::Model
 
     belongs_to :trigger
     belongs_to :pipeline, foreign_key: :commit_id
     has_many :builds
+
+    delegate :short_token, to: :trigger, prefix: true, allow_nil: true
 
     # We switched to Ci::PipelineVariable from Ci::TriggerRequest.variables.
     # Ci::TriggerRequest doesn't save variables anymore.

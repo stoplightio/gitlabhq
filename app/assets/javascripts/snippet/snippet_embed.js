@@ -1,5 +1,7 @@
+import { __ } from '~/locale';
+
 export default () => {
-  const { protocol, host, pathname } = location;
+  const { protocol, host, pathname } = window.location;
   const shareBtn = document.querySelector('.js-share-btn');
   const embedBtn = document.querySelector('.js-embed-btn');
   const snippetUrlArea = document.querySelector('.js-snippet-url-area');
@@ -10,7 +12,7 @@ export default () => {
     shareBtn.classList.add('is-active');
     embedBtn.classList.remove('is-active');
     snippetUrlArea.value = url;
-    embedAction.innerText = 'Share';
+    embedAction.innerText = __('Share');
   });
 
   embedBtn.addEventListener('click', () => {
@@ -18,6 +20,6 @@ export default () => {
     shareBtn.classList.remove('is-active');
     const scriptTag = `<script src="${url}.js"></script>`;
     snippetUrlArea.value = scriptTag;
-    embedAction.innerText = 'Embed';
+    embedAction.innerText = __('Embed');
   });
 };

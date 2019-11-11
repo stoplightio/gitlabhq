@@ -1,10 +1,10 @@
 require "spec_helper"
 
 describe 'Git HTTP requests' do
+  include ProjectForksHelper
   include TermsHelper
   include GitHttpHelpers
   include WorkhorseHelpers
-  include UserActivitiesHelpers
 
   shared_examples 'pulls require Basic HTTP Authentication' do
     context "when no credentials are provided" do
@@ -104,6 +104,70 @@ describe 'Git HTTP requests' do
     end
   end
 
+  shared_examples_for 'project path without .git suffix' do
+    context "GET info/refs" do
+      let(:path) { "/#{project_path}/info/refs" }
+
+      context "when no params are added" do
+        before do
+          get path
+        end
+
+        it "redirects to the .git suffix version" do
+          expect(response).to redirect_to("/#{project_path}.git/info/refs")
+        end
+      end
+
+      context "when the upload-pack service is requested" do
+        let(:params) { { service: 'git-upload-pack' } }
+
+        before do
+          get path, params: params
+        end
+
+        it "redirects to the .git suffix version" do
+          expect(response).to redirect_to("/#{project_path}.git/info/refs?service=#{params[:service]}")
+        end
+      end
+
+      context "when the receive-pack service is requested" do
+        let(:params) { { service: 'git-receive-pack' } }
+
+        before do
+          get path, params: params
+        end
+
+        it "redirects to the .git suffix version" do
+          expect(response).to redirect_to("/#{project_path}.git/info/refs?service=#{params[:service]}")
+        end
+      end
+
+      context "when the params are anything else" do
+        let(:params) { { service: 'git-implode-pack' } }
+
+        before do
+          get path, params: params
+        end
+
+        it "redirects to the sign-in page" do
+          expect(response).to redirect_to(new_user_session_path)
+        end
+      end
+    end
+
+    context "POST git-upload-pack" do
+      it "fails to find a route" do
+        expect { clone_post(project_path) }.to raise_error(ActionController::RoutingError)
+      end
+    end
+
+    context "POST git-receive-pack" do
+      it "fails to find a route" do
+        expect { push_post(project_path) }.to raise_error(ActionController::RoutingError)
+      end
+    end
+  end
+
   describe "User with no identities" do
     let(:user) { create(:user) }
 
@@ -142,6 +206,10 @@ describe 'Git HTTP requests' do
 
             expect(response).to have_gitlab_http_status(:unprocessable_entity)
           end
+        end
+
+        it_behaves_like 'project path without .git suffix' do
+          let(:project_path) { "#{user.namespace.path}/project.git-project" }
         end
       end
     end
@@ -302,8 +370,24 @@ describe 'Git HTTP requests' do
             it 'rejects pushes with 403 Forbidden' do
               upload(path, env) do |response|
                 expect(response).to have_gitlab_http_status(:forbidden)
-                expect(response.body).to eq(change_access_error(:push_code))
+                expect(response.body).to eq('You are not allowed to push code to this project.')
               end
+            end
+
+            context 'when merge requests are open that allow maintainer access' do
+              let(:canonical_project) { create(:project, :public, :repository) }
+              let(:project) { fork_project(canonical_project, nil, repository: true) }
+
+              before do
+                canonical_project.add_maintainer(user)
+                create(:merge_request,
+                       source_project: project,
+                       target_project:  canonical_project,
+                       source_branch: 'fixes',
+                       allow_collaboration: true)
+              end
+
+              it_behaves_like 'pushes are allowed'
             end
           end
         end
@@ -365,9 +449,13 @@ describe 'Git HTTP requests' do
 
           context "when authentication fails" do
             context "when the user is IP banned" do
+              before do
+                Gitlab.config.rack_attack.git_basic_auth['enabled'] = true
+              end
+
               it "responds with status 401" do
                 expect(Rack::Attack::Allow2Ban).to receive(:filter).and_return(true)
-                allow_any_instance_of(Rack::Request).to receive(:ip).and_return('1.2.3.4')
+                allow_any_instance_of(ActionDispatch::Request).to receive(:ip).and_return('1.2.3.4')
 
                 clone_get(path, env)
 
@@ -381,13 +469,13 @@ describe 'Git HTTP requests' do
 
             context "when the user has access to the project" do
               before do
-                project.add_master(user)
+                project.add_maintainer(user)
               end
 
               context "when the user is blocked" do
                 it "rejects pulls with 401 Unauthorized" do
                   user.block
-                  project.add_master(user)
+                  project.add_maintainer(user)
 
                   download(path, env) do |response|
                     expect(response).to have_gitlab_http_status(:unauthorized)
@@ -404,6 +492,10 @@ describe 'Git HTTP requests' do
               end
 
               context "when the user isn't blocked" do
+                before do
+                  Gitlab.config.rack_attack.git_basic_auth['enabled'] = true
+                end
+
                 it "resets the IP in Rack Attack on download" do
                   expect(Rack::Attack::Allow2Ban).to receive(:reset).twice
 
@@ -423,10 +515,10 @@ describe 'Git HTTP requests' do
                 end
 
                 it 'updates the user last activity', :clean_gitlab_redis_shared_state do
-                  expect(user_activity(user)).to be_nil
+                  expect(user.last_activity_on).to be_nil
 
                   download(path, env) do |response|
-                    expect(user_activity(user)).to be_present
+                    expect(user.reload.last_activity_on).to eql(Date.today)
                   end
                 end
               end
@@ -450,21 +542,21 @@ describe 'Git HTTP requests' do
                 let(:path) { "#{project.full_path}.git" }
 
                 before do
-                  project.add_master(user)
+                  project.add_maintainer(user)
                 end
 
                 context 'when username and password are provided' do
                   it 'rejects pulls with personal access token error message' do
                     download(path, user: user.username, password: user.password) do |response|
                       expect(response).to have_gitlab_http_status(:unauthorized)
-                      expect(response.body).to include('You must use a personal access token with \'api\' scope for Git over HTTP')
+                      expect(response.body).to include('You must use a personal access token with \'read_repository\' or \'write_repository\' scope for Git over HTTP')
                     end
                   end
 
                   it 'rejects the push attempt with personal access token error message' do
                     upload(path, user: user.username, password: user.password) do |response|
                       expect(response).to have_gitlab_http_status(:unauthorized)
-                      expect(response.body).to include('You must use a personal access token with \'api\' scope for Git over HTTP')
+                      expect(response.body).to include('You must use a personal access token with \'read_repository\' or \'write_repository\' scope for Git over HTTP')
                     end
                   end
                 end
@@ -474,6 +566,47 @@ describe 'Git HTTP requests' do
 
                   it_behaves_like 'pulls are allowed'
                   it_behaves_like 'pushes are allowed'
+
+                  it 'rejects the push attempt for read_repository scope' do
+                    read_access_token = create(:personal_access_token, user: user, scopes: [:read_repository])
+
+                    upload(path, user: user.username, password: read_access_token.token) do |response|
+                      expect(response).to have_gitlab_http_status(:forbidden)
+                      expect(response.body).to include('You are not allowed to upload code')
+                    end
+                  end
+
+                  it 'accepts the push attempt for write_repository scope' do
+                    write_access_token = create(:personal_access_token, user: user, scopes: [:write_repository])
+
+                    upload(path, user: user.username, password: write_access_token.token) do |response|
+                      expect(response).to have_gitlab_http_status(:ok)
+                    end
+                  end
+
+                  it 'accepts the pull attempt for read_repository scope' do
+                    read_access_token = create(:personal_access_token, user: user, scopes: [:read_repository])
+
+                    download(path, user: user.username, password: read_access_token.token) do |response|
+                      expect(response).to have_gitlab_http_status(:ok)
+                    end
+                  end
+
+                  it 'accepts the pull attempt for api scope' do
+                    read_access_token = create(:personal_access_token, user: user, scopes: [:api])
+
+                    download(path, user: user.username, password: read_access_token.token) do |response|
+                      expect(response).to have_gitlab_http_status(:ok)
+                    end
+                  end
+
+                  it 'accepts the push attempt for api scope' do
+                    write_access_token = create(:personal_access_token, user: user, scopes: [:api])
+
+                    upload(path, user: user.username, password: write_access_token.token) do |response|
+                      expect(response).to have_gitlab_http_status(:ok)
+                    end
+                  end
                 end
               end
 
@@ -485,14 +618,14 @@ describe 'Git HTTP requests' do
                 it 'rejects pulls with personal access token error message' do
                   download(path, user: 'foo', password: 'bar') do |response|
                     expect(response).to have_gitlab_http_status(:unauthorized)
-                    expect(response.body).to include('You must use a personal access token with \'api\' scope for Git over HTTP')
+                    expect(response.body).to include('You must use a personal access token with \'read_repository\' or \'write_repository\' scope for Git over HTTP')
                   end
                 end
 
                 it 'rejects pushes with personal access token error message' do
                   upload(path, user: 'foo', password: 'bar') do |response|
                     expect(response).to have_gitlab_http_status(:unauthorized)
-                    expect(response.body).to include('You must use a personal access token with \'api\' scope for Git over HTTP')
+                    expect(response.body).to include('You must use a personal access token with \'read_repository\' or \'write_repository\' scope for Git over HTTP')
                   end
                 end
 
@@ -506,7 +639,7 @@ describe 'Git HTTP requests' do
                   it 'does not display the personal access token error message' do
                     upload(path, user: 'foo', password: 'bar') do |response|
                       expect(response).to have_gitlab_http_status(:unauthorized)
-                      expect(response.body).not_to include('You must use a personal access token with \'api\' scope for Git over HTTP')
+                      expect(response.body).not_to include('You must use a personal access token with \'read_repository\' or \'write_repository\' scope for Git over HTTP')
                     end
                   end
                 end
@@ -524,7 +657,7 @@ describe 'Git HTTP requests' do
                   maxretry = options[:maxretry] - 1
                   ip = '1.2.3.4'
 
-                  allow_any_instance_of(Rack::Request).to receive(:ip).and_return(ip)
+                  allow_any_instance_of(ActionDispatch::Request).to receive(:ip).and_return(ip)
                   Rack::Attack::Allow2Ban.reset(ip, options)
 
                   maxretry.times.each do
@@ -682,70 +815,8 @@ describe 'Git HTTP requests' do
         end
       end
 
-      context "when the project path doesn't end in .git" do
-        let(:project) { create(:project, :repository, :public, path: 'project.git-project') }
-
-        context "GET info/refs" do
-          let(:path) { "/#{project.full_path}/info/refs" }
-
-          context "when no params are added" do
-            before do
-              get path
-            end
-
-            it "redirects to the .git suffix version" do
-              expect(response).to redirect_to("/#{project.full_path}.git/info/refs")
-            end
-          end
-
-          context "when the upload-pack service is requested" do
-            let(:params) { { service: 'git-upload-pack' } }
-
-            before do
-              get path, params
-            end
-
-            it "redirects to the .git suffix version" do
-              expect(response).to redirect_to("/#{project.full_path}.git/info/refs?service=#{params[:service]}")
-            end
-          end
-
-          context "when the receive-pack service is requested" do
-            let(:params) { { service: 'git-receive-pack' } }
-
-            before do
-              get path, params
-            end
-
-            it "redirects to the .git suffix version" do
-              expect(response).to redirect_to("/#{project.full_path}.git/info/refs?service=#{params[:service]}")
-            end
-          end
-
-          context "when the params are anything else" do
-            let(:params) { { service: 'git-implode-pack' } }
-
-            before do
-              get path, params
-            end
-
-            it "redirects to the sign-in page" do
-              expect(response).to redirect_to(new_user_session_path)
-            end
-          end
-        end
-
-        context "POST git-upload-pack" do
-          it "fails to find a route" do
-            expect { clone_post(project.full_path) }.to raise_error(ActionController::RoutingError)
-          end
-        end
-
-        context "POST git-receive-pack" do
-          it "fails to find a route" do
-            expect { push_post(project.full_path) }.to raise_error(ActionController::RoutingError)
-          end
-        end
+      it_behaves_like 'project path without .git suffix' do
+        let(:project_path) { create(:project, :repository, :public, path: 'project.git-project').full_path }
       end
 
       context "retrieving an info/refs file" do
@@ -810,7 +881,7 @@ describe 'Git HTTP requests' do
 
         context 'and the user is on the team' do
           before do
-            project.add_master(user)
+            project.add_maintainer(user)
           end
 
           it "responds with status 200" do
@@ -833,7 +904,7 @@ describe 'Git HTTP requests' do
     let(:env) { { user: user.username, password: user.password } }
 
     before do
-      project.add_master(user)
+      project.add_maintainer(user)
       enforce_terms
     end
 

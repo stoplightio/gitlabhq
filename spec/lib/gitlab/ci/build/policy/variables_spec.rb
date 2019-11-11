@@ -15,6 +15,7 @@ describe Gitlab::Ci::Build::Policy::Variables do
 
   before do
     pipeline.variables.build(key: 'CI_PROJECT_NAME', value: '')
+    pipeline.variables.build(key: 'MY_VARIABLE', value: 'my-var')
   end
 
   describe '#satisfied_by?' do
@@ -24,7 +25,13 @@ describe Gitlab::Ci::Build::Policy::Variables do
       expect(policy).to be_satisfied_by(pipeline, seed)
     end
 
-    it 'is not satisfied by an overriden empty variable' do
+    it 'is satisfied by a matching pipeline variable' do
+      policy = described_class.new(['$MY_VARIABLE'])
+
+      expect(policy).to be_satisfied_by(pipeline, seed)
+    end
+
+    it 'is not satisfied by an overridden empty variable' do
       policy = described_class.new(['$CI_PROJECT_NAME'])
 
       expect(policy).not_to be_satisfied_by(pipeline, seed)
@@ -54,7 +61,7 @@ describe Gitlab::Ci::Build::Policy::Variables do
       expect(policy).not_to be_satisfied_by(pipeline, seed)
     end
 
-    it 'allows to evaluate regular secret variables' do
+    it 'allows to evaluate regular CI variables' do
       create(:ci_variable, project: project, key: 'SECRET', value: 'my secret')
 
       policy = described_class.new(["$SECRET == 'my secret'"])
@@ -67,6 +74,20 @@ describe Gitlab::Ci::Build::Policy::Variables do
 
       expect(pipeline).not_to be_persisted
       expect(seed.to_resource).not_to be_persisted
+    end
+
+    context 'when a bridge job is used' do
+      let(:bridge) do
+        build(:ci_bridge, pipeline: pipeline, project: project, ref: 'master')
+      end
+
+      let(:seed) { double('bridge seed', to_resource: bridge) }
+
+      it 'is satisfied by a matching expression for a bridge job' do
+        policy = described_class.new(['$MY_VARIABLE'])
+
+        expect(policy).to be_satisfied_by(pipeline, seed)
+      end
     end
   end
 end

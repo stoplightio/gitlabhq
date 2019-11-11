@@ -1,4 +1,4 @@
-Hi <%= @user.name %>!
+Hi <%= sanitize_name(@user.name) %>!
 
 Your Stoplight administrator created an account for you. You are now a member of the company Stoplight account.
 

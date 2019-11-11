@@ -1,10 +1,14 @@
+# frozen_string_literal: true
+
 module Issues
   class BuildService < Issues::BaseService
     include ResolveDiscussions
 
     def execute
       filter_resolve_discussion_params
-      @issue = project.issues.new(issue_params)
+      @issue = project.issues.new(issue_params).tap do |issue|
+        ensure_milestone_available(issue)
+      end
     end
 
     def issue_params_with_info_from_discussions
@@ -44,19 +48,21 @@ module Issues
 
       other_note_count = discussion.notes.size - 1
 
-      discussion_info = "- [ ] #{first_note_to_resolve.author.to_reference} #{action} a [discussion](#{note_url}): "
-      discussion_info << " (+#{other_note_count} #{'comment'.pluralize(other_note_count)})" if other_note_count > 0
+      discussion_info = ["- [ ] #{first_note_to_resolve.author.to_reference} #{action} a [discussion](#{note_url}): "]
+      discussion_info << "(+#{other_note_count} #{'comment'.pluralize(other_note_count)})" if other_note_count > 0
 
       note_without_block_quotes = Banzai::Filter::BlockquoteFenceFilter.new(first_note_to_resolve.note).call
       spaces = ' ' * 4
       quote = note_without_block_quotes.lines.map { |line| "#{spaces}> #{line}" }.join
 
-      [discussion_info, quote].join("\n\n")
+      [discussion_info.join(' '), quote].join("\n\n")
     end
 
     def issue_params
-      @issue_params ||= issue_params_with_info_from_discussions.merge(whitelisted_issue_params)
+      @issue_params ||= build_issue_params
     end
+
+    private
 
     def whitelisted_issue_params
       if can?(current_user, :admin_issue, project)
@@ -64,6 +70,10 @@ module Issues
       else
         params.slice(:title, :description)
       end
+    end
+
+    def build_issue_params
+      issue_params_with_info_from_discussions.merge(whitelisted_issue_params)
     end
   end
 end

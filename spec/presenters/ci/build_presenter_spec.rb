@@ -78,7 +78,7 @@ describe Ci::BuildPresenter do
       it 'returns the reason of failure' do
         status_title = presenter.status_title
 
-        expect(status_title).to eq('Failed <br> (unknown failure)')
+        expect(status_title).to eq('Failed - (unknown failure)')
       end
     end
 
@@ -89,7 +89,7 @@ describe Ci::BuildPresenter do
         status_title = presenter.status_title
 
         expect(status_title).not_to include('(retried)')
-        expect(status_title).to eq('Failed <br> (unknown failure)')
+        expect(status_title).to eq('Failed - (unknown failure)')
       end
     end
 
@@ -99,7 +99,7 @@ describe Ci::BuildPresenter do
       it 'returns the reason of failure' do
         status_title = presenter.status_title
 
-        expect(status_title).to eq('Failed <br> (unknown failure)')
+        expect(status_title).to eq('Failed - (unknown failure)')
       end
     end
 
@@ -173,34 +173,34 @@ describe Ci::BuildPresenter do
       it 'returns the reason of failure' do
         tooltip = subject.tooltip_message
 
-        expect(tooltip).to eq("#{build.name} - failed <br> (script failure)")
+        expect(tooltip).to eq("#{build.name} - failed - (script failure)")
       end
     end
 
     context 'When build has failed and retried' do
       let(:build) { create(:ci_build, :script_failure, :retried, pipeline: pipeline) }
 
-      it 'should include the reason of failure and the retried title' do
+      it 'includes the reason of failure and the retried title' do
         tooltip = subject.tooltip_message
 
-        expect(tooltip).to eq("#{build.name} - failed <br> (script failure) (retried)")
+        expect(tooltip).to eq("#{build.name} - failed - (script failure) (retried)")
       end
     end
 
     context 'When build has failed and is allowed to' do
       let(:build) { create(:ci_build, :script_failure, :allowed_to_fail, pipeline: pipeline) }
 
-      it 'should include the reason of failure' do
+      it 'includes the reason of failure' do
         tooltip = subject.tooltip_message
 
-        expect(tooltip).to eq("#{build.name} - failed <br> (script failure) (allowed to fail)")
+        expect(tooltip).to eq("#{build.name} - failed - (script failure) (allowed to fail)")
       end
     end
 
     context 'For any other build (no retried)' do
       let(:build) { create(:ci_build, :success, pipeline: pipeline) }
 
-      it 'should include build name and status' do
+      it 'includes build name and status' do
         tooltip = subject.tooltip_message
 
         expect(tooltip).to eq("#{build.name} - passed")
@@ -210,10 +210,46 @@ describe Ci::BuildPresenter do
     context 'For any other build (retried)' do
       let(:build) { create(:ci_build, :success, :retried, pipeline: pipeline) }
 
-      it 'should include build name and status' do
+      it 'includes build name and status' do
         tooltip = subject.tooltip_message
 
         expect(tooltip).to eq("#{build.name} - passed (retried)")
+      end
+    end
+  end
+
+  describe '#execute_in' do
+    subject { presenter.execute_in }
+
+    context 'when build is scheduled' do
+      context 'when schedule is not expired' do
+        let(:build) { create(:ci_build, :scheduled) }
+
+        it 'returns execution time' do
+          Timecop.freeze do
+            is_expected.to be_like_time(60.0)
+          end
+        end
+      end
+
+      context 'when schedule is expired' do
+        let(:build) { create(:ci_build, :expired_scheduled) }
+
+        it 'returns execution time' do
+          Timecop.freeze do
+            is_expected.to eq(0)
+          end
+        end
+      end
+    end
+
+    context 'when build is not delayed' do
+      let(:build) { create(:ci_build) }
+
+      it 'does not return execution time' do
+        Timecop.freeze do
+          is_expected.to be_falsy
+        end
       end
     end
   end
@@ -231,9 +267,9 @@ describe Ci::BuildPresenter do
     let(:build) { create(:ci_build, :failed, :script_failure) }
 
     context 'when is a script or missing dependency failure' do
-      let(:failure_reasons) { %w(script_failure missing_dependency_failure) }
+      let(:failure_reasons) { %w(script_failure missing_dependency_failure archived_failure) }
 
-      it 'should return false' do
+      it 'returns false' do
         failure_reasons.each do |failure_reason|
           build.update_attribute(:failure_reason, failure_reason)
           expect(presenter.recoverable?).to be_falsy
@@ -244,7 +280,7 @@ describe Ci::BuildPresenter do
     context 'when is any other failure type' do
       let(:failure_reasons) { %w(unknown_failure api_failure stuck_or_timeout_failure runner_system_failure) }
 
-      it 'should return true' do
+      it 'returns true' do
         failure_reasons.each do |failure_reason|
           build.update_attribute(:failure_reason, failure_reason)
           expect(presenter.recoverable?).to be_truthy

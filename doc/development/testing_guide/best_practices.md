@@ -1,5 +1,20 @@
 # Testing best practices
 
+## Test Design
+
+Testing at GitLab is a first class citizen, not an afterthought. It's important we consider the design of our tests 
+as we do the design of our features. 
+
+When implementing a feature, we think about developing the right capabilities the right way, which helps us 
+narrow our scope to a manageable level. When implementing tests for a feature, we must think about developing 
+the right tests, but then cover _all_ the important ways the test may fail, which can quickly widen our scope to 
+a level that is difficult to manage.
+
+Test heuristics can help solve this problem. They concisely address many of the common ways bugs 
+manifest themselves within our code. When designing our tests, take time to review known test heuristics to inform 
+our test design. We can find some helpful heuristics documented in the Handbook in the 
+[Test Design](https://about.gitlab.com/handbook/engineering/quality/guidelines/test-engineering/test-design/) section.
+
 ## Test speed
 
 GitLab has a massive test suite that, without [parallelization], can take hours
@@ -19,6 +34,16 @@ Here are some things to keep in mind regarding test performance:
 
 ## RSpec
 
+To run rspec tests:
+
+```sh
+# run all tests
+bundle exec rspec
+
+# run test for path
+bundle exec rspec spec/[path]/[to]/[spec].rb
+```
+
 ### General guidelines
 
 - Use a single, top-level `describe ClassName` block.
@@ -30,7 +55,7 @@ Here are some things to keep in mind regarding test performance:
   to separate phases.
 - Use `Gitlab.config.gitlab.host` rather than hard coding `'localhost'`
 - Don't assert against the absolute value of a sequence-generated attribute (see
-  [Gotchas](../gotchas.md#dont-assert-against-the-absolute-value-of-a-sequence-generated-attribute)).
+  [Gotchas](../gotchas.md#do-not-assert-against-the-absolute-value-of-a-sequence-generated-attribute)).
 - Don't supply the `:each` argument to hooks since it's the default.
 - On `before` and `after` hooks, prefer it scoped to `:context` over `:all`
 - When using `evaluate_script("$('.js-foo').testSomething()")` (or `execute_script`) which acts on a given element,
@@ -101,7 +126,7 @@ CHROME_HEADLESS=0 bundle exec rspec some_spec.rb
 
 The test will go by quickly, but this will give you an idea of what's happening.
 
-You can also add `byebug` or `binding.pry` to pause execution and step through
+You can also add `byebug` or `binding.pry` to pause execution and [step through](../pry_debugging.md#stepping)
 the test.
 
 #### Screenshots
@@ -111,7 +136,7 @@ failure. In CI you can download these files as job artifacts.
 
 Also, you can manually take screenshots at any point in a test by adding the
 methods below. Be sure to remove them when they are no longer needed! See
-https://github.com/mattheworiordan/capybara-screenshot#manual-screenshots for
+<https://github.com/mattheworiordan/capybara-screenshot#manual-screenshots> for
 more.
 
 Add `screenshot_and_save_page` in a `:js` spec to screenshot what Capybara
@@ -158,12 +183,13 @@ instead of 30+ seconds in case of a regular `spec_helper`.
 
 ### `let` variables
 
-GitLab's RSpec suite has made extensive use of `let` variables to reduce
-duplication. However, this sometimes [comes at the cost of clarity][lets-not],
+GitLab's RSpec suite has made extensive use of `let`(along with it strict, non-lazy
+version `let!`) variables to reduce duplication. However, this sometimes [comes at the cost of clarity][lets-not], 
 so we need to set some guidelines for their use going forward:
 
-- `let` variables are preferable to instance variables. Local variables are
-  preferable to `let` variables.
+- `let!` variables are preferable to instance variables. `let` variables
+  are preferable to `let!` variables. Local variables are preferable to 
+  `let` variables.
 - Use `let` to reduce duplication throughout an entire spec file.
 - Don't use `let` to define variables used by a single test; define them as
   local variables inside the test's `it` block.
@@ -173,6 +199,9 @@ so we need to set some guidelines for their use going forward:
 - Try to avoid overriding the definition of one `let` variable with another.
 - Don't define a `let` variable that's only used by the definition of another.
   Use a helper method instead.
+- `let!` variables should be used only in case if strict evaluation with defined 
+  order is required, otherwise `let` will suffice. Remember that `let` is lazy and won't 
+  be evaluated until it is referenced.
 
 [lets-not]: https://robots.thoughtbot.com/lets-not
 
@@ -187,8 +216,10 @@ project, one project will do for the entire file. This can be achieved by using
 reloads or recreates the model, _only_ if needed. That is, when you changed
 properties or destroyed the object.
 
-There is one gotcha; you can't reference a model defined in a `let` block in a
-`set` block.
+Note that you can't reference a model defined in a `let` block in a `set` block.
+
+Also, `set` is not supported in `:js` specs since those don't use transactions
+to clean up database state after each example.
 
 ### Time-sensitive tests
 
@@ -209,6 +240,130 @@ it 'is overdue' do
 end
 ```
 
+### Pristine test environments
+
+The code exercised by a single GitLab test may access and modify many items of
+data. Without careful preparation before a test runs, and cleanup afterward,
+data can be changed by a test in such a way that it affects the behaviour of
+following tests. This should be avoided at all costs! Fortunately, the existing
+test framework handles most cases already.
+
+When the test environment does get polluted, a common outcome is
+[flaky tests](flaky_tests.md). Pollution will often manifest as an order
+dependency: running spec A followed by spec B will reliably fail, but running
+spec B followed by spec A will reliably succeed. In these cases, you can use
+`rspec --bisect` (or a manual pairwise bisect of spec files) to determine which
+spec is at fault. Fixing the problem requires some understanding of how the test
+suite ensures the environment is pristine. Read on to discover more about each
+data store!
+
+#### SQL database
+
+This is managed for us by the `database_cleaner` gem. Each spec is surrounded in
+a transaction, which is rolled back once the test completes. Certain specs will
+instead issue `DELETE FROM` queries against every table after completion; this
+allows the created rows to be viewed from multiple database connections, which
+is important for specs that run in a browser, or migration specs, among others.
+
+One consequence of using these strategies, instead of the well-known
+`TRUNCATE TABLES` approach, is that primary keys and other sequences are **not**
+reset across specs. So if you create a project in spec A, then create a project
+in spec B, the first will have `id=1`, while the second will have `id=2`.
+
+This means that specs should **never** rely on the value of an ID, or any other
+sequence-generated column. To avoid accidental conflicts, specs should also
+avoid manually specifying any values in these kinds of columns. Instead, leave
+them unspecified, and look up the value after the row is created.
+
+#### Redis
+
+GitLab stores two main categories of data in Redis: cached items, and sidekiq
+jobs.
+
+In most specs, the Rails cache is actually an in-memory store. This is replaced
+between specs, so calls to `Rails.cache.read` and `Rails.cache.write` are safe.
+However, if a spec makes direct Redis calls, it should mark itself with the
+`:clean_gitlab_redis_cache`, `:clean_gitlab_redis_shared_state` or
+`:clean_gitlab_redis_queues` traits as appropriate.
+
+Sidekiq jobs are typically not run in specs, but this behaviour can be altered
+in each spec through the use of `Sidekiq::Testing.inline!` blocks. Any spec that
+causes Sidekiq jobs to be pushed to Redis should use the `:sidekiq` trait, to
+ensure that they are removed once the spec completes.
+
+#### Filesystem
+
+Filesystem data can be roughly split into "repositories", and "everything else".
+Repositories are stored in `tmp/tests/repositories`. This directory is emptied
+before a test run starts, and after the test run ends. It is not emptied between
+specs, so created repositories accumulate within this directory over the
+lifetime of the process. Deleting them is expensive, but this could lead to
+pollution unless carefully managed.
+
+To avoid this, [hashed storage](../../administration/repository_storage_types.md)
+is enabled in the test suite. This means that repositories are given a unique
+path that depends on their project's ID. Since the project IDs are not reset
+between specs, this guarantees that each spec gets its own repository on disk,
+and prevents changes from being visible between specs.
+
+If a spec manually specifies a project ID, or inspects the state of the
+`tmp/tests/repositories/` directory directly, then it should clean up the
+directory both before and after it runs. In general, these patterns should be
+completely avoided.
+
+Other classes of file linked to database objects, such as uploads, are generally
+managed in the same way. With hashed storage enabled in the specs, they are
+written to disk in locations determined by ID, so conflicts should not occur.
+
+Some specs disable hashed storage by passing the `:legacy_storage` trait to the
+`projects` factory. Specs that do this must **never** override the `path` of the
+project, or any of its groups. The default path includes the project ID, so will
+not conflict; but if two specs create a `:legacy_storage` project with the same
+path, they will use the same repository on disk and lead to test environment
+pollution.
+
+Other files must be managed manually by the spec. If you run code that creates a
+`tmp/test-file.csv` file, for instance, the spec must ensure that the file is
+removed as part of cleanup.
+
+#### Persistent in-memory application state
+
+All the specs in a given `rspec` run share the same Ruby process, which means
+they can affect each other by modifying Ruby objects that are accessible between
+specs. In practice, this means global variables, and constants (which includes
+Ruby classes, modules, etc).
+
+Global variables should generally not be modified. If absolutely necessary, a
+block like this can be used to ensure the change is rolled back afterwards:
+
+```ruby
+around(:each) do |example|
+  old_value = $0
+
+  begin
+    $0 = "new-value"
+    example.run
+  ensure
+    $0 = old_value
+  end
+end
+```
+
+If a spec needs to modify a constant, it should use the `stub_const` helper to
+ensure the change is rolled back.
+
+If you need to modify the contents of the `ENV` constant, you can use the
+`stub_env` helper method instead.
+
+While most Ruby **instances** are not shared between specs, **classes**
+and **modules** generally are. Class and module instance variables, accessors,
+class variables, and other stateful idioms, should be treated in the same way as
+global variables - don't modify them unless you have to! In particular, prefer
+using expectations, or dependency injection along with stubs, to avoid the need
+for modifications. If you have no other choice, an `around` block similar to the
+example for global variables, above, can be used, but this should be avoided if
+at all possible.
+
 ### Table-based / Parameterized tests
 
 This style of testing is used to exercise one piece of code with a comprehensive
@@ -224,16 +379,11 @@ range of inputs, might look like this:
 describe "#==" do
   using RSpec::Parameterized::TableSyntax
 
-  let(:project1) { create(:project) }
-  let(:project2) { create(:project) }
   where(:a, :b, :result) do
     1         | 1        | true
     1         | 2        | false
     true      | true     | true
     true      | false    | false
-    project1  | project1 | true
-    project2  | project2 | true
-    project 1 | project2 | false
   end
 
   with_them do
@@ -245,6 +395,11 @@ describe "#==" do
   end
 end
 ```
+
+CAUTION: **Caution:**
+Only use simple values as input in the `where` block. Using procs, stateful
+objects, FactoryBot-created objects etc. can lead to
+[unexpected results](https://github.com/tomykaira/rspec-parameterized/issues/8).
 
 ### Prometheus tests
 
@@ -270,7 +425,7 @@ This is especially useful whenever it's showing 500 internal server error.
 
 ### Shared contexts
 
-All shared contexts should be be placed under `spec/support/shared_contexts/`.
+All shared contexts should be placed under `spec/support/shared_contexts/`.
 Shared contexts can be placed in subfolder if they apply to a certain type of
 specs only (e.g. features, requests etc.) but shouldn't be if they apply to
 multiple type of specs.
@@ -280,7 +435,7 @@ Each file should include only one context and have a descriptive name, e.g.
 
 ### Shared examples
 
-All shared examples should be be placed under `spec/support/shared_examples/`.
+All shared examples should be placed under `spec/support/shared_examples/`.
 Shared examples can be placed in subfolder if they apply to a certain type of
 specs only (e.g. features, requests etc.) but shouldn't be if they apply to
 multiple type of specs.
@@ -292,7 +447,7 @@ Each file should include only one context and have a descriptive name, e.g.
 
 Helpers are usually modules that provide some methods to hide the complexity of
 specific RSpec examples. You can define helpers in RSpec files if they're not
-intended to be shared with other specs. Otherwise, they should be be placed
+intended to be shared with other specs. Otherwise, they should be placed
 under `spec/support/helpers/`. Helpers can be placed in subfolder if they apply
 to a certain type of specs only (e.g. features, requests etc.) but shouldn't be
 if they apply to multiple type of specs.
@@ -346,7 +501,38 @@ GitLab uses [factory_bot] as a test fixture replacement.
 
 ### Fixtures
 
-All fixtures should be be placed under `spec/fixtures/`.
+All fixtures should be placed under `spec/fixtures/`.
+
+### Repositories
+
+Testing some functionality, e.g., merging a merge request, requires a git
+repository with a certain state to be present in the test environment. GitLab
+maintains the [gitlab-test](https://gitlab.com/gitlab-org/gitlab-test)
+repository for certain common cases - you can ensure a copy of the repository is
+used with the `:repository` trait for project factories:
+
+```ruby
+let(:project) { create(:project, :repository) }
+```
+
+Where you can, consider using the `:custom_repo` trait instead of `:repository`.
+This allows you to specify exactly what files will appear in the `master` branch
+of the project's repository. For example:
+
+```ruby
+let(:project) do
+  create(
+    :project, :custom_repo,
+    files: {
+      'README.md'       => 'Content here',
+      'foo/bar/baz.txt' => 'More content here'
+    }
+  )
+end
+```
+
+This will create a repository containing two files, with default permissions and
+the specified content.
 
 ### Config
 

@@ -138,6 +138,28 @@ shared_examples_for 'common trace features' do
     end
   end
 
+  describe '#write' do
+    subject { trace.send(:write, mode) { } }
+
+    let(:mode) { 'wb' }
+
+    context 'when arhicved trace does not exist yet' do
+      it 'does not raise an error' do
+        expect { subject }.not_to raise_error
+      end
+    end
+
+    context 'when arhicved trace already exists' do
+      before do
+        create(:ci_job_artifact, :trace, job: build)
+      end
+
+      it 'raises an error' do
+        expect { subject }.to raise_error(Gitlab::Ci::Trace::AlreadyArchivedError)
+      end
+    end
+  end
+
   describe '#set' do
     before do
       trace.set("12")
@@ -158,10 +180,9 @@ shared_examples_for 'common trace features' do
     end
 
     context 'runners token' do
-      let(:token) { 'my_secret_token' }
+      let(:token) { build.project.runners_token }
 
       before do
-        build.project.update(runners_token: token)
         trace.set(token)
       end
 
@@ -171,10 +192,9 @@ shared_examples_for 'common trace features' do
     end
 
     context 'hides build token' do
-      let(:token) { 'my_secret_token' }
+      let(:token) { build.token }
 
       before do
-        build.update(token: token)
         trace.set(token)
       end
 
@@ -247,17 +267,14 @@ shared_examples_for 'common trace features' do
         end
 
         context 'when another process has already been archiving', :clean_gitlab_redis_shared_state do
+          include ExclusiveLeaseHelpers
+
           before do
-            Gitlab::ExclusiveLease.new("trace:archive:#{trace.job.id}", timeout: 1.hour).try_obtain
+            stub_exclusive_lease_taken("trace:write:lock:#{trace.job.id}", timeout: 1.minute)
           end
 
           it 'blocks concurrent archiving' do
-            expect(Rails.logger).to receive(:error).with('Cannot obtain an exclusive lease. There must be another instance already in execution.')
-
-            subject
-
-            build.reload
-            expect(build.job_artifacts_trace).to be_nil
+            expect { subject }.to raise_error(::Gitlab::ExclusiveLeaseHelpers::FailedToObtainLockError)
           end
         end
       end
@@ -307,14 +324,6 @@ shared_examples_for 'trace with disabled live trace feature' do
     context 'when current_path (with project_id) exists' do
       before do
         expect(trace).to receive(:default_path) { expand_fixture_path('trace/sample_trace') }
-      end
-
-      it_behaves_like 'read successfully with IO'
-    end
-
-    context 'when current_path (with project_ci_id) exists' do
-      before do
-        expect(trace).to receive(:deprecated_path) { expand_fixture_path('trace/sample_trace') }
       end
 
       it_behaves_like 'read successfully with IO'
@@ -376,37 +385,6 @@ shared_examples_for 'trace with disabled live trace feature' do
       it "can be erased" do
         trace.erase!
         expect(trace.exist?).to be(false)
-      end
-    end
-
-    context 'deprecated path' do
-      let(:path) { trace.send(:deprecated_path) }
-
-      context 'with valid ci_id' do
-        before do
-          build.project.update(ci_id: 1000)
-
-          FileUtils.mkdir_p(File.dirname(path))
-
-          File.open(path, "w") do |file|
-            file.write("data")
-          end
-        end
-
-        it "trace exist" do
-          expect(trace.exist?).to be(true)
-        end
-
-        it "can be erased" do
-          trace.erase!
-          expect(trace.exist?).to be(false)
-        end
-      end
-
-      context 'without valid ci_id' do
-        it "does not return deprecated path" do
-          expect(path).to be_nil
-        end
       end
     end
 
@@ -572,7 +550,7 @@ shared_examples_for 'trace with disabled live trace feature' do
 
       it 'does not archive' do
         expect_any_instance_of(described_class).not_to receive(:archive_stream!)
-        expect { subject }.to raise_error('Already archived')
+        expect { subject }.to raise_error(Gitlab::Ci::Trace::AlreadyArchivedError)
         expect(build.job_artifacts_trace.file.exists?).to be_truthy
       end
     end
@@ -584,6 +562,55 @@ shared_examples_for 'trace with disabled live trace feature' do
         expect_any_instance_of(described_class).not_to receive(:archive_stream!)
         expect { subject }.to raise_error('Job is not finished yet')
         expect(build.trace.exist?).to be_truthy
+      end
+    end
+  end
+
+  describe '#erase!' do
+    subject { trace.erase! }
+
+    context 'when it is a live trace' do
+      context 'when trace is stored in database' do
+        let(:build) { create(:ci_build) }
+
+        before do
+          build.update_column(:trace, 'sample trace')
+        end
+
+        it { expect(trace.raw).not_to be_nil }
+
+        it "removes trace" do
+          subject
+
+          expect(trace.raw).to be_nil
+        end
+      end
+
+      context 'when trace is stored in file storage' do
+        let(:build) { create(:ci_build, :trace_live) }
+
+        it { expect(trace.raw).not_to be_nil }
+
+        it "removes trace" do
+          subject
+
+          expect(trace.raw).to be_nil
+        end
+      end
+    end
+
+    context 'when it is an archived trace' do
+      let(:build) { create(:ci_build, :trace_artifact) }
+
+      it "has trace at first" do
+        expect(trace.raw).not_to be_nil
+      end
+
+      it "removes trace" do
+        subject
+
+        build.reload
+        expect(trace.raw).to be_nil
       end
     end
   end
@@ -759,7 +786,7 @@ shared_examples_for 'trace with enabled live trace feature' do
 
       it 'does not archive' do
         expect_any_instance_of(described_class).not_to receive(:archive_stream!)
-        expect { subject }.to raise_error('Already archived')
+        expect { subject }.to raise_error(Gitlab::Ci::Trace::AlreadyArchivedError)
         expect(build.job_artifacts_trace.file.exists?).to be_truthy
       end
     end
@@ -771,6 +798,37 @@ shared_examples_for 'trace with enabled live trace feature' do
         expect_any_instance_of(described_class).not_to receive(:archive_stream!)
         expect { subject }.to raise_error('Job is not finished yet')
         expect(build.trace.exist?).to be_truthy
+      end
+    end
+  end
+
+  describe '#erase!' do
+    subject { trace.erase! }
+
+    context 'when it is a live trace' do
+      let(:build) { create(:ci_build, :trace_live) }
+
+      it { expect(trace.raw).not_to be_nil }
+
+      it "removes trace" do
+        subject
+
+        expect(trace.raw).to be_nil
+      end
+    end
+
+    context 'when it is an archived trace' do
+      let(:build) { create(:ci_build, :trace_artifact) }
+
+      it "has trace at first" do
+        expect(trace.raw).not_to be_nil
+      end
+
+      it "removes trace" do
+        subject
+
+        build.reload
+        expect(trace.raw).to be_nil
       end
     end
   end

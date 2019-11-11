@@ -35,37 +35,40 @@ describe Projects::MergeRequestsController, '(JavaScript fixtures)', type: :cont
 
   before do
     sign_in(admin)
+    allow(Discussion).to receive(:build_discussion_id).and_return(['discussionid:ceterumcenseo'])
   end
 
   after do
     remove_repository(project)
   end
 
-  it 'merge_requests/merge_request_of_current_user.html.raw' do |example|
+  it 'merge_requests/merge_request_of_current_user.html' do |example|
     merge_request.update(author: admin)
 
     render_merge_request(example.description, merge_request)
   end
 
-  it 'merge_requests/merge_request_with_task_list.html.raw' do |example|
+  it 'merge_requests/merge_request_with_task_list.html' do |example|
     create(:ci_build, :pending, pipeline: pipeline)
 
     render_merge_request(example.description, merge_request)
   end
 
-  it 'merge_requests/merged_merge_request.html.raw' do |example|
-    allow_any_instance_of(MergeRequest).to receive(:source_branch_exists?).and_return(true)
-    allow_any_instance_of(MergeRequest).to receive(:can_remove_source_branch?).and_return(true)
+  it 'merge_requests/merged_merge_request.html' do |example|
+    expect_next_instance_of(MergeRequest) do |merge_request|
+      allow(merge_request).to receive(:source_branch_exists?).and_return(true)
+      allow(merge_request).to receive(:can_remove_source_branch?).and_return(true)
+    end
     render_merge_request(example.description, merged_merge_request)
   end
 
-  it 'merge_requests/diff_comment.html.raw' do |example|
+  it 'merge_requests/diff_comment.html' do |example|
     create(:diff_note_on_merge_request, project: project, author: admin, position: position, noteable: merge_request)
     create(:note_on_merge_request, author: admin, project: project, noteable: merge_request)
     render_merge_request(example.description, merge_request)
   end
 
-  it 'merge_requests/merge_request_with_comment.html.raw' do |example|
+  it 'merge_requests/merge_request_with_comment.html' do |example|
     create(:note_on_merge_request, author: admin, project: project, noteable: merge_request, note: '- [ ] Task List Item')
     render_merge_request(example.description, merge_request)
   end
@@ -77,6 +80,13 @@ describe Projects::MergeRequestsController, '(JavaScript fixtures)', type: :cont
 
   it 'merge_requests/diff_discussion.json' do |example|
     create(:diff_note_on_merge_request, project: project, author: admin, position: position, noteable: merge_request)
+    render_discussions_json(merge_request, example.description)
+  end
+
+  it 'merge_requests/resolved_diff_discussion.json' do |example|
+    note = create(:discussion_note_on_merge_request, :resolved, project: project, author: admin, position: position, noteable: merge_request)
+    create(:system_note, project: project, author: admin, noteable: merge_request, discussion_id: note.discussion.id)
+
     render_discussions_json(merge_request, example.description)
   end
 
@@ -105,21 +115,21 @@ describe Projects::MergeRequestsController, '(JavaScript fixtures)', type: :cont
   private
 
   def render_discussions_json(merge_request, fixture_file_name)
-    get :discussions,
+    get :discussions, params: {
       namespace_id: project.namespace.to_param,
       project_id: project,
-      id: merge_request.to_param,
-      format: :json
+      id: merge_request.to_param
+    }, format: :json
 
     store_frontend_fixture(response, fixture_file_name)
   end
 
   def render_merge_request(fixture_file_name, merge_request)
-    get :show,
+    get :show, params: {
       namespace_id: project.namespace.to_param,
       project_id: project,
-      id: merge_request.to_param,
-      format: :html
+      id: merge_request.to_param
+    }, format: :html
 
     expect(response).to be_success
     store_frontend_fixture(response, fixture_file_name)

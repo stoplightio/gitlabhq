@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe BuildFinishedWorker do
@@ -25,6 +27,25 @@ describe BuildFinishedWorker do
         expect { described_class.new.perform(123) }
           .not_to raise_error
       end
+    end
+
+    it 'schedules a ChatNotification job for a chat build' do
+      build = create(:ci_build, :success, pipeline: create(:ci_pipeline, source: :chat))
+
+      expect(ChatNotificationWorker)
+        .to receive(:perform_async)
+        .with(build.id)
+
+      described_class.new.perform(build.id)
+    end
+
+    it 'does not schedule a ChatNotification job for a regular build' do
+      build = create(:ci_build, :success, pipeline: create(:ci_pipeline))
+
+      expect(ChatNotificationWorker)
+        .not_to receive(:perform_async)
+
+      described_class.new.perform(build.id)
     end
   end
 end

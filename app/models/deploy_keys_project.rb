@@ -1,4 +1,6 @@
-class DeployKeysProject < ActiveRecord::Base
+# frozen_string_literal: true
+
+class DeployKeysProject < ApplicationRecord
   belongs_to :project
   belongs_to :deploy_key, inverse_of: :deploy_keys_projects
 

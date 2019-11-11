@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe MergeRequests::UpdateService, :mailer do
@@ -13,13 +15,13 @@ describe MergeRequests::UpdateService, :mailer do
   let(:merge_request) do
     create(:merge_request, :simple, title: 'Old title',
                                     description: "FYI #{user2.to_reference}",
-                                    assignee_id: user3.id,
+                                    assignee_ids: [user3.id],
                                     source_project: project,
                                     author: create(:user))
   end
 
   before do
-    project.add_master(user)
+    project.add_maintainer(user)
     project.add_developer(user2)
     project.add_developer(user3)
   end
@@ -48,7 +50,7 @@ describe MergeRequests::UpdateService, :mailer do
         {
           title: 'New title',
           description: 'Also please fix',
-          assignee_id: user2.id,
+          assignee_ids: [user.id],
           state_event: 'close',
           label_ids: [label.id],
           target_branch: 'target',
@@ -71,7 +73,7 @@ describe MergeRequests::UpdateService, :mailer do
       it 'matches base expectations' do
         expect(@merge_request).to be_valid
         expect(@merge_request.title).to eq('New title')
-        expect(@merge_request.assignee).to eq(user2)
+        expect(@merge_request.assignees).to match_array([user])
         expect(@merge_request).to be_closed
         expect(@merge_request.labels.count).to eq(1)
         expect(@merge_request.labels.first.title).to eq(label.name)
@@ -106,14 +108,15 @@ describe MergeRequests::UpdateService, :mailer do
         note = find_note('assigned to')
 
         expect(note).not_to be_nil
-        expect(note.note).to include "assigned to #{user2.to_reference}"
+        expect(note.note).to include "assigned to #{user.to_reference} and unassigned #{user3.to_reference}"
       end
 
-      it 'creates system note about merge_request label edit' do
-        note = find_note('added ~')
+      it 'creates a resource label event' do
+        event = merge_request.resource_label_events.last
 
-        expect(note).not_to be_nil
-        expect(note.note).to include "added #{label.to_reference} label"
+        expect(event).not_to be_nil
+        expect(event.label_id).to eq label.id
+        expect(event.user_id).to eq user.id
       end
 
       it 'creates system note about title change' do
@@ -292,7 +295,7 @@ describe MergeRequests::UpdateService, :mailer do
 
       context 'when is reassigned' do
         before do
-          update_merge_request({ assignee: user2 })
+          update_merge_request({ assignee_ids: [user2.id] })
         end
 
         it 'marks previous assignee pending todos as done' do
@@ -314,14 +317,58 @@ describe MergeRequests::UpdateService, :mailer do
         end
       end
 
-      context 'when the milestone change' do
+      context 'when the milestone is removed' do
+        let!(:non_subscriber) { create(:user) }
+
+        let!(:subscriber) do
+          create(:user) do |u|
+            merge_request.toggle_subscription(u, project)
+            project.add_developer(u)
+          end
+        end
+
+        it_behaves_like 'system notes for milestones'
+
+        it 'sends notifications for subscribers of changed milestone' do
+          merge_request.milestone = create(:milestone, project: project)
+
+          merge_request.save
+
+          perform_enqueued_jobs do
+            update_merge_request(milestone_id: "")
+          end
+
+          should_email(subscriber)
+          should_not_email(non_subscriber)
+        end
+      end
+
+      context 'when the milestone is changed' do
+        let!(:non_subscriber) { create(:user) }
+
+        let!(:subscriber) do
+          create(:user) do |u|
+            merge_request.toggle_subscription(u, project)
+            project.add_developer(u)
+          end
+        end
+
         it 'marks pending todos as done' do
-          update_merge_request({ milestone: create(:milestone) })
+          update_merge_request({ milestone: create(:milestone, project: project) })
 
           expect(pending_todo.reload).to be_done
         end
 
         it_behaves_like 'system notes for milestones'
+
+        it 'sends notifications for subscribers of changed milestone' do
+          perform_enqueued_jobs do
+            update_merge_request(milestone: create(:milestone, project: project))
+          end
+
+          should_email(subscriber)
+          should_not_email(non_subscriber)
+        end
       end
 
       context 'when the labels change' do
@@ -342,7 +389,7 @@ describe MergeRequests::UpdateService, :mailer do
 
       context 'when the assignee changes' do
         it 'updates open merge request counter for assignees when merge request is reassigned' do
-          update_merge_request(assignee_id: user2.id)
+          update_merge_request(assignee_ids: [user2.id])
 
           expect(user3.assigned_open_merge_requests_count).to eq 0
           expect(user2.assigned_open_merge_requests_count).to eq 1
@@ -360,7 +407,7 @@ describe MergeRequests::UpdateService, :mailer do
       end
     end
 
-    context 'when the issue is relabeled' do
+    context 'when the merge request is relabeled' do
       let!(:non_subscriber) { create(:user) }
       let!(:subscriber) { create(:user) { |u| label.toggle_subscription(u, project) } }
 
@@ -420,6 +467,8 @@ describe MergeRequests::UpdateService, :mailer do
       end
 
       it { expect(@merge_request.tasks?).to eq(true) }
+
+      it_behaves_like 'updating a single task'
 
       context 'when tasks are marked as completed' do
         before do
@@ -494,36 +543,36 @@ describe MergeRequests::UpdateService, :mailer do
       end
     end
 
-    context 'updating asssignee_id' do
+    context 'updating asssignee_ids' do
       it 'does not update assignee when assignee_id is invalid' do
-        merge_request.update(assignee_id: user.id)
+        merge_request.update(assignee_ids: [user.id])
 
-        update_merge_request(assignee_id: -1)
+        update_merge_request(assignee_ids: [-1])
 
-        expect(merge_request.reload.assignee).to eq(user)
+        expect(merge_request.reload.assignees).to eq([user])
       end
 
       it 'unassigns assignee when user id is 0' do
-        merge_request.update(assignee_id: user.id)
+        merge_request.update(assignee_ids: [user.id])
 
-        update_merge_request(assignee_id: 0)
+        update_merge_request(assignee_ids: [0])
 
-        expect(merge_request.assignee_id).to be_nil
+        expect(merge_request.assignee_ids).to be_empty
       end
 
       it 'saves assignee when user id is valid' do
-        update_merge_request(assignee_id: user.id)
+        update_merge_request(assignee_ids: [user.id])
 
-        expect(merge_request.assignee_id).to eq(user.id)
+        expect(merge_request.assignee_ids).to eq([user.id])
       end
 
       it 'does not update assignee_id when user cannot read issue' do
-        non_member        = create(:user)
-        original_assignee = merge_request.assignee
+        non_member = create(:user)
+        original_assignees = merge_request.assignees
 
-        update_merge_request(assignee_id: non_member.id)
+        update_merge_request(assignee_ids: [non_member.id])
 
-        expect(merge_request.assignee_id).to eq(original_assignee.id)
+        expect(merge_request.reload.assignees).to eq(original_assignees)
       end
 
       context "when issuable feature is private" do
@@ -536,7 +585,7 @@ describe MergeRequests::UpdateService, :mailer do
             feature_visibility_attr = :"#{merge_request.model_name.plural}_access_level"
             project.project_feature.update_attribute(feature_visibility_attr, ProjectFeature::PRIVATE)
 
-            expect { update_merge_request(assignee_id: assignee) }.not_to change { merge_request.assignee }
+            expect { update_merge_request(assignee_ids: [assignee]) }.not_to change { merge_request.reload.assignees }
           end
         end
       end
@@ -548,8 +597,8 @@ describe MergeRequests::UpdateService, :mailer do
     end
 
     context 'setting `allow_collaboration`' do
-      let(:target_project) { create(:project, :public) }
-      let(:source_project) { fork_project(target_project) }
+      let(:target_project) { create(:project, :repository, :public) }
+      let(:source_project) { fork_project(target_project, nil, repository: true) }
       let(:user) { create(:user) }
       let(:merge_request) do
         create(:merge_request,
@@ -572,7 +621,7 @@ describe MergeRequests::UpdateService, :mailer do
       end
 
       it 'is allowed by a user that can push to the source and can update the merge request' do
-        merge_request.update!(assignee: user)
+        merge_request.update!(assignees: [user])
         source_project.add_developer(user)
 
         update_merge_request(allow_collaboration: true, title: 'Updated title')

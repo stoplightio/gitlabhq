@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'mime/types'
 
 module API
@@ -9,7 +11,7 @@ module API
     params do
       requires :id, type: String, desc: 'The ID of a project'
     end
-    resource :projects, requirements: API::PROJECT_ENDPOINT_REQUIREMENTS do
+    resource :projects, requirements: API::NAMESPACE_OR_PROJECT_REQUIREMENTS do
       helpers do
         def handle_project_member_errors(errors)
           if errors[:project_access].any?
@@ -87,11 +89,9 @@ module API
         optional :format, type: String, desc: 'The archive format'
       end
       get ':id/repository/archive', requirements: { format: Gitlab::PathRegex.archive_formats_regex } do
-        begin
-          send_git_archive user_project.repository, ref: params[:sha], format: params[:format], append_sha: true
-        rescue
-          not_found!('File')
-        end
+        send_git_archive user_project.repository, ref: params[:sha], format: params[:format], append_sha: true
+      rescue
+        not_found!('File')
       end
 
       desc 'Compare two branches, tags, or commits' do
@@ -100,9 +100,10 @@ module API
       params do
         requires :from, type: String, desc: 'The commit, branch name, or tag name to start comparison'
         requires :to, type: String, desc: 'The commit, branch name, or tag name to stop comparison'
+        optional :straight, type: Boolean, desc: 'Comparison method, `true` for direct comparison between `from` and `to` (`from`..`to`), `false` to compare using merge base (`from`...`to`)', default: false
       end
       get ':id/repository/compare' do
-        compare = Gitlab::Git::Compare.new(user_project.repository.raw_repository, params[:from], params[:to])
+        compare = Gitlab::Git::Compare.new(user_project.repository.raw_repository, params[:from], params[:to], straight: params[:straight])
         present compare, with: Entities::Compare
       end
 
@@ -115,11 +116,37 @@ module API
         optional :sort, type: String, values: %w[asc desc], default: 'asc', desc: 'Sort by asc (ascending) or desc (descending)'
       end
       get ':id/repository/contributors' do
-        begin
-          contributors = ::Kaminari.paginate_array(user_project.repository.contributors(order_by: params[:order_by], sort: params[:sort]))
-          present paginate(contributors), with: Entities::Contributor
-        rescue
-          not_found!
+        contributors = ::Kaminari.paginate_array(user_project.repository.contributors(order_by: params[:order_by], sort: params[:sort]))
+        present paginate(contributors), with: Entities::Contributor
+      rescue
+        not_found!
+      end
+
+      desc 'Get the common ancestor between commits' do
+        success Entities::Commit
+      end
+      params do
+        requires :refs, type: Array[String]
+      end
+      get ':id/repository/merge_base' do
+        refs = params[:refs]
+
+        if refs.size < 2
+          render_api_error!('Provide at least 2 refs', 400)
+        end
+
+        merge_base = Gitlab::Git::MergeBase.new(user_project.repository, refs)
+
+        if merge_base.unknown_refs.any?
+          ref_noun = 'ref'.pluralize(merge_base.unknown_refs.size)
+          message = "Could not find #{ref_noun}: #{merge_base.unknown_refs.join(', ')}"
+          render_api_error!(message, 400)
+        end
+
+        if merge_base.commit
+          present merge_base.commit, with: Entities::Commit
+        else
+          not_found!("Merge Base")
         end
       end
     end

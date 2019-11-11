@@ -82,6 +82,16 @@ You can see GitLab's keyboard shortcuts by using 'shift + ?'
 | <kbd>r</kbd> | Reply (quoting selected text) |
 | <kbd>e</kbd> | Edit issue/merge request |
 | <kbd>l</kbd> | Change label |
+| <kbd>]</kbd> or <kbd>j</kbd> | Move to next file |
+| <kbd>[</kbd> or <kbd>k</kbd> | Move to previous file |
+
+## Epics **[ULTIMATE]**
+
+| Keyboard Shortcut | Description |
+| ----------------- | ----------- |
+| <kbd>r</kbd> | Reply (quoting selected text) |
+| <kbd>e</kbd> | Edit description |
+| <kbd>l</kbd> | Change label |
 
 ## Wiki pages
 
@@ -93,4 +103,5 @@ You can see GitLab's keyboard shortcuts by using 'shift + ?'
 
 | Keyboard Shortcut | Description |
 | ----------------- | ----------- |
-| <kbd>⌘</kbd> + <kbd>p</kbd> | Go to file |
+| <kbd>Cmd</kbd>/<kbd>Ctrl</kbd> + <kbd>p</kbd> | Go to file |
+| <kbd>Cmd</kbd>/<kbd>Ctrl</kbd> + <kbd>Enter</kbd> | Commit (when editing the commit message) |

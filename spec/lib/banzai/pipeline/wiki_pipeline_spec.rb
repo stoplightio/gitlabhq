@@ -121,6 +121,13 @@ describe Banzai::Pipeline::WikiPipeline do
               expect(output).to include("href=\"#{relative_url_root}/wiki_link_ns/wiki_link_project/wikis/page\"")
             end
 
+            it 'rewrites non-file links (with spaces) to be at the scope of the wiki root' do
+              markdown = "[Link to Page](page slug)"
+              output = described_class.to_html(markdown, project: project, project_wiki: project_wiki, page_slug: page.slug)
+
+              expect(output).to include("href=\"#{relative_url_root}/wiki_link_ns/wiki_link_project/wikis/page%20slug\"")
+            end
+
             it "rewrites file links to be at the scope of the current directory" do
               markdown = "[Link to Page](page.md)"
               output = described_class.to_html(markdown, project: project, project_wiki: project_wiki, page_slug: page.slug)
@@ -133,6 +140,13 @@ describe Banzai::Pipeline::WikiPipeline do
               output = described_class.to_html(markdown, project: project, project_wiki: project_wiki, page_slug: page.slug)
 
               expect(output).to include("href=\"#{relative_url_root}/wiki_link_ns/wiki_link_project/wikis/start-page#title\"")
+            end
+
+            it 'rewrites links (with spaces) with anchor' do
+              markdown = '[Link to Header](start page#title)'
+              output = described_class.to_html(markdown, project: project, project_wiki: project_wiki, page_slug: page.slug)
+
+              expect(output).to include("href=\"#{relative_url_root}/wiki_link_ns/wiki_link_project/wikis/start%20page#title\"")
             end
           end
 
@@ -162,6 +176,106 @@ describe Banzai::Pipeline::WikiPipeline do
           end
         end
       end
+    end
+
+    describe "checking slug validity when assembling links" do
+      context "with a valid slug" do
+        let(:valid_slug) { "http://example.com" }
+
+        it "includes the slug in a (.) relative link" do
+          output = described_class.to_html(
+            "[Link](./alert(1);)",
+            project: project,
+            project_wiki: project_wiki,
+            page_slug: valid_slug
+          )
+
+          expect(output).to include(valid_slug)
+        end
+
+        it "includeds the slug in a (..) relative link" do
+          output = described_class.to_html(
+            "[Link](../alert(1);)",
+            project: project,
+            project_wiki: project_wiki,
+            page_slug: valid_slug
+          )
+
+          expect(output).to include(valid_slug)
+        end
+      end
+
+      context "when the slug is deemed unsafe or invalid" do
+        invalid_slugs = [
+          "javascript:",
+          "JaVaScRiPt:",
+          "\u0001java\u0003script:",
+          "javascript    :",
+          "javascript:    ",
+          "javascript    :   ",
+          ":javascript:",
+          "javascript&#58;",
+          "javascript&#0058;",
+          "javascript&#x3A;",
+          "javascript&#x003A;",
+          "java\0script:",
+          " &#14;  javascript:"
+        ]
+
+        invalid_js_links = [
+          "alert(1);",
+          "alert(document.location);"
+        ]
+
+        invalid_slugs.each do |slug|
+          context "with the invalid slug #{slug}" do
+            invalid_js_links.each do |link|
+              it "doesn't include a prohibited slug in a (.) relative link '#{link}'" do
+                output = described_class.to_html(
+                  "[Link](./#{link})",
+                  project: project,
+                  project_wiki: project_wiki,
+                  page_slug: slug
+                )
+
+                expect(output).not_to include(slug)
+              end
+
+              it "doesn't include a prohibited slug in a (..) relative link '#{link}'" do
+                output = described_class.to_html(
+                  "[Link](../#{link})",
+                  project: project,
+                  project_wiki: project_wiki,
+                  page_slug: slug
+                )
+
+                expect(output).not_to include(slug)
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+
+  describe 'videos' do
+    let(:namespace) { create(:namespace, name: "wiki_link_ns") }
+    let(:project)   { create(:project, :public, name: "wiki_link_project", namespace: namespace) }
+    let(:project_wiki) { ProjectWiki.new(project, double(:user)) }
+    let(:page) { build(:wiki_page, wiki: project_wiki, page: OpenStruct.new(url_path: 'nested/twice/start-page')) }
+
+    it 'generates video html structure' do
+      markdown = "![video_file](video_file_name.mp4)"
+      output = described_class.to_html(markdown, project: project, project_wiki: project_wiki, page_slug: page.slug)
+
+      expect(output).to include('<video src="/wiki_link_ns/wiki_link_project/wikis/nested/twice/video_file_name.mp4"')
+    end
+
+    it 'rewrites and replaces video links names with white spaces to %20' do
+      markdown = "![video file](video file name.mp4)"
+      output = described_class.to_html(markdown, project: project, project_wiki: project_wiki, page_slug: page.slug)
+
+      expect(output).to include('<video src="/wiki_link_ns/wiki_link_project/wikis/nested/twice/video%20file%20name.mp4"')
     end
   end
 end

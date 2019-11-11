@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module NotificationsHelper
   include IconsHelper
 
@@ -83,22 +85,23 @@ module NotificationsHelper
   end
 
   def notification_event_name(event)
-    # All values from NotificationSetting::EMAIL_EVENTS
+    # All values from NotificationSetting.email_events
     case event
     when :success_pipeline
       s_('NotificationEvent|Successful pipeline')
     else
-      N_('NotificationEvent|New note')
-      N_('NotificationEvent|New issue')
-      N_('NotificationEvent|Reopen issue')
-      N_('NotificationEvent|Close issue')
-      N_('NotificationEvent|Reassign issue')
-      N_('NotificationEvent|New merge request')
-      N_('NotificationEvent|Close merge request')
-      N_('NotificationEvent|Reassign merge request')
-      N_('NotificationEvent|Merge merge request')
-      N_('NotificationEvent|Failed pipeline')
       s_(event.to_s.humanize)
     end
+  end
+
+  def notification_setting_icon(notification_setting)
+    sprite_icon(
+      notification_setting.disabled? ? "notifications-off" : "notifications",
+      css_class: "icon notifications-icon js-notifications-icon"
+    )
+  end
+
+  def show_unsubscribe_title?(noteable)
+    can?(current_user, "read_#{noteable.to_ability_name}".to_sym, noteable)
   end
 end

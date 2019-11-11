@@ -1,6 +1,6 @@
 # Public access
 
-GitLab allows you to change your projects' visibility in order be accessed
+GitLab allows [Owners](../user/permissions.md) to change a projects' visibility in order to be accessed
 **publicly** or **internally**.
 
 Projects with either of these visibility levels will be listed in the
@@ -29,6 +29,12 @@ in users.
 
 Any logged in user will have [Guest](../user/permissions.md) permissions
 on the repository.
+
+### Private projects
+
+Private projects can only be cloned and viewed by project members, and
+they will only appear to project members on the public access directory
+(`https://gitlab.example.com/public`).
 
 ### How to change project visibility
 

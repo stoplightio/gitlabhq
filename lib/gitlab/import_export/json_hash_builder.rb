@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module ImportExport
     # Generates a hash that conforms with http://apidock.com/rails/Hash/to_json
@@ -65,7 +67,7 @@ module Gitlab
       # +value+ existing model to be included in the hash
       # +parsed_hash+ the original hash
       def parse_hash(value)
-        return nil if already_contains_methods?(value)
+        return if already_contains_methods?(value)
 
         @attributes_finder.parse(value) do |hash|
           { include: hash_or_merge(value, hash) }

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe ForkNetworkMember do
@@ -11,7 +13,7 @@ describe ForkNetworkMember do
     let(:fork_network) { fork_network_member.fork_network }
 
     it 'removes the fork network if it was the last member' do
-      fork_network.fork_network_members.destroy_all
+      fork_network.fork_network_members.destroy_all # rubocop: disable DestroyAll
 
       expect(ForkNetwork.count).to eq(0)
     end

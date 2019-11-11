@@ -34,7 +34,7 @@ export default {
     },
     errorMessage() {
       return sprintf(
-        s__('ClusterIntegration|An error occured while trying to fetch project zones: %{error}'),
+        s__('ClusterIntegration|An error occurred while trying to fetch project zones: %{error}'),
         { error: this.gapiError },
       );
     },
@@ -61,13 +61,8 @@ export default {
 
 <template>
   <div>
-    <div
-      class="js-gcp-zone-dropdown dropdown"
-    >
-      <dropdown-hidden-input
-        :name="fieldName"
-        :value="selectedZone"
-      />
+    <div class="js-gcp-zone-dropdown dropdown">
+      <dropdown-hidden-input :name="fieldName" :value="selectedZone" />
       <dropdown-button
         :class="{ 'border-danger': hasErrors }"
         :is-disabled="isDisabled"
@@ -86,31 +81,21 @@ export default {
                 {{ s__('ClusterIntegration|No zones matched your search') }}
               </span>
             </li>
-            <li
-              v-for="result in results"
-              :key="result.id"
-            >
-              <button
-                type="button"
-                @click.prevent="setItem(result.name)"
-              >
-                {{ result.name }}
-              </button>
+            <li v-for="result in results" :key="result.id">
+              <button type="button" @click.prevent="setItem(result.name)">{{ result.name }}</button>
             </li>
           </ul>
         </div>
-        <div class="dropdown-loading">
-          <loading-icon />
-        </div>
+        <div class="dropdown-loading"><gl-loading-icon /></div>
       </div>
     </div>
     <span
-      class="form-text"
+      v-if="hasErrors"
       :class="{
         'text-danger': hasErrors,
-        'text-muted': !hasErrors
+        'text-muted': !hasErrors,
       }"
-      v-if="hasErrors"
+      class="form-text"
     >
       {{ errorMessage }}
     </span>

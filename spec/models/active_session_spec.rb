@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'rails_helper'
 
 RSpec.describe ActiveSession, :clean_gitlab_redis_shared_state do
@@ -7,7 +9,10 @@ RSpec.describe ActiveSession, :clean_gitlab_redis_shared_state do
     end
   end
 
-  let(:session) { double(:session, id: '6919a6f1bb119dd7396fadc38fd18d0d') }
+  let(:session) do
+    double(:session, { id: '6919a6f1bb119dd7396fadc38fd18d0d',
+                       '[]': {} })
+  end
 
   let(:request) do
     double(:request, {

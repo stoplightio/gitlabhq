@@ -1,11 +1,17 @@
+# frozen_string_literal: true
+
 # Helpers to send Git blobs, diffs, patches or archives through Workhorse.
 # Workhorse will also serve files when using `send_file`.
 module WorkhorseHelper
   # Send a Git blob through Workhorse
-  def send_git_blob(repository, blob)
+  def send_git_blob(repository, blob, inline: true)
     headers.store(*Gitlab::Workhorse.send_git_blob(repository, blob))
-    headers['Content-Disposition'] = 'inline'
-    headers['Content-Type'] = safe_content_type(blob)
+
+    headers['Content-Disposition'] = inline ? 'inline' : 'attachment'
+
+    # If enabled, this will override the values set above
+    workhorse_set_content_type!
+
     render plain: ""
   end
 
@@ -37,5 +43,9 @@ module WorkhorseHelper
 
   def set_workhorse_internal_api_content_type
     headers['Content-Type'] = Gitlab::Workhorse::INTERNAL_API_CONTENT_TYPE
+  end
+
+  def workhorse_set_content_type!
+    headers[Gitlab::Workhorse::DETECT_HEADER] = "true"
   end
 end

@@ -1,4 +1,6 @@
-class LabelPriority < ActiveRecord::Base
+# frozen_string_literal: true
+
+class LabelPriority < ApplicationRecord
   belongs_to :project
   belongs_to :label
 

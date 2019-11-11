@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module MergeRequests
   class AddTodoWhenBuildFailsService < MergeRequests::BaseService
     # Adds a todo to the parent merge_request when a CI build fails
@@ -5,7 +7,7 @@ module MergeRequests
     def execute(commit_status)
       return if commit_status.allow_failure? || commit_status.retried?
 
-      commit_status_merge_requests(commit_status) do |merge_request|
+      pipeline_merge_requests(commit_status.pipeline) do |merge_request|
         todo_service.merge_request_build_failed(merge_request)
       end
     end
@@ -14,7 +16,7 @@ module MergeRequests
     # build is retried
     #
     def close(commit_status)
-      commit_status_merge_requests(commit_status) do |merge_request|
+      pipeline_merge_requests(commit_status.pipeline) do |merge_request|
         todo_service.merge_request_build_retried(merge_request)
       end
     end

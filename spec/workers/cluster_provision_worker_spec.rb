@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe ClusterProvisionWorker do
@@ -14,10 +16,16 @@ describe ClusterProvisionWorker do
     end
 
     context 'when provider type is user' do
-      let(:cluster) { create(:cluster, provider_type: :user) }
+      let(:cluster) { create(:cluster, :provided_by_user) }
 
       it 'does not provision a cluster' do
         expect_any_instance_of(Clusters::Gcp::ProvisionService).not_to receive(:execute)
+
+        described_class.new.perform(cluster.id)
+      end
+
+      it 'configures kubernetes platform' do
+        expect(ClusterConfigureWorker).to receive(:perform_async).with(cluster.id)
 
         described_class.new.perform(cluster.id)
       end
@@ -26,6 +34,7 @@ describe ClusterProvisionWorker do
     context 'when cluster does not exist' do
       it 'does not provision a cluster' do
         expect_any_instance_of(Clusters::Gcp::ProvisionService).not_to receive(:execute)
+        expect(ClusterConfigureWorker).not_to receive(:perform_async)
 
         described_class.new.perform(123)
       end

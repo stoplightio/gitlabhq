@@ -1,11 +1,15 @@
+# frozen_string_literal: true
+
 # Controller for viewing a file's blame
 class Projects::BlobController < Projects::ApplicationController
   include ExtractsPath
   include CreatesCommit
   include RendersBlob
+  include NotesHelper
   include ActionView::Helpers::SanitizeHelper
-
   prepend_before_action :authenticate_user!, only: [:edit]
+
+  around_action :allow_gitaly_ref_name_caching, only: [:show]
 
   before_action :require_non_empty_project, except: [:new, :create]
   before_action :authorize_download_code!
@@ -27,7 +31,7 @@ class Projects::BlobController < Projects::ApplicationController
   end
 
   def create
-    create_commit(Files::CreateService, success_notice: "The file has been successfully created.",
+    create_commit(Files::CreateService, success_notice: _("The file has been successfully created."),
                                         success_path: -> { project_blob_path(@project, File.join(@branch_name, @file_path)) },
                                         failure_view: :new,
                                         failure_path: project_new_blob_path(@project, @ref))
@@ -79,8 +83,8 @@ class Projects::BlobController < Projects::ApplicationController
   end
 
   def destroy
-    create_commit(Files::DeleteService, success_notice: "The file has been successfully deleted.",
-                                        success_path: -> { project_tree_path(@project, @branch_name) },
+    create_commit(Files::DeleteService, success_notice: _("The file has been successfully deleted."),
+                                        success_path: -> { after_delete_path },
                                         failure_view: :show,
                                         failure_path: project_blob_path(@project, @id))
   end
@@ -88,21 +92,17 @@ class Projects::BlobController < Projects::ApplicationController
   def diff
     apply_diff_view_cookie!
 
-    @blob.load_all_data!
-    @lines = Gitlab::Highlight.highlight(@blob.path, @blob.data, repository: @repository).lines
+    @form = Blobs::UnfoldPresenter.new(blob, params.to_unsafe_h)
 
-    @form = UnfoldForm.new(params)
-    @lines = @lines[@form.since - 1..@form.to - 1].map(&:html_safe)
-
-    if @form.bottom?
-      @match_line = ''
+    # keep only json rendering when
+    # https://gitlab.com/gitlab-org/gitlab-ce/issues/44988 is done
+    if rendered_for_merge_request?
+      render json: DiffLineSerializer.new.represent(@form.diff_lines)
     else
-      lines_length = @lines.length - 1
-      line = [@form.since, lines_length].join(',')
-      @match_line = "@@ -#{line}+#{line} @@"
+      @lines = @form.lines
+      @match_line = @form.match_line_text
+      render layout: false
     end
-
-    render layout: false
   end
 
   private
@@ -136,6 +136,7 @@ class Projects::BlobController < Projects::ApplicationController
     render_404
   end
 
+  # rubocop: disable CodeReuse/ActiveRecord
   def after_edit_path
     from_merge_request = MergeRequestsFinder.new(current_user, project_id: @project.id).find_by(iid: params[:from_merge_request_iid])
     if from_merge_request && @branch_name == @ref
@@ -143,6 +144,16 @@ class Projects::BlobController < Projects::ApplicationController
         "##{hexdigest(@path)}"
     else
       project_blob_path(@project, File.join(@branch_name, @path))
+    end
+  end
+  # rubocop: enable CodeReuse/ActiveRecord
+
+  def after_delete_path
+    branch = BranchesFinder.new(@repository, search: @ref).execute.first
+    if @repository.tree(branch.target, tree_path).entries.empty?
+      project_tree_path(@project, @ref)
+    else
+      project_tree_path(@project, File.join(@ref, tree_path))
     end
   end
 
@@ -163,8 +174,7 @@ class Projects::BlobController < Projects::ApplicationController
       end
 
     if params[:file].present?
-      params[:content] = Base64.encode64(params[:file].read)
-      params[:encoding] = 'base64'
+      params[:content] = params[:file]
     end
 
     @commit_params = {
@@ -178,8 +188,10 @@ class Projects::BlobController < Projects::ApplicationController
   end
 
   def validate_diff_params
+    return if params[:full]
+
     if [:since, :to, :offset].any? { |key| params[key].blank? }
-      render nothing: true
+      head :ok
     end
   end
 
@@ -197,21 +209,17 @@ class Projects::BlobController < Projects::ApplicationController
   end
 
   def show_json
-    json = blob_json(@blob)
-    return render_404 unless json
+    set_last_commit_sha
 
-    path_segments = @path.split('/')
-    path_segments.pop
-    tree_path = path_segments.join('/')
-
-    render json: json.merge(
+    json = {
       id: @blob.id,
+      last_commit_sha: @last_commit_sha,
       path: blob.path,
       name: blob.name,
       extension: blob.extension,
       size: blob.raw_size,
       mime_type: blob.mime_type,
-      binary: blob.raw_binary?,
+      binary: blob.binary?,
       simple_viewer: blob.simple_viewer&.class&.partial_name,
       rich_viewer: blob.rich_viewer&.class&.partial_name,
       show_viewer_switcher: !!blob.show_viewer_switcher?,
@@ -221,6 +229,14 @@ class Projects::BlobController < Projects::ApplicationController
       commits_path: project_commits_path(project, @id),
       tree_path: project_tree_path(project, File.join(@ref, tree_path)),
       permalink: project_blob_path(project, File.join(@commit.id, @path))
-    )
+    }
+
+    json.merge!(blob_json(@blob) || {}) unless params[:viewer] == 'none'
+
+    render json: json
+  end
+
+  def tree_path
+    @path.rpartition('/').first
   end
 end

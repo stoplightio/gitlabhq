@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Files
   class DeleteService < Files::BaseService
     def create_commit!
@@ -18,7 +20,7 @@ module Files
       super
 
       if file_has_changed?(@file_path, @last_commit_sha)
-        raise FileChangedError, "You are attempting to delete a file that has been previously updated."
+        raise FileChangedError, _("You are attempting to delete a file that has been previously updated.")
       end
     end
   end

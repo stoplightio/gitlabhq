@@ -1,4 +1,6 @@
-class ChatTeam < ActiveRecord::Base
+# frozen_string_literal: true
+
+class ChatTeam < ApplicationRecord
   validates :team_id, presence: true
   validates :namespace, uniqueness: true
 

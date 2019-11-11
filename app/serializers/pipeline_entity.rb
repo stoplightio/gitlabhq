@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class PipelineEntity < Grape::Entity
   include RequestAwareEntity
 
@@ -21,16 +23,23 @@ class PipelineEntity < Grape::Entity
     expose :latest?, as: :latest
     expose :stuck?, as: :stuck
     expose :auto_devops_source?, as: :auto_devops
+    expose :merge_request_event?, as: :merge_request
     expose :has_yaml_errors?, as: :yaml_errors
     expose :can_retry?, as: :retryable
     expose :can_cancel?, as: :cancelable
     expose :failure_reason?, as: :failure_reason
+    expose :detached_merge_request_pipeline?, as: :detached_merge_request_pipeline
+    expose :merge_request_pipeline?, as: :merge_request_pipeline
   end
 
   expose :details do
-    expose :detailed_status, as: :status, with: StatusEntity
+    expose :detailed_status, as: :status, with: DetailedStatusEntity
     expose :duration
     expose :finished_at
+  end
+
+  expose :merge_request, if: -> (*) { has_presentable_merge_request? }, with: MergeRequestForPipelineEntity do |pipeline|
+    pipeline.merge_request.present(current_user: request.current_user)
   end
 
   expose :ref do
@@ -46,16 +55,19 @@ class PipelineEntity < Grape::Entity
 
     expose :tag?, as: :tag
     expose :branch?, as: :branch
+    expose :merge_request_event?, as: :merge_request
   end
 
   expose :commit, using: CommitEntity
+  expose :source_sha, if: -> (pipeline, _) { pipeline.merge_request_pipeline? }
+  expose :target_sha, if: -> (pipeline, _) { pipeline.merge_request_pipeline? }
   expose :yaml_errors, if: -> (pipeline, _) { pipeline.has_yaml_errors? }
 
   expose :failure_reason, if: -> (pipeline, _) { pipeline.failure_reason? } do |pipeline|
     pipeline.present.failure_reason
   end
 
-  expose :retry_path, if: -> (*) { can_retry? }  do |pipeline|
+  expose :retry_path, if: -> (*) { can_retry? } do |pipeline|
     retry_project_pipeline_path(pipeline.project, pipeline)
   end
 
@@ -75,6 +87,11 @@ class PipelineEntity < Grape::Entity
   def can_cancel?
     can?(request.current_user, :update_pipeline, pipeline) &&
       pipeline.cancelable?
+  end
+
+  def has_presentable_merge_request?
+    pipeline.triggered_by_merge_request? &&
+      can?(request.current_user, :read_merge_request, pipeline.merge_request)
   end
 
   def detailed_status

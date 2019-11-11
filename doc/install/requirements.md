@@ -27,16 +27,16 @@ Please see the [installation from source guide](installation.md) and the [instal
 
 ### Non-Unix operating systems such as Windows
 
-GitLab is developed for Unix operating systems. 
+GitLab is developed for Unix operating systems.
 It does **not** run on Windows, and we have no plans to support it in the near future. For the latest development status view this [issue](https://gitlab.com/gitlab-org/gitlab-ce/issues/46567).
 Please consider using a virtual machine to run GitLab.
 
 ## Ruby versions
 
-GitLab requires Ruby (MRI) 2.3. Support for Ruby versions below 2.3 (2.1, 2.2) will stop with GitLab 8.13.
+GitLab requires Ruby (MRI) 2.5. Support for Ruby versions below 2.5 (2.3, 2.4) will stop with GitLab 11.6.
 
 You will have to use the standard MRI implementation of Ruby.
-We love [JRuby](http://jruby.org/) and [Rubinius](http://rubini.us/) but GitLab
+We love [JRuby](https://www.jruby.org/) and [Rubinius](https://rubinius.com) but GitLab
 needs several Gems that have native extensions.
 
 ## Hardware requirements
@@ -51,6 +51,8 @@ Apart from a local hard drive you can also mount a volume that supports the netw
 
 If you have enough RAM memory and a recent CPU the speed of GitLab is mainly limited by hard drive seek times. Having a fast drive (7200 RPM and up) or a solid state drive (SSD) will improve the responsiveness of GitLab.
 
+NOTE: **Note:** Since file system performance may affect GitLab's overall performance, we do not recommend using EFS for storage. See the [relevant documentation](../administration/high_availability/nfs.md#avoid-using-awss-elastic-file-system-efs) for more details.
+
 ### CPU
 
 - 1 core supports up to 100 users but the application can be a bit slower due to having all workers and background jobs running on the same core
@@ -64,16 +66,14 @@ If you have enough RAM memory and a recent CPU the speed of GitLab is mainly lim
 
 ### Memory
 
-You need at least 4GB of addressable memory (RAM + swap) to install and use GitLab!
+You need at least 8GB of addressable memory (RAM + swap) to install and use GitLab!
 The operating system and any other running applications will also be using memory
 so keep in mind that you need at least 4GB available before running GitLab. With
 less memory GitLab will give strange errors during the reconfigure run and 500
 errors during usage.
 
-- 1GB RAM + 3GB of swap is the absolute minimum but we strongly **advise against** this amount of memory. See the [unicorn worker section below](#unicorn-workers) for more advice.
-- 2GB RAM + 2GB swap supports up to 100 users but it will be very slow
-- **4GB RAM** is the **recommended** memory size for all installations and supports up to 100 users
-- 8GB RAM supports up to 1,000 users
+- 4GB RAM + 4GB swap supports up to 100 users but it will be very slow
+- **8GB RAM** is the **recommended** memory size for all installations and supports up to 100 users
 - 16GB RAM supports up to 2,000 users
 - 32GB RAM supports up to 4,000 users
 - 64GB RAM supports up to 8,000 users
@@ -87,7 +87,7 @@ if your available memory changes. We also recommend [configuring the kernel's sw
 to a low value like `10` to make the most of your RAM while still having the swap
 available when needed.
 
-Notice: The 25 workers of Sidekiq will show up as separate processes in your process overview (such as `top` or `htop`) but they share the same RAM allocation since Sidekiq is a multithreaded application. Please see the section below about Unicorn workers for information about how many you need of those.
+NOTE: **Note:** The 25 workers of Sidekiq will show up as separate processes in your process overview (such as `top` or `htop`) but they share the same RAM allocation since Sidekiq is a multithreaded application. Please see the section below about Unicorn workers for information about how many you need of those.
 
 ## Database
 
@@ -105,19 +105,23 @@ features of GitLab work with MySQL/MariaDB:
 
 1. MySQL support for subgroups was [dropped with GitLab 9.3][post].
    See [issue #30472][30472] for more information.
-1. GitLab Geo does [not support MySQL](https://docs.gitlab.com/ee/gitlab-geo/database.html#mysql-replication).
-1. [Zero downtime migrations][zero] do not work with MySQL
+1. Geo does [not support MySQL](https://docs.gitlab.com/ee/administration/geo/replication/database.html). This means no supported Disaster Recovery solution if using MySQL. **[PREMIUM ONLY]**
+1. [Zero downtime migrations](../update/README.md#upgrading-without-downtime) do not work with MySQL.
+1. [Database load balancing](https://docs.gitlab.com/ee/administration/database_load_balancing.html) is
+   supported only for PostgreSQL. **[PREMIUM ONLY]**
 1. GitLab [optimizes the loading of dashboard events](https://gitlab.com/gitlab-org/gitlab-ce/issues/31806) using [PostgreSQL LATERAL JOINs](https://blog.heapanalytics.com/postgresqls-powerful-new-join-type-lateral/).
 1. In general, SQL optimized for PostgreSQL may run much slower in MySQL due to
    differences in query planners. For example, subqueries that work well in PostgreSQL
-   may not be [performant in MySQL](https://dev.mysql.com/doc/refman/5.7/en/optimizing-subqueries.html)
+   may not be [performant in MySQL](https://dev.mysql.com/doc/refman/5.7/en/optimizing-subqueries.html).
+1. Binary column index length is limited to 20 bytes. This is accomplished with [a hack](https://gitlab.com/gitlab-org/gitlab-ce/blob/master/config/initializers/mysql_set_length_for_binary_indexes.rb).
+1. MySQL requires a variety of hacks to increase limits on various columns, [for example](https://gitlab.com/gitlab-org/gitlab-ce/issues/49583).
+1. [The milestone filter runs slower queries on MySQL](https://gitlab.com/gitlab-org/gitlab-ce/issues/51173#note_99391731).
 1. We expect this list to grow over time.
 
 Existing users using GitLab with MySQL/MariaDB are advised to
 [migrate to PostgreSQL](../update/mysql_to_postgresql.md) instead.
 
 [30472]: https://gitlab.com/gitlab-org/gitlab-ce/issues/30472
-[zero]: ../update/README.md#upgrading-without-downtime
 [post]: https://about.gitlab.com/2017/06/22/gitlab-9-3-released/#dropping-support-for-subgroups-in-mysql
 
 ### PostgreSQL Requirements
@@ -139,7 +143,17 @@ On some systems you may need to install an additional package (e.g.
 
 #### Additional requirements for GitLab Geo
 
-If you are using [GitLab Geo](https://docs.gitlab.com/ee/development/geo.html), the [tracking database](https://docs.gitlab.com/ee/development/geo.html#geo-tracking-database) also requires the `postgres_fdw` extension.
+If you are using [GitLab Geo](https://docs.gitlab.com/ee/development/geo.html):
+
+- We strongly recommend running Omnibus-managed instances as they are actively
+  developed and tested. We aim to be compatible with most external (not managed
+  by Omnibus) databases (for example, AWS RDS) but we do not guarantee
+  compatibility.
+- The
+  [tracking database](https://docs.gitlab.com/ee/development/geo.html#geo-tracking-database)
+  requires the
+  [postgres_fdw](https://www.postgresql.org/docs/9.6/static/postgres-fdw.html)
+  extension.
 
 ```
 CREATE EXTENSION postgres_fdw;
@@ -197,9 +211,18 @@ use the CI features.
 
 ## Supported web browsers
 
-We support the current and the previous major release of Firefox, Chrome/Chromium, Safari and Microsoft browsers (Microsoft Edge and Internet Explorer 11).
+We support the current and the previous major release of:
+
+- Firefox
+- Chrome/Chromium
+- Safari
+- Microsoft Edge
+- Internet Explorer 11
+
+The browser vendors release regular minor version updates with important bug fixes and security updates.
+Support is only provided for the current minor version of the major version you are running.
 
 Each time a new browser version is released, we begin supporting that version and stop supporting the third most recent version.
 
-Note: We do not support running GitLab with JavaScript disabled in the browser and have no plans of supporting that
+NOTE: **Note:** We do not support running GitLab with JavaScript disabled in the browser and have no plans of supporting that
 in the future because we have features such as Issue Boards which require JavaScript extensively.

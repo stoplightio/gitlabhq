@@ -14,6 +14,7 @@
     .col-sm-10
       = f.text_area :message, class: "form-control js-autosize",
         required: true,
+        dir: 'auto',
         data: { preview_path: preview_admin_broadcast_messages_path }
   .form-group.row.js-toggle-colors-container
     .col-sm-10.offset-sm-2
@@ -36,6 +37,6 @@
       = f.datetime_select :ends_at, {}, class: 'form-control form-control-inline'
   .form-actions
     - if @broadcast_message.persisted?
-      = f.submit "Update broadcast message", class: "btn btn-create"
+      = f.submit "Update broadcast message", class: "btn btn-success"
     - else
-      = f.submit "Add broadcast message", class: "btn btn-create"
+      = f.submit "Add broadcast message", class: "btn btn-success"

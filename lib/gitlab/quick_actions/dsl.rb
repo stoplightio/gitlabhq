@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module QuickActions
     module Dsl
@@ -22,13 +24,17 @@ module Gitlab
         # Example:
         #
         #   desc do
-        #     "This is a dynamic description for #{noteable.to_ability_name}"
+        #     "This is a dynamic description for #{quick_action_target.to_ability_name}"
         #   end
         #   command :command_key do |arguments|
         #     # Awesome code block
         #   end
         def desc(text = '', &block)
           @description = block_given? ? block : text
+        end
+
+        def warning(message = '')
+          @warning = message
         end
 
         # Allows to define params for the next quick action.
@@ -58,6 +64,23 @@ module Gitlab
         #   end
         def explanation(text = '', &block)
           @explanation = block_given? ? block : text
+        end
+
+        # Allows to define type(s) that must be met in order for the command
+        # to be returned by `.command_names` & `.command_definitions`.
+        #
+        # It is being evaluated before the conditions block is being evaluated
+        #
+        # If no types are passed then any type is allowed as the check is simply skipped.
+        #
+        # Example:
+        #
+        #   types Commit, Issue, MergeRequest
+        #   command :command_key do |arguments|
+        #     # Awesome code block
+        #   end
+        def types(*types_list)
+          @types = types_list
         end
 
         # Allows to define conditions that must be met in order for the command
@@ -133,11 +156,13 @@ module Gitlab
             name,
             aliases: aliases,
             description: @description,
+            warning: @warning,
             explanation: @explanation,
             params: @params,
             condition_block: @condition_block,
             parse_params_block: @parse_params_block,
-            action_block: block
+            action_block: block,
+            types: @types
           )
 
           self.command_definitions << definition
@@ -150,7 +175,9 @@ module Gitlab
           @explanation = nil
           @params = nil
           @condition_block = nil
+          @warning = nil
           @parse_params_block = nil
+          @types = nil
         end
       end
     end

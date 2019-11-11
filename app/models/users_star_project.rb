@@ -1,4 +1,6 @@
-class UsersStarProject < ActiveRecord::Base
+# frozen_string_literal: true
+
+class UsersStarProject < ApplicationRecord
   belongs_to :project, counter_cache: :star_count, touch: true
   belongs_to :user
 

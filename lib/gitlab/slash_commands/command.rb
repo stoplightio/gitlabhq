@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module SlashCommands
     class Command < BaseCommand
@@ -7,7 +9,8 @@ module Gitlab
           Gitlab::SlashCommands::IssueNew,
           Gitlab::SlashCommands::IssueSearch,
           Gitlab::SlashCommands::IssueMove,
-          Gitlab::SlashCommands::Deploy
+          Gitlab::SlashCommands::Deploy,
+          Gitlab::SlashCommands::Run
         ]
       end
 

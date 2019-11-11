@@ -1,6 +1,7 @@
 import $ from 'jquery';
 import Flash from '~/flash';
 import Api from '~/api';
+import { __ } from '~/locale';
 
 export default class Search {
   constructor() {
@@ -22,9 +23,9 @@ export default class Search {
         fields: ['full_name'],
       },
       data(term, callback) {
-        return Api.groups(term, {}, (data) => {
+        return Api.groups(term, {}, data => {
           data.unshift({
-            full_name: 'Any',
+            full_name: __('Any'),
           });
           data.splice(1, 0, 'divider');
           return callback(data);
@@ -37,7 +38,7 @@ export default class Search {
         return obj.full_name;
       },
       toggleLabel(obj) {
-        return `${($groupDropdown.data('defaultLabel'))} ${obj.full_name}`;
+        return `${$groupDropdown.data('defaultLabel')} ${obj.full_name}`;
       },
       clicked: () => Search.submitSearch(),
     });
@@ -52,16 +53,16 @@ export default class Search {
       },
       data: (term, callback) => {
         this.getProjectsData(term)
-          .then((data) => {
+          .then(data => {
             data.unshift({
-              name_with_namespace: 'Any',
+              name_with_namespace: __('Any'),
             });
             data.splice(1, 0, 'divider');
 
             return data;
           })
           .then(data => callback(data))
-          .catch(() => new Flash('Error fetching projects'));
+          .catch(() => new Flash(__('Error fetching projects')));
       },
       id(obj) {
         return obj.id;
@@ -70,7 +71,7 @@ export default class Search {
         return obj.name_with_namespace;
       },
       toggleLabel(obj) {
-        return `${($projectDropdown.data('defaultLabel'))} ${obj.name_with_namespace}`;
+        return `${$projectDropdown.data('defaultLabel')} ${obj.name_with_namespace}`;
       },
       clicked: () => Search.submitSearch(),
     });
@@ -99,17 +100,24 @@ export default class Search {
   }
 
   clearSearchField() {
-    return $(this.searchInput).val('').trigger('keyup').focus();
+    return $(this.searchInput)
+      .val('')
+      .trigger('keyup')
+      .focus();
   }
 
   getProjectsData(term) {
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       if (this.groupId) {
-        Api.groupProjects(this.groupId, term, resolve);
+        Api.groupProjects(this.groupId, term, {}, resolve);
       } else {
-        Api.projects(term, {
-          order_by: 'id',
-        }, resolve);
+        Api.projects(
+          term,
+          {
+            order_by: 'id',
+          },
+          resolve,
+        );
       }
     });
   }

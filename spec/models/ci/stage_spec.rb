@@ -1,7 +1,11 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Ci::Stage, :models do
   let(:stage) { create(:ci_stage_entity) }
+
+  it_behaves_like 'having unique enum values'
 
   describe 'associations' do
     before do
@@ -86,6 +90,18 @@ describe Ci::Stage, :models do
         expect { stage.update_status }
           .to change { stage.reload.status }
           .to 'skipped'
+      end
+    end
+
+    context 'when stage is scheduled because of scheduled builds' do
+      before do
+        create(:ci_build, :scheduled, stage_id: stage.id)
+      end
+
+      it 'updates status to scheduled' do
+        expect { stage.update_status }
+          .to change { stage.reload.status }
+          .to 'scheduled'
       end
     end
 
@@ -188,6 +204,18 @@ describe Ci::Stage, :models do
     end
   end
 
+  describe '#delay' do
+    subject { stage.delay }
+
+    let(:stage) { create(:ci_stage_entity, status: :created) }
+
+    it 'updates stage status' do
+      subject
+
+      expect(stage).to be_scheduled
+    end
+  end
+
   describe '#position' do
     context 'when stage has been imported and does not have position index set' do
       before do
@@ -257,4 +285,6 @@ describe Ci::Stage, :models do
       end
     end
   end
+
+  it_behaves_like 'manual playable stage', :ci_stage_entity
 end

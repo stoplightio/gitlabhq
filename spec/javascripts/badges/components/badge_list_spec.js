@@ -34,11 +34,13 @@ describe('BadgeList component', () => {
 
   it('renders a header with the badge count', () => {
     const header = vm.$el.querySelector('.card-header');
+
     expect(header).toHaveText(new RegExp(`Your badges\\s+${numberOfDummyBadges}`));
   });
 
   it('renders a row for each badge', () => {
     const rows = vm.$el.querySelectorAll('.gl-responsive-table-row');
+
     expect(rows).toHaveLength(numberOfDummyBadges);
   });
 
@@ -58,7 +60,8 @@ describe('BadgeList component', () => {
 
     Vue.nextTick()
       .then(() => {
-        const loadingIcon = vm.$el.querySelector('.fa-spinner');
+        const loadingIcon = vm.$el.querySelector('.spinner');
+
         expect(loadingIcon).toBeVisible();
       })
       .then(done)

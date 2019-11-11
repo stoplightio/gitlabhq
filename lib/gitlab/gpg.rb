@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module Gpg
     extend self
@@ -71,8 +73,10 @@ module Gitlab
       if MUTEX.locked? && MUTEX.owned?
         optimistic_using_tmp_keychain(&block)
       else
-        MUTEX.synchronize do
-          optimistic_using_tmp_keychain(&block)
+        ActiveSupport::Dependencies.interlock.permit_concurrent_loads do
+          MUTEX.synchronize do
+            optimistic_using_tmp_keychain(&block)
+          end
         end
       end
     end

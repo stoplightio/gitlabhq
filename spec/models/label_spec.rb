@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Label do
@@ -137,6 +139,58 @@ describe Label do
           expect(label.priority(project)).to eq 1
         end
       end
+    end
+  end
+
+  describe '.search' do
+    let(:label) { create(:label, title: 'bug', description: 'incorrect behavior') }
+
+    it 'returns labels with a partially matching title' do
+      expect(described_class.search(label.title[0..2])).to eq([label])
+    end
+
+    it 'returns labels with a partially matching description' do
+      expect(described_class.search(label.description[0..5])).to eq([label])
+    end
+
+    it 'returns nothing' do
+      expect(described_class.search('feature')).to be_empty
+    end
+  end
+
+  describe '.subscribed_by' do
+    let!(:user)   { create(:user) }
+    let!(:label)  { create(:label) }
+    let!(:label2) { create(:label) }
+
+    before do
+      label.subscribe(user)
+    end
+
+    it 'returns subscribed labels' do
+      expect(described_class.subscribed_by(user.id)).to eq([label])
+    end
+
+    it 'returns nothing' do
+      expect(described_class.subscribed_by(0)).to be_empty
+    end
+  end
+
+  describe '.optionally_subscribed_by' do
+    let!(:user)   { create(:user) }
+    let!(:label)  { create(:label) }
+    let!(:label2) { create(:label) }
+
+    before do
+      label.subscribe(user)
+    end
+
+    it 'returns subscribed labels' do
+      expect(described_class.optionally_subscribed_by(user.id)).to eq([label])
+    end
+
+    it 'returns all labels if user_id is nil' do
+      expect(described_class.optionally_subscribed_by(nil)).to match_array([label, label2])
     end
   end
 end

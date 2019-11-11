@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module Metrics
     module Samplers
@@ -8,7 +10,7 @@ module Gitlab
       # statistics, etc.
       class InfluxSampler < BaseSampler
         # interval - The sampling interval in seconds.
-        def initialize(interval = Metrics.settings[:sample_interval])
+        def initialize(interval = ::Gitlab::Metrics.settings[:sample_interval])
           super(interval)
           @last_step = nil
 
@@ -16,12 +18,6 @@ module Gitlab
 
           @last_minor_gc = Delta.new(GC.stat[:minor_gc_count])
           @last_major_gc = Delta.new(GC.stat[:major_gc_count])
-
-          if Gitlab::Metrics.mri?
-            require 'allocations'
-
-            Allocations.start
-          end
         end
 
         def sample
@@ -36,7 +32,7 @@ module Gitlab
         end
 
         def flush
-          Metrics.submit_metrics(@metrics.map(&:to_hash))
+          ::Gitlab::Metrics.submit_metrics(@metrics.map(&:to_hash))
         end
 
         def sample_memory_usage

@@ -2,12 +2,19 @@ import $ from 'jquery';
 import _ from 'underscore';
 import { scaleLinear, scaleThreshold } from 'd3-scale';
 import { select } from 'd3-selection';
+import dateFormat from 'dateformat';
 import { getDayName, getDayDifference } from '~/lib/utils/datetime_utility';
 import axios from '~/lib/utils/axios_utils';
 import flash from '~/flash';
-import { __ } from '~/locale';
+import { n__, s__, __ } from '~/locale';
 
 const d3 = { select, scaleLinear, scaleThreshold };
+
+const firstDayOfWeekChoices = Object.freeze({
+  sunday: 0,
+  monday: 1,
+  saturday: 6,
+});
 
 const LOADING_HTML = `
   <div class="text-center">
@@ -26,11 +33,11 @@ function getSystemDate(systemUtcOffsetSeconds) {
 function formatTooltipText({ date, count }) {
   const dateObject = new Date(date);
   const dateDayName = getDayName(dateObject);
-  const dateText = dateObject.format('mmm d, yyyy');
+  const dateText = dateFormat(dateObject, 'mmm d, yyyy');
 
-  let contribText = 'No contributions';
+  let contribText = __('No contributions');
   if (count > 0) {
-    contribText = `${count} contribution${count > 1 ? 's' : ''}`;
+    contribText = n__('%d contribution', '%d contributions', count);
   }
   return `${contribText}<br />${dateDayName} ${dateText}`;
 }
@@ -42,7 +49,15 @@ const initColorKey = () =>
     .domain([0, 3]);
 
 export default class ActivityCalendar {
-  constructor(container, timestamps, calendarActivitiesPath, utcOffset = 0, firstDayOfWeek = 0) {
+  constructor(
+    container,
+    activitiesContainer,
+    timestamps,
+    calendarActivitiesPath,
+    utcOffset = 0,
+    firstDayOfWeek = firstDayOfWeekChoices.sunday,
+    monthsAgo = 12,
+  ) {
     this.calendarActivitiesPath = calendarActivitiesPath;
     this.clickDay = this.clickDay.bind(this);
     this.currentSelectedDate = '';
@@ -50,21 +65,23 @@ export default class ActivityCalendar {
     this.daySize = 15;
     this.daySizeWithSpace = this.daySize + this.daySpace * 2;
     this.monthNames = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
+      __('Jan'),
+      __('Feb'),
+      __('Mar'),
+      __('Apr'),
+      __('May'),
+      __('Jun'),
+      __('Jul'),
+      __('Aug'),
+      __('Sep'),
+      __('Oct'),
+      __('Nov'),
+      __('Dec'),
     ];
     this.months = [];
     this.firstDayOfWeek = firstDayOfWeek;
+    this.activitiesContainer = activitiesContainer;
+    this.container = container;
 
     // Loop through the timestamps to create a group of objects
     // The group of objects will be grouped based on the day of the week they are
@@ -74,17 +91,17 @@ export default class ActivityCalendar {
     const today = getSystemDate(utcOffset);
     today.setHours(0, 0, 0, 0, 0);
 
-    const oneYearAgo = new Date(today);
-    oneYearAgo.setFullYear(today.getFullYear() - 1);
+    const timeAgo = new Date(today);
+    timeAgo.setMonth(today.getMonth() - monthsAgo);
 
-    const days = getDayDifference(oneYearAgo, today);
+    const days = getDayDifference(timeAgo, today);
 
     for (let i = 0; i <= days; i += 1) {
-      const date = new Date(oneYearAgo);
+      const date = new Date(timeAgo);
       date.setDate(date.getDate() + i);
 
       const day = date.getDay();
-      const count = timestamps[date.format('yyyy-mm-dd')] || 0;
+      const count = timestamps[dateFormat(date, 'yyyy-mm-dd')] || 0;
 
       // Create a new group array if this is the first day of the week
       // or if is first object
@@ -148,7 +165,7 @@ export default class ActivityCalendar {
       .append('g')
       .attr('transform', (group, i) => {
         _.each(group, (stamp, a) => {
-          if (a === 0 && stamp.day === 0) {
+          if (a === 0 && stamp.day === this.firstDayOfWeek) {
             const month = stamp.date.getMonth();
             const x = this.daySizeWithSpace * i + 1 + this.daySizeWithSpace;
             const lastMonth = _.last(this.months);
@@ -170,9 +187,8 @@ export default class ActivityCalendar {
       .attr('y', stamp => this.dayYPos(stamp.day))
       .attr('width', this.daySize)
       .attr('height', this.daySize)
-      .attr(
-        'fill',
-        stamp => (stamp.count !== 0 ? this.color(Math.min(stamp.count, 40)) : '#ededed'),
+      .attr('fill', stamp =>
+        stamp.count !== 0 ? this.color(Math.min(stamp.count, 40)) : '#ededed',
       )
       .attr('title', stamp => formatTooltipText(stamp))
       .attr('class', 'user-contrib-cell js-tooltip')
@@ -183,18 +199,31 @@ export default class ActivityCalendar {
   renderDayTitles() {
     const days = [
       {
-        text: 'M',
+        text: s__('DayTitle|M'),
         y: 29 + this.dayYPos(1),
       },
       {
-        text: 'W',
+        text: s__('DayTitle|W'),
         y: 29 + this.dayYPos(3),
       },
       {
-        text: 'F',
+        text: s__('DayTitle|F'),
         y: 29 + this.dayYPos(5),
       },
     ];
+
+    if (this.firstDayOfWeek === firstDayOfWeekChoices.monday) {
+      days.push({
+        text: s__('DayTitle|S'),
+        y: 29 + this.dayYPos(7),
+      });
+    } else if (this.firstDayOfWeek === firstDayOfWeekChoices.saturday) {
+      days.push({
+        text: s__('DayTitle|S'),
+        y: 29 + this.dayYPos(6),
+      });
+    }
+
     this.svg
       .append('g')
       .selectAll('text')
@@ -224,11 +253,11 @@ export default class ActivityCalendar {
 
   renderKey() {
     const keyValues = [
-      'no contributions',
-      '1-9 contributions',
-      '10-19 contributions',
-      '20-29 contributions',
-      '30+ contributions',
+      __('no contributions'),
+      __('1-9 contributions'),
+      __('10-19 contributions'),
+      __('20-29 contributions'),
+      __('30+ contributions'),
     ];
     const keyColors = [
       '#ededed',
@@ -279,7 +308,7 @@ export default class ActivityCalendar {
         this.currentSelectedDate.getDate(),
       ].join('-');
 
-      $('.user-calendar-activities').html(LOADING_HTML);
+      $(this.activitiesContainer).html(LOADING_HTML);
 
       axios
         .get(this.calendarActivitiesPath, {
@@ -288,11 +317,11 @@ export default class ActivityCalendar {
           },
           responseType: 'text',
         })
-        .then(({ data }) => $('.user-calendar-activities').html(data))
+        .then(({ data }) => $(this.activitiesContainer).html(data))
         .catch(() => flash(__('An error occurred while retrieving calendar activity')));
     } else {
       this.currentSelectedDate = '';
-      $('.user-calendar-activities').html('');
+      $(this.activitiesContainer).html('');
     }
   }
 }

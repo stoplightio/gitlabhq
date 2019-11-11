@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Banzai
   # Class for removing Markdown references a certain user is not allowed to
   # view.
@@ -37,7 +39,13 @@ module Banzai
 
       all_document_nodes.each do |entry|
         nodes_for_document = entry[:nodes]
-        doc_data = { document: entry[:document], visible_reference_count: nodes_for_document.count }
+
+        doc_data = {
+          document:                entry[:document],
+          total_reference_count:   nodes_for_document.count,
+          visible_reference_count: nodes_for_document.count
+        }
+
         metadata << doc_data
 
         nodes_for_document.each do |node|
@@ -62,8 +70,11 @@ module Banzai
       # Build the raw <a> tag just with a link as href and content if
       # it's originally a link pattern. We shouldn't return a plain text href.
       original_link =
-        if link_reference == 'true' && href = original_content
-          %(<a href="#{href}">#{href}</a>)
+        if link_reference == 'true'
+          href = node.attr('href')
+          content = original_content
+
+          %(<a href="#{href}">#{content}</a>)
         end
 
       # The reference should be replaced by the original link's content,

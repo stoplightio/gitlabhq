@@ -2,12 +2,13 @@ import axios from '../../lib/utils/axios_utils';
 import { mergeUrlParams } from '../../lib/utils/url_utility';
 
 export default class BoardService {
-  constructor({ boardsEndpoint, listsEndpoint, bulkUpdatePath, boardId }) {
+  constructor({ boardsEndpoint, listsEndpoint, bulkUpdatePath, boardId, recentBoardsEndpoint }) {
     this.boardsEndpoint = boardsEndpoint;
     this.boardId = boardId;
     this.listsEndpoint = listsEndpoint;
     this.listsEndpointGenerate = `${listsEndpoint}/generate.json`;
     this.bulkUpdatePath = bulkUpdatePath;
+    this.recentBoardsEndpoint = `${recentBoardsEndpoint}.json`;
   }
 
   generateBoardsPath(id) {
@@ -19,7 +20,9 @@ export default class BoardService {
   }
 
   static generateIssuePath(boardId, id) {
-    return `${gon.relative_url_root}/-/boards/${boardId ? `${boardId}` : ''}/issues${id ? `/${id}` : ''}`;
+    return `${gon.relative_url_root}/-/boards/${boardId ? `${boardId}` : ''}/issues${
+      id ? `/${id}` : ''
+    }`;
   }
 
   all() {
@@ -54,7 +57,9 @@ export default class BoardService {
 
   getIssuesForList(id, filter = {}) {
     const data = { id };
-    Object.keys(filter).forEach((key) => { data[key] = filter[key]; });
+    Object.keys(filter).forEach(key => {
+      data[key] = filter[key];
+    });
 
     return axios.get(mergeUrlParams(data, this.generateIssuesPath(id)));
   }
@@ -75,7 +80,9 @@ export default class BoardService {
   }
 
   getBacklog(data) {
-    return axios.get(mergeUrlParams(data, `${gon.relative_url_root}/-/boards/${this.boardId}/issues.json`));
+    return axios.get(
+      mergeUrlParams(data, `${gon.relative_url_root}/-/boards/${this.boardId}/issues.json`),
+    );
   }
 
   bulkUpdate(issueIds, extraData = {}) {

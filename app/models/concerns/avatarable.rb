@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Avatarable
   extend ActiveSupport::Concern
 
@@ -7,7 +9,7 @@ module Avatarable
     include Gitlab::Utils::StrongMemoize
 
     validate :avatar_type, if: ->(user) { user.avatar.present? && user.avatar_changed? }
-    validates :avatar, file_size: { maximum: 200.kilobytes.to_i }
+    validates :avatar, file_size: { maximum: 200.kilobytes.to_i }, if: :avatar_changed?
 
     mount_uploader :avatar, AvatarUploader
 
@@ -19,7 +21,7 @@ module Avatarable
       # We use avatar_path instead of overriding avatar_url because of carrierwave.
       # See https://gitlab.com/gitlab-org/gitlab-ce/merge_requests/11001/diffs#note_28659864
 
-      avatar_path(only_path: args.fetch(:only_path, true)) || super
+      avatar_path(only_path: args.fetch(:only_path, true), size: args[:size]) || super
     end
 
     def retrieve_upload(identifier, paths)
@@ -40,12 +42,24 @@ module Avatarable
     end
   end
 
-  def avatar_path(only_path: true)
-    return unless self[:avatar].present?
+  def avatar_path(only_path: true, size: nil)
+    unless self.try(:id)
+      return uncached_avatar_path(only_path: only_path, size: size)
+    end
+
+    # Cache this avatar path only within the request because avatars in
+    # object storage may be generated with time-limited, signed URLs.
+    key = "#{self.class.name}:#{self.id}:#{only_path}:#{size}"
+    Gitlab::SafeRequestStore[key] ||= uncached_avatar_path(only_path: only_path, size: size)
+  end
+
+  def uncached_avatar_path(only_path: true, size: nil)
+    return unless self.try(:avatar).present?
 
     asset_host = ActionController::Base.asset_host
     use_asset_host = asset_host.present?
     use_authentication = respond_to?(:public?) && !public?
+    query_params = size&.nonzero? ? "?width=#{size}" : ""
 
     # Avatars for private and internal groups and projects require authentication to be viewed,
     # which means they can only be served by Rails, on the regular GitLab host.
@@ -56,7 +70,8 @@ module Avatarable
       only_path = false
     end
 
-    url_base = ""
+    url_base = []
+
     if use_asset_host
       url_base << asset_host unless only_path
     else
@@ -64,7 +79,7 @@ module Avatarable
       url_base << gitlab_config.relative_url_root
     end
 
-    url_base + avatar.local_url
+    url_base.join + avatar.local_url + query_params
   end
 
   # Path that is persisted in the tracking Upload model. Used to fetch the
@@ -76,13 +91,14 @@ module Avatarable
   private
 
   def retrieve_upload_from_batch(identifier)
-    BatchLoader.for(identifier: identifier, model: self).batch(key: self.class) do |upload_params, loader, args|
+    BatchLoader.for(identifier: identifier, model: self)
+               .batch(key: self.class, cache: true, replace_methods: false) do |upload_params, loader, args|
       model_class = args[:key]
       paths = upload_params.flat_map do |params|
         params[:model].upload_paths(params[:identifier])
       end
 
-      Upload.where(uploader: AvatarUploader, path: paths).find_each do |upload|
+      Upload.where(uploader: AvatarUploader.name, path: paths).find_each do |upload|
         model = model_class.instantiate('id' => upload.model_id)
 
         loader.call({ model: model, identifier: File.basename(upload.path) }, upload)

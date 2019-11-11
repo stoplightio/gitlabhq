@@ -54,13 +54,63 @@ describe Gitlab::ProjectSearchResults do
     end
 
     it 'finds by name' do
-      expect(results.map(&:first)).to include(expected_file_by_name)
+      expect(results.map(&:filename)).to include(expected_file_by_name)
+    end
+
+    it "loads all blobs for filename matches in single batch" do
+      expect(Gitlab::Git::Blob).to receive(:batch).once.and_call_original
+
+      expected = project.repository.search_files_by_name(query, 'master')
+      expect(results.map(&:filename)).to include(*expected)
     end
 
     it 'finds by content' do
-      blob = results.select { |result| result.first == expected_file_by_content }.flatten.last
+      blob = results.select { |result| result.filename == expected_file_by_content }.flatten.last
 
       expect(blob.filename).to eq(expected_file_by_content)
+    end
+  end
+
+  shared_examples 'blob search repository ref' do |entity_type|
+    let(:query) { 'files' }
+    let(:file_finder) { double }
+    let(:project_branch) { 'project_branch' }
+
+    subject(:results) { described_class.new(user, project, query, repository_ref).objects(blob_type) }
+
+    before do
+      allow(entity).to receive(:default_branch).and_return(project_branch)
+      allow(file_finder).to receive(:find).and_return([])
+    end
+
+    context 'when repository_ref exists' do
+      let(:repository_ref) { 'ref_branch' }
+
+      it 'uses it' do
+        expect(Gitlab::FileFinder).to receive(:new).with(project, repository_ref).and_return(file_finder)
+
+        results
+      end
+    end
+
+    context 'when repository_ref is not present' do
+      let(:repository_ref) { nil }
+
+      it "uses #{entity_type} repository default reference" do
+        expect(Gitlab::FileFinder).to receive(:new).with(project, project_branch).and_return(file_finder)
+
+        results
+      end
+    end
+
+    context 'when repository_ref is blank' do
+      let(:repository_ref) { '' }
+
+      it "uses #{entity_type} repository default reference" do
+        expect(Gitlab::FileFinder).to receive(:new).with(project, project_branch).and_return(file_finder)
+
+        results
+      end
     end
   end
 
@@ -75,124 +125,9 @@ describe Gitlab::ProjectSearchResults do
       let(:expected_file_by_content) { 'CHANGELOG' }
     end
 
-    describe 'parsing results' do
-      let(:results) { project.repository.search_files_by_content('feature', 'master') }
-      let(:search_result) { results.first }
-
-      subject { described_class.parse_search_result(search_result) }
-
-      it "returns a valid FoundBlob" do
-        is_expected.to be_an Gitlab::SearchResults::FoundBlob
-        expect(subject.id).to be_nil
-        expect(subject.path).to eq('CHANGELOG')
-        expect(subject.filename).to eq('CHANGELOG')
-        expect(subject.basename).to eq('CHANGELOG')
-        expect(subject.ref).to eq('master')
-        expect(subject.startline).to eq(188)
-        expect(subject.data.lines[2]).to eq("  - Feature: Replace teams with group membership\n")
-      end
-
-      context 'when the matching filename contains a colon' do
-        let(:search_result) { "master:testdata/project::function1.yaml\x001\x00---\n" }
-
-        it 'returns a valid FoundBlob' do
-          expect(subject.filename).to eq('testdata/project::function1.yaml')
-          expect(subject.basename).to eq('testdata/project::function1')
-          expect(subject.ref).to eq('master')
-          expect(subject.startline).to eq(1)
-          expect(subject.data).to eq("---\n")
-        end
-      end
-
-      context 'when the matching content contains a number surrounded by colons' do
-        let(:search_result) { "master:testdata/foo.txt\x001\x00blah:9:blah" }
-
-        it 'returns a valid FoundBlob' do
-          expect(subject.filename).to eq('testdata/foo.txt')
-          expect(subject.basename).to eq('testdata/foo')
-          expect(subject.ref).to eq('master')
-          expect(subject.startline).to eq(1)
-          expect(subject.data).to eq('blah:9:blah')
-        end
-      end
-
-      context 'when the matching content contains multiple null bytes' do
-        let(:search_result) { "master:testdata/foo.txt\x001\x00blah\x001\x00foo" }
-
-        it 'returns a valid FoundBlob' do
-          expect(subject.filename).to eq('testdata/foo.txt')
-          expect(subject.basename).to eq('testdata/foo')
-          expect(subject.ref).to eq('master')
-          expect(subject.startline).to eq(1)
-          expect(subject.data).to eq("blah\x001\x00foo")
-        end
-      end
-
-      context 'when the search result ends with an empty line' do
-        let(:results) { project.repository.search_files_by_content('Role models', 'master') }
-
-        it 'returns a valid FoundBlob that ends with an empty line' do
-          expect(subject.filename).to eq('files/markdown/ruby-style-guide.md')
-          expect(subject.basename).to eq('files/markdown/ruby-style-guide')
-          expect(subject.ref).to eq('master')
-          expect(subject.startline).to eq(1)
-          expect(subject.data).to eq("# Prelude\n\n> Role models are important. <br/>\n> -- Officer Alex J. Murphy / RoboCop\n\n")
-        end
-      end
-
-      context 'when the search returns non-ASCII data' do
-        context 'with UTF-8' do
-          let(:results) { project.repository.search_files_by_content('файл', 'master') }
-
-          it 'returns results as UTF-8' do
-            expect(subject.filename).to eq('encoding/russian.rb')
-            expect(subject.basename).to eq('encoding/russian')
-            expect(subject.ref).to eq('master')
-            expect(subject.startline).to eq(1)
-            expect(subject.data).to eq("Хороший файл\n")
-          end
-        end
-
-        context 'with UTF-8 in the filename' do
-          let(:results) { project.repository.search_files_by_content('webhook', 'master') }
-
-          it 'returns results as UTF-8' do
-            expect(subject.filename).to eq('encoding/テスト.txt')
-            expect(subject.basename).to eq('encoding/テスト')
-            expect(subject.ref).to eq('master')
-            expect(subject.startline).to eq(3)
-            expect(subject.data).to include('WebHookの確認')
-          end
-        end
-
-        context 'with ISO-8859-1' do
-          let(:search_result) { "master:encoding/iso8859.txt\x001\x00\xC4\xFC\nmaster:encoding/iso8859.txt\x002\x00\nmaster:encoding/iso8859.txt\x003\x00foo\n".force_encoding(Encoding::ASCII_8BIT) }
-
-          it 'returns results as UTF-8' do
-            expect(subject.filename).to eq('encoding/iso8859.txt')
-            expect(subject.basename).to eq('encoding/iso8859')
-            expect(subject.ref).to eq('master')
-            expect(subject.startline).to eq(1)
-            expect(subject.data).to eq("Äü\n\nfoo\n")
-          end
-        end
-      end
-
-      context "when filename has extension" do
-        let(:search_result) { "master:CONTRIBUTE.md\x005\x00- [Contribute to GitLab](#contribute-to-gitlab)\n" }
-
-        it { expect(subject.path).to eq('CONTRIBUTE.md') }
-        it { expect(subject.filename).to eq('CONTRIBUTE.md') }
-        it { expect(subject.basename).to eq('CONTRIBUTE') }
-      end
-
-      context "when file under directory" do
-        let(:search_result) { "master:a/b/c.md\x005\x00a b c\n" }
-
-        it { expect(subject.path).to eq('a/b/c.md') }
-        it { expect(subject.filename).to eq('a/b/c.md') }
-        it { expect(subject.basename).to eq('a/b/c') }
-      end
+    it_behaves_like 'blob search repository ref', 'project' do
+      let(:blob_type) { 'blobs' }
+      let(:entity) { project }
     end
   end
 
@@ -211,6 +146,11 @@ describe Gitlab::ProjectSearchResults do
       let(:private_project) { create(:project, :public, :wiki_repo, :wiki_private) }
       let(:expected_file_by_name) { 'Files/Title.md' }
       let(:expected_file_by_content) { 'CHANGELOG.md' }
+    end
+
+    it_behaves_like 'blob search repository ref', 'wiki' do
+      let(:blob_type) { 'wiki_blobs' }
+      let(:entity) { project.wiki }
     end
   end
 
@@ -385,7 +325,7 @@ describe Gitlab::ProjectSearchResults do
       let!(:private_project) { create(:project, :private, :repository, creator: creator, namespace: creator.namespace) }
       let(:team_master) do
         user = create(:user, username: 'private-project-master')
-        private_project.add_master(user)
+        private_project.add_maintainer(user)
         user
       end
       let(:team_reporter) do
@@ -470,6 +410,38 @@ describe Gitlab::ProjectSearchResults do
         let(:search_phrase) { '0b4bc9a49' }
         let(:commit) { project.repository.commit('0b4bc9a') }
       end
+    end
+  end
+
+  describe 'user search' do
+    it 'returns the user belonging to the project matching the search query' do
+      project = create(:project)
+
+      user1 = create(:user, username: 'gob_bluth')
+      create(:project_member, :developer, user: user1, project: project)
+
+      user2 = create(:user, username: 'michael_bluth')
+      create(:project_member, :developer, user: user2, project: project)
+
+      create(:user, username: 'gob_2018')
+
+      result = described_class.new(user, project, 'gob').objects('users')
+
+      expect(result).to eq [user1]
+    end
+
+    it 'returns the user belonging to the group matching the search query' do
+      group = create(:group)
+      project = create(:project, namespace: group)
+
+      user1 = create(:user, username: 'gob_bluth')
+      create(:group_member, :developer, user: user1, group: group)
+
+      create(:user, username: 'gob_2018')
+
+      result = described_class.new(user, project, 'gob').objects('users')
+
+      expect(result).to eq [user1]
     end
   end
 end

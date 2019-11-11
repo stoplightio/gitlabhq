@@ -8,7 +8,7 @@ input {
 
 input[type='text'].danger {
   background: $input-danger-bg !important;
-  border-color: $input-danger-border;
+  border-color: $red-400;
   text-shadow: 0 1px 1px $white-light;
 }
 
@@ -31,9 +31,18 @@ label {
     margin: 0;
   }
 
-  &.label-light {
+  &.label-bold {
     font-weight: $gl-font-weight-bold;
   }
+}
+
+.label-wrapper {
+  display: block;
+  margin: 0;
+}
+
+.form-label {
+  @extend label;
 }
 
 .form-control-label {
@@ -80,7 +89,7 @@ label {
   .form-control {
     height: 29px;
     background: $white-light;
-    font-family: $monospace_font;
+    font-family: $monospace-font;
   }
 
   .input-group-prepend .btn,
@@ -119,7 +128,7 @@ label {
 
 .form-control {
   @include box-shadow(none);
-  border-radius: 2px;
+  border-radius: $border-radius-default;
   padding: $gl-vert-padding $gl-input-padding;
 
   &.input-short {
@@ -147,9 +156,11 @@ label {
 .select-control {
   padding-left: 10px;
   padding-right: 10px;
+  appearance: none;
+  /* stylelint-disable property-no-vendor-prefix */
   -webkit-appearance: none;
   -moz-appearance: none;
-  appearance: none;
+  /* stylelint-enable property-no-vendor-prefix */
 
   &::-ms-expand {
     display: none;
@@ -169,8 +180,9 @@ label {
   font-weight: $gl-font-weight-normal;
 }
 
-.form-control::-webkit-input-placeholder {
-  color: $gl-text-color-secondary;
+
+.form-control::placeholder {
+  color: $gl-text-color-tertiary;
 }
 
 .input-group {
@@ -194,14 +206,17 @@ label {
 .form-text.text-muted {
   margin-bottom: 0;
   margin-top: #{$grid-size / 2};
+  font-size: $gl-font-size;
 }
 
-.gl-field-error {
+.gl-field-error,
+.invalid-feedback {
   color: $red-500;
+  font-size: $gl-font-size;
 }
 
 .gl-show-field-errors {
-  .form-control {
+  .form-control:not(textarea) {
     height: 34px;
   }
 
@@ -242,4 +257,30 @@ label {
       margin-top: 0;
     }
   }
+}
+
+.input-icon-wrapper {
+  position: relative;
+
+  .input-icon-right {
+    position: absolute;
+    right: 0.8em;
+    top: 50%;
+    transform: translateY(-50%);
+    color: $gray-600;
+  }
+}
+
+.input-md {
+  max-width: $input-md-width;
+  width: 100%;
+}
+
+.input-lg {
+  max-width: $input-lg-width;
+  width: 100%;
+}
+
+.input-group-text {
+  max-height: $input-height;
 }

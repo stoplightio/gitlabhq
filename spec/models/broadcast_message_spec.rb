@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe BroadcastMessage do
@@ -49,13 +51,19 @@ describe BroadcastMessage do
     it 'caches the output of the query' do
       create(:broadcast_message)
 
-      expect(described_class).to receive(:where).and_call_original.once
+      expect(described_class).to receive(:current_and_future_messages).and_call_original.once
 
       described_class.current
 
       Timecop.travel(1.year) do
         described_class.current
       end
+    end
+
+    it 'does not create new records' do
+      create(:broadcast_message)
+
+      expect { described_class.current }.not_to change { described_class.count }
     end
 
     it 'includes messages that need to be displayed in the future' do
@@ -77,8 +85,21 @@ describe BroadcastMessage do
     it 'does not clear the cache if only a future message should be displayed' do
       create(:broadcast_message, :future)
 
-      expect(Rails.cache).not_to receive(:delete)
+      expect(Rails.cache).not_to receive(:delete).with(described_class::CACHE_KEY)
       expect(described_class.current.length).to eq(0)
+    end
+
+    it 'clears the legacy cache key' do
+      create(:broadcast_message, :future)
+
+      expect(Rails.cache).to receive(:delete).with(described_class::LEGACY_CACHE_KEY)
+      expect(described_class.current.length).to eq(0)
+    end
+  end
+
+  describe '#attributes' do
+    it 'includes message_html field' do
+      expect(subject.attributes.keys).to include("cached_markdown_version", "message_html")
     end
   end
 
@@ -143,6 +164,7 @@ describe BroadcastMessage do
       message = create(:broadcast_message)
 
       expect(Rails.cache).to receive(:delete).with(described_class::CACHE_KEY)
+      expect(Rails.cache).to receive(:delete).with(described_class::LEGACY_CACHE_KEY)
 
       message.flush_redis_cache
     end

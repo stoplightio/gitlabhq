@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe NamespacelessProjectDestroyWorker do
@@ -71,10 +73,10 @@ describe NamespacelessProjectDestroyWorker do
           expect(merge_request.reload).to be_closed
         end
 
-        it 'destroys the link' do
+        it 'destroys fork network members' do
           subject.perform(project.id)
 
-          expect(parent_project.forked_project_links).to be_empty
+          expect(parent_project.forked_to_members).to be_empty
         end
       end
     end

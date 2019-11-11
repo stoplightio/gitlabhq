@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Service do
@@ -78,7 +80,7 @@ describe Service do
       context 'when template is invalid' do
         it 'sets service template to inactive when template is invalid' do
           project = create(:project)
-          template = JiraService.new(template: true, active: true)
+          template = KubernetesService.new(template: true, active: true)
           template.save(validate: false)
 
           service = described_class.build_from_template(project.id, template)
@@ -280,7 +282,7 @@ describe Service do
         service.save!
 
         expect do
-          service.update_attributes(active: false)
+          service.update(active: false)
         end.to change { service.project.has_external_issue_tracker }.from(true).to(false)
       end
     end
@@ -289,7 +291,7 @@ describe Service do
   describe "#deprecated?" do
     let(:project) { create(:project, :repository) }
 
-    it 'should return false by default' do
+    it 'returns false by default' do
       service = create(:service, project: project)
       expect(service.deprecated?).to be_falsy
     end
@@ -298,7 +300,7 @@ describe Service do
   describe "#deprecation_message" do
     let(:project) { create(:project, :repository) }
 
-    it 'should be empty by default' do
+    it 'is empty by default' do
       service = create(:service, project: project)
       expect(service.deprecation_message).to be_nil
     end
@@ -343,6 +345,33 @@ describe Service do
 
     it 'filters out sensitive fields' do
       expect(service.api_field_names).to eq(['safe_field'])
+    end
+  end
+
+  context 'logging' do
+    let(:project) { create(:project) }
+    let(:service) { create(:service, project: project) }
+    let(:test_message) { "test message" }
+    let(:arguments) do
+      {
+        service_class: service.class.name,
+        project_path: project.full_path,
+        project_id: project.id,
+        message: test_message,
+        additional_argument: 'some argument'
+      }
+    end
+
+    it 'logs info messages using json logger' do
+      expect(Gitlab::JsonLogger).to receive(:info).with(arguments)
+
+      service.log_info(test_message, additional_argument: 'some argument')
+    end
+
+    it 'logs error messages using json logger' do
+      expect(Gitlab::JsonLogger).to receive(:error).with(arguments)
+
+      service.log_error(test_message, additional_argument: 'some argument')
     end
   end
 end

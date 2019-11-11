@@ -1,5 +1,6 @@
 import Vue from 'vue';
 import MockAdapter from 'axios-mock-adapter';
+import '~/behaviors/markdown/render_gfm';
 import axios from '~/lib/utils/axios_utils';
 import store from '~/ide/stores';
 import repoEditor from '~/ide/components/repo_editor.vue';
@@ -25,6 +26,8 @@ describe('RepoEditor', () => {
     vm.$store.state.openFiles.push(f);
     Vue.set(vm.$store.state.entries, f.path, f);
 
+    spyOn(vm, 'getFileData').and.returnValue(Promise.resolve());
+
     vm.$mount();
 
     Vue.nextTick(() => setTimeout(done));
@@ -49,6 +52,7 @@ describe('RepoEditor', () => {
   it('renders only an edit tab', done => {
     Vue.nextTick(() => {
       const tabs = vm.$el.querySelectorAll('.ide-mode-tabs .nav-links li');
+
       expect(tabs.length).toBe(1);
       expect(tabs[0].textContent.trim()).toBe('Edit');
 
@@ -69,6 +73,7 @@ describe('RepoEditor', () => {
     it('renders an Edit and a Preview Tab', done => {
       Vue.nextTick(() => {
         const tabs = vm.$el.querySelectorAll('.ide-mode-tabs .nav-links li');
+
         expect(tabs.length).toBe(2);
         expect(tabs[0].textContent.trim()).toBe('Edit');
         expect(tabs[1].textContent.trim()).toBe('Preview Markdown');
@@ -106,6 +111,7 @@ describe('RepoEditor', () => {
     it('renders an Edit and a Preview Tab', done => {
       Vue.nextTick(() => {
         const tabs = vm.$el.querySelectorAll('.ide-mode-tabs .nav-links li');
+
         expect(tabs.length).toBe(2);
         expect(tabs[0].textContent.trim()).toBe('Review');
         expect(tabs[1].textContent.trim()).toBe('Preview Markdown');
@@ -119,8 +125,7 @@ describe('RepoEditor', () => {
       vm.file.path = `${vm.file.path}.md`;
       vm.$store.state.entries[vm.file.path] = vm.file;
 
-      vm
-        .$nextTick()
+      vm.$nextTick()
         .then(() => {
           vm.$el.querySelectorAll('.ide-mode-tabs .nav-links a')[1].click();
         })
@@ -291,8 +296,7 @@ describe('RepoEditor', () => {
     it('calls updateDimensions when panelResizing is false', done => {
       vm.$store.state.panelResizing = true;
 
-      vm
-        .$nextTick()
+      vm.$nextTick()
         .then(() => {
           vm.$store.state.panelResizing = false;
         })
@@ -316,8 +320,8 @@ describe('RepoEditor', () => {
       });
     });
 
-    it('calls updateDimensions when rightPane is updated', done => {
-      vm.$store.state.rightPane = 'testing';
+    it('calls updateDimensions when rightPane is opened', done => {
+      vm.$store.state.rightPane.isOpen = true;
 
       vm.$nextTick(() => {
         expect(vm.editor.updateDimensions).toHaveBeenCalled();
@@ -360,8 +364,7 @@ describe('RepoEditor', () => {
 
     vm.file.pending = true;
 
-    vm
-      .$nextTick()
+    vm.$nextTick()
       .then(() => {
         vm.file = file('testing');
 

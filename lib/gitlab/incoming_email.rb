@@ -1,7 +1,10 @@
+# frozen_string_literal: true
+
 module Gitlab
   module IncomingEmail
-    UNSUBSCRIBE_SUFFIX = '+unsubscribe'.freeze
-    WILDCARD_PLACEHOLDER = '%{key}'.freeze
+    UNSUBSCRIBE_SUFFIX        = '-unsubscribe'.freeze
+    UNSUBSCRIBE_SUFFIX_LEGACY = '+unsubscribe'.freeze
+    WILDCARD_PLACEHOLDER      = '%{key}'.freeze
 
     class << self
       def enabled?
@@ -20,6 +23,7 @@ module Gitlab
         config.address.sub(WILDCARD_PLACEHOLDER, key)
       end
 
+      # example: incoming+1234567890abcdef1234567890abcdef-unsubscribe@incoming.gitlab.com
       def unsubscribe_address(key)
         config.address.sub(WILDCARD_PLACEHOLDER, "#{key}#{UNSUBSCRIBE_SUFFIX}")
       end
@@ -53,7 +57,7 @@ module Gitlab
 
       def address_regex
         wildcard_address = config.address
-        return nil unless wildcard_address
+        return unless wildcard_address
 
         regex = Regexp.escape(wildcard_address)
         regex = regex.sub(Regexp.escape(WILDCARD_PLACEHOLDER), '(.+)')

@@ -1,9 +1,4 @@
-.js-pipeline-schedule-form {
-  .dropdown-select,
-  .dropdown-menu-toggle {
-    width: 100% !important;
-  }
-
+.pipeline-schedule-form {
   .gl-field-error {
     margin: 10px 0 0;
   }
@@ -39,10 +34,6 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-
-    svg {
-      vertical-align: middle;
-    }
   }
 
   .next-run-cell {
@@ -51,6 +42,10 @@
 
   a {
     color: $text-color;
+  }
+
+  svg {
+    vertical-align: middle;
   }
 }
 

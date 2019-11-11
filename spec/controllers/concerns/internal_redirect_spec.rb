@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe InternalRedirect do
@@ -51,6 +53,31 @@ describe InternalRedirect do
     it 'returns the path including querystring if the url is on the same host' do
       expect(controller.safe_redirect_path_for_url('http://test.host/hello/world?hello=world#L123'))
         .to eq('/hello/world?hello=world#L123')
+    end
+  end
+
+  describe '#sanitize_redirect' do
+    let(:valid_path) { '/hello/world?hello=world' }
+    let(:valid_url) { "http://test.host#{valid_path}" }
+
+    it 'returns `nil` for invalid paths' do
+      invalid_path = '//not/valid'
+
+      expect(controller.sanitize_redirect(invalid_path)).to eq nil
+    end
+
+    it 'returns `nil` for invalid urls' do
+      input = 'http://test.host:3000/invalid'
+
+      expect(controller.sanitize_redirect(input)).to eq nil
+    end
+
+    it 'returns input for valid paths' do
+      expect(controller.sanitize_redirect(valid_path)).to eq valid_path
+    end
+
+    it 'returns path for valid urls' do
+      expect(controller.sanitize_redirect(valid_url)).to eq valid_path
     end
   end
 

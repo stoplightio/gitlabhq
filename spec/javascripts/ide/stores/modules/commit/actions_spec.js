@@ -3,8 +3,11 @@ import store from '~/ide/stores';
 import service from '~/ide/services';
 import router from '~/ide/ide_router';
 import eventHub from '~/ide/eventhub';
-import * as consts from '~/ide/stores/modules/commit/constants';
+import consts from '~/ide/stores/modules/commit/constants';
+import { commitActionTypes } from '~/ide/constants';
 import { resetStore, file } from 'spec/ide/helpers';
+
+const TEST_COMMIT_SHA = '123456789';
 
 describe('IDE commit module actions', () => {
   beforeEach(() => {
@@ -108,77 +111,6 @@ describe('IDE commit module actions', () => {
     });
   });
 
-  describe('checkCommitStatus', () => {
-    beforeEach(() => {
-      store.state.currentProjectId = 'abcproject';
-      store.state.currentBranchId = 'master';
-      store.state.projects.abcproject = {
-        branches: {
-          master: {
-            workingReference: '1',
-          },
-        },
-      };
-    });
-
-    it('calls service', done => {
-      spyOn(service, 'getBranchData').and.returnValue(
-        Promise.resolve({
-          data: {
-            commit: { id: '123' },
-          },
-        }),
-      );
-
-      store
-        .dispatch('commit/checkCommitStatus')
-        .then(() => {
-          expect(service.getBranchData).toHaveBeenCalledWith('abcproject', 'master');
-
-          done();
-        })
-        .catch(done.fail);
-    });
-
-    it('returns true if current ref does not equal returned ID', done => {
-      spyOn(service, 'getBranchData').and.returnValue(
-        Promise.resolve({
-          data: {
-            commit: { id: '123' },
-          },
-        }),
-      );
-
-      store
-        .dispatch('commit/checkCommitStatus')
-        .then(val => {
-          expect(val).toBeTruthy();
-
-          done();
-        })
-        .catch(done.fail);
-    });
-
-    it('returns false if current ref equals returned ID', done => {
-      spyOn(service, 'getBranchData').and.returnValue(
-        Promise.resolve({
-          data: {
-            commit: { id: '1' },
-          },
-        }),
-      );
-
-      store
-        .dispatch('commit/checkCommitStatus')
-        .then(val => {
-          expect(val).toBeFalsy();
-
-          done();
-        })
-        .catch(done.fail);
-    });
-  });
-
   describe('updateFilesAfterCommit', () => {
     const data = {
       id: '123',
@@ -206,6 +138,9 @@ describe('IDE commit module actions', () => {
         branches: {
           master: {
             workingReference: '',
+            commit: {
+              short_id: TEST_COMMIT_SHA,
+            },
           },
         },
       };
@@ -255,7 +190,7 @@ describe('IDE commit module actions', () => {
           branch,
         })
         .then(() => {
-          expect(f.lastCommit.message).toBe(data.message);
+          expect(f.lastCommitSha).toBe(data.id);
         })
         .then(done)
         .catch(done.fail);
@@ -306,6 +241,9 @@ describe('IDE commit module actions', () => {
         branches: {
           master: {
             workingReference: '1',
+            commit: {
+              short_id: TEST_COMMIT_SHA,
+            },
           },
         },
       };
@@ -314,6 +252,7 @@ describe('IDE commit module actions', () => {
         ...file('changed'),
         type: 'blob',
         active: true,
+        lastCommitSha: TEST_COMMIT_SHA,
       };
       store.state.stagedFiles.push(f);
       store.state.changedFiles = [
@@ -336,19 +275,21 @@ describe('IDE commit module actions', () => {
     });
 
     describe('success', () => {
+      const COMMIT_RESPONSE = {
+        id: '123456',
+        short_id: '123',
+        message: 'test message',
+        committed_date: 'date',
+        stats: {
+          additions: '1',
+          deletions: '2',
+        },
+      };
+
       beforeEach(() => {
         spyOn(service, 'commit').and.returnValue(
           Promise.resolve({
-            data: {
-              id: '123456',
-              short_id: '123',
-              message: 'test message',
-              committed_date: 'date',
-              stats: {
-                additions: '1',
-                deletions: '2',
-              },
-            },
+            data: COMMIT_RESPONSE,
           }),
         );
       });
@@ -362,13 +303,42 @@ describe('IDE commit module actions', () => {
               commit_message: 'testing 123',
               actions: [
                 {
-                  action: 'update',
+                  action: commitActionTypes.update,
                   file_path: jasmine.anything(),
-                  content: jasmine.anything(),
+                  content: undefined,
                   encoding: jasmine.anything(),
+                  last_commit_id: undefined,
+                  previous_path: undefined,
                 },
               ],
-              start_branch: 'master',
+              start_sha: TEST_COMMIT_SHA,
+            });
+
+            done();
+          })
+          .catch(done.fail);
+      });
+
+      it('sends lastCommit ID when not creating new branch', done => {
+        store.state.commit.commitAction = '1';
+
+        store
+          .dispatch('commit/commitChanges')
+          .then(() => {
+            expect(service.commit).toHaveBeenCalledWith('abcproject', {
+              branch: jasmine.anything(),
+              commit_message: 'testing 123',
+              actions: [
+                {
+                  action: commitActionTypes.update,
+                  file_path: jasmine.anything(),
+                  content: undefined,
+                  encoding: jasmine.anything(),
+                  last_commit_id: TEST_COMMIT_SHA,
+                  previous_path: undefined,
+                },
+              ],
+              start_sha: undefined,
             });
 
             done();
@@ -393,8 +363,8 @@ describe('IDE commit module actions', () => {
         store
           .dispatch('commit/commitChanges')
           .then(() => {
-            expect(store.state.entries[store.state.openFiles[0].path].lastCommit.message).toBe(
-              'test message',
+            expect(store.state.entries[store.state.openFiles[0].path].lastCommitSha).toBe(
+              COMMIT_RESPONSE.id,
             );
 
             done();
@@ -428,17 +398,33 @@ describe('IDE commit module actions', () => {
         it('redirects to new merge request page', done => {
           spyOn(eventHub, '$on');
 
-          store.state.commit.commitAction = '3';
+          store.state.commit.commitAction = consts.COMMIT_TO_NEW_BRANCH;
+          store.state.commit.shouldCreateMR = true;
 
           store
             .dispatch('commit/commitChanges')
             .then(() => {
               expect(visitUrl).toHaveBeenCalledWith(
                 `webUrl/merge_requests/new?merge_request[source_branch]=${
-                  store.getters['commit/newBranchName']
+                  store.getters['commit/placeholderBranchName']
                 }&merge_request[target_branch]=master`,
               );
 
+              done();
+            })
+            .catch(done.fail);
+        });
+
+        it('does not redirect to new merge request page when shouldCreateMR is not checked', done => {
+          spyOn(eventHub, '$on');
+
+          store.state.commit.commitAction = consts.COMMIT_TO_NEW_BRANCH;
+          store.state.commit.shouldCreateMR = false;
+
+          store
+            .dispatch('commit/commitChanges')
+            .then(() => {
+              expect(visitUrl).not.toHaveBeenCalled();
               done();
             })
             .catch(done.fail);

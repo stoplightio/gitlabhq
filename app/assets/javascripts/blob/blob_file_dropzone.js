@@ -5,6 +5,7 @@ import Dropzone from 'dropzone';
 import { visitUrl } from '../lib/utils/url_utility';
 import { HIDDEN_CLASS } from '../lib/utils/constants';
 import csrf from '../lib/utils/csrf';
+import { sprintf, __ } from '~/locale';
 
 Dropzone.autoDiscover = false;
 
@@ -41,44 +42,50 @@ export default class BlobFileDropzone {
       addRemoveLinks: true,
       previewsContainer: '.dropzone-previews',
       headers: csrf.headers,
-      init: function () {
-        this.on('addedfile', function () {
+      init: function() {
+        this.on('addedfile', function() {
           toggleLoading(submitButton, submitButtonLoadingIcon, false);
           dropzoneMessage.addClass(HIDDEN_CLASS);
-          $('.dropzone-alerts').html('').hide();
+          $('.dropzone-alerts')
+            .html('')
+            .hide();
         });
-        this.on('removedfile', function () {
+        this.on('removedfile', function() {
           toggleLoading(submitButton, submitButtonLoadingIcon, false);
           dropzoneMessage.removeClass(HIDDEN_CLASS);
         });
-        this.on('success', function (header, response) {
+        this.on('success', function(header, response) {
           $('#modal-upload-blob').modal('hide');
           visitUrl(response.filePath);
         });
-        this.on('maxfilesexceeded', function (file) {
+        this.on('maxfilesexceeded', function(file) {
           dropzoneMessage.addClass(HIDDEN_CLASS);
           this.removeFile(file);
         });
-        this.on('sending', function (file, xhr, formData) {
+        this.on('sending', function(file, xhr, formData) {
           formData.append('branch_name', form.find('.js-branch-name').val());
           formData.append('create_merge_request', form.find('.js-create-merge-request').val());
           formData.append('commit_message', form.find('.js-commit-message').val());
         });
       },
       // Override behavior of adding error underneath preview
-      error: function (file, errorMessage) {
-        const stripped = $('<div/>').html(errorMessage).text();
-        $('.dropzone-alerts').html(`Error uploading file: "${stripped}"`).show();
+      error: function(file, errorMessage) {
+        const stripped = $('<div/>')
+          .html(errorMessage)
+          .text();
+        $('.dropzone-alerts')
+          .html(sprintf(__('Error uploading file: %{stripped}'), { stripped }))
+          .show();
         this.removeFile(file);
       },
     });
 
-    submitButton.on('click', (e) => {
+    submitButton.on('click', e => {
       e.preventDefault();
       e.stopPropagation();
       if (dropzone[0].dropzone.getQueuedFiles().length === 0) {
         // eslint-disable-next-line no-alert
-        alert('Please select a file');
+        alert(__('Please select a file'));
         return false;
       }
       toggleLoading(submitButton, submitButtonLoadingIcon, true);

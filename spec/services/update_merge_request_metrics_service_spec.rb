@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'rails_helper'
 
 describe MergeRequestMetricsService do
@@ -12,7 +14,7 @@ describe MergeRequestMetricsService do
       service.merge(event)
 
       expect(metrics.merged_by).to eq(user)
-      expect(metrics.merged_at).to eq(event.created_at)
+      expect(metrics.merged_at).to be_like_time(event.created_at)
     end
   end
 
@@ -25,7 +27,7 @@ describe MergeRequestMetricsService do
       service.close(event)
 
       expect(metrics.latest_closed_by).to eq(user)
-      expect(metrics.latest_closed_at).to eq(event.created_at)
+      expect(metrics.latest_closed_at).to be_like_time(event.created_at)
     end
   end
 

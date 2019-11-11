@@ -22,12 +22,20 @@ unless Sidekiq.server?
         params: params,
         remote_ip: event.payload[:remote_ip],
         user_id: event.payload[:user_id],
-        username: event.payload[:username]
+        username: event.payload[:username],
+        ua: event.payload[:ua],
+        queue_duration: event.payload[:queue_duration]
       }
 
       gitaly_calls = Gitlab::GitalyClient.get_request_count
-      payload[:gitaly_calls] = gitaly_calls if gitaly_calls > 0
+
+      if gitaly_calls > 0
+        payload[:gitaly_calls] = gitaly_calls
+        payload[:gitaly_duration] = Gitlab::GitalyClient.query_time_ms
+      end
+
       payload[:response] = event.payload[:response] if event.payload[:response]
+      payload[Labkit::Correlation::CorrelationId::LOG_KEY] = Labkit::Correlation::CorrelationId.current_id
 
       payload
     end

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Groups::RunnersController < Groups::ApplicationController
   # Proper policies should be implemented per
   # https://gitlab.com/gitlab-org/gitlab-ce/issues/45894
@@ -14,7 +16,7 @@ class Groups::RunnersController < Groups::ApplicationController
 
   def update
     if Ci::UpdateRunnerService.new(@runner).update(runner_params)
-      redirect_to group_runner_path(@group, @runner), notice: 'Runner was successfully updated.'
+      redirect_to group_runner_path(@group, @runner), notice: _('Runner was successfully updated.')
     else
       render 'edit'
     end
@@ -23,22 +25,22 @@ class Groups::RunnersController < Groups::ApplicationController
   def destroy
     @runner.destroy
 
-    redirect_to group_settings_ci_cd_path(@group, anchor: 'runners-settings'), status: 302
+    redirect_to group_settings_ci_cd_path(@group, anchor: 'runners-settings'), status: :found
   end
 
   def resume
     if Ci::UpdateRunnerService.new(@runner).update(active: true)
-      redirect_to group_settings_ci_cd_path(@group, anchor: 'runners-settings'), notice: 'Runner was successfully updated.'
+      redirect_to group_settings_ci_cd_path(@group, anchor: 'runners-settings'), notice: _('Runner was successfully updated.')
     else
-      redirect_to group_settings_ci_cd_path(@group, anchor: 'runners-settings'), alert: 'Runner was not updated.'
+      redirect_to group_settings_ci_cd_path(@group, anchor: 'runners-settings'), alert: _('Runner was not updated.')
     end
   end
 
   def pause
     if Ci::UpdateRunnerService.new(@runner).update(active: false)
-      redirect_to group_settings_ci_cd_path(@group, anchor: 'runners-settings'), notice: 'Runner was successfully updated.'
+      redirect_to group_settings_ci_cd_path(@group, anchor: 'runners-settings'), notice: _('Runner was successfully updated.')
     else
-      redirect_to group_settings_ci_cd_path(@group, anchor: 'runners-settings'), alert: 'Runner was not updated.'
+      redirect_to group_settings_ci_cd_path(@group, anchor: 'runners-settings'), alert: _('Runner was not updated.')
     end
   end
 

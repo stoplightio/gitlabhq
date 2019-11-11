@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # This class breaks the actual CarrierWave concept.
 # Every uploader should use a base_dir that is model agnostic so we can build
 # back URLs from base_dir-relative paths saved in the `Upload` model.
@@ -12,8 +14,8 @@ class FileUploader < GitlabUploader
   include ObjectStorage::Concern
   prepend ObjectStorage::Extension::RecordsUploads
 
-  MARKDOWN_PATTERN = %r{\!?\[.*?\]\(/uploads/(?<secret>[0-9a-f]{32})/(?<file>.*?)\)}
-  DYNAMIC_PATH_PATTERN = %r{(?<secret>\h{32})/(?<identifier>.*)}
+  MARKDOWN_PATTERN = %r{\!?\[.*?\]\(/uploads/(?<secret>[0-9a-f]{32})/(?<file>.*?)\)}.freeze
+  DYNAMIC_PATH_PATTERN = %r{.*(?<secret>\h{32})/(?<identifier>.*)}.freeze
 
   after :remove, :prune_store_dir
 
@@ -65,6 +67,10 @@ class FileUploader < GitlabUploader
     SecureRandom.hex
   end
 
+  def self.extract_dynamic_path(path)
+    DYNAMIC_PATH_PATTERN.match(path)
+  end
+
   def upload_paths(identifier)
     [
       File.join(secret, identifier),
@@ -103,10 +109,18 @@ class FileUploader < GitlabUploader
   def upload_path
     if file_storage?
       # Legacy path relative to project.full_path
-      File.join(dynamic_segment, identifier)
+      local_storage_path(identifier)
     else
-      File.join(store_dir, identifier)
+      remote_storage_path(identifier)
     end
+  end
+
+  def local_storage_path(file_identifier)
+    File.join(dynamic_segment, file_identifier)
+  end
+
+  def remote_storage_path(file_identifier)
+    File.join(store_dir, file_identifier)
   end
 
   def store_dirs
@@ -114,12 +128,6 @@ class FileUploader < GitlabUploader
       Store::LOCAL => File.join(base_dir, dynamic_segment),
       Store::REMOTE => File.join(base_dir(ObjectStorage::Store::REMOTE), dynamic_segment)
     }
-  end
-
-  def markdown_link
-    markdown = "[#{markdown_name}](#{secure_url})"
-    markdown.prepend("!") if image_or_video? || dangerous?
-    markdown
   end
 
   def to_h
@@ -130,10 +138,6 @@ class FileUploader < GitlabUploader
     }
   end
 
-  def filename
-    self.file.filename
-  end
-
   def upload=(value)
     super
 
@@ -141,7 +145,7 @@ class FileUploader < GitlabUploader
     return if apply_context!(value.uploader_context)
 
     # fallback to the regex based extraction
-    if matches = DYNAMIC_PATH_PATTERN.match(value.path)
+    if matches = self.class.extract_dynamic_path(value.path)
       @secret = matches[:secret]
       @identifier = matches[:identifier]
     end
@@ -153,9 +157,9 @@ class FileUploader < GitlabUploader
 
   # return a new uploader with a file copy on another project
   def self.copy_to(uploader, to_project)
-    moved = uploader.dup.tap do |u|
-      u.model = to_project
-    end
+    moved = self.new(to_project)
+    moved.object_store = uploader.object_store
+    moved.filename = uploader.filename
 
     moved.copy_file(uploader.file)
     moved
@@ -188,10 +192,6 @@ class FileUploader < GitlabUploader
 
   def prune_store_dir
     storage.delete_dir!(store_dir) # only remove when empty
-  end
-
-  def markdown_name
-    (image_or_video? ? File.basename(filename, File.extname(filename)) : filename).gsub("]", "\\]")
   end
 
   def identifier

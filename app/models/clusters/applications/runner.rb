@@ -1,16 +1,19 @@
+# frozen_string_literal: true
+
 module Clusters
   module Applications
-    class Runner < ActiveRecord::Base
-      VERSION = '0.1.13'.freeze
+    class Runner < ApplicationRecord
+      VERSION = '0.4.1'.freeze
 
       self.table_name = 'clusters_applications_runners'
 
       include ::Clusters::Concerns::ApplicationCore
       include ::Clusters::Concerns::ApplicationStatus
+      include ::Clusters::Concerns::ApplicationVersion
       include ::Clusters::Concerns::ApplicationData
 
       belongs_to :runner, class_name: 'Ci::Runner', foreign_key: :runner_id
-      delegate :project, to: :cluster
+      delegate :project, :group, to: :cluster
 
       default_value_for :version, VERSION
 
@@ -26,11 +29,20 @@ module Clusters
         content_values.to_yaml
       end
 
+      # Need to investigate if pipelines run by this runner will stop upon the
+      # executor pod stopping
+      # I.e.run a pipeline, and uninstall runner while pipeline is running
+      def allowed_to_uninstall?
+        false
+      end
+
       def install_command
         Gitlab::Kubernetes::Helm::InstallCommand.new(
-          name,
+          name: name,
+          version: VERSION,
+          rbac: cluster.platform_kubernetes_rbac?,
           chart: chart,
-          values: values,
+          files: files,
           repository: repository
         )
       end
@@ -50,12 +62,19 @@ module Clusters
       end
 
       def runner_create_params
-        {
+        attributes = {
           name: 'kubernetes-cluster',
-          runner_type: :project_type,
-          tag_list: %w(kubernetes cluster),
-          projects: [project]
+          runner_type: cluster.cluster_type,
+          tag_list: %w[kubernetes cluster]
         }
+
+        if cluster.group_type?
+          attributes[:groups] = [group]
+        elsif cluster.project_type?
+          attributes[:projects] = [project]
+        end
+
+        attributes
       end
 
       def gitlab_url

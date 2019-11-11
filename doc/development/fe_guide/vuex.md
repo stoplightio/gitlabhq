@@ -52,7 +52,7 @@ The first thing you should do before writing any code is to design the state.
 Often we need to provide data from haml to our Vue application. Let's store it in the state for better access.
 
 ```javascript
-  export default {
+  export default () => ({
     endpoint: null,
 
     isLoading: false,
@@ -62,7 +62,7 @@ Often we need to provide data from haml to our Vue application. Let's store it i
     errorAddingUser: false,
 
     users: [],
-  };
+  });
 ```
 
 #### Access `state` properties
@@ -78,12 +78,12 @@ In this file, we will write the actions that will call the respective mutations:
 
 ```javascript
   import * as types from './mutation_types';
-  import axios from '~/lib/utils/axios-utils';
+  import axios from '~/lib/utils/axios_utils';
   import createFlash from '~/flash';
 
   export const requestUsers = ({ commit }) => commit(types.REQUEST_USERS);
   export const receiveUsersSuccess = ({ commit }, data) => commit(types.RECEIVE_USERS_SUCCESS, data);
-  export const receiveUsersError = ({ commit }, error) => commit(types.REQUEST_USERS_ERROR, error);
+  export const receiveUsersError = ({ commit }, error) => commit(types.RECEIVE_USERS_ERROR, error);
 
   export const fetchUsers = ({ state, dispatch }) => {
     dispatch('requestUsers');
@@ -114,19 +114,21 @@ When a request is made we often want to show a loading state to the user.
 
 Instead of creating an action to toggle the loading state and dispatch it in the component,
 create:
+
 1. An action `requestSomething`, to toggle the loading state
 1. An action `receiveSomethingSuccess`, to handle the success callback
 1. An action `receiveSomethingError`, to handle the error callback
 1. An action `fetchSomething` to make the request.
     1. In case your application does more than a `GET` request you can use these as examples:
-        1. `PUT`: `createSomething`
-        2. `POST`: `updateSomething`
-        3. `DELETE`: `deleteSomething`
+        - `POST`: `createSomething`
+        - `PUT`: `updateSomething`
+        - `DELETE`: `deleteSomething`
 
 The component MUST only dispatch the `fetchNamespace` action. Actions namespaced with `request` or `receive` should not be called from the component
 The `fetch` action will be responsible to dispatch `requestNamespace`, `receiveNamespaceSuccess` and `receiveNamespaceError`
 
 By following this pattern we guarantee:
+
 1. All applications follow the same pattern, making it easier for anyone to maintain the code
 1. All data in the application follows the same lifecycle pattern
 1. Actions are contained and human friendly
@@ -135,6 +137,7 @@ By following this pattern we guarantee:
 
 #### Dispatching actions
 To dispatch an action from a component, use the `mapActions` helper:
+
 ```javascript
 import { mapActions } from 'vuex';
 
@@ -172,7 +175,7 @@ Remember that actions only describe that something happened, they don't describe
       state.users = data;
       state.isLoading = false;
     },
-    [types.REQUEST_USERS_ERROR](state, error) {
+    [types.RECEIVE_USERS_ERROR](state, error) {
       state.isLoading = false;
     },
     [types.REQUEST_ADD_USER](state, user) {
@@ -202,6 +205,7 @@ export const getUsersWithPets = (state, getters) => {
 ```
 
 To access a getter from a component, use the `mapGetters` helper:
+
 ```javascript
 import { mapGetters } from 'vuex';
 
@@ -214,7 +218,7 @@ import { mapGetters } from 'vuex';
 };
 ```
 
-### `mutations_types.js`
+### `mutation_types.js`
 From [vuex mutations docs][vuex-mutations]:
 > It is a commonly seen pattern to use constants for mutation types in various Flux implementations. This allows the code to take advantage of tooling like linters, and putting all constants in a single file allows your collaborators to get an at-a-glance view of what mutations are possible in the entire application.
 
@@ -224,6 +228,7 @@ export const ADD_USER = 'ADD_USER';
 
 ### How to include the store in your application
 The store should be included in the main component of your application:
+
 ```javascript
   // app.vue
   import store from 'store'; // it will include the index.js file
@@ -290,23 +295,24 @@ export default {
 ```
 
 ### Vuex Gotchas
+
 1. Do not call a mutation directly. Always use an action to commit a mutation. Doing so will keep consistency throughout the application. From Vuex docs:
 
-  >  why don't we just call store.commit('action') directly? Well, remember that mutations must be synchronous? Actions aren't. We can perform asynchronous operations inside an action.
+    >  why don't we just call store.commit('action') directly? Well, remember that mutations must be synchronous? Actions aren't. We can perform asynchronous operations inside an action.
 
-  ```javascript
-    // component.vue
+    ```javascript
+      // component.vue
 
-    // bad
-    created() {
-      this.$store.commit('mutation');
-    }
+      // bad
+      created() {
+        this.$store.commit('mutation');
+      }
 
-    // good
-    created() {
-      this.$store.dispatch('action');
-    }
-  ```
+      // good
+      created() {
+        this.$store.dispatch('action');
+      }
+    ```
 1. Use mutation types instead of hardcoding strings. It will be less error prone.
 1. The State will be accessible in all components descending from the use where the store is instantiated.
 
@@ -342,7 +348,7 @@ describe('component', () => {
       name: 'Foo',
       age: '30',
     };
-    
+
     store = createStore();
 
     // populate the store
@@ -361,7 +367,8 @@ Because we're currently using [`babel-plugin-rewire`](https://github.com/speedsk
 `[vuex] actions should be function or object with "handler" function`
 
 To prevent this error from happening, you need to export an empty function as `default`:
-```
+
+```javascript
 // getters.js or actions.js
 
 // prevent babel-plugin-rewire from generating an invalid default during karma tests

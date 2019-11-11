@@ -27,6 +27,15 @@ Rails.application.routes.draw do
                 authorizations: 'oauth/authorizations'
   end
 
+  # This is here so we can "reserve" the path for the Jira integration in GitLab EE
+  # Having a non-existent controller here does not affect the scope in any way since all possible routes
+  # get a 404 proc returned. It is written in this way to minimize merge conflicts with EE
+  scope path: '/login/oauth', controller: 'oauth/jira/authorizations', as: :oauth_jira do
+    match '*all', via: [:get, :post], to: proc { [404, {}, ['']] }
+  end
+
+  draw :oauth
+
   use_doorkeeper_openid_connect
 
   # Autocomplete
@@ -34,6 +43,7 @@ Rails.application.routes.draw do
   get '/autocomplete/users/:id' => 'autocomplete#user'
   get '/autocomplete/projects' => 'autocomplete#projects'
   get '/autocomplete/award_emojis' => 'autocomplete#award_emojis'
+  get '/autocomplete/merge_request_target_branches' => 'autocomplete#merge_request_target_branches'
 
   # Search
   get 'search' => 'search#show'
@@ -46,9 +56,9 @@ Rails.application.routes.draw do
   get 'health_check(/:checks)' => 'health_check#index', as: :health_check
 
   scope path: '-' do
+    # '/-/health' implemented by BasicHealthMiddleware
     get 'liveness' => 'health#liveness'
     get 'readiness' => 'health#readiness'
-    post 'storage_check' => 'health#storage_check'
     resources :metrics, only: [:index]
     mount Peek::Railtie => '/peek', as: 'peek_routes'
 
@@ -70,10 +80,36 @@ Rails.application.routes.draw do
 
     get 'ide' => 'ide#index'
     get 'ide/*vueroute' => 'ide#index', format: false
+
+    draw :operations
+    draw :instance_statistics
+
+    if ENV['GITLAB_ENABLE_CHAOS_ENDPOINTS']
+      get '/chaos/leakmem' => 'chaos#leakmem'
+      get '/chaos/cpuspin' => 'chaos#cpuspin'
+      get '/chaos/sleep' => 'chaos#sleep'
+      get '/chaos/kill' => 'chaos#kill'
+    end
   end
 
-  # Koding route
-  get 'koding' => 'koding#index'
+  concern :clusterable do
+    resources :clusters, only: [:index, :new, :show, :update, :destroy] do
+      collection do
+        post :create_user
+        post :create_gcp
+      end
+
+      member do
+        scope :applications do
+          post '/:application', to: 'clusters/applications#create', as: :install_applications
+          patch '/:application', to: 'clusters/applications#update', as: :update_applications
+          delete '/:application', to: 'clusters/applications#destroy', as: :uninstall_applications
+        end
+
+        get :cluster_status, format: :json
+      end
+    end
+  end
 
   draw :api
   draw :sidekiq

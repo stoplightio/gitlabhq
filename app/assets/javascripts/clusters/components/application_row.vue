@@ -1,213 +1,392 @@
 <script>
-  /* eslint-disable vue/require-default-prop */
-  import { s__, sprintf } from '../../locale';
-  import eventHub from '../event_hub';
-  import loadingButton from '../../vue_shared/components/loading_button.vue';
-  import {
-    APPLICATION_NOT_INSTALLABLE,
-    APPLICATION_SCHEDULED,
-    APPLICATION_INSTALLABLE,
-    APPLICATION_INSTALLING,
-    APPLICATION_INSTALLED,
-    APPLICATION_ERROR,
-    REQUEST_LOADING,
-    REQUEST_SUCCESS,
-    REQUEST_FAILURE,
-  } from '../constants';
+/* eslint-disable vue/require-default-prop */
+import { GlLink, GlModalDirective } from '@gitlab/ui';
+import TimeagoTooltip from '../../vue_shared/components/time_ago_tooltip.vue';
+import { s__, sprintf } from '../../locale';
+import eventHub from '../event_hub';
+import identicon from '../../vue_shared/components/identicon.vue';
+import loadingButton from '../../vue_shared/components/loading_button.vue';
+import UninstallApplicationButton from './uninstall_application_button.vue';
+import UninstallApplicationConfirmationModal from './uninstall_application_confirmation_modal.vue';
 
-  export default {
-    components: {
-      loadingButton,
-    },
-    props: {
-      id: {
-        type: String,
-        required: true,
-      },
-      title: {
-        type: String,
-        required: true,
-      },
-      titleLink: {
-        type: String,
-        required: false,
-      },
-      manageLink: {
-        type: String,
-        required: false,
-      },
-      status: {
-        type: String,
-        required: false,
-      },
-      statusReason: {
-        type: String,
-        required: false,
-      },
-      requestStatus: {
-        type: String,
-        required: false,
-      },
-      requestReason: {
-        type: String,
-        required: false,
-      },
-      installApplicationRequestParams: {
-        type: Object,
-        required: false,
-        default: () => ({}),
-      },
-    },
-    computed: {
-      rowJsClass() {
-        return `js-cluster-application-row-${this.id}`;
-      },
-      installButtonLoading() {
-        return !this.status ||
-          this.status === APPLICATION_SCHEDULED ||
-          this.status === APPLICATION_INSTALLING ||
-          this.requestStatus === REQUEST_LOADING;
-      },
-      installButtonDisabled() {
-        // Avoid the potential for the real-time data to say APPLICATION_INSTALLABLE but
-        // we already made a request to install and are just waiting for the real-time
-        // to sync up.
-        return (this.status !== APPLICATION_INSTALLABLE
-          && this.status !== APPLICATION_ERROR) ||
-          this.requestStatus === REQUEST_LOADING ||
-          this.requestStatus === REQUEST_SUCCESS;
-      },
-      installButtonLabel() {
-        let label;
-        if (
-          this.status === APPLICATION_NOT_INSTALLABLE ||
-          this.status === APPLICATION_INSTALLABLE ||
-          this.status === APPLICATION_ERROR
-        ) {
-          label = s__('ClusterIntegration|Install');
-        } else if (this.status === APPLICATION_SCHEDULED ||
-          this.status === APPLICATION_INSTALLING) {
-          label = s__('ClusterIntegration|Installing');
-        } else if (this.status === APPLICATION_INSTALLED) {
-          label = s__('ClusterIntegration|Installed');
-        }
+import { APPLICATION_STATUS } from '../constants';
 
-        return label;
-      },
-      showManageButton() {
-        return this.manageLink && this.status === APPLICATION_INSTALLED;
-      },
-      manageButtonLabel() {
-        return s__('ClusterIntegration|Manage');
-      },
-      hasError() {
-        return this.status === APPLICATION_ERROR ||
-        this.requestStatus === REQUEST_FAILURE;
-      },
-      generalErrorDescription() {
-        return sprintf(
-          s__('ClusterIntegration|Something went wrong while installing %{title}'), {
-            title: this.title,
-          },
+export default {
+  components: {
+    loadingButton,
+    identicon,
+    TimeagoTooltip,
+    GlLink,
+    UninstallApplicationButton,
+    UninstallApplicationConfirmationModal,
+  },
+  directives: {
+    GlModalDirective,
+  },
+  props: {
+    id: {
+      type: String,
+      required: true,
+    },
+    title: {
+      type: String,
+      required: true,
+    },
+    titleLink: {
+      type: String,
+      required: false,
+    },
+    manageLink: {
+      type: String,
+      required: false,
+    },
+    logoUrl: {
+      type: String,
+      required: false,
+      default: null,
+    },
+    disabled: {
+      type: Boolean,
+      required: false,
+      default: false,
+    },
+    uninstallable: {
+      type: Boolean,
+      required: false,
+      default: false,
+    },
+    status: {
+      type: String,
+      required: false,
+    },
+    statusReason: {
+      type: String,
+      required: false,
+    },
+    requestReason: {
+      type: String,
+      required: false,
+    },
+    installed: {
+      type: Boolean,
+      required: false,
+      default: false,
+    },
+    installFailed: {
+      type: Boolean,
+      required: false,
+      default: false,
+    },
+    version: {
+      type: String,
+      required: false,
+    },
+    chartRepo: {
+      type: String,
+      required: false,
+    },
+    upgradeAvailable: {
+      type: Boolean,
+      required: false,
+    },
+    updateSuccessful: {
+      type: Boolean,
+      required: false,
+      default: false,
+    },
+    updateFailed: {
+      type: Boolean,
+      required: false,
+      default: false,
+    },
+    uninstallFailed: {
+      type: Boolean,
+      required: false,
+      default: false,
+    },
+    uninstallSuccessful: {
+      type: Boolean,
+      required: false,
+      default: false,
+    },
+    updateAcknowledged: {
+      type: Boolean,
+      required: false,
+      default: true,
+    },
+    installApplicationRequestParams: {
+      type: Object,
+      required: false,
+      default: () => ({}),
+    },
+  },
+  computed: {
+    isUnknownStatus() {
+      return !this.isKnownStatus && this.status !== null;
+    },
+    isKnownStatus() {
+      return Object.values(APPLICATION_STATUS).includes(this.status);
+    },
+    isInstalling() {
+      return this.status === APPLICATION_STATUS.INSTALLING;
+    },
+    canInstall() {
+      return (
+        this.status === APPLICATION_STATUS.NOT_INSTALLABLE ||
+        this.status === APPLICATION_STATUS.INSTALLABLE ||
+        this.isUnknownStatus
+      );
+    },
+    hasLogo() {
+      return !!this.logoUrl;
+    },
+    identiconId() {
+      // generate a deterministic integer id for the identicon background
+      return this.id.charCodeAt(0);
+    },
+    rowJsClass() {
+      return `js-cluster-application-row-${this.id}`;
+    },
+    displayUninstallButton() {
+      return this.installed && this.uninstallable;
+    },
+    displayInstallButton() {
+      return !this.installed || !this.uninstallable;
+    },
+    installButtonLoading() {
+      return !this.status || this.isInstalling;
+    },
+    installButtonDisabled() {
+      // Avoid the potential for the real-time data to say APPLICATION_STATUS.INSTALLABLE but
+      // we already made a request to install and are just waiting for the real-time
+      // to sync up.
+      return (
+        ((this.status !== APPLICATION_STATUS.INSTALLABLE &&
+          this.status !== APPLICATION_STATUS.ERROR) ||
+          this.isInstalling) &&
+        this.isKnownStatus
+      );
+    },
+    installButtonLabel() {
+      let label;
+      if (this.canInstall) {
+        label = s__('ClusterIntegration|Install');
+      } else if (this.isInstalling) {
+        label = s__('ClusterIntegration|Installing');
+      } else if (this.installed) {
+        label = s__('ClusterIntegration|Installed');
+      }
+
+      return label;
+    },
+    showManageButton() {
+      return this.manageLink && this.status === APPLICATION_STATUS.INSTALLED;
+    },
+    manageButtonLabel() {
+      return s__('ClusterIntegration|Manage');
+    },
+    hasError() {
+      return this.installFailed || this.uninstallFailed;
+    },
+    generalErrorDescription() {
+      let errorDescription;
+
+      if (this.installFailed) {
+        errorDescription = s__('ClusterIntegration|Something went wrong while installing %{title}');
+      } else if (this.uninstallFailed) {
+        errorDescription = s__(
+          'ClusterIntegration|Something went wrong while uninstalling %{title}',
         );
-      },
+      }
+
+      return sprintf(errorDescription, { title: this.title });
     },
-    methods: {
-      installClicked() {
-        eventHub.$emit('installApplication', {
-          id: this.id,
-          params: this.installApplicationRequestParams,
-        });
-      },
+    versionLabel() {
+      if (this.updateFailed) {
+        return s__('ClusterIntegration|Upgrade failed');
+      } else if (this.isUpgrading) {
+        return s__('ClusterIntegration|Upgrading');
+      }
+
+      return s__('ClusterIntegration|Upgraded');
     },
-  };
+    upgradeFailureDescription() {
+      return s__('ClusterIntegration|Update failed. Please check the logs and try again.');
+    },
+    upgradeSuccessDescription() {
+      return sprintf(s__('ClusterIntegration|%{title} upgraded successfully.'), {
+        title: this.title,
+      });
+    },
+    upgradeButtonLabel() {
+      let label;
+      if (this.upgradeAvailable && !this.updateFailed && !this.isUpgrading) {
+        label = s__('ClusterIntegration|Upgrade');
+      } else if (this.isUpgrading) {
+        label = s__('ClusterIntegration|Updating');
+      } else if (this.updateFailed) {
+        label = s__('ClusterIntegration|Retry update');
+      }
+
+      return label;
+    },
+    isUpgrading() {
+      // Since upgrading is handled asynchronously on the backend we need this check to prevent any delay on the frontend
+      return this.status === APPLICATION_STATUS.UPDATING;
+    },
+    shouldShowUpgradeDetails() {
+      // This method only returns true when;
+      // Upgrade was successful OR Upgrade failed
+      //     AND new upgrade is unavailable AND version information is present.
+      return (this.updateSuccessful || this.updateFailed) && !this.upgradeAvailable && this.version;
+    },
+    uninstallSuccessDescription() {
+      return sprintf(s__('ClusterIntegration|%{title} uninstalled successfully.'), {
+        title: this.title,
+      });
+    },
+  },
+  watch: {
+    updateSuccessful(updateSuccessful) {
+      if (updateSuccessful) {
+        this.$toast.show(this.upgradeSuccessDescription);
+      }
+    },
+    uninstallSuccessful(uninstallSuccessful) {
+      if (uninstallSuccessful) {
+        this.$toast.show(this.uninstallSuccessDescription);
+      }
+    },
+  },
+  methods: {
+    installClicked() {
+      eventHub.$emit('installApplication', {
+        id: this.id,
+        params: this.installApplicationRequestParams,
+      });
+    },
+    upgradeClicked() {
+      eventHub.$emit('upgradeApplication', {
+        id: this.id,
+        params: this.installApplicationRequestParams,
+      });
+    },
+    uninstallConfirmed() {
+      eventHub.$emit('uninstallApplication', {
+        id: this.id,
+      });
+    },
+  },
+};
 </script>
 
 <template>
   <div
-    class="gl-responsive-table-row gl-responsive-table-row-col-span"
-    :class="rowJsClass"
+    :class="[
+      rowJsClass,
+      installed && 'cluster-application-installed',
+      disabled && 'cluster-application-disabled',
+    ]"
+    class="cluster-application-row gl-responsive-table-row gl-responsive-table-row-col-span"
   >
-    <div
-      class="gl-responsive-table-row-layout"
-      role="row"
-    >
-      <a
-        v-if="titleLink"
-        :href="titleLink"
-        target="blank"
-        rel="noopener noreferrer"
-        role="gridcell"
-        class="table-section section-15 section-align-top js-cluster-application-title"
-      >
-        {{ title }}
-      </a>
-      <span
-        v-else
-        class="table-section section-15 section-align-top js-cluster-application-title"
-      >
-        {{ title }}
-      </span>
-      <div
-        class="table-section section-wrap"
-        role="gridcell"
-      >
-        <slot name="description"></slot>
+    <div class="gl-responsive-table-row-layout" role="row">
+      <div class="table-section append-right-8 section-align-top" role="gridcell">
+        <img
+          v-if="hasLogo"
+          :src="logoUrl"
+          :alt="`${title} logo`"
+          class="cluster-application-logo avatar s40"
+        />
+        <identicon v-else :entity-id="identiconId" :entity-name="title" size-class="s40" />
       </div>
-      <div
-        class="table-section table-button-footer section-align-top"
-        :class="{ 'section-20': showManageButton, 'section-15': !showManageButton }"
-        role="gridcell"
-      >
-        <div
-          v-if="showManageButton"
-          class="btn-group table-action-buttons"
-        >
+      <div class="table-section cluster-application-description section-wrap" role="gridcell">
+        <strong>
           <a
-            class="btn"
-            :href="manageLink"
+            v-if="titleLink"
+            :href="titleLink"
+            target="blank"
+            rel="noopener noreferrer"
+            class="js-cluster-application-title"
+            >{{ title }}</a
           >
-            {{ manageButtonLabel }}
-          </a>
-        </div>
-        <div class="btn-group table-action-buttons">
-          <loading-button
-            class="js-cluster-application-install-button"
-            :loading="installButtonLoading"
-            :disabled="installButtonDisabled"
-            :label="installButtonLabel"
-            @click="installClicked"
-          />
-        </div>
-      </div>
-    </div>
-    <div
-      v-if="hasError"
-      class="gl-responsive-table-row-layout"
-      role="row"
-    >
-      <div
-        class="alert alert-danger alert-block append-bottom-0 clusters-error-alert"
-        role="gridcell"
-      >
-        <div>
-          <p class="js-cluster-application-general-error-message">
+          <span v-else class="js-cluster-application-title">{{ title }}</span>
+        </strong>
+        <slot name="description"></slot>
+        <div v-if="hasError" class="cluster-application-error text-danger prepend-top-10">
+          <p class="js-cluster-application-general-error-message append-bottom-0">
             {{ generalErrorDescription }}
           </p>
           <ul v-if="statusReason || requestReason">
-            <li
-              v-if="statusReason"
-              class="js-cluster-application-status-error-message"
-            >
+            <li v-if="statusReason" class="js-cluster-application-status-error-message">
               {{ statusReason }}
             </li>
-            <li
-              v-if="requestReason"
-              class="js-cluster-application-request-error-message"
-            >
+            <li v-if="requestReason" class="js-cluster-application-request-error-message">
               {{ requestReason }}
             </li>
           </ul>
+        </div>
+
+        <div
+          v-if="shouldShowUpgradeDetails"
+          class="form-text text-muted label p-0 js-cluster-application-upgrade-details"
+        >
+          {{ versionLabel }}
+          <span v-if="updateSuccessful">to</span>
+
+          <gl-link
+            v-if="updateSuccessful"
+            :href="chartRepo"
+            target="_blank"
+            class="js-cluster-application-upgrade-version"
+            >chart v{{ version }}</gl-link
+          >
+        </div>
+
+        <div
+          v-if="updateFailed && !isUpgrading"
+          class="bs-callout bs-callout-danger cluster-application-banner mt-2 mb-0 js-cluster-application-upgrade-failure-message"
+        >
+          {{ upgradeFailureDescription }}
+        </div>
+        <loading-button
+          v-if="upgradeAvailable || updateFailed || isUpgrading"
+          class="btn btn-primary js-cluster-application-upgrade-button mt-2"
+          :loading="isUpgrading"
+          :disabled="isUpgrading"
+          :label="upgradeButtonLabel"
+          @click="upgradeClicked"
+        />
+      </div>
+      <div
+        :class="{ 'section-25': showManageButton, 'section-15': !showManageButton }"
+        class="table-section table-button-footer section-align-top"
+        role="gridcell"
+      >
+        <div v-if="showManageButton" class="btn-group table-action-buttons">
+          <a :href="manageLink" :class="{ disabled: disabled }" class="btn">{{
+            manageButtonLabel
+          }}</a>
+        </div>
+        <div class="btn-group table-action-buttons">
+          <loading-button
+            v-if="displayInstallButton"
+            :loading="installButtonLoading"
+            :disabled="disabled || installButtonDisabled"
+            :label="installButtonLabel"
+            class="js-cluster-application-install-button"
+            @click="installClicked"
+          />
+          <uninstall-application-button
+            v-if="displayUninstallButton"
+            v-gl-modal-directive="'uninstall-' + id"
+            :status="status"
+            class="js-cluster-application-uninstall-button"
+          />
+          <uninstall-application-confirmation-modal
+            :application="id"
+            :application-title="title"
+            @confirm="uninstallConfirmed()"
+          />
         </div>
       </div>
     </div>

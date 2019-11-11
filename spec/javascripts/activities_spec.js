@@ -1,4 +1,4 @@
-/* eslint-disable no-unused-expressions, no-prototype-builtins, no-new, no-shadow, max-len */
+/* eslint-disable no-unused-expressions, no-prototype-builtins, no-new, no-shadow */
 
 import $ from 'jquery';
 import 'vendor/jquery.endless-scroll';
@@ -7,7 +7,7 @@ import Pager from '~/pager';
 
 describe('Activities', () => {
   window.gon || (window.gon = {});
-  const fixtureTemplate = 'static/event_filter.html.raw';
+  const fixtureTemplate = 'static/event_filter.html';
   const filters = [
     {
       id: 'all',

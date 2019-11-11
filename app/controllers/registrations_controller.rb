@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class RegistrationsController < Devise::RegistrationsController
   include Recaptcha::Verify
   include AcceptsPendingInvitations
@@ -25,7 +27,7 @@ class RegistrationsController < Devise::RegistrationsController
         persist_accepted_terms_if_required(new_user)
       end
     else
-      flash[:alert] = 'There was an error with the reCAPTCHA. Please solve the reCAPTCHA again.'
+      flash[:alert] = s_('Profiles|There was an error with the reCAPTCHA. Please solve the reCAPTCHA again.')
       flash.delete :recaptcha_error
       render action: 'new'
     end

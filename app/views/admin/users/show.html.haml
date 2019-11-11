@@ -39,6 +39,10 @@
             %strong= email.email
             = link_to remove_email_admin_user_path(@user, email), data: { confirm: "Are you sure you want to remove #{email.email}?" }, method: :delete, class: "btn-sm btn btn-remove float-right", title: 'Remove secondary email', id: "remove_email_#{email.id}" do
               %i.fa.fa-times
+        %li
+          %span.light ID:
+          %strong
+            = @user.id
 
         %li.two-factor-status
           %span.light Two-factor Authentication:
@@ -48,6 +52,8 @@
               = link_to 'Disable', disable_two_factor_admin_user_path(@user), data: {confirm: 'Are you sure?'}, method: :patch, class: 'btn btn-sm btn-remove float-right', title: 'Disable Two-factor Authentication'
             - else
               Disabled
+
+        = render_if_exists 'admin/namespace_plan_info', namespace: @user.namespace
 
         %li
           %span.light External User:
@@ -113,6 +119,11 @@
           %strong
             = @user.sign_in_count
 
+        %li
+          %span.light= _("Highest role:")
+          %strong
+            = Gitlab::Access.human_access_with_none(@user.highest_role)
+
         - if @user.ldap_user?
           %li
             %span.light LDAP uid:
@@ -125,11 +136,13 @@
             %strong
               = link_to @user.created_by.name, [:admin, @user.created_by]
 
+        = render_if_exists partial: "namespaces/shared_runner_status", locals: { namespace: @user.namespace }
+
   .col-md-6
     - unless @user == current_user
       - unless @user.confirmed?
-        .card.bg-info
-          .card-header
+        .card.border-info
+          .card-header.bg-info.text-white
             Confirm user
           .card-body
             - if @user.unconfirmed_email.present?
@@ -137,9 +150,12 @@
             %p This user has an unconfirmed email address#{email}. You may force a confirmation.
             %br
             = link_to 'Confirm user', confirm_admin_user_path(@user), method: :put, class: "btn btn-info", data: { confirm: 'Are you sure?' }
+
+      = render_if_exists 'admin/users/user_detail_note'
+
       - if @user.blocked?
-        .card.bg-info
-          .card-header
+        .card.border-info
+          .card-header.bg-info.text-white
             This user is blocked
           .card-body
             %p A blocked user cannot:
@@ -149,8 +165,8 @@
             %br
             = link_to 'Unblock user', unblock_admin_user_path(@user), method: :put, class: "btn btn-info", data: { confirm: 'Are you sure?' }
       - else
-        .card.bg-warning
-          .card-header
+        .card.border-warning
+          .card-header.bg-warning.text-white
             Block this user
           .card-body
             %p Blocking user has the following effects:
@@ -162,16 +178,16 @@
             %br
             = link_to 'Block user', block_admin_user_path(@user), data: { confirm: 'USER WILL BE BLOCKED! Are you sure?' }, method: :put, class: "btn btn-warning"
       - if @user.access_locked?
-        .card.bg-info
-          .card-header
+        .card.border-info
+          .card-header.bg-info.text-white
             This account has been locked
           .card-body
             %p This user has been temporarily locked due to excessive number of failed logins. You may manually unlock the account.
             %br
             = link_to 'Unlock user', unlock_admin_user_path(@user), method: :put, class: "btn btn-info", data: { confirm: 'Are you sure?' }
 
-      .card.bg-danger
-        .card-header
+      .card.border-danger
+        .card-header.bg-danger.text-white
           = s_('AdminUsers|Delete user')
         .card-body
           - if @user.can_be_removed? && can?(current_user, :destroy_user, @user)
@@ -196,8 +212,8 @@
               %p
                 You don't have access to delete this user.
 
-      .card.bg-danger
-        .card-header
+      .card.border-danger
+        .card-header.bg-danger.text-white
           = s_('AdminUsers|Delete user and contributions')
         .card-body
           - if can?(current_user, :destroy_user, @user)

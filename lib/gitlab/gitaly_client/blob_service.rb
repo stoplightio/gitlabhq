@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module GitalyClient
     class BlobService
@@ -13,9 +15,9 @@ module Gitlab
           oid: oid,
           limit: limit
         )
-        response = GitalyClient.call(@gitaly_repo.storage_name, :blob_service, :get_blob, request)
+        response = GitalyClient.call(@gitaly_repo.storage_name, :blob_service, :get_blob, request, timeout: GitalyClient.fast_timeout)
 
-        data = ''
+        data = []
         blob = nil
         response.each do |msg|
           if blob.nil?
@@ -25,7 +27,9 @@ module Gitlab
           data << msg.data
         end
 
-        return nil if blob.oid.blank?
+        return if blob.oid.blank?
+
+        data = data.join
 
         Gitlab::Git::Blob.new(
           id: blob.oid,
@@ -43,7 +47,7 @@ module Gitlab
           blob_ids: blob_ids
         )
 
-        response = GitalyClient.call(@gitaly_repo.storage_name, :blob_service, :get_lfs_pointers, request)
+        response = GitalyClient.call(@gitaly_repo.storage_name, :blob_service, :get_lfs_pointers, request, timeout: GitalyClient.medium_timeout)
 
         map_lfs_pointers(response)
       end
@@ -51,13 +55,13 @@ module Gitlab
       def get_blobs(revision_paths, limit = -1)
         return [] if revision_paths.empty?
 
-        revision_paths.map! do |rev, path|
+        request_revision_paths = revision_paths.map do |rev, path|
           Gitaly::GetBlobsRequest::RevisionPath.new(revision: rev, path: encode_binary(path))
         end
 
         request = Gitaly::GetBlobsRequest.new(
           repository: @gitaly_repo,
-          revision_paths: revision_paths,
+          revision_paths: request_revision_paths,
           limit: limit
         )
 
@@ -66,13 +70,13 @@ module Gitlab
           :blob_service,
           :get_blobs,
           request,
-          timeout: GitalyClient.default_timeout
+          timeout: GitalyClient.fast_timeout
         )
 
         GitalyClient::BlobsStitcher.new(response)
       end
 
-      def get_new_lfs_pointers(revision, limit, not_in)
+      def get_new_lfs_pointers(revision, limit, not_in, dynamic_timeout = nil)
         request = Gitaly::GetNewLFSPointersRequest.new(
           repository: @gitaly_repo,
           revision: encode_binary(revision),
@@ -85,7 +89,20 @@ module Gitlab
           request.not_in_refs += not_in
         end
 
-        response = GitalyClient.call(@gitaly_repo.storage_name, :blob_service, :get_new_lfs_pointers, request)
+        timeout =
+          if dynamic_timeout
+            [dynamic_timeout, GitalyClient.medium_timeout].min
+          else
+            GitalyClient.medium_timeout
+          end
+
+        response = GitalyClient.call(
+          @gitaly_repo.storage_name,
+          :blob_service,
+          :get_new_lfs_pointers,
+          request,
+          timeout: timeout
+        )
 
         map_lfs_pointers(response)
       end
@@ -96,7 +113,7 @@ module Gitlab
           revision: encode_binary(revision)
         )
 
-        response = GitalyClient.call(@gitaly_repo.storage_name, :blob_service, :get_all_lfs_pointers, request)
+        response = GitalyClient.call(@gitaly_repo.storage_name, :blob_service, :get_all_lfs_pointers, request, timeout: GitalyClient.medium_timeout)
 
         map_lfs_pointers(response)
       end

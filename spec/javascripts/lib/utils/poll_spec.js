@@ -1,4 +1,7 @@
+/* eslint-disable jasmine/no-unsafe-spy */
+
 import Poll from '~/lib/utils/poll';
+import { successCodes } from '~/lib/utils/http_status';
 
 const waitForAllCallsToFinish = (service, waitForCount, successCallback) => {
   const timer = () => {
@@ -44,7 +47,7 @@ describe('Poll', () => {
     service.fetch.calls.reset();
   });
 
-  it('calls the success callback when no header for interval is provided', (done) => {
+  it('calls the success callback when no header for interval is provided', done => {
     mockServiceCall(service, { status: 200 });
     setup();
 
@@ -56,7 +59,7 @@ describe('Poll', () => {
     });
   });
 
-  it('calls the error callback when the http request returns an error', (done) => {
+  it('calls the error callback when the http request returns an error', done => {
     mockServiceCall(service, { status: 500 }, true);
     setup();
 
@@ -68,7 +71,7 @@ describe('Poll', () => {
     });
   });
 
-  it('skips the error callback when request is aborted', (done) => {
+  it('skips the error callback when request is aborted', done => {
     mockServiceCall(service, { status: 0 }, true);
     setup();
 
@@ -81,43 +84,49 @@ describe('Poll', () => {
     });
   });
 
-  it('should call the success callback when the interval header is -1', (done) => {
+  it('should call the success callback when the interval header is -1', done => {
     mockServiceCall(service, { status: 200, headers: { 'poll-interval': -1 } });
-    setup().then(() => {
-      expect(callbacks.success).toHaveBeenCalled();
-      expect(callbacks.error).not.toHaveBeenCalled();
+    setup()
+      .then(() => {
+        expect(callbacks.success).toHaveBeenCalled();
+        expect(callbacks.error).not.toHaveBeenCalled();
 
-      done();
-    }).catch(done.fail);
+        done();
+      })
+      .catch(done.fail);
   });
 
-  it('starts polling when http status is 200 and interval header is provided', (done) => {
-    mockServiceCall(service, { status: 200, headers: { 'poll-interval': 1 } });
+  describe('for 2xx status code', () => {
+    successCodes.forEach(httpCode => {
+      it(`starts polling when http status is ${httpCode} and interval header is provided`, done => {
+        mockServiceCall(service, { status: httpCode, headers: { 'poll-interval': 1 } });
 
-    const Polling = new Poll({
-      resource: service,
-      method: 'fetch',
-      data: { page: 1 },
-      successCallback: callbacks.success,
-      errorCallback: callbacks.error,
-    });
+        const Polling = new Poll({
+          resource: service,
+          method: 'fetch',
+          data: { page: 1 },
+          successCallback: callbacks.success,
+          errorCallback: callbacks.error,
+        });
 
-    Polling.makeRequest();
+        Polling.makeRequest();
 
-    waitForAllCallsToFinish(service, 2, () => {
-      Polling.stop();
+        waitForAllCallsToFinish(service, 2, () => {
+          Polling.stop();
 
-      expect(service.fetch.calls.count()).toEqual(2);
-      expect(service.fetch).toHaveBeenCalledWith({ page: 1 });
-      expect(callbacks.success).toHaveBeenCalled();
-      expect(callbacks.error).not.toHaveBeenCalled();
+          expect(service.fetch.calls.count()).toEqual(2);
+          expect(service.fetch).toHaveBeenCalledWith({ page: 1 });
+          expect(callbacks.success).toHaveBeenCalled();
+          expect(callbacks.error).not.toHaveBeenCalled();
 
-      done();
+          done();
+        });
+      });
     });
   });
 
   describe('stop', () => {
-    it('stops polling when method is called', (done) => {
+    it('stops polling when method is called', done => {
       mockServiceCall(service, { status: 200, headers: { 'poll-interval': 1 } });
 
       const Polling = new Poll({
@@ -144,8 +153,38 @@ describe('Poll', () => {
     });
   });
 
+  describe('enable', () => {
+    it('should enable polling upon a response', done => {
+      jasmine.clock().install();
+
+      const Polling = new Poll({
+        resource: service,
+        method: 'fetch',
+        data: { page: 1 },
+        successCallback: () => {},
+      });
+
+      Polling.enable({
+        data: { page: 4 },
+        response: { status: 200, headers: { 'poll-interval': 1 } },
+      });
+
+      jasmine.clock().tick(1);
+      jasmine.clock().uninstall();
+
+      waitForAllCallsToFinish(service, 1, () => {
+        Polling.stop();
+
+        expect(service.fetch.calls.count()).toEqual(1);
+        expect(service.fetch).toHaveBeenCalledWith({ page: 4 });
+        expect(Polling.options.data).toEqual({ page: 4 });
+        done();
+      });
+    });
+  });
+
   describe('restart', () => {
-    it('should restart polling when its called', (done) => {
+    it('should restart polling when its called', done => {
       mockServiceCall(service, { status: 200, headers: { 'poll-interval': 1 } });
 
       const Polling = new Poll({
@@ -162,6 +201,7 @@ describe('Poll', () => {
       });
 
       spyOn(Polling, 'stop').and.callThrough();
+      spyOn(Polling, 'enable').and.callThrough();
       spyOn(Polling, 'restart').and.callThrough();
 
       Polling.makeRequest();
@@ -172,6 +212,7 @@ describe('Poll', () => {
         expect(service.fetch.calls.count()).toEqual(2);
         expect(service.fetch).toHaveBeenCalledWith({ page: 4 });
         expect(Polling.stop).toHaveBeenCalled();
+        expect(Polling.enable).toHaveBeenCalled();
         expect(Polling.restart).toHaveBeenCalled();
         expect(Polling.options.data).toEqual({ page: 4 });
         done();

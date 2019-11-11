@@ -19,8 +19,8 @@ describe Gitlab::Database::RenameReservedPathsMigration::V1::RenameBase, :delete
       Project.find(project.id)
   end
 
-  describe "#remove_last_ocurrence" do
-    it "removes only the last occurance of a string" do
+  describe "#remove_last_occurrence" do
+    it "removes only the last occurrence of a string" do
       input = "this/is/a-word-to-replace/namespace/with/a-word-to-replace"
 
       expect(subject.remove_last_occurrence(input, "a-word-to-replace"))

@@ -15,7 +15,7 @@ if defined?(Unicorn)
   end
 end
 
-require ::File.expand_path('../config/environment',  __FILE__)
+require ::File.expand_path('../config/environment', __FILE__)
 
 warmup do |app|
   client = Rack::MockRequest.new(app)

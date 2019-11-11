@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe WaitableWorker do
@@ -18,8 +20,8 @@ describe WaitableWorker do
       def self.bulk_perform_inline(args_list)
       end
 
-      def perform(i = 0)
-        self.class.counter += i
+      def perform(count = 0)
+        self.class.counter += count
       end
     end
   end

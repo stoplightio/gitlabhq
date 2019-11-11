@@ -2,7 +2,21 @@ require 'spec_helper'
 
 # We stub Gitaly in `spec/support/gitaly.rb` for other tests. We don't want
 # those stubs while testing the GitalyClient itself.
-describe Gitlab::GitalyClient, skip_gitaly_mock: true do
+describe Gitlab::GitalyClient do
+  let(:sample_cert) { Rails.root.join('spec/fixtures/clusters/sample_cert.pem').to_s }
+
+  before do
+    allow(described_class)
+      .to receive(:stub_cert_paths)
+      .and_return([sample_cert])
+  end
+
+  def stub_repos_storages(address)
+    allow(Gitlab.config.repositories).to receive(:storages).and_return({
+      'default' => { 'gitaly_address' => address }
+    })
+  end
+
   describe '.stub_class' do
     it 'returns the gRPC health check stub' do
       expect(described_class.stub_class(:health_check)).to eq(::Grpc::Health::V1::Health::Stub)
@@ -15,16 +29,51 @@ describe Gitlab::GitalyClient, skip_gitaly_mock: true do
 
   describe '.stub_address' do
     it 'returns the same result after being called multiple times' do
-      address = 'localhost:9876'
-      prefixed_address = "tcp://#{address}"
-
-      allow(Gitlab.config.repositories).to receive(:storages).and_return({
-        'default' => { 'gitaly_address' => prefixed_address }
-      })
+      address = 'tcp://localhost:9876'
+      stub_repos_storages address
 
       2.times do
         expect(described_class.stub_address('default')).to eq('localhost:9876')
       end
+    end
+  end
+
+  describe '.stub_certs' do
+    it 'skips certificates if OpenSSLError is raised and report it' do
+      expect(Rails.logger).to receive(:error).at_least(:once)
+      expect(Gitlab::Sentry)
+        .to receive(:track_exception)
+        .with(
+          a_kind_of(OpenSSL::X509::CertificateError),
+          extra: { cert_file: a_kind_of(String) }).at_least(:once)
+
+      expect(OpenSSL::X509::Certificate)
+        .to receive(:new)
+        .and_raise(OpenSSL::X509::CertificateError).at_least(:once)
+
+      expect(described_class.stub_certs).to be_a(String)
+    end
+  end
+  describe '.stub_creds' do
+    it 'returns :this_channel_is_insecure if unix' do
+      address = 'unix:/tmp/gitaly.sock'
+      stub_repos_storages address
+
+      expect(described_class.stub_creds('default')).to eq(:this_channel_is_insecure)
+    end
+
+    it 'returns :this_channel_is_insecure if tcp' do
+      address = 'tcp://localhost:9876'
+      stub_repos_storages address
+
+      expect(described_class.stub_creds('default')).to eq(:this_channel_is_insecure)
+    end
+
+    it 'returns Credentials object if tls' do
+      address = 'tls://localhost:9876'
+      stub_repos_storages address
+
+      expect(described_class.stub_creds('default')).to be_a(GRPC::Core::ChannelCredentials)
     end
   end
 
@@ -37,9 +86,19 @@ describe Gitlab::GitalyClient, skip_gitaly_mock: true do
     context 'when passed a UNIX socket address' do
       it 'passes the address as-is to GRPC' do
         address = 'unix:/tmp/gitaly.sock'
-        allow(Gitlab.config.repositories).to receive(:storages).and_return({
-          'default' => { 'gitaly_address' => address }
-        })
+        stub_repos_storages address
+
+        expect(Gitaly::CommitService::Stub).to receive(:new).with(address, any_args)
+
+        described_class.stub(:commit_service, 'default')
+      end
+    end
+
+    context 'when passed a TLS address' do
+      it 'strips tls:// prefix before passing it to GRPC::Core::Channel initializer' do
+        address = 'localhost:9876'
+        prefixed_address = "tls://#{address}"
+        stub_repos_storages prefixed_address
 
         expect(Gitaly::CommitService::Stub).to receive(:new).with(address, any_args)
 
@@ -51,15 +110,21 @@ describe Gitlab::GitalyClient, skip_gitaly_mock: true do
       it 'strips tcp:// prefix before passing it to GRPC::Core::Channel initializer' do
         address = 'localhost:9876'
         prefixed_address = "tcp://#{address}"
-
-        allow(Gitlab.config.repositories).to receive(:storages).and_return({
-          'default' => { 'gitaly_address' => prefixed_address }
-        })
+        stub_repos_storages prefixed_address
 
         expect(Gitaly::CommitService::Stub).to receive(:new).with(address, any_args)
 
         described_class.stub(:commit_service, 'default')
       end
+    end
+  end
+
+  describe '.connection_data' do
+    it 'returns connection data' do
+      address = 'tcp://localhost:9876'
+      stub_repos_storages address
+
+      expect(described_class.connection_data('default')).to eq({ 'address' => address, 'token' => 'secret' })
     end
   end
 
@@ -77,6 +142,48 @@ describe Gitlab::GitalyClient, skip_gitaly_mock: true do
     end
   end
 
+  describe '.request_kwargs' do
+    context 'when catfile-cache feature is enabled' do
+      before do
+        stub_feature_flags('gitaly_catfile-cache': true)
+      end
+
+      it 'sets the gitaly-session-id in the metadata' do
+        results = described_class.request_kwargs('default', nil)
+        expect(results[:metadata]).to include('gitaly-session-id')
+      end
+
+      context 'when RequestStore is not enabled' do
+        it 'sets a different gitaly-session-id per request' do
+          gitaly_session_id = described_class.request_kwargs('default', nil)[:metadata]['gitaly-session-id']
+
+          expect(described_class.request_kwargs('default', nil)[:metadata]['gitaly-session-id']).not_to eq(gitaly_session_id)
+        end
+      end
+
+      context 'when RequestStore is enabled', :request_store do
+        it 'sets the same gitaly-session-id on every outgoing request metadata' do
+          gitaly_session_id = described_class.request_kwargs('default', nil)[:metadata]['gitaly-session-id']
+
+          3.times do
+            expect(described_class.request_kwargs('default', nil)[:metadata]['gitaly-session-id']).to eq(gitaly_session_id)
+          end
+        end
+      end
+    end
+
+    context 'when catfile-cache feature is disabled' do
+      before do
+        stub_feature_flags({ 'gitaly_catfile-cache': false })
+      end
+
+      it 'does not set the gitaly-session-id in the metadata' do
+        results = described_class.request_kwargs('default', nil)
+        expect(results[:metadata]).not_to include('gitaly-session-id')
+      end
+    end
+  end
+
   describe 'enforce_gitaly_request_limits?' do
     def call_gitaly(count = 1)
       (1..count).each do
@@ -84,9 +191,19 @@ describe Gitlab::GitalyClient, skip_gitaly_mock: true do
       end
     end
 
-    context 'when RequestStore is enabled', :request_store do
+    context 'when RequestStore is enabled and the maximum number of calls is not enforced by a feature flag', :request_store do
+      before do
+        stub_feature_flags(gitaly_enforce_requests_limits: false)
+      end
+
       it 'allows up the maximum number of allowed calls' do
         expect { call_gitaly(Gitlab::GitalyClient::MAXIMUM_GITALY_CALLS) }.not_to raise_error
+      end
+
+      it 'allows the maximum number of calls to be exceeded if GITALY_DISABLE_REQUEST_LIMITS is set' do
+        stub_env('GITALY_DISABLE_REQUEST_LIMITS', 'true')
+
+        expect { call_gitaly(Gitlab::GitalyClient::MAXIMUM_GITALY_CALLS + 1) }.not_to raise_error
       end
 
       context 'when the maximum number of calls has been reached' do
@@ -120,6 +237,32 @@ describe Gitlab::GitalyClient, skip_gitaly_mock: true do
 
         it 'does not allow the maximum number of calls to be exceeded outside of an allow_n_plus_1_calls block' do
           expect { call_gitaly(Gitlab::GitalyClient::MAXIMUM_GITALY_CALLS + 1) }.to raise_error(Gitlab::GitalyClient::TooManyInvocationsError)
+        end
+      end
+    end
+
+    context 'in production and when RequestStore is enabled', :request_store do
+      before do
+        allow(Rails.env).to receive(:production?).and_return(true)
+      end
+
+      context 'when the maximum number of calls is enforced by a feature flag' do
+        before do
+          stub_feature_flags(gitaly_enforce_requests_limits: true)
+        end
+
+        it 'does not allow the maximum number of calls to be exceeded' do
+          expect { call_gitaly(Gitlab::GitalyClient::MAXIMUM_GITALY_CALLS + 1) }.to raise_error(Gitlab::GitalyClient::TooManyInvocationsError)
+        end
+      end
+
+      context 'when the maximum number of calls is not enforced by a feature flag' do
+        before do
+          stub_feature_flags(gitaly_enforce_requests_limits: false)
+        end
+
+        it 'allows the maximum number of calls to be exceeded' do
+          expect { call_gitaly(Gitlab::GitalyClient::MAXIMUM_GITALY_CALLS + 1) }.not_to raise_error
         end
       end
     end
@@ -191,102 +334,13 @@ describe Gitlab::GitalyClient, skip_gitaly_mock: true do
     let(:feature_name) { 'my_feature' }
     let(:real_feature_name) { "gitaly_#{feature_name}" }
 
-    context 'when Gitaly is disabled' do
-      before do
-        allow(described_class).to receive(:enabled?).and_return(false)
-      end
-
-      it 'returns false' do
-        expect(described_class.feature_enabled?(feature_name)).to be(false)
-      end
+    before do
+      allow(Feature).to receive(:enabled?).and_return(false)
     end
 
-    context 'when the feature status is DISABLED' do
-      let(:feature_status) { Gitlab::GitalyClient::MigrationStatus::DISABLED }
-
-      it 'returns false' do
-        expect(described_class.feature_enabled?(feature_name, status: feature_status)).to be(false)
-      end
-    end
-
-    context 'when the feature_status is OPT_IN' do
-      let(:feature_status) { Gitlab::GitalyClient::MigrationStatus::OPT_IN }
-
-      context "when the feature flag hasn't been set" do
-        it 'returns false' do
-          expect(described_class.feature_enabled?(feature_name, status: feature_status)).to be(false)
-        end
-      end
-
-      context "when the feature flag is set to disable" do
-        before do
-          Feature.get(real_feature_name).disable
-        end
-
-        it 'returns false' do
-          expect(described_class.feature_enabled?(feature_name, status: feature_status)).to be(false)
-        end
-      end
-
-      context "when the feature flag is set to enable" do
-        before do
-          Feature.get(real_feature_name).enable
-        end
-
-        it 'returns true' do
-          expect(described_class.feature_enabled?(feature_name, status: feature_status)).to be(true)
-        end
-      end
-
-      context "when the feature flag is set to a percentage of time" do
-        before do
-          Feature.get(real_feature_name).enable_percentage_of_time(70)
-        end
-
-        it 'bases the result on pseudo-random numbers' do
-          expect(Random).to receive(:rand).and_return(0.3)
-          expect(described_class.feature_enabled?(feature_name, status: feature_status)).to be(true)
-
-          expect(Random).to receive(:rand).and_return(0.8)
-          expect(described_class.feature_enabled?(feature_name, status: feature_status)).to be(false)
-        end
-      end
-
-      context "when a feature is not persisted" do
-        it 'returns false when opt_into_all_features is off' do
-          allow(Feature).to receive(:persisted?).and_return(false)
-          allow(described_class).to receive(:opt_into_all_features?).and_return(false)
-
-          expect(described_class.feature_enabled?(feature_name, status: feature_status)).to be(false)
-        end
-
-        it 'returns true when the override is on' do
-          allow(Feature).to receive(:persisted?).and_return(false)
-          allow(described_class).to receive(:opt_into_all_features?).and_return(true)
-
-          expect(described_class.feature_enabled?(feature_name, status: feature_status)).to be(true)
-        end
-      end
-    end
-
-    context 'when the feature_status is OPT_OUT' do
-      let(:feature_status) { Gitlab::GitalyClient::MigrationStatus::OPT_OUT }
-
-      context "when the feature flag hasn't been set" do
-        it 'returns true' do
-          expect(described_class.feature_enabled?(feature_name, status: feature_status)).to be(true)
-        end
-      end
-
-      context "when the feature flag is set to disable" do
-        before do
-          Feature.get(real_feature_name).disable
-        end
-
-        it 'returns false' do
-          expect(described_class.feature_enabled?(feature_name, status: feature_status)).to be(false)
-        end
-      end
+    it 'returns false' do
+      expect(Feature).to receive(:enabled?).with(real_feature_name)
+      expect(described_class.feature_enabled?(feature_name)).to be(false)
     end
   end
 
@@ -302,6 +356,31 @@ describe Gitlab::GitalyClient, skip_gitaly_mock: true do
         expect(described_class.default_timeout).to be(55)
         expect(described_class.medium_timeout).to be(30)
         expect(described_class.fast_timeout).to be(10)
+      end
+    end
+  end
+
+  describe 'Peek Performance bar details' do
+    let(:gitaly_server) { Gitaly::Server.all.first }
+
+    before do
+      Gitlab::SafeRequestStore[:peek_enabled] = true
+    end
+
+    context 'when the request store is active', :request_store do
+      it 'records call details if a RPC is called' do
+        gitaly_server.server_version
+
+        expect(described_class.list_call_details).not_to be_empty
+        expect(described_class.list_call_details.size).to be(1)
+      end
+    end
+
+    context 'when no request store is active' do
+      it 'records nothing' do
+        gitaly_server.server_version
+
+        expect(described_class.list_call_details).to be_empty
       end
     end
   end

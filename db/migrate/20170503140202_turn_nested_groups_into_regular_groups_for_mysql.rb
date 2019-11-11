@@ -5,7 +5,7 @@
 # updating a namespace to also rename directories (uploads, GitLab pages, etc).
 # The alternative is to copy hundreds of lines of code into this migration,
 # adjust them where needed, etc; something which doesn't work well at all.
-class TurnNestedGroupsIntoRegularGroupsForMysql < ActiveRecord::Migration
+class TurnNestedGroupsIntoRegularGroupsForMysql < ActiveRecord::Migration[4.2]
   include Gitlab::Database::MigrationHelpers
 
   # Set this constant to true if this migration requires downtime.
@@ -45,13 +45,6 @@ class TurnNestedGroupsIntoRegularGroupsForMysql < ActiveRecord::Migration
       end
 
       bulk_insert_members(rows)
-
-      # This method relies on the parent to determine the proper path.
-      # Because we reset "parent_id" this method will not return the right path
-      # when moving namespaces.
-      full_path_was = namespace.send(:full_path_was)
-
-      namespace.define_singleton_method(:full_path_was) { full_path_was }
 
       namespace.update!(parent_id: nil, path: new_path_for(namespace))
     end

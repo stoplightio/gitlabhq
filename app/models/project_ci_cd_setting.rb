@@ -1,4 +1,6 @@
-class ProjectCiCdSetting < ActiveRecord::Base
+# frozen_string_literal: true
+
+class ProjectCiCdSetting < ApplicationRecord
   belongs_to :project, inverse_of: :ci_cd_settings
 
   # The version of the schema that first introduced this model/table.

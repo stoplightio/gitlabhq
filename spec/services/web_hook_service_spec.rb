@@ -1,6 +1,10 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe WebHookService do
+  include StubRequests
+
   let(:project) { create(:project) }
   let(:project_hook) { create(:project_hook) }
   let(:headers) do
@@ -60,6 +64,36 @@ describe WebHookService do
       ).once
     end
 
+    context 'when auth credentials are present' do
+      let(:url) {'https://example.org'}
+      let(:project_hook) { create(:project_hook, url: 'https://demo:demo@example.org/') }
+
+      it 'uses the credentials' do
+        stub_full_request(url, method: :post)
+
+        service_instance.execute
+
+        expect(WebMock).to have_requested(:post, stubbed_hostname(url)).with(
+          headers: headers.merge('Authorization' => 'Basic ZGVtbzpkZW1v')
+        ).once
+      end
+    end
+
+    context 'when auth credentials are partial present' do
+      let(:url) {'https://example.org'}
+      let(:project_hook) { create(:project_hook, url: 'https://demo@example.org/') }
+
+      it 'uses the credentials anyways' do
+        stub_full_request(url, method: :post)
+
+        service_instance.execute
+
+        expect(WebMock).to have_requested(:post, stubbed_hostname(url)).with(
+          headers: headers.merge('Authorization' => 'Basic ZGVtbzo=')
+        ).once
+      end
+    end
+
     it 'catches exceptions' do
       WebMock.stub_request(:post, project_hook.url).to_raise(StandardError.new('Some error'))
 
@@ -67,12 +101,12 @@ describe WebHookService do
     end
 
     it 'handles exceptions' do
-      exceptions = [SocketError, OpenSSL::SSL::SSLError, Errno::ECONNRESET, Errno::ECONNREFUSED, Errno::EHOSTUNREACH, Net::OpenTimeout, Net::ReadTimeout, Gitlab::HTTP::BlockedUrlError]
+      exceptions = [SocketError, OpenSSL::SSL::SSLError, Errno::ECONNRESET, Errno::ECONNREFUSED, Errno::EHOSTUNREACH, Net::OpenTimeout, Net::ReadTimeout, Gitlab::HTTP::BlockedUrlError, Gitlab::HTTP::RedirectionTooDeep]
       exceptions.each do |exception_class|
         exception = exception_class.new('Exception message')
 
         WebMock.stub_request(:post, project_hook.url).to_raise(exception)
-        expect(service_instance.execute).to eq({ status: :error, message: exception.message })
+        expect(service_instance.execute).to eq({ status: :error, message: exception.to_s })
         expect { service_instance.execute }.not_to raise_error
       end
     end

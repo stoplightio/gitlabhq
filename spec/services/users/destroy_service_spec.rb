@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Users::DestroyService do
@@ -19,7 +21,9 @@ describe Users::DestroyService do
       end
 
       it 'will delete the project' do
-        expect_any_instance_of(Projects::DestroyService).to receive(:execute).once
+        expect_next_instance_of(Projects::DestroyService) do |destroy_service|
+          expect(destroy_service).to receive(:execute).once.and_return(true)
+        end
 
         service.execute(user)
       end
@@ -32,7 +36,9 @@ describe Users::DestroyService do
       end
 
       it 'destroys a project in pending_delete' do
-        expect_any_instance_of(Projects::DestroyService).to receive(:execute).once
+        expect_next_instance_of(Projects::DestroyService) do |destroy_service|
+          expect(destroy_service).to receive(:execute).once.and_return(true)
+        end
 
         service.execute(user)
 
@@ -74,7 +80,7 @@ describe Users::DestroyService do
       end
 
       context "for an merge request the user was assigned to" do
-        let!(:merge_request) { create(:merge_request, source_project: project, assignee: user) }
+        let!(:merge_request) { create(:merge_request, source_project: project, assignees: [user]) }
 
         before do
           service.execute(user)
@@ -87,7 +93,7 @@ describe Users::DestroyService do
         it 'migrates the merge request so that it is "Unassigned"' do
           migrated_merge_request = MergeRequest.find_by_id(merge_request.id)
 
-          expect(migrated_merge_request.assignee).to be_nil
+          expect(migrated_merge_request.assignees).to be_empty
         end
       end
     end
@@ -168,29 +174,44 @@ describe Users::DestroyService do
     end
 
     describe "user personal's repository removal" do
-      before do
-        Sidekiq::Testing.inline! { service.execute(user) }
-      end
+      context 'storages' do
+        before do
+          perform_enqueued_jobs { service.execute(user) }
+        end
 
-      context 'legacy storage' do
-        let!(:project) { create(:project, :empty_repo, :legacy_storage, namespace: user.namespace) }
+        context 'legacy storage' do
+          let!(:project) { create(:project, :empty_repo, :legacy_storage, namespace: user.namespace) }
 
-        it 'removes repository' do
-          expect(gitlab_shell.exists?(project.repository_storage, "#{project.disk_path}.git")).to be_falsey
+          it 'removes repository' do
+            expect(gitlab_shell.exists?(project.repository_storage, "#{project.disk_path}.git")).to be_falsey
+          end
+        end
+
+        context 'hashed storage' do
+          let!(:project) { create(:project, :empty_repo, namespace: user.namespace) }
+
+          it 'removes repository' do
+            expect(gitlab_shell.exists?(project.repository_storage, "#{project.disk_path}.git")).to be_falsey
+          end
         end
       end
 
-      context 'hashed storage' do
-        let!(:project) { create(:project, :empty_repo, namespace: user.namespace) }
+      context 'repository removal status is taken into account' do
+        it 'raises exception' do
+          expect_next_instance_of(::Projects::DestroyService) do |destroy_service|
+            expect(destroy_service).to receive(:execute).and_return(false)
+          end
 
-        it 'removes repository' do
-          expect(gitlab_shell.exists?(project.repository_storage, "#{project.disk_path}.git")).to be_falsey
+          expect { service.execute(user) }
+            .to raise_error(Users::DestroyService::DestroyError, "Project #{project.id} can't be deleted" )
         end
       end
     end
 
     describe "calls the before/after callbacks" do
       it 'of project_members' do
+        expect_any_instance_of(ProjectMember).to receive(:run_callbacks).with(:find).once
+        expect_any_instance_of(ProjectMember).to receive(:run_callbacks).with(:initialize).once
         expect_any_instance_of(ProjectMember).to receive(:run_callbacks).with(:destroy).once
 
         service.execute(user)
@@ -200,6 +221,8 @@ describe Users::DestroyService do
         group_member = create(:group_member)
         group_member.group.group_members.create(user: user, access_level: 40)
 
+        expect_any_instance_of(GroupMember).to receive(:run_callbacks).with(:find).once
+        expect_any_instance_of(GroupMember).to receive(:run_callbacks).with(:initialize).once
         expect_any_instance_of(GroupMember).to receive(:run_callbacks).with(:destroy).once
 
         service.execute(user)

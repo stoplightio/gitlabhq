@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'open3'
 
 module QA
@@ -11,10 +13,12 @@ module QA
       # TODO, make it possible to use generic QA framework classes
       # as a library - gitlab-org/gitlab-qa#94
       #
-      def shell(command)
+      def shell(command, stdin_data: nil)
         puts "Executing `#{command}`"
 
-        Open3.popen2e(*command) do |_in, out, wait|
+        Open3.popen2e(*command) do |stdin, out, wait|
+          stdin.puts(stdin_data) if stdin_data
+          stdin.close if stdin_data
           out.each { |line| puts line }
 
           if wait.value.exited? && wait.value.exitstatus.nonzero?

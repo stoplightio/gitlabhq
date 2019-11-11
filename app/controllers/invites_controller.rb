@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class InvitesController < ApplicationController
   before_action :member
   skip_before_action :authenticate_user!, only: :decline
@@ -11,9 +13,9 @@ class InvitesController < ApplicationController
     if member.accept_invite!(current_user)
       label, path = source_info(member.source)
 
-      redirect_to path, notice: "You have been granted #{member.human_access} access to #{label}."
+      redirect_to path, notice: _("You have been granted %{member_human_access} access to %{label}.") % { member_human_access: member.human_access, label: label }
     else
-      redirect_back_or_default(options: { alert: "The invitation could not be accepted." })
+      redirect_back_or_default(options: { alert: _("The invitation could not be accepted.") })
     end
   end
 
@@ -28,9 +30,9 @@ class InvitesController < ApplicationController
           new_user_session_path
         end
 
-      redirect_to path, notice: "You have declined the invitation to join #{label}."
+      redirect_to path, notice: _("You have declined the invitation to join %{label}.") % { label: label }
     else
-      redirect_back_or_default(options: { alert: "The invitation could not be declined." })
+      redirect_back_or_default(options: { alert: _("The invitation could not be declined.") })
     end
   end
 
@@ -50,9 +52,9 @@ class InvitesController < ApplicationController
   def authenticate_user!
     return if current_user
 
-    notice = "To accept this invitation, sign in"
-    notice << " or create an account" if Gitlab::CurrentSettings.allow_signup?
-    notice << "."
+    notice = ["To accept this invitation, sign in"]
+    notice << "or create an account" if Gitlab::CurrentSettings.allow_signup?
+    notice = notice.join(' ') + "."
 
     store_location_for :user, request.fullpath
     redirect_to new_user_session_path, notice: notice

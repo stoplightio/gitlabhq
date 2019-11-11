@@ -1,4 +1,6 @@
-class TermAgreement < ActiveRecord::Base
+# frozen_string_literal: true
+
+class TermAgreement < ApplicationRecord
   belongs_to :term, class_name: 'ApplicationSetting::Term'
   belongs_to :user
 

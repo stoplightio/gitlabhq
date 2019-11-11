@@ -16,6 +16,8 @@ describe 'Comments on personal snippets', :js do
   before do
     sign_in user
     visit snippet_path(snippet)
+
+    wait_for_requests
   end
 
   subject { page }
@@ -42,6 +44,15 @@ describe 'Comments on personal snippets', :js do
         expect(page).to have_selector('.note-emoji-button')
       end
     end
+
+    it 'shows the status of a note author' do
+      status = create(:user_status, user: user)
+      visit snippet_path(snippet)
+
+      within("#note_#{snippet_notes[0].id}") do
+        expect(page).to show_user_status(status)
+      end
+    end
   end
 
   context 'when submitting a note' do
@@ -59,7 +70,7 @@ describe 'Comments on personal snippets', :js do
       fill_in 'note[note]', with: 'This is **awesome**!'
       find('.js-md-preview-button').click
 
-      page.within('.new-note .md-preview') do
+      page.within('.new-note .md-preview-holder') do
         expect(page).to have_content('This is awesome!')
         expect(page).to have_selector('strong')
       end
@@ -72,7 +83,7 @@ describe 'Comments on personal snippets', :js do
       expect(find('div#notes')).to have_content('This is awesome!')
     end
 
-    it 'should not have autocomplete' do
+    it 'does not have autocomplete' do
       wait_for_requests
 
       find('#note_note').native.send_keys('')
@@ -92,7 +103,7 @@ describe 'Comments on personal snippets', :js do
 
       page.within('.current-note-edit-form') do
         fill_in 'note[note]', with: 'new content'
-        find('.btn-save').click
+        find('.btn-success').click
       end
 
       page.within("#notes-list li#note_#{snippet_notes[0].id}") do

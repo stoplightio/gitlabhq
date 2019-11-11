@@ -1,8 +1,10 @@
-class List < ActiveRecord::Base
+# frozen_string_literal: true
+
+class List < ApplicationRecord
   belongs_to :board
   belongs_to :label
 
-  enum list_type: { backlog: 0, label: 1, closed: 2, assignee: 3 }
+  enum list_type: { backlog: 0, label: 1, closed: 2, assignee: 3, milestone: 4 }
 
   validates :board, :list_type, presence: true
   validates :label, :position, presence: true, if: :label?
@@ -13,6 +15,7 @@ class List < ActiveRecord::Base
 
   scope :destroyable, -> { where(list_type: list_types.slice(*destroyable_types).values) }
   scope :movable, -> { where(list_type: list_types.slice(*movable_types).values) }
+  scope :preload_associations, -> { preload(:board, :label) }
 
   class << self
     def destroyable_types
@@ -25,11 +28,11 @@ class List < ActiveRecord::Base
   end
 
   def destroyable?
-    label?
+    self.class.destroyable_types.include?(list_type&.to_sym)
   end
 
   def movable?
-    label?
+    self.class.movable_types.include?(list_type&.to_sym)
   end
 
   def title
@@ -51,6 +54,6 @@ class List < ActiveRecord::Base
   private
 
   def can_be_destroyed
-    destroyable?
+    throw(:abort) unless destroyable?
   end
 end

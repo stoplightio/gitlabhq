@@ -25,8 +25,44 @@ describe UsersHelper do
       allow(helper).to receive(:can?).and_return(true)
     end
 
-    it 'includes all the expected tabs' do
-      expect(tabs).to include(:activity, :groups, :contributed, :projects, :snippets)
+    context 'with public profile' do
+      it 'includes all the expected tabs' do
+        expect(tabs).to include(:activity, :groups, :contributed, :projects, :snippets)
+      end
+    end
+
+    context 'with private profile' do
+      before do
+        allow(helper).to receive(:can?).with(user, :read_user_profile, nil).and_return(false)
+      end
+
+      it 'is empty' do
+        expect(tabs).to be_empty
+      end
+    end
+  end
+
+  describe '#user_internal_regex_data' do
+    using RSpec::Parameterized::TableSyntax
+
+    where(:user_default_external, :user_default_internal_regex, :result) do
+      false | nil                | { user_internal_regex_pattern: nil, user_internal_regex_options: nil }
+      false | ''                 | { user_internal_regex_pattern: nil, user_internal_regex_options: nil }
+      false | 'mockRegexPattern' | { user_internal_regex_pattern: nil, user_internal_regex_options: nil }
+      true  | nil                | { user_internal_regex_pattern: nil, user_internal_regex_options: nil }
+      true  | ''                 | { user_internal_regex_pattern: nil, user_internal_regex_options: nil }
+      true  | 'mockRegexPattern' | { user_internal_regex_pattern: 'mockRegexPattern', user_internal_regex_options: 'i' }
+    end
+
+    with_them do
+      before do
+        stub_application_setting(user_default_external: user_default_external)
+        stub_application_setting(user_default_internal_regex: user_default_internal_regex)
+      end
+
+      subject { helper.user_internal_regex_data }
+
+      it { is_expected.to eq(result) }
     end
   end
 
@@ -61,6 +97,74 @@ describe UsersHelper do
 
       it 'hides the profile and the settings tab' do
         expect(items).not_to include(:settings, :profile, :help)
+      end
+    end
+  end
+
+  describe '#user_badges_in_admin_section' do
+    before do
+      allow(helper).to receive(:current_user).and_return(user)
+    end
+
+    context 'with a blocked user' do
+      it "returns the blocked badge" do
+        blocked_user = create(:user, state: 'blocked')
+
+        badges = helper.user_badges_in_admin_section(blocked_user)
+
+        expect(badges).to eq([text: "Blocked", variant: "danger"])
+      end
+    end
+
+    context 'with an admin user' do
+      it "returns the admin badge" do
+        admin_user = create(:admin)
+
+        badges = helper.user_badges_in_admin_section(admin_user)
+
+        expect(badges).to eq([text: "Admin", variant: "success"])
+      end
+    end
+
+    context 'with an external user' do
+      it 'returns the external badge' do
+        external_user = create(:user, external: true)
+
+        badges = helper.user_badges_in_admin_section(external_user)
+
+        expect(badges).to eq([text: "External", variant: "secondary"])
+      end
+    end
+
+    context 'with the current user' do
+      it 'returns the "It\'s You" badge' do
+        badges = helper.user_badges_in_admin_section(user)
+
+        expect(badges).to eq([text: "It's you!", variant: nil])
+      end
+    end
+
+    context 'with an external blocked admin' do
+      it 'returns the blocked, admin and external badges' do
+        user = create(:admin, state: 'blocked', external: true)
+
+        badges = helper.user_badges_in_admin_section(user)
+
+        expect(badges).to eq([
+          { text: "Blocked", variant: "danger" },
+          { text: "Admin", variant: "success" },
+          { text: "External", variant: "secondary" }
+        ])
+      end
+    end
+
+    context 'get badges for normal user' do
+      it 'returns no badges' do
+        user = create(:user)
+
+        badges = helper.user_badges_in_admin_section(user)
+
+        expect(badges).to be_empty
       end
     end
   end

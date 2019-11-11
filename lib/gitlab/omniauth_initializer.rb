@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   class OmniauthInitializer
     def initialize(devise_config)
@@ -6,13 +8,16 @@ module Gitlab
 
     def execute(providers)
       providers.each do |provider|
-        add_provider(provider['name'].to_sym, *arguments_for(provider))
+        name = provider['name'].to_sym
+
+        add_provider_to_devise(name, *arguments_for(provider))
+        setup_provider(name)
       end
     end
 
     private
 
-    def add_provider(*args)
+    def add_provider_to_devise(*args)
       @devise_config.omniauth(*args)
     end
 
@@ -31,10 +36,23 @@ module Gitlab
         hash_arguments = provider['args'].merge(provider_defaults(provider))
 
         # A Hash from the configuration will be passed as is.
-        provider_arguments << hash_arguments.symbolize_keys
+        provider_arguments << normalize_hash_arguments(hash_arguments)
       end
 
       provider_arguments
+    end
+
+    def normalize_hash_arguments(args)
+      args.symbolize_keys!
+
+      # Rails 5.1 deprecated the use of string names in the middleware
+      # (https://github.com/rails/rails/commit/83b767ce), so we need to
+      # pass in the actual class to Devise.
+      if args[:strategy_class].is_a?(String)
+        args[:strategy_class] = args[:strategy_class].constantize
+      end
+
+      args
     end
 
     def provider_defaults(provider)
@@ -45,6 +63,12 @@ module Gitlab
         { remote_sign_out_handler: authentiq_signout_handler }
       when 'shibboleth'
         { fail_with_empty_uid: true }
+      when 'openid_connect'
+        # If a name argument is omitted, OmniAuth will expect that the
+        # matching route is /auth/users/openidconnect instead of
+        # /auth/users/openid_connect because of
+        # https://gitlab.com/gitlab-org/gitlab-ce/issues/62208#note_178780341.
+        { name: 'openid_connect' }
       else
         {}
       end
@@ -69,6 +93,24 @@ module Gitlab
         else
           false
         end
+      end
+    end
+
+    def omniauth_customized_providers
+      @omniauth_customized_providers ||= build_omniauth_customized_providers
+    end
+
+    # We override this in EE
+    def build_omniauth_customized_providers
+      %i[bitbucket jwt]
+    end
+
+    def setup_provider(provider)
+      case provider
+      when :kerberos
+        require 'omniauth-kerberos'
+      when *omniauth_customized_providers
+        require_dependency "omni_auth/strategies/#{provider}"
       end
     end
   end

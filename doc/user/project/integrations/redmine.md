@@ -1,9 +1,9 @@
 # Redmine Service
 
 1. To enable the Redmine integration in a project, navigate to the
-[Integrations page](project_services.md#accessing-the-project-services), click
-the **Redmine** service, and fill in the required details on the page as described
-in the table below.
+   [Integrations page](project_services.md#accessing-the-project-services), click
+   the **Redmine** service, and fill in the required details on the page as described
+   in the table below.
 
     | Field | Description |
     | ----- | ----------- |
@@ -18,15 +18,14 @@ in the table below.
 
     ![Redmine configuration](img/redmine_configuration.png)
 
-2. To disable the internal issue tracking system in a project, navigate to the General page, expand [Permissions](../settings/index.md#sharing-and-permissions), and slide the Issues switch invalid.
-
-    ![Issue configuration](img/issue_configuration.png)
+1. To disable the internal issue tracking system in a project, navigate to the General page, expand the [permissions](../settings/index.md#sharing-and-permissions) section and switch the **Issues** toggle to disabled.
 
 ## Referencing issues in Redmine
 
 Issues in Redmine can be referenced in two alternative ways:
-1. `#<ID>` where `<ID>` is a number (example `#143`)
-2. `<PROJECT>-<ID>` where `<PROJECT>` starts with a capital letter which is
+
+- `#<ID>` where `<ID>` is a number (example `#143`).
+- `<PROJECT>-<ID>` where `<PROJECT>` starts with a capital letter which is
   then followed by capital letters, numbers or underscores, and `<ID>` is
   a number (example `API_32-143`).
 

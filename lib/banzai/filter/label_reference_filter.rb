@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Banzai
   module Filter
     # HTML filter that replaces label references with links.
@@ -27,7 +29,7 @@ module Banzai
           if label
             yield match, label.id, project, namespace, $~
           else
-            match
+            escape_html_entities(match)
           end
         end
       end
@@ -46,7 +48,7 @@ module Banzai
                      include_ancestor_groups: true,
                      only_group_labels: true }
                  else
-                   { project_id: parent.id,
+                   { project: parent,
                      include_ancestor_groups: true }
                  end
 
@@ -80,16 +82,22 @@ module Banzai
 
       def object_link_text(object, matches)
         label_suffix = ''
+        parent = project || group
 
         if project || full_path_ref?(matches)
           project_path    = full_project_path(matches[:namespace], matches[:project])
           parent_from_ref = from_ref_cached(project_path)
-          reference       = parent_from_ref.to_human_reference(project || group)
+          reference       = parent_from_ref.to_human_reference(parent)
 
           label_suffix = " <i>in #{reference}</i>" if reference.present?
         end
 
-        LabelsHelper.render_colored_label(object, label_suffix)
+        presenter = object.present(issuable_subject: parent)
+        LabelsHelper.render_colored_label(presenter, label_suffix: label_suffix, title: tooltip_title(presenter))
+      end
+
+      def tooltip_title(label)
+        nil
       end
 
       def full_path_ref?(matches)
@@ -98,6 +106,10 @@ module Banzai
 
       def unescape_html_entities(text)
         CGI.unescapeHTML(text.to_s)
+      end
+
+      def escape_html_entities(text)
+        CGI.escapeHTML(text.to_s)
       end
 
       def object_link_title(object, matches)

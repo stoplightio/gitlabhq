@@ -1,5 +1,8 @@
+# frozen_string_literal: true
+
 module IssuableCollections
   extend ActiveSupport::Concern
+  include CookiesHelper
   include SortingHelper
   include Gitlab::IssuableMetadata
   include Gitlab::Utils::StrongMemoize
@@ -38,7 +41,7 @@ module IssuableCollections
     return if pagination_disabled?
 
     @issuables          = @issuables.page(params[:page])
-    @issuable_meta_data = issuable_meta_data(@issuables, collection_type)
+    @issuable_meta_data = issuable_meta_data(@issuables, collection_type, current_user)
     @total_pages        = issuable_page_count
   end
   # rubocop:enable Gitlab/ModuleWithInstanceVariables
@@ -47,9 +50,11 @@ module IssuableCollections
     false
   end
 
+  # rubocop: disable CodeReuse/ActiveRecord
   def issuables_collection
     finder.execute.preload(preload_for_collection)
   end
+  # rubocop: enable CodeReuse/ActiveRecord
 
   def redirect_out_of_range(total_pages)
     return false if total_pages.nil? || total_pages.zero?
@@ -76,42 +81,81 @@ module IssuableCollections
   end
 
   def issuable_finder_for(finder_class)
-    finder_class.new(current_user, filter_params)
+    finder_class.new(current_user, finder_options)
   end
 
   # rubocop:disable Gitlab/ModuleWithInstanceVariables
-  def filter_params
-    set_sort_order_from_cookie
-    set_default_state
+  def finder_options
+    params[:state] = default_state if params[:state].blank?
 
-    # Skip irrelevant Rails routing params
-    @filter_params = params.dup.except(:controller, :action, :namespace_id)
-    @filter_params[:sort] ||= default_sort_order
+    options = {
+      scope: params[:scope],
+      state: params[:state],
+      confidential: Gitlab::Utils.to_boolean(params[:confidential]),
+      sort: set_sort_order
+    }
 
-    @sort = @filter_params[:sort]
+    # Used by view to highlight active option
+    @sort = options[:sort]
 
     if @project
-      @filter_params[:project_id] = @project.id
+      options[:project_id] = @project.id
+      options[:attempt_project_search_optimizations] = true
     elsif @group
-      @filter_params[:group_id] = @group.id
-      @filter_params[:include_subgroups] = true
-      @filter_params[:use_cte_for_search] = true
+      options[:group_id] = @group.id
+      options[:include_subgroups] = true
+      options[:attempt_group_search_optimizations] = true
     end
 
-    @filter_params.permit(finder_type.valid_params)
+    params.permit(finder_type.valid_params).merge(options)
   end
   # rubocop:enable Gitlab/ModuleWithInstanceVariables
 
-  def set_default_state
-    params[:state] = 'opened' if params[:state].blank?
+  def default_state
+    'opened'
+  end
+
+  def set_sort_order
+    set_sort_order_from_user_preference || set_sort_order_from_cookie || default_sort_order
+  end
+
+  def set_sort_order_from_user_preference
+    return unless current_user
+    return unless issuable_sorting_field
+
+    user_preference = current_user.user_preference
+
+    sort_param = params[:sort]
+    sort_param ||= user_preference[issuable_sorting_field]
+
+    return sort_param if Gitlab::Database.read_only?
+
+    if user_preference[issuable_sorting_field] != sort_param
+      user_preference.update(issuable_sorting_field => sort_param)
+    end
+
+    sort_param
+  end
+
+  # Implement issuable_sorting_field method on controllers
+  # to choose which column to store the sorting parameter.
+  def issuable_sorting_field
+    nil
   end
 
   def set_sort_order_from_cookie
-    key = 'issuable_sort'
+    sort_param = params[:sort] if params[:sort].present?
+    # fallback to legacy cookie value for backward compatibility
+    sort_param ||= cookies['issuable_sort']
+    sort_param ||= cookies[remember_sorting_key]
 
-    cookies[key] = params[:sort] if params[:sort].present?
-    cookies[key] = update_cookie_value(cookies[key])
-    params[:sort] = cookies[key]
+    sort_value = update_cookie_value(sort_param)
+    set_secure_cookie(remember_sorting_key, sort_value)
+    sort_value
+  end
+
+  def remember_sorting_key
+    @remember_sorting_key ||= "#{collection_type.downcase}_sort"
   end
 
   def default_sort_order
@@ -127,12 +171,6 @@ module IssuableCollections
     case value
     when 'id_asc'             then sort_value_oldest_created
     when 'id_desc'            then sort_value_recently_created
-    when 'created_asc'        then sort_value_created_date
-    when 'created_desc'       then sort_value_created_date
-    when 'due_date_asc'       then sort_value_due_date
-    when 'due_date_desc'      then sort_value_due_date
-    when 'milestone_due_asc'  then sort_value_milestone
-    when 'milestone_due_desc' then sort_value_milestone
     when 'downvotes_asc'      then sort_value_popularity
     when 'downvotes_desc'     then sort_value_popularity
     else value
@@ -140,29 +178,27 @@ module IssuableCollections
   end
 
   def finder
-    strong_memoize(:finder) do
-      issuable_finder_for(finder_type)
-    end
+    @finder ||= issuable_finder_for(finder_type)
   end
 
   def collection_type
-    @collection_type ||= case finder
-                         when IssuesFinder
+    @collection_type ||= case finder_type.name
+                         when 'IssuesFinder'
                            'Issue'
-                         when MergeRequestsFinder
+                         when 'MergeRequestsFinder'
                            'MergeRequest'
                          end
   end
 
+  # rubocop:disable Gitlab/ModuleWithInstanceVariables
   def preload_for_collection
+    common_attributes = [:author, :assignees, :labels, :milestone]
     @preload_for_collection ||= case collection_type
                                 when 'Issue'
-                                  [:project, :author, :assignees, :labels, :milestone, project: :namespace]
+                                  common_attributes + [:project, project: :namespace]
                                 when 'MergeRequest'
-                                  [
-                                    :target_project, :author, :assignee, :labels, :milestone,
-                                    source_project: :route, head_pipeline: :project, target_project: :namespace, latest_merge_request_diff: :merge_request_diff_commits
-                                  ]
+                                  common_attributes + [:target_project, source_project: :route, head_pipeline: :project, target_project: :namespace, latest_merge_request_diff: :merge_request_diff_commits]
                                 end
   end
+  # rubocop:enable Gitlab/ModuleWithInstanceVariables
 end

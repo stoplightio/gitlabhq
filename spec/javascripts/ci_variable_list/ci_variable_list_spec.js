@@ -5,9 +5,9 @@ import getSetTimeoutPromise from 'spec/helpers/set_timeout_promise_helper';
 const HIDE_CLASS = 'hide';
 
 describe('VariableList', () => {
-  preloadFixtures('pipeline_schedules/edit.html.raw');
-  preloadFixtures('pipeline_schedules/edit_with_variables.html.raw');
-  preloadFixtures('projects/ci_cd_settings.html.raw');
+  preloadFixtures('pipeline_schedules/edit.html');
+  preloadFixtures('pipeline_schedules/edit_with_variables.html');
+  preloadFixtures('projects/ci_cd_settings.html');
 
   let $wrapper;
   let variableList;
@@ -15,7 +15,7 @@ describe('VariableList', () => {
   describe('with only key/value inputs', () => {
     describe('with no variables', () => {
       beforeEach(() => {
-        loadFixtures('pipeline_schedules/edit.html.raw');
+        loadFixtures('pipeline_schedules/edit.html');
         $wrapper = $('.js-ci-variable-list-section');
 
         variableList = new VariableList({
@@ -33,7 +33,8 @@ describe('VariableList', () => {
 
       it('should add another row when editing the last rows key input', () => {
         const $row = $wrapper.find('.js-row');
-        $row.find('.js-ci-variable-input-key')
+        $row
+          .find('.js-ci-variable-input-key')
           .val('foo')
           .trigger('input');
 
@@ -41,12 +42,14 @@ describe('VariableList', () => {
 
         // Check for the correct default in the new row
         const $keyInput = $wrapper.find('.js-row:last-child').find('.js-ci-variable-input-key');
+
         expect($keyInput.val()).toBe('');
       });
 
       it('should add another row when editing the last rows value textarea', () => {
         const $row = $wrapper.find('.js-row');
-        $row.find('.js-ci-variable-input-value')
+        $row
+          .find('.js-ci-variable-input-value')
           .val('foo')
           .trigger('input');
 
@@ -54,18 +57,21 @@ describe('VariableList', () => {
 
         // Check for the correct default in the new row
         const $valueInput = $wrapper.find('.js-row:last-child').find('.js-ci-variable-input-key');
+
         expect($valueInput.val()).toBe('');
       });
 
       it('should remove empty row after blurring', () => {
         const $row = $wrapper.find('.js-row');
-        $row.find('.js-ci-variable-input-key')
+        $row
+          .find('.js-ci-variable-input-key')
           .val('foo')
           .trigger('input');
 
         expect($wrapper.find('.js-row').length).toBe(2);
 
-        $row.find('.js-ci-variable-input-key')
+        $row
+          .find('.js-ci-variable-input-key')
           .val('')
           .trigger('input')
           .trigger('blur');
@@ -76,7 +82,7 @@ describe('VariableList', () => {
 
     describe('with persisted variables', () => {
       beforeEach(() => {
-        loadFixtures('pipeline_schedules/edit_with_variables.html.raw');
+        loadFixtures('pipeline_schedules/edit_with_variables.html');
         $wrapper = $('.js-ci-variable-list-section');
 
         variableList = new VariableList({
@@ -109,8 +115,10 @@ describe('VariableList', () => {
 
   describe('with all inputs(key, value, protected)', () => {
     beforeEach(() => {
-      loadFixtures('projects/ci_cd_settings.html.raw');
+      loadFixtures('projects/ci_cd_settings.html');
       $wrapper = $('.js-ci-variable-list-section');
+
+      $wrapper.find('.js-ci-variable-input-protected').attr('data-default', 'false');
 
       variableList = new VariableList({
         container: $wrapper,
@@ -119,17 +127,25 @@ describe('VariableList', () => {
       variableList.init();
     });
 
-    it('should add another row when editing the last rows protected checkbox', (done) => {
+    it('should not add another row when editing the last rows protected checkbox', done => {
       const $row = $wrapper.find('.js-row:last-child');
       $row.find('.ci-variable-protected-item .js-project-feature-toggle').click();
 
       getSetTimeoutPromise()
         .then(() => {
-          expect($wrapper.find('.js-row').length).toBe(2);
+          expect($wrapper.find('.js-row').length).toBe(1);
+        })
+        .then(done)
+        .catch(done.fail);
+    });
 
-          // Check for the correct default in the new row
-          const $protectedInput = $wrapper.find('.js-row:last-child').find('.js-ci-variable-input-protected');
-          expect($protectedInput.val()).toBe('false');
+    it('should not add another row when editing the last rows masked checkbox', done => {
+      const $row = $wrapper.find('.js-row:last-child');
+      $row.find('.ci-variable-masked-item .js-project-feature-toggle').click();
+
+      getSetTimeoutPromise()
+        .then(() => {
+          expect($wrapper.find('.js-row').length).toBe(1);
         })
         .then(done)
         .catch(done.fail);
@@ -138,7 +154,7 @@ describe('VariableList', () => {
 
   describe('toggleEnableRow method', () => {
     beforeEach(() => {
-      loadFixtures('pipeline_schedules/edit_with_variables.html.raw');
+      loadFixtures('pipeline_schedules/edit_with_variables.html');
       $wrapper = $('.js-ci-variable-list-section');
 
       variableList = new VariableList({
@@ -166,6 +182,7 @@ describe('VariableList', () => {
 
     it('should enable all remove buttons', () => {
       variableList.toggleEnableRow(false);
+
       expect($wrapper.find('.js-row-remove-button[disabled]').length).toBe(3);
 
       variableList.toggleEnableRow(true);
@@ -175,6 +192,7 @@ describe('VariableList', () => {
 
     it('should enable all key inputs', () => {
       variableList.toggleEnableRow(false);
+
       expect($wrapper.find('.js-ci-variable-input-key[disabled]').length).toBe(3);
 
       variableList.toggleEnableRow(true);
@@ -185,7 +203,7 @@ describe('VariableList', () => {
 
   describe('hideValues', () => {
     beforeEach(() => {
-      loadFixtures('projects/ci_cd_settings.html.raw');
+      loadFixtures('projects/ci_cd_settings.html');
       $wrapper = $('.js-ci-variable-list-section');
 
       variableList = new VariableList({
@@ -200,7 +218,8 @@ describe('VariableList', () => {
       const $inputValue = $row.find('.js-ci-variable-input-value');
       const $placeholder = $row.find('.js-secret-value-placeholder');
 
-      $row.find('.js-ci-variable-input-value')
+      $row
+        .find('.js-ci-variable-input-value')
         .val('foo')
         .trigger('input');
 

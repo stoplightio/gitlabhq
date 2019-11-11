@@ -1,4 +1,4 @@
-/* eslint-disable space-before-function-paren, one-var, one-var-declaration-per-line, no-use-before-define, comma-dangle, max-len */
+/* eslint-disable one-var, no-use-before-define */
 
 import $ from 'jquery';
 import MockAdapter from 'axios-mock-adapter';
@@ -9,12 +9,13 @@ import '~/lib/utils/text_utility';
 describe('Issue', function() {
   let $boxClosed, $boxOpen, $btn;
 
-  preloadFixtures('issues/closed-issue.html.raw');
-  preloadFixtures('issues/issue-with-task-list.html.raw');
-  preloadFixtures('issues/open-issue.html.raw');
+  preloadFixtures('issues/closed-issue.html');
+  preloadFixtures('issues/issue-with-task-list.html');
+  preloadFixtures('issues/open-issue.html');
 
   function expectErrorMessage() {
     const $flashMessage = $('div.flash-alert');
+
     expect($flashMessage).toExist();
     expect($flashMessage).toBeVisible();
     expect($flashMessage).toHaveText('Unable to update this issue at this time.');
@@ -23,6 +24,7 @@ describe('Issue', function() {
   function expectIssueState(isIssueOpen) {
     expectVisibility($boxClosed, !isIssueOpen);
     expectVisibility($boxOpen, isIssueOpen);
+
     expect($btn).toHaveText(isIssueOpen ? 'Close issue' : 'Reopen issue');
   }
 
@@ -32,6 +34,7 @@ describe('Issue', function() {
     }
 
     const $available = Issue.$btnNewBranch.find('.available');
+
     expect($available).toHaveText('New branch');
 
     if (!isPending && canCreate) {
@@ -41,6 +44,7 @@ describe('Issue', function() {
     }
 
     const $unavailable = Issue.$btnNewBranch.find('.unavailable');
+
     expect($unavailable).toHaveText('New branch unavailable');
 
     if (!isPending && !canCreate) {
@@ -60,19 +64,22 @@ describe('Issue', function() {
 
   function findElements(isIssueInitiallyOpen) {
     $boxClosed = $('div.status-box-issue-closed');
+
     expect($boxClosed).toExist();
     expect($boxClosed).toHaveText('Closed');
 
     $boxOpen = $('div.status-box-open');
+
     expect($boxOpen).toExist();
     expect($boxOpen).toHaveText('Open');
 
     $btn = $('.js-issuable-close-button');
+
     expect($btn).toExist();
     expect($btn).toHaveText(isIssueInitiallyOpen ? 'Close issue' : 'Reopen issue');
   }
 
-  [true, false].forEach((isIssueInitiallyOpen) => {
+  [true, false].forEach(isIssueInitiallyOpen => {
     describe(`with ${isIssueInitiallyOpen ? 'open' : 'closed'} issue`, function() {
       const action = isIssueInitiallyOpen ? 'close' : 'reopen';
       let mock;
@@ -98,15 +105,14 @@ describe('Issue', function() {
 
       beforeEach(function() {
         if (isIssueInitiallyOpen) {
-          loadFixtures('issues/open-issue.html.raw');
+          loadFixtures('issues/open-issue.html');
         } else {
-          loadFixtures('issues/closed-issue.html.raw');
+          loadFixtures('issues/closed-issue.html');
         }
 
         mock = new MockAdapter(axios);
 
         mock.onGet(/(.*)\/related_branches$/).reply(200, {});
-        mock.onGet(/(.*)\/referenced_merge_requests$/).reply(200, {});
 
         findElements(isIssueInitiallyOpen);
         this.issue = new Issue();
@@ -127,7 +133,7 @@ describe('Issue', function() {
 
       it(`${action}s the issue`, function(done) {
         mockCloseButtonResponseSuccess(this.$triggeredButton.attr('href'), {
-          id: 34
+          id: 34,
         });
         mockCanCreateBranch(!isIssueInitiallyOpen);
 
@@ -135,6 +141,7 @@ describe('Issue', function() {
 
         setTimeout(() => {
           expectIssueState(!isIssueInitiallyOpen);
+
           expect(this.$triggeredButton.get(0).getAttribute('disabled')).toBeNull();
           expect(this.$projectIssuesCounter.text()).toBe(isIssueInitiallyOpen ? '1,000' : '1,002');
           expectNewBranchButtonState(false, !isIssueInitiallyOpen);
@@ -145,7 +152,7 @@ describe('Issue', function() {
 
       it(`fails to ${action} the issue if saved:false`, function(done) {
         mockCloseButtonResponseSuccess(this.$triggeredButton.attr('href'), {
-          saved: false
+          saved: false,
         });
         mockCanCreateBranch(isIssueInitiallyOpen);
 
@@ -153,8 +160,10 @@ describe('Issue', function() {
 
         setTimeout(() => {
           expectIssueState(isIssueInitiallyOpen);
+
           expect(this.$triggeredButton.get(0).getAttribute('disabled')).toBeNull();
           expectErrorMessage();
+
           expect(this.$projectIssuesCounter.text()).toBe('1,001');
           expectNewBranchButtonState(false, isIssueInitiallyOpen);
 
@@ -170,8 +179,10 @@ describe('Issue', function() {
 
         setTimeout(() => {
           expectIssueState(isIssueInitiallyOpen);
+
           expect(this.$triggeredButton.get(0).getAttribute('disabled')).toBeNull();
           expectErrorMessage();
+
           expect(this.$projectIssuesCounter.text()).toBe('1,001');
           expectNewBranchButtonState(false, isIssueInitiallyOpen);
 

@@ -1,4 +1,6 @@
-class AuditEvent < ActiveRecord::Base
+# frozen_string_literal: true
+
+class AuditEvent < ApplicationRecord
   serialize :details, Hash # rubocop:disable Cop/ActiveRecordSerialize
 
   belongs_to :user, foreign_key: :author_id

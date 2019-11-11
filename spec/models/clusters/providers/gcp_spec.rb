@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Clusters::Providers::Gcp do
@@ -72,6 +74,14 @@ describe Clusters::Providers::Gcp do
         it { is_expected.to be_truthy }
       end
     end
+  end
+
+  describe '#legacy_abac?' do
+    let(:gcp) { build(:cluster_provider_gcp) }
+
+    subject { gcp }
+
+    it { is_expected.not_to be_legacy_abac }
   end
 
   describe '#state_machine' do

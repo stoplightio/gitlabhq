@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Emails
   module Pipelines
     def pipeline_success_email(pipeline, recipients)
@@ -13,7 +15,7 @@ module Emails
     def pipeline_mail(pipeline, recipients, status)
       @project = pipeline.project
       @pipeline = pipeline
-      @merge_request = pipeline.merge_requests.first
+      @merge_request = pipeline.merge_requests_as_head_pipeline.first
       add_headers
 
       # We use bcc here because we don't want to generate this emails for a
@@ -39,10 +41,10 @@ module Emails
     end
 
     def pipeline_subject(status)
-      commit = @pipeline.short_sha
-      commit << " in #{@merge_request.to_reference}" if @merge_request
+      commit = [@pipeline.short_sha]
+      commit << "in #{@merge_request.to_reference}" if @merge_request
 
-      subject("Pipeline ##{@pipeline.id} has #{status} for #{@pipeline.ref}", commit)
+      subject("Pipeline ##{@pipeline.id} has #{status} for #{@pipeline.ref}", commit.join(' '))
     end
   end
 end

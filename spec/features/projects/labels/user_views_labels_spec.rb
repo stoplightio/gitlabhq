@@ -1,13 +1,16 @@
+# frozen_string_literal: true
+
 require "spec_helper"
 
 describe "User views labels" do
   set(:project) { create(:project_empty_repo, :public) }
   set(:user) { create(:user) }
 
-  LABEL_TITLES = %w[bug enhancement feature].freeze
+  let(:label_titles) { %w[bug enhancement feature] }
+  let!(:prioritized_label) { create(:label, project: project, title: 'prioritized-label-name', priority: 1) }
 
   before do
-    LABEL_TITLES.each { |title| create(:label, project: project, title: title) }
+    label_titles.each { |title| create(:label, project: project, title: title) }
 
     project.add_guest(user)
     sign_in(user)
@@ -16,8 +19,12 @@ describe "User views labels" do
   end
 
   it "shows all labels" do
+    page.within('.prioritized-labels .manage-labels-list') do
+      expect(page).to have_content('prioritized-label-name')
+    end
+
     page.within('.other-labels .manage-labels-list') do
-      LABEL_TITLES.each { |title| expect(page).to have_content(title) }
+      label_titles.each { |title| expect(page).to have_content(title) }
     end
   end
 end

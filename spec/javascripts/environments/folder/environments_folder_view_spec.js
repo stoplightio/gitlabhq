@@ -3,6 +3,7 @@ import MockAdapter from 'axios-mock-adapter';
 import axios from '~/lib/utils/axios_utils';
 import environmentsFolderViewComponent from '~/environments/folder/environments_folder_view.vue';
 import mountComponent from 'spec/helpers/vue_mount_component_helper';
+import { removeBreakLine, removeWhitespace } from 'spec/helpers/vue_component_helper';
 import { environmentsList } from '../mock_data';
 
 describe('Environments Folder View', () => {
@@ -13,9 +14,13 @@ describe('Environments Folder View', () => {
   const mockData = {
     endpoint: 'environments.json',
     folderName: 'review',
-    canCreateDeployment: true,
     canReadEnvironment: true,
     cssContainerClass: 'container',
+    canaryDeploymentFeatureId: 'canary_deployment',
+    showCanaryDeploymentCallout: true,
+    userCalloutsPath: '/callouts',
+    lockPromotionSvgPath: '/assets/illustrations/lock-promotion.svg',
+    helpCanaryDeploymentsPath: 'help/canary-deployments',
   };
 
   beforeEach(() => {
@@ -30,39 +35,43 @@ describe('Environments Folder View', () => {
     component.$destroy();
   });
 
-  describe('successfull request', () => {
+  describe('successful request', () => {
     beforeEach(() => {
-      mock.onGet(mockData.endpoint).reply(200, {
-        environments: environmentsList,
-        stopped_count: 1,
-        available_count: 0,
-      }, {
-        'X-nExt-pAge': '2',
-        'x-page': '1',
-        'X-Per-Page': '2',
-        'X-Prev-Page': '',
-        'X-TOTAL': '20',
-        'X-Total-Pages': '10',
-      });
+      mock.onGet(mockData.endpoint).reply(
+        200,
+        {
+          environments: environmentsList,
+          stopped_count: 1,
+          available_count: 0,
+        },
+        {
+          'X-nExt-pAge': '2',
+          'x-page': '1',
+          'X-Per-Page': '2',
+          'X-Prev-Page': '',
+          'X-TOTAL': '20',
+          'X-Total-Pages': '10',
+        },
+      );
 
       component = mountComponent(Component, mockData);
     });
 
-    it('should render a table with environments', (done) => {
+    it('should render a table with environments', done => {
       setTimeout(() => {
         expect(component.$el.querySelectorAll('table')).not.toBeNull();
-        expect(
-          component.$el.querySelector('.environment-name').textContent.trim(),
-        ).toEqual(environmentsList[0].name);
+        expect(component.$el.querySelector('.environment-name').textContent.trim()).toEqual(
+          environmentsList[0].name,
+        );
         done();
       }, 0);
     });
 
-    it('should render available tab with count', (done) => {
+    it('should render available tab with count', done => {
       setTimeout(() => {
-        expect(
-          component.$el.querySelector('.js-environments-tab-available').textContent,
-        ).toContain('Available');
+        expect(component.$el.querySelector('.js-environments-tab-available').textContent).toContain(
+          'Available',
+        );
 
         expect(
           component.$el.querySelector('.js-environments-tab-available .badge').textContent,
@@ -71,11 +80,11 @@ describe('Environments Folder View', () => {
       }, 0);
     });
 
-    it('should render stopped tab with count', (done) => {
+    it('should render stopped tab with count', done => {
       setTimeout(() => {
-        expect(
-          component.$el.querySelector('.js-environments-tab-stopped').textContent,
-        ).toContain('Stopped');
+        expect(component.$el.querySelector('.js-environments-tab-stopped').textContent).toContain(
+          'Stopped',
+        );
 
         expect(
           component.$el.querySelector('.js-environments-tab-stopped .badge').textContent,
@@ -84,36 +93,39 @@ describe('Environments Folder View', () => {
       }, 0);
     });
 
-    it('should render parent folder name', (done) => {
+    it('should render parent folder name', done => {
       setTimeout(() => {
         expect(
-          component.$el.querySelector('.js-folder-name').textContent.trim(),
+          removeBreakLine(
+            removeWhitespace(component.$el.querySelector('.js-folder-name').textContent.trim()),
+          ),
         ).toContain('Environments / review');
         done();
       }, 0);
     });
 
     describe('pagination', () => {
-      it('should render pagination', (done) => {
+      it('should render pagination', done => {
         setTimeout(() => {
-          expect(
-            component.$el.querySelectorAll('.gl-pagination'),
-          ).not.toBeNull();
+          expect(component.$el.querySelectorAll('.gl-pagination')).not.toBeNull();
           done();
         }, 0);
       });
 
-      it('should make an API request when changing page', (done) => {
+      it('should make an API request when changing page', done => {
         spyOn(component, 'updateContent');
         setTimeout(() => {
-          component.$el.querySelector('.gl-pagination .js-last-button a').click();
+          component.$el.querySelector('.gl-pagination .js-last-button .page-link').click();
 
-          expect(component.updateContent).toHaveBeenCalledWith({ scope: component.scope, page: '10' });
+          expect(component.updateContent).toHaveBeenCalledWith({
+            scope: component.scope,
+            page: '10',
+          });
           done();
         }, 0);
       });
 
-      it('should make an API request when using tabs', (done) => {
+      it('should make an API request when using tabs', done => {
         setTimeout(() => {
           spyOn(component, 'updateContent');
           component.$el.querySelector('.js-environments-tab-stopped').click();
@@ -134,20 +146,18 @@ describe('Environments Folder View', () => {
       component = mountComponent(Component, mockData);
     });
 
-    it('should not render a table', (done) => {
+    it('should not render a table', done => {
       setTimeout(() => {
-        expect(
-          component.$el.querySelector('table'),
-        ).toBe(null);
+        expect(component.$el.querySelector('table')).toBe(null);
         done();
       }, 0);
     });
 
-    it('should render available tab with count 0', (done) => {
+    it('should render available tab with count 0', done => {
       setTimeout(() => {
-        expect(
-          component.$el.querySelector('.js-environments-tab-available').textContent,
-        ).toContain('Available');
+        expect(component.$el.querySelector('.js-environments-tab-available').textContent).toContain(
+          'Available',
+        );
 
         expect(
           component.$el.querySelector('.js-environments-tab-available .badge').textContent,
@@ -156,11 +166,11 @@ describe('Environments Folder View', () => {
       }, 0);
     });
 
-    it('should render stopped tab with count 0', (done) => {
+    it('should render stopped tab with count 0', done => {
       setTimeout(() => {
-        expect(
-          component.$el.querySelector('.js-environments-tab-stopped').textContent,
-        ).toContain('Stopped');
+        expect(component.$el.querySelector('.js-environments-tab-stopped').textContent).toContain(
+          'Stopped',
+        );
 
         expect(
           component.$el.querySelector('.js-environments-tab-stopped .badge').textContent,
@@ -177,12 +187,13 @@ describe('Environments Folder View', () => {
       });
 
       component = mountComponent(Component, mockData);
-      spyOn(history, 'pushState').and.stub();
+      spyOn(window.history, 'pushState').and.stub();
     });
 
     describe('updateContent', () => {
-      it('should set given parameters', (done) => {
-        component.updateContent({ scope: 'stopped', page: '4' })
+      it('should set given parameters', done => {
+        component
+          .updateContent({ scope: 'stopped', page: '4' })
           .then(() => {
             expect(component.page).toEqual('4');
             expect(component.scope).toEqual('stopped');

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Gitlab
   module Ci
     class Config
@@ -5,8 +7,8 @@ module Gitlab
         ##
         # Entry that represents an environment.
         #
-        class Environment < Node
-          include Validatable
+        class Environment < ::Gitlab::Config::Entry::Node
+          include ::Gitlab::Config::Entry::Validatable
 
           ALLOWED_KEYS = %i[name url action on_stop].freeze
 
@@ -34,10 +36,12 @@ module Gitlab
               validates :config, allowed_keys: ALLOWED_KEYS
 
               validates :url,
+                        type: String,
                         length: { maximum: 255 },
                         allow_nil: true
 
               validates :action,
+                        type: String,
                         inclusion: { in: %w[start stop], message: 'should be start or stop' },
                         allow_nil: true
 

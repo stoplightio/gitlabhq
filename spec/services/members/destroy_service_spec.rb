@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Members::DestroyService do
@@ -20,6 +22,11 @@ describe Members::DestroyService do
   end
 
   shared_examples 'a service destroying a member' do
+    before do
+      type = member.is_a?(GroupMember) ? 'Group' : 'Project'
+      expect(TodosDestroyer::EntityLeaveWorker).to receive(:perform_in).with(Todo::WAIT_FOR_DELETE, member.user_id, member.source_id, type)
+    end
+
     it 'destroys the member' do
       expect { described_class.new(current_user).execute(member, opts) }.to change { member.source.members_and_requesters.count }.by(-1)
     end
@@ -38,9 +45,9 @@ describe Members::DestroyService do
   shared_examples 'a service destroying a member with access' do
     it_behaves_like 'a service destroying a member'
 
-    it 'invalidates cached counts for todos and assigned issues and merge requests', :aggregate_failures do
+    it 'invalidates cached counts for assigned issues and merge requests', :aggregate_failures do
       create(:issue, project: group_project, assignees: [member_user])
-      create(:merge_request, source_project: group_project, assignee: member_user)
+      create(:merge_request, source_project: group_project, assignees: [member_user])
       create(:todo, :pending, project: group_project, user: member_user)
       create(:todo, :done, project: group_project, user: member_user)
 
@@ -64,14 +71,14 @@ describe Members::DestroyService do
     it 'calls Member#after_decline_request' do
       expect_any_instance_of(NotificationService).to receive(:decline_access_request).with(member)
 
-      described_class.new(current_user).execute(member)
+      described_class.new(current_user).execute(member, opts)
     end
 
     context 'when current user is the member' do
       it 'does not call Member#after_decline_request' do
         expect_any_instance_of(NotificationService).not_to receive(:decline_access_request).with(member)
 
-        described_class.new(member_user).execute(member)
+        described_class.new(member_user).execute(member, opts)
       end
     end
   end
@@ -114,7 +121,7 @@ describe Members::DestroyService do
 
     context 'when current user can destroy the given member' do
       before do
-        group_project.add_master(current_user)
+        group_project.add_maintainer(current_user)
         group.add_owner(current_user)
       end
 
@@ -142,8 +149,8 @@ describe Members::DestroyService do
 
   context 'with an access requester' do
     before do
-      group_project.update_attributes(request_access_enabled: true)
-      group.update_attributes(request_access_enabled: true)
+      group_project.update(request_access_enabled: true)
+      group.update(request_access_enabled: true)
       group_project.request_access(member_user)
       group.request_access(member_user)
     end
@@ -154,7 +161,7 @@ describe Members::DestroyService do
       end
 
       it_behaves_like 'a service destroying a member' do
-        let(:opts) { { skip_authorization: true } }
+        let(:opts) { { skip_authorization: true, skip_subresources: true } }
         let(:member) { group_project.requesters.find_by(user_id: member_user.id) }
       end
 
@@ -163,14 +170,16 @@ describe Members::DestroyService do
       end
 
       it_behaves_like 'a service destroying a member' do
-        let(:opts) { { skip_authorization: true } }
+        let(:opts) { { skip_authorization: true, skip_subresources: true } }
         let(:member) { group.requesters.find_by(user_id: member_user.id) }
       end
     end
 
     context 'when current user can destroy the given access requester' do
+      let(:opts) { { skip_subresources: true } }
+
       before do
-        group_project.add_master(current_user)
+        group_project.add_maintainer(current_user)
         group.add_owner(current_user)
       end
 
@@ -210,7 +219,7 @@ describe Members::DestroyService do
 
     context 'when current user can destroy the given invited user' do
       before do
-        group_project.add_master(current_user)
+        group_project.add_maintainer(current_user)
         group.add_owner(current_user)
       end
 
@@ -222,6 +231,56 @@ describe Members::DestroyService do
       it_behaves_like 'a service destroying a member' do
         let(:member) { group_invited_member }
       end
+    end
+  end
+
+  context 'subresources' do
+    let(:user) { create(:user) }
+    let(:member_user) { create(:user) }
+    let(:opts) { {} }
+
+    let(:group) { create(:group, :public) }
+    let(:subgroup) { create(:group, parent: group) }
+    let(:subsubgroup) { create(:group, parent: subgroup) }
+    let(:subsubproject) { create(:project, group: subsubgroup) }
+
+    let(:group_project) { create(:project, :public, group: group) }
+    let(:control_project) { create(:project, group: subsubgroup) }
+
+    before do
+      create(:group_member, :developer, group: subsubgroup, user: member_user)
+
+      subsubproject.add_developer(member_user)
+      control_project.add_maintainer(user)
+      group.add_owner(user)
+
+      group_member = create(:group_member, :developer, group: group, user: member_user)
+
+      described_class.new(user).execute(group_member, opts)
+    end
+
+    it 'removes the project membership' do
+      expect(group_project.members.map(&:user)).not_to include(member_user)
+    end
+
+    it 'removes the group membership' do
+      expect(group.members.map(&:user)).not_to include(member_user)
+    end
+
+    it 'removes the subgroup membership', :postgresql do
+      expect(subgroup.members.map(&:user)).not_to include(member_user)
+    end
+
+    it 'removes the subsubgroup membership', :postgresql do
+      expect(subsubgroup.members.map(&:user)).not_to include(member_user)
+    end
+
+    it 'removes the subsubproject membership', :postgresql do
+      expect(subsubproject.members.map(&:user)).not_to include(member_user)
+    end
+
+    it 'does not remove the user from the control project' do
+      expect(control_project.members.map(&:user)).to include(user)
     end
   end
 end

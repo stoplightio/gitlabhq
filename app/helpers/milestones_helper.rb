@@ -1,5 +1,8 @@
+# frozen_string_literal: true
+
 module MilestonesHelper
   include EntityDateHelper
+  include Gitlab::Utils::StrongMemoize
 
   def milestones_filter_path(opts = {})
     if @project
@@ -42,7 +45,7 @@ module MilestonesHelper
       when :closed
         issues.closed
       else
-        raise ArgumentError, "invalid milestone state `#{state}`"
+        raise ArgumentError, _("invalid milestone state `%{state}`") % { state: state }
       end
 
     issues.size
@@ -51,6 +54,7 @@ module MilestonesHelper
   # Returns count of milestones for different states
   # Uses explicit hash keys as the 'opened' state URL params differs from the db value
   # and we need to add the total
+  # rubocop: disable CodeReuse/ActiveRecord
   def milestone_counts(milestones)
     counts = milestones.reorder(nil).group(:state).count
 
@@ -60,6 +64,7 @@ module MilestonesHelper
       all: counts.values.sum || 0
     }
   end
+  # rubocop: enable CodeReuse/ActiveRecord
 
   # Show 'active' class if provided GET param matches check
   # `or_blank` allows the function to return 'active' when given an empty param
@@ -109,30 +114,22 @@ module MilestonesHelper
     end
   end
 
-  def milestone_tooltip_title(milestone)
-    if milestone
-      "#{milestone.title}<br />#{milestone_tooltip_due_date(milestone)}"
-    end
-  end
-
   def milestone_time_for(date, date_type)
     title = date_type == :start ? "Start date" : "End date"
 
     if date
-      time_ago = time_ago_in_words(date)
-      time_ago.slice!("about ")
-
-      time_ago << if date.past?
-                    " ago"
-                  else
-                    " remaining"
-                  end
+      time_ago = time_ago_in_words(date).sub("about ", "")
+      state = if date.past?
+                "ago"
+              else
+                "remaining"
+              end
 
       content = [
         title,
         "<br />",
         date.to_s(:medium),
-        "(#{time_ago})"
+        "(#{time_ago} #{state})"
       ].join(" ")
 
       content.html_safe
@@ -148,8 +145,13 @@ module MilestonesHelper
 
     content = []
 
-    content << n_("1 open issue", "%d open issues", issues["opened"]) % issues["opened"] if issues["opened"]
-    content << n_("1 closed issue", "%d closed issues", issues["closed"]) % issues["closed"] if issues["closed"]
+    if issues["opened"]
+      content << n_("1 open issue", "%{issues} open issues", issues["opened"]) % { issues: issues["opened"] }
+    end
+
+    if issues["closed"]
+      content << n_("1 closed issue", "%{issues} closed issues", issues["closed"]) % { issues: issues["closed"] }
+    end
 
     content.join('<br />').html_safe
   end
@@ -161,16 +163,16 @@ module MilestonesHelper
 
     content = []
 
-    content << n_("1 open merge request", "%d open merge requests", merge_requests.opened.count) % merge_requests.opened.count if merge_requests.opened.any?
-    content << n_("1 closed merge request", "%d closed merge requests", merge_requests.closed.count) % merge_requests.closed.count if merge_requests.closed.any?
-    content << n_("1 merged merge request", "%d merged merge requests", merge_requests.merged.count) % merge_requests.merged.count if merge_requests.merged.any?
+    content << n_("1 open merge request", "%{merge_requests} open merge requests", merge_requests.opened.count) % { merge_requests: merge_requests.opened.count } if merge_requests.opened.any?
+    content << n_("1 closed merge request", "%{merge_requests} closed merge requests", merge_requests.closed.count) % { merge_requests: merge_requests.closed.count } if merge_requests.closed.any?
+    content << n_("1 merged merge request", "%{merge_requests} merged merge requests", merge_requests.merged.count) % { merge_requests: merge_requests.merged.count } if merge_requests.merged.any?
 
     content.join('<br />').html_safe
   end
 
   def milestone_tooltip_due_date(milestone)
     if milestone.due_date
-      "#{milestone.due_date.to_s(:medium)} (#{remaining_days_in_words(milestone)})"
+      "#{milestone.due_date.to_s(:medium)} (#{remaining_days_in_words(milestone.due_date, milestone.start_date)})"
     else
       _('Milestone')
     end
@@ -181,15 +183,15 @@ module MilestonesHelper
       "#{milestone.start_date.to_s(:medium)}–#{milestone.due_date.to_s(:medium)}"
     elsif milestone.due_date
       if milestone.due_date.past?
-        "expired on #{milestone.due_date.to_s(:medium)}"
+        _("expired on %{milestone_due_date}") % { milestone_due_date: milestone.due_date.strftime('%b %-d, %Y') }
       else
-        "expires on #{milestone.due_date.to_s(:medium)}"
+        _("expires on %{milestone_due_date}") % { milestone_due_date: milestone.due_date.strftime('%b %-d, %Y') }
       end
     elsif milestone.start_date
       if milestone.start_date.past?
-        "started on #{milestone.start_date.to_s(:medium)}"
+        _("started on %{milestone_start_date}") % { milestone_start_date: milestone.start_date.strftime('%b %-d, %Y') }
       else
-        "starts on #{milestone.start_date.to_s(:medium)}"
+        _("starts on %{milestone_start_date}") % { milestone_start_date: milestone.start_date.strftime('%b %-d, %Y') }
       end
     end
   end
@@ -231,6 +233,29 @@ module MilestonesHelper
       group_milestone_path(@group, milestone.safe_title, title: milestone.title, milestone: params)
     else
       group_milestone_path(@group, milestone.iid, milestone: params)
+    end
+  end
+
+  def group_or_project_milestone_path(milestone)
+    params =
+      if milestone.group_milestone?
+        { milestone: { title: milestone.title } }
+      else
+        { title: milestone.title }
+      end
+
+    milestone_path(milestone.milestone, params)
+  end
+
+  def can_admin_project_milestones?
+    strong_memoize(:can_admin_project_milestones) do
+      can?(current_user, :admin_milestone, @project)
+    end
+  end
+
+  def can_admin_group_milestones?
+    strong_memoize(:can_admin_group_milestones) do
+      can?(current_user, :admin_milestone, @project.group)
     end
   end
 end

@@ -69,8 +69,8 @@ describe('RavenConfig', () => {
     let ravenConfig;
     const options = {
       sentryDsn: '//sentryDsn',
-      whitelistUrls: ['//gitlabUrl'],
-      isProduction: true,
+      whitelistUrls: ['//gitlabUrl', 'webpack-internal://'],
+      environment: 'test',
       release: 'revision',
       tags: {
         revision: 'revision',
@@ -95,7 +95,7 @@ describe('RavenConfig', () => {
         release: options.release,
         tags: options.tags,
         whitelistUrls: options.whitelistUrls,
-        environment: 'production',
+        environment: 'test',
         ignoreErrors: ravenConfig.IGNORE_ERRORS,
         ignoreUrls: ravenConfig.IGNORE_URLS,
         shouldSendCallback: jasmine.any(Function),
@@ -106,8 +106,8 @@ describe('RavenConfig', () => {
       expect(raven.install).toHaveBeenCalled();
     });
 
-    it('should set .environment to development if isProduction is false', () => {
-      ravenConfig.options.isProduction = false;
+    it('should set environment from options', () => {
+      ravenConfig.options.environment = 'development';
 
       RavenConfig.configure.call(ravenConfig);
 
@@ -133,7 +133,7 @@ describe('RavenConfig', () => {
       RavenConfig.setUser.call(ravenConfig);
     });
 
-    it('should call .setUserContext', function () {
+    it('should call .setUserContext', function() {
       expect(Raven.setUserContext).toHaveBeenCalledWith({
         id: ravenConfig.options.currentUserId,
       });

@@ -13,7 +13,7 @@ describe Gitlab::Ci::Config::Entry::Global do
         expect(described_class.nodes.keys)
           .to match_array(%i[before_script image services
                              after_script variables stages
-                             types cache])
+                             types cache include])
       end
     end
   end
@@ -42,7 +42,7 @@ describe Gitlab::Ci::Config::Entry::Global do
         end
 
         it 'creates node object for each entry' do
-          expect(global.descendants.count).to eq 8
+          expect(global.descendants.count).to eq 9
         end
 
         it 'creates node object using valid class' do
@@ -153,25 +153,25 @@ describe Gitlab::Ci::Config::Entry::Global do
               rspec: { name: :rspec,
                        script: %w[rspec ls],
                        before_script: %w(ls pwd),
-                       commands: "ls\npwd\nrspec\nls",
                        image: { name: 'ruby:2.2' },
                        services: [{ name: 'postgres:9.1' }, { name: 'mysql:5.5' }],
                        stage: 'test',
                        cache: { key: 'k', untracked: true, paths: ['public/'], policy: 'pull-push' },
                        variables: { 'VAR' => 'value' },
                        ignore: false,
-                       after_script: ['make clean'] },
+                       after_script: ['make clean'],
+                       only: { refs: %w[branches tags] } },
               spinach: { name: :spinach,
                          before_script: [],
                          script: %w[spinach],
-                         commands: 'spinach',
                          image: { name: 'ruby:2.2' },
                          services: [{ name: 'postgres:9.1' }, { name: 'mysql:5.5' }],
                          stage: 'test',
                          cache: { key: 'k', untracked: true, paths: ['public/'], policy: 'pull-push' },
                          variables: {},
                          ignore: false,
-                         after_script: ['make clean'] }
+                         after_script: ['make clean'],
+                         only: { refs: %w[branches tags] } }
             )
           end
         end
@@ -189,7 +189,7 @@ describe Gitlab::Ci::Config::Entry::Global do
 
       describe '#nodes' do
         it 'instantizes all nodes' do
-          expect(global.descendants.count).to eq 8
+          expect(global.descendants.count).to eq 9
         end
 
         it 'contains unspecified nodes' do
@@ -219,7 +219,7 @@ describe Gitlab::Ci::Config::Entry::Global do
 
     ##
     # When nodes are specified but not defined, we assume that
-    # configuration is valid, and we asume that entry is simply undefined,
+    # configuration is valid, and we assume that entry is simply undefined,
     # despite the fact, that key is present. See issue #18775 for more
     # details.
     #

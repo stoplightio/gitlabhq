@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe RelativePositioning do
@@ -6,9 +8,21 @@ describe RelativePositioning do
   let(:issue1) { create(:issue, project: project) }
   let(:new_issue) { create(:issue, project: project) }
 
-  before do
-    [issue, issue1].each do |issue|
-      issue.move_to_end && issue.save
+  describe '.move_to_end' do
+    it 'moves the object to the end' do
+      Issue.move_to_end([issue, issue1])
+
+      expect(issue1.prev_relative_position).to eq issue.relative_position
+      expect(issue.prev_relative_position).to eq nil
+      expect(issue1.next_relative_position).to eq nil
+    end
+
+    it 'does not perform any moves if all issues have their relative_position set' do
+      issue.update!(relative_position: 1)
+
+      expect(issue).not_to receive(:save)
+
+      Issue.move_to_end([issue])
     end
   end
 
@@ -59,6 +73,12 @@ describe RelativePositioning do
   end
 
   describe '#move_to_end' do
+    before do
+      [issue, issue1].each do |issue|
+        issue.move_to_end && issue.save
+      end
+    end
+
     it 'moves issue to the end' do
       new_issue.move_to_end
 
@@ -67,6 +87,12 @@ describe RelativePositioning do
   end
 
   describe '#shift_after?' do
+    before do
+      [issue, issue1].each do |issue|
+        issue.move_to_end && issue.save
+      end
+    end
+
     it 'returns true' do
       issue.update(relative_position: issue1.relative_position - 1)
 
@@ -81,6 +107,12 @@ describe RelativePositioning do
   end
 
   describe '#shift_before?' do
+    before do
+      [issue, issue1].each do |issue|
+        issue.move_to_end && issue.save
+      end
+    end
+
     it 'returns true' do
       issue.update(relative_position: issue1.relative_position + 1)
 
@@ -95,6 +127,12 @@ describe RelativePositioning do
   end
 
   describe '#move_between' do
+    before do
+      [issue, issue1].each do |issue|
+        issue.move_to_end && issue.save
+      end
+    end
+
     it 'positions issue between two other' do
       new_issue.move_between(issue, issue1)
 

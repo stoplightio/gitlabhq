@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module SearchHelper
   def search_autocomplete_opts(term)
     return unless current_user
@@ -22,17 +24,22 @@ module SearchHelper
   end
 
   def search_entries_info(collection, scope, term)
-    return unless collection.count > 0
+    return if collection.to_a.empty?
 
     from = collection.offset_value + 1
-    to = collection.offset_value + collection.count
+    to = collection.offset_value + collection.to_a.size
     count = collection.total_count
 
-    "Showing #{from} - #{to} of #{count} #{scope.humanize(capitalize: false)} for \"#{term}\""
+    s_("SearchResults|Showing %{from} - %{to} of %{count} %{scope} for \"%{term}\"") % { from: from, to: to, count: count, scope: scope.humanize(capitalize: false), term: term }
   end
 
-  def find_project_for_result_blob(result)
+  def find_project_for_result_blob(projects, result)
     @project
+  end
+
+  # Used in EE
+  def blob_projects(results)
+    nil
   end
 
   def parse_search_result(result)
@@ -43,36 +50,40 @@ module SearchHelper
     filename
   end
 
+  def search_service
+    @search_service ||= ::SearchService.new(current_user, params)
+  end
+
   private
 
   # Autocomplete results for various settings pages
   def default_autocomplete
     [
-      { category: "Settings", label: "User settings",    url: profile_path },
-      { category: "Settings", label: "SSH Keys",         url: profile_keys_path },
-      { category: "Settings", label: "Dashboard",        url: root_path }
+      { category: "Settings", label: _("User settings"),    url: profile_path },
+      { category: "Settings", label: _("SSH Keys"),         url: profile_keys_path },
+      { category: "Settings", label: _("Dashboard"),        url: root_path }
     ]
   end
 
   # Autocomplete results for settings pages, for admins
   def default_autocomplete_admin
     [
-      { category: "Settings", label: "Admin Section", url: admin_root_path }
+      { category: "Settings", label: _("Admin Section"), url: admin_root_path }
     ]
   end
 
   # Autocomplete results for internal help pages
   def help_autocomplete
     [
-      { category: "Help", label: "API Help",           url: help_page_path("api/README") },
-      { category: "Help", label: "Markdown Help",      url: help_page_path("user/markdown") },
-      { category: "Help", label: "Permissions Help",   url: help_page_path("user/permissions") },
-      { category: "Help", label: "Public Access Help", url: help_page_path("public_access/public_access") },
-      { category: "Help", label: "Rake Tasks Help",    url: help_page_path("raketasks/README") },
-      { category: "Help", label: "SSH Keys Help",      url: help_page_path("ssh/README") },
-      { category: "Help", label: "System Hooks Help",  url: help_page_path("system_hooks/system_hooks") },
-      { category: "Help", label: "Webhooks Help",      url: help_page_path("user/project/integrations/webhooks") },
-      { category: "Help", label: "Workflow Help",      url: help_page_path("workflow/README") }
+      { category: "Help", label: _("API Help"),           url: help_page_path("api/README") },
+      { category: "Help", label: _("Markdown Help"),      url: help_page_path("user/markdown") },
+      { category: "Help", label: _("Permissions Help"),   url: help_page_path("user/permissions") },
+      { category: "Help", label: _("Public Access Help"), url: help_page_path("public_access/public_access") },
+      { category: "Help", label: _("Rake Tasks Help"),    url: help_page_path("raketasks/README") },
+      { category: "Help", label: _("SSH Keys Help"),      url: help_page_path("ssh/README") },
+      { category: "Help", label: _("System Hooks Help"),  url: help_page_path("system_hooks/system_hooks") },
+      { category: "Help", label: _("Webhooks Help"),      url: help_page_path("user/project/integrations/webhooks") },
+      { category: "Help", label: _("Workflow Help"),      url: help_page_path("workflow/README") }
     ]
   end
 
@@ -82,16 +93,16 @@ module SearchHelper
       ref = @ref || @project.repository.root_ref
 
       [
-        { category: "Current Project", label: "Files",          url: project_tree_path(@project, ref) },
-        { category: "Current Project", label: "Commits",        url: project_commits_path(@project, ref) },
-        { category: "Current Project", label: "Network",        url: project_network_path(@project, ref) },
-        { category: "Current Project", label: "Graph",          url: project_graph_path(@project, ref) },
-        { category: "Current Project", label: "Issues",         url: project_issues_path(@project) },
-        { category: "Current Project", label: "Merge Requests", url: project_merge_requests_path(@project) },
-        { category: "Current Project", label: "Milestones",     url: project_milestones_path(@project) },
-        { category: "Current Project", label: "Snippets",       url: project_snippets_path(@project) },
-        { category: "Current Project", label: "Members",        url: project_project_members_path(@project) },
-        { category: "Current Project", label: "Wiki",           url: project_wikis_path(@project) }
+        { category: "In this project", label: _("Files"),          url: project_tree_path(@project, ref) },
+        { category: "In this project", label: _("Commits"),        url: project_commits_path(@project, ref) },
+        { category: "In this project", label: _("Network"),        url: project_network_path(@project, ref) },
+        { category: "In this project", label: _("Graph"),          url: project_graph_path(@project, ref) },
+        { category: "In this project", label: _("Issues"),         url: project_issues_path(@project) },
+        { category: "In this project", label: _("Merge Requests"), url: project_merge_requests_path(@project) },
+        { category: "In this project", label: _("Milestones"),     url: project_milestones_path(@project) },
+        { category: "In this project", label: _("Snippets"),       url: project_snippets_path(@project) },
+        { category: "In this project", label: _("Members"),        url: project_project_members_path(@project) },
+        { category: "In this project", label: _("Wiki"),           url: project_wikis_path(@project) }
       ]
     else
       []
@@ -99,30 +110,36 @@ module SearchHelper
   end
 
   # Autocomplete results for the current user's groups
+  # rubocop: disable CodeReuse/ActiveRecord
   def groups_autocomplete(term, limit = 5)
     current_user.authorized_groups.order_id_desc.search(term).limit(limit).map do |group|
       {
         category: "Groups",
         id: group.id,
         label: "#{search_result_sanitize(group.full_name)}",
-        url: group_path(group)
+        url: group_path(group),
+        avatar_url: group.avatar_url || ''
       }
     end
   end
+  # rubocop: enable CodeReuse/ActiveRecord
 
   # Autocomplete results for the current user's projects
+  # rubocop: disable CodeReuse/ActiveRecord
   def projects_autocomplete(term, limit = 5)
     current_user.authorized_projects.order_id_desc.search_by_title(term)
-      .sorted_by_stars.non_archived.limit(limit).map do |p|
+      .sorted_by_stars_desc.non_archived.limit(limit).map do |p|
       {
         category: "Projects",
         id: p.id,
         value: "#{search_result_sanitize(p.name)}",
         label: "#{search_result_sanitize(p.full_name)}",
-        url: project_path(p)
+        url: project_path(p),
+        avatar_url: p.avatar_url || ''
       }
     end
   end
+  # rubocop: enable CodeReuse/ActiveRecord
 
   def search_result_sanitize(str)
     Sanitize.clean(str)
@@ -145,7 +162,7 @@ module SearchHelper
     opts =
       {
         id: "filtered-search-#{type}",
-        placeholder: 'Search or filter results...',
+        placeholder: _('Search or filter results...'),
         data: {
           'username-params' => UserSerializer.new.represent(@users)
         },
@@ -155,13 +172,24 @@ module SearchHelper
     if @project.present?
       opts[:data]['project-id'] = @project.id
       opts[:data]['base-endpoint'] = project_path(@project)
-    else
-      # Group context
+    elsif @group.present?
       opts[:data]['group-id'] = @group.id
       opts[:data]['base-endpoint'] = group_canonical_path(@group)
+    else
+      opts[:data]['base-endpoint'] = root_dashboard_path
     end
 
     opts
+  end
+
+  def search_history_storage_prefix
+    if @project.present?
+      @project.full_path
+    elsif @group.present?
+      @group.full_path
+    else
+      'dashboard'
+    end
   end
 
   # Sanitize a HTML field for search display. Most tags are stripped out and the
@@ -181,5 +209,15 @@ module SearchHelper
 
   def limited_count(count, limit = 1000)
     count > limit ? "#{limit}+" : count
+  end
+
+  def search_tabs?(tab)
+    return false if Feature.disabled?(:users_search, default_enabled: true)
+
+    if @project
+      project_search_tabs?(:members)
+    else
+      can?(current_user, :read_users_list)
+    end
   end
 end

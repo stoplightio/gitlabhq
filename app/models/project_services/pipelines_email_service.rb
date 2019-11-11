@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class PipelinesEmailService < Service
   prop_accessor :recipients
   boolean_accessor :notify_only_broken_pipelines
@@ -8,11 +10,11 @@ class PipelinesEmailService < Service
   end
 
   def title
-    'Pipelines emails'
+    _('Pipelines emails')
   end
 
   def description
-    'Email the pipelines status to a list of recipients.'
+    _('Email the pipelines status to a list of recipients.')
   end
 
   def self.to_param
@@ -36,11 +38,11 @@ class PipelinesEmailService < Service
   end
 
   def can_test?
-    project.pipelines.any?
+    project.ci_pipelines.any?
   end
 
   def test_data(project, user)
-    data = Gitlab::DataBuilder::Pipeline.build(project.pipelines.last)
+    data = Gitlab::DataBuilder::Pipeline.build(project.ci_pipelines.last)
     data[:user] = user.hook_attrs
     data
   end
@@ -49,7 +51,7 @@ class PipelinesEmailService < Service
     [
       { type: 'textarea',
         name: 'recipients',
-        placeholder: 'Emails separated by comma',
+        placeholder: _('Emails separated by comma'),
         required: true },
       { type: 'checkbox',
         name: 'notify_only_broken_pipelines' }

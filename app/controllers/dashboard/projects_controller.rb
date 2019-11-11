@@ -1,31 +1,40 @@
+# frozen_string_literal: true
+
 class Dashboard::ProjectsController < Dashboard::ApplicationController
   include ParamsBackwardCompatibility
   include RendersMemberAccess
 
+  prepend_before_action(only: [:index]) { authenticate_sessionless_user!(:rss) }
   before_action :set_non_archived_param
   before_action :default_sorting
   skip_cross_project_access_check :index, :starred
 
   def index
-    @projects = load_projects(params.merge(non_public: true)).page(params[:page])
+    @projects = load_projects(params.merge(non_public: true))
 
     respond_to do |format|
-      format.html
+      format.html do
+        # n+1: https://gitlab.com/gitlab-org/gitlab-ce/issues/40260
+        Gitlab::GitalyClient.allow_n_plus_1_calls do
+          render
+        end
+      end
       format.atom do
         load_events
         render layout: 'xml.atom'
       end
       format.json do
         render json: {
-          html: view_to_html_string("dashboard/projects/_projects", locals: { projects: @projects })
+          html: view_to_html_string("dashboard/projects/_projects", projects: @projects)
         }
       end
     end
   end
 
+  # rubocop: disable CodeReuse/ActiveRecord
   def starred
     @projects = load_projects(params.merge(starred: true))
-      .includes(:forked_from_project, :tags).page(params[:page])
+      .includes(:forked_from_project, :tags)
 
     @groups = []
 
@@ -33,11 +42,12 @@ class Dashboard::ProjectsController < Dashboard::ApplicationController
       format.html
       format.json do
         render json: {
-          html: view_to_html_string("dashboard/projects/_projects", locals: { projects: @projects })
+          html: view_to_html_string("dashboard/projects/_projects", projects: @projects)
         }
       end
     end
   end
+  # rubocop: enable CodeReuse/ActiveRecord
 
   private
 
@@ -46,14 +56,20 @@ class Dashboard::ProjectsController < Dashboard::ApplicationController
     @sort = params[:sort]
   end
 
+  # rubocop: disable CodeReuse/ActiveRecord
   def load_projects(finder_params)
+    @total_user_projects_count = ProjectsFinder.new(params: { non_public: true }, current_user: current_user).execute
+    @total_starred_projects_count = ProjectsFinder.new(params: { starred: true }, current_user: current_user).execute
+
     projects = ProjectsFinder
                 .new(params: finder_params, current_user: current_user)
                 .execute
-                .includes(:route, :creator, namespace: [:route, :owner])
+                .includes(:route, :creator, :group, namespace: [:route, :owner])
+                .page(finder_params[:page])
 
     prepare_projects_for_rendering(projects)
   end
+  # rubocop: enable CodeReuse/ActiveRecord
 
   def load_events
     projects = load_projects(params.merge(non_public: true))

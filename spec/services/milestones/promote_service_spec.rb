@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 describe Milestones::PromoteService do
@@ -10,7 +12,7 @@ describe Milestones::PromoteService do
 
   describe '#execute' do
     before do
-      group.add_master(user)
+      group.add_maintainer(user)
     end
 
     context 'validations' do

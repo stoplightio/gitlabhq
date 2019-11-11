@@ -1,9 +1,11 @@
+# frozen_string_literal: true
+
 # Module that can be included into a model to make it easier to ignore database
 # columns.
 #
 # Example:
 #
-#     class User < ActiveRecord::Base
+#     class User < ApplicationRecord
 #       include IgnorableColumn
 #
 #       ignore_column :updated_at
@@ -12,7 +14,7 @@
 module IgnorableColumn
   extend ActiveSupport::Concern
 
-  module ClassMethods
+  class_methods do
     def columns
       super.reject { |column| ignored_columns.include?(column.name) }
     end

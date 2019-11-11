@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module MergeRequests
   class RebaseService < MergeRequests::WorkingCopyBaseService
     REBASE_ERROR = 'Rebase failed. Please rebase locally'.freeze
@@ -18,9 +20,7 @@ module MergeRequests
         return false
       end
 
-      rebase_sha = repository.rebase(current_user, merge_request)
-
-      merge_request.update_attributes(rebase_commit_sha: rebase_sha)
+      repository.rebase(current_user, merge_request)
 
       true
     rescue => e

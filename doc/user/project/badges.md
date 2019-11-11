@@ -17,7 +17,7 @@ If you find that you have to add the same badges to several projects, you may wa
 
 To add a new badge to a project:
 
-1.  Navigate to your project's **Settings > Badges**.
+1.  Navigate to your project's **Settings > General > Badges**.
 1.  Under "Link", enter the URL that the badges should point to and under
     "Badge image URL" the URL of the image that should be displayed.
 1.  Submit the badge by clicking the **Add badge** button.
@@ -39,7 +39,7 @@ project, consider adding them on the [project level](#project-badges) or use
 
 To add a new badge to a group:
 
-1.  Navigate to your group's **Settings > Project Badges**.
+1.  Navigate to your group's **Settings > General > Badges**.
 1.  Under "Link", enter the URL that the badges should point to and under
     "Badge image URL" the URL of the image that should be displayed.
 1.  Submit the badge by clicking the **Add badge** button.
@@ -62,6 +62,12 @@ are available:
 - `%{default_branch}`: Default branch name configured for a project's repository
 - `%{commit_sha}`: ID of the most recent commit to the default branch of a
   project's repository
+
+NOTE: **Note:**
+Placeholders allow badges to expose otherwise-private information, such as the
+default branch or commit SHA when the project is configured to have a private
+repository. This is by design, as badges are intended to be used publicly. Avoid
+using these placeholders if the information is sensitive.
 
 ## API
 

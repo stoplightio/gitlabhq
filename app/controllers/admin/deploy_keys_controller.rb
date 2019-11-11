@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Admin::DeployKeysController < Admin::ApplicationController
   before_action :deploy_keys, only: [:index]
   before_action :deploy_key, only: [:destroy, :edit, :update]
@@ -22,8 +24,8 @@ class Admin::DeployKeysController < Admin::ApplicationController
   end
 
   def update
-    if deploy_key.update_attributes(update_params)
-      flash[:notice] = 'Deploy key was successfully updated.'
+    if deploy_key.update(update_params)
+      flash[:notice] = _('Deploy key was successfully updated.')
       redirect_to admin_deploy_keys_path
     else
       render 'edit'
@@ -34,7 +36,7 @@ class Admin::DeployKeysController < Admin::ApplicationController
     deploy_key.destroy
 
     respond_to do |format|
-      format.html { redirect_to admin_deploy_keys_path, status: 302 }
+      format.html { redirect_to admin_deploy_keys_path, status: :found }
       format.json { head :ok }
     end
   end
