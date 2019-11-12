@@ -1,7 +1,7 @@
 # 20171215113715_update_billing_accounts_namespace_ids.rb
 
 # rubocop:disable all
-class UpdateBillingAccountsNamespaceIds < ActiveRecord::Migration
+class UpdateBillingAccountsNamespaceIds < ActiveRecord::Migration[4.2]
   DOWNTIME = false
 
   def up

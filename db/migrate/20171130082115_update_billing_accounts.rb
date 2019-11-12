@@ -1,7 +1,7 @@
 # 20171130082115_update_billing_accounts.rb
 
 # rubocop:disable all
-class UpdateBillingAccounts < ActiveRecord::Migration
+class UpdateBillingAccounts < ActiveRecord::Migration[4.2]
   DOWNTIME = false
 
   def up

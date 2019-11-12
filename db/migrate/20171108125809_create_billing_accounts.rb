@@ -1,7 +1,7 @@
 # 20171108125809_create_billing_accounts.rb
 
 # rubocop:disable all
-class CreateBillingAccounts < ActiveRecord::Migration
+class CreateBillingAccounts < ActiveRecord::Migration[4.2]
   DOWNTIME = false
 
   def up

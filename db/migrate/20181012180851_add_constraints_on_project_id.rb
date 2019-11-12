@@ -1,7 +1,7 @@
 # 20181012180851_add_constraints_on_project_id.rb
 
 # rubocop:disable all
-class AddConstraintsOnProjectId < ActiveRecord::Migration
+class AddConstraintsOnProjectId < ActiveRecord::Migration[4.2]
   include Gitlab::Database::MigrationHelpers
 
   DOWNTIME = false
